@@ -82,6 +82,16 @@ public struct ReadingPosition: Codable, Equatable, Sendable {
     }
 }
 
+public struct MaterialReading: Codable, Equatable, Sendable {
+    public var openedAt: Date?
+    public var isRead: Bool
+
+    public init(openedAt: Date? = nil, isRead: Bool = false) {
+        self.openedAt = openedAt
+        self.isRead = isRead
+    }
+}
+
 public struct Note: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let materialID: String

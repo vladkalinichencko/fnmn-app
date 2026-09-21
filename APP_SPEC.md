@@ -7,7 +7,8 @@
 - Добавить статью по URL через запущенный на Mac сервис.
 - Импортировать готовый JSON-пакет статьи или видео.
 - Открыть материал, перейти к предыдущему или следующему блоку и выбрать раздел.
-- Вернуться к последнему сохранённому блоку; для видео сохранить время текущего блока.
+- Вернуться через «Продолжить» к материалу, который открывали последним, и к его сохранённому блоку; для видео сохранить время текущего блока.
+- Явно отметить материал прочитанным или непрочитанным.
 - Создать или отредактировать одну заметку у текущего блока.
 - Создать папку и перетащить в неё материал.
 - Открыть исходный URL.
@@ -33,9 +34,15 @@ flowchart TD
     Import --> Persist[LibraryFile.save]
     Persist --> Library
 
+    Library --> Continue[Продолжить]
+    Continue --> Select
     Library --> Select[Выбрать материал]
-    Select --> Restore[Найти ReadingPosition]
+    Select --> RecordOpen[LibrarySnapshot.recordOpening]
+    RecordOpen --> PersistState[LibraryFile.saveState]
+    PersistState --> Restore[Найти ReadingPosition]
     Restore --> Reader[Показать текущий Block]
+    Library --> MarkRead[Отметить прочитанным или непрочитанным]
+    MarkRead --> PersistState
     Reader --> Move[Предыдущий / следующий / раздел]
     Move --> SavePosition[LibraryFile.saveState]
     SavePosition --> Reader
@@ -59,6 +66,7 @@ classDiagram
     ImportPackage o-- Section
     ImportPackage o-- Block
     LibrarySnapshot o-- ReadingPosition
+    LibrarySnapshot o-- MaterialReading
     LibrarySnapshot o-- Note
     ReaderView --> BlockWebView
 
@@ -68,8 +76,19 @@ classDiagram
       +load()
       +importData()
       +importArticle()
+      +recordOpening()
+      +setRead()
       +save(position)
       +save(note)
+    }
+    class LibrarySnapshot {
+      +continuedPackage: ImportPackage?
+      +recordOpening()
+      +setRead()
+    }
+    class MaterialReading {
+      +openedAt: Date?
+      +isRead: Bool
     }
     class LibraryFile {
       +load()
@@ -81,7 +100,7 @@ classDiagram
     }
 ```
 
-`LibrarySnapshot` — единственный владелец сохранённых данных. `LibraryModel` выполняет операции над снимком и вызывает адаптеры. SwiftUI-экраны владеют только временным взаимодействием и отправляют действия в небольшие редьюсеры рядом с экраном. `LibraryFile`, `ArticleClient` и `BlockWebView` — границы эффектов.
+`LibrarySnapshot` — единственный владелец сохранённых данных, включая место чтения и `MaterialReading` (время открытия и явная отметка прочтения). «Продолжить» — селектор `continuedPackage`: материал с самым поздним `openedAt`; если открытий ещё не записывали, берётся первый пакет с сохранённой позицией. `LibraryModel` выполняет операции над снимком и вызывает адаптеры. SwiftUI-экраны владеют только временным взаимодействием и отправляют действия в небольшие редьюсеры рядом с экраном. `LibraryFile`, `ArticleClient` и `BlockWebView` — границы эффектов.
 
 ## Состояния экранов
 
@@ -130,9 +149,11 @@ stateDiagram-v2
 - Повторный импорт заменяет пакет с тем же `material.id`, не создавая копию.
 - Для пары `materialID + blockID` существует не больше одной заметки.
 - `ReadingPosition.blockID` указывает на блок открытого пакета; устаревшее время видео не переводит читатель обратно к старому блоку.
+- `MaterialReading.openedAt` обновляется при выборе материала; `isRead` меняется только явным действием пользователя и не выводится из позиции или открытия.
+- Старый `state.json` без `readings` загружается как пустой словарь.
 - Сначала меняется снимок в памяти, затем он сохраняется атомарно; ошибка записи возвращает прежний снимок.
 - Результат асинхронной операции применяется только к экрану и материалу, которые её запустили.
 
 ## Как добавлять следующий срез
 
-До кода в этот файл добавляются видимое действие пользователя, его переходы состояния, владелец данных и граница эффекта. В коде добавляется минимальный сквозной путь через существующие типы. Следующий срез первого этапа: корректный выбор материала в «Продолжить» и явная отметка прочтения.
+До кода в этот файл добавляются видимое действие пользователя, его переходы состояния, владелец данных и граница эффекта. В коде добавляется минимальный сквозной путь через существующие типы. Следующий срез: импорт каталога PDF-книги (`content.md`, `metadata.json`, `assets/`, `validation.json`) без сведения его к JSON-блокам статьи.

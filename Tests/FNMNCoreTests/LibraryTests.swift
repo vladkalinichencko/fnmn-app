@@ -29,6 +29,60 @@ private let article = ImportPackage(
     #expect(try await file.load() == library)
 }
 
+private let laterArticle = ImportPackage(
+    material: Material(id: "article:https://example.com/b", kind: .article, title: "B", sourceURL: URL(string: "https://example.com/b")!),
+    sections: [Section(id: "s1", parentID: nil, title: "Start", level: 1, firstBlockID: "b1")],
+    blocks: [Block(id: "b1", sectionID: "s1", kind: .paragraph, html: "<p>Text</p>")]
+)
+
+@Test func continueChoosesMostRecentlyOpenedMaterial() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article)
+    try library.importPackage(laterArticle)
+    library.positions[article.material.id] = ReadingPosition(blockID: "b1")
+    library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
+    library.recordOpening(materialID: article.material.id, at: Date(timeIntervalSinceReferenceDate: 1))
+    library.recordOpening(materialID: laterArticle.material.id, at: Date(timeIntervalSinceReferenceDate: 2))
+    #expect(library.continuedPackage?.material.id == laterArticle.material.id)
+}
+
+@Test func continueFallsBackToSavedPositionWhenNothingWasOpened() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article)
+    try library.importPackage(laterArticle)
+    library.positions[article.material.id] = ReadingPosition(blockID: "b1")
+    library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
+    #expect(library.continuedPackage?.material.id == article.material.id)
+}
+
+@Test func openingDoesNotMarkMaterialRead() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article)
+    library.recordOpening(materialID: article.material.id, at: Date(timeIntervalSinceReferenceDate: 1))
+    #expect(library.readings[article.material.id]?.isRead == false)
+}
+
+@Test func openingAndReadStateSurviveDiskRoundTrip() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory.appending(path: "library.json"))
+    var library = LibrarySnapshot()
+    try library.importPackage(article)
+    library.recordOpening(materialID: article.material.id, at: Date(timeIntervalSinceReferenceDate: 10))
+    library.setRead(true, materialID: article.material.id)
+    try await file.save(library)
+    #expect(try await file.load() == library)
+}
+
+@Test func oldStateWithoutReadingsStillLoads() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data(#"{"positions":{},"notes":[],"folders":[]}"#.utf8)
+        .write(to: directory.appending(path: "state.json"))
+    let snapshot = try await LibraryFile(url: directory).load()
+    #expect(snapshot.readings.isEmpty)
+    #expect(snapshot.continuedPackage == nil)
+}
+
 @Test func staleVideoEventCannotMoveReaderBackToOldBlock() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article)

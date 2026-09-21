@@ -46,6 +46,26 @@ final class LibraryModel {
         catch { snapshot = previous; throw error }
     }
 
+    func recordOpening(materialID: String, at date: Date = .now) async {
+        let previous = snapshot.readings[materialID]
+        snapshot.recordOpening(materialID: materialID, at: date)
+        do { try await file.saveState(snapshot) }
+        catch {
+            snapshot.readings[materialID] = previous
+            operationError = error.localizedDescription
+        }
+    }
+
+    func setRead(_ isRead: Bool, materialID: String) async {
+        let previous = snapshot.readings[materialID]
+        snapshot.setRead(isRead, materialID: materialID)
+        do { try await file.saveState(snapshot) }
+        catch {
+            snapshot.readings[materialID] = previous
+            operationError = error.localizedDescription
+        }
+    }
+
     func save(position: ReadingPosition, materialID: String) async {
         let previous = snapshot.positions[materialID]
         snapshot.positions[materialID] = position

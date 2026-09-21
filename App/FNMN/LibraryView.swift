@@ -50,41 +50,19 @@ struct LibraryView: View {
                         Button("Try again") { Task { await library.load() } }
                     }
                 case .ready:
-                    List(selection: selectionBinding) {
-                        if let continued = continuedPackage {
-                            SwiftUI.Section("Continue") { MaterialRow(package: continued).tag(continued.material.id) }
-                        }
-                        SwiftUI.Section("Materials") {
-                            ForEach(library.snapshot.packages, id: \.material.id) { package in
-                                MaterialRow(package: package)
-                                    .tag(package.material.id)
-                                    .draggable(package.material.id)
-                            }
-                        }
-                        ForEach(library.snapshot.folders, id: \.self) { folder in
-                            SwiftUI.Section(folder) {
-                                ForEach(library.snapshot.packages.filter { $0.folders.contains(folder) }, id: \.material.id) { package in
-                                    MaterialRow(package: package).tag(package.material.id)
-                                }
-                            }
-                            .dropDestination(for: String.self) { ids, _ in
-                                for id in ids {
-                                    Task { await library.move(materialID: id, to: folder) }
-                                }
-                                return !ids.isEmpty
-                            }
-                        }
-                    }
+                    LibraryReadyList(selection: selectionBinding)
                 }
             }
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItemGroup {
-                    Button("Add article", systemImage: "link.badge.plus") { send(.present(.addArticle)) }
-                    Button("Import package", systemImage: "doc.badge.plus") { send(.present(.importPackage)) }
-                    Button("New folder", systemImage: "folder.badge.plus") { send(.present(.newFolder)) }
+                    Group {
+                        Button("Add article", systemImage: "link.badge.plus") { send(.present(.addArticle)) }
+                        Button("Import package", systemImage: "doc.badge.plus") { send(.present(.importPackage)) }
+                        Button("New folder", systemImage: "folder.badge.plus") { send(.present(.newFolder)) }
+                    }
+                    .disabled(library.loadState != .ready)
                 }
-                .disabled(library.loadState != .ready)
             }
         } detail: {
             if let package = selectedPackage {
@@ -129,12 +107,13 @@ struct LibraryView: View {
         library.snapshot.packages.first { $0.material.id == state.selection }
     }
 
-    private var continuedPackage: ImportPackage? {
-        library.snapshot.packages.first { library.snapshot.positions[$0.material.id] != nil }
-    }
-
     private var selectionBinding: Binding<String?> {
-        Binding(get: { state.selection }, set: { send(.select($0)) })
+        Binding(get: { state.selection }, set: { materialID in
+            send(.select(materialID))
+            if let materialID {
+                Task { await library.recordOpening(materialID: materialID) }
+            }
+        })
     }
 
     private func destinationBinding(_ destination: LibraryDestination) -> Binding<Bool> {
@@ -149,10 +128,72 @@ struct LibraryView: View {
     }
 }
 
+private struct LibraryReadyList: View {
+    @Environment(LibraryModel.self) private var library
+    @Binding var selection: String?
+
+    var body: some View {
+        List(selection: $selection) {
+            if let continued = library.snapshot.continuedPackage {
+                SwiftUI.Section("Continue") {
+                    row(continued)
+                }
+            }
+            SwiftUI.Section("Materials") {
+                ForEach(library.snapshot.packages, id: \.material.id) { package in
+                    row(package).draggable(package.material.id)
+                }
+            }
+            ForEach(library.snapshot.folders, id: \.self) { folder in
+                SwiftUI.Section(folder) {
+                    ForEach(library.snapshot.packages(in: folder), id: \.material.id) { package in
+                        row(package)
+                    }
+                }
+                .dropDestination(for: String.self) { ids, _ in
+                    for id in ids {
+                        Task { await library.move(materialID: id, to: folder) }
+                    }
+                    return !ids.isEmpty
+                }
+            }
+        }
+    }
+
+    private func row(_ package: ImportPackage) -> some View {
+        MaterialRow(
+            package: package,
+            isRead: library.snapshot.readings[package.material.id]?.isRead ?? false
+        ) { isRead in
+            Task { await library.setRead(isRead, materialID: package.material.id) }
+        }
+        .tag(package.material.id)
+    }
+}
+
 private struct MaterialRow: View {
     let package: ImportPackage
+    let isRead: Bool
+    let setRead: (Bool) -> Void
+
     var body: some View {
-        Label(package.material.title, systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text")
+        labeledTitle
+            .swipeActions(edge: .leading) {
+                Button(isRead ? "Mark unread" : "Mark read") { setRead(!isRead) }
+            }
+            .contextMenu {
+                Button(isRead ? "Mark unread" : "Mark read") { setRead(!isRead) }
+            }
+    }
+
+    @ViewBuilder
+    private var labeledTitle: some View {
+        let title = Label(package.material.title, systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text")
+        if isRead {
+            title
+        } else {
+            title.badge("Unread")
+        }
     }
 }
 
