@@ -87,7 +87,17 @@ struct LibraryView: View {
                 ContentUnavailableView("Choose a material", systemImage: "books.vertical")
             }
         }
-        .sheet(isPresented: destinationBinding(.addArticle)) { AddArticleView() }
+        .sheet(isPresented: destinationBinding(.addArticle)) {
+            AddArticleView(initialURL: library.pendingShare?.absoluteString ?? "")
+        }
+        .onChange(of: library.pendingShare) { _, shared in
+            guard shared != nil, library.loadState == .ready else { return }
+            send(.present(.addArticle))
+        }
+        .onChange(of: library.loadState) { _, loadState in
+            guard loadState == .ready, library.pendingShare != nil else { return }
+            send(.present(.addArticle))
+        }
         .alert("New folder", isPresented: destinationBinding(.newFolder)) {
             TextField("Name", text: $newFolder)
             Button("Create") {
@@ -284,6 +294,10 @@ private struct AddArticleView: View {
     @State private var pickingBookFolder = false
     @State private var state = ArticleImportState.editing
 
+    init(initialURL: String = "") {
+        _articleURL = State(initialValue: initialURL)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -309,6 +323,12 @@ private struct AddArticleView: View {
                     ProgressView()
                 }
             }
+        }
+        .onAppear { library.pendingShare = nil }
+        .onChange(of: library.pendingShare) { _, shared in
+            guard let shared else { return }
+            articleURL = shared.absoluteString
+            library.pendingShare = nil
         }
         .alert("Import failed", isPresented: .init(
             get: { state.failure != nil },

@@ -202,6 +202,14 @@ private let namedBook = BookRecord(
     #expect(CaptureError.unprepared(.youtube).errorDescription?.contains("YouTube") == true)
 }
 
+@Test func shareHandoffRoundTripsAnHTTPLink() {
+    let article = URL(string: "https://arxiv.org/abs/1706.03762")!
+    let handoff = CaptureHandoff.link(for: article)
+    #expect(CaptureHandoff.sharedURL(from: handoff!) == article)
+    #expect(CaptureHandoff.sharedURL(from: URL(string: "fnmn://add?url=ftp://example.com")!) == nil)
+    #expect(CaptureHandoff.sharedURL(from: URL(string: "https://example.com")!) == nil)
+}
+
 @Test func albumKeepsACardInEveryFolderItWasDroppedInto() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article)

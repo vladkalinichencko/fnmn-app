@@ -12,6 +12,7 @@ final class LibraryModel {
     var snapshot = LibrarySnapshot()
     var loadState: LibraryLoadState = .loading
     var operationError: String?
+    var pendingShare: URL?
     var storageURL: URL { file.root }
     private let file: LibraryFile
 

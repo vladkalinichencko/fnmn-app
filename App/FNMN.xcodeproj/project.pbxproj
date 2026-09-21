@@ -20,6 +20,10 @@
 		C5D59E4B171DA2124DA6B4DD /* LibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4323AC29BFCE9540F2C0AF9 /* LibraryModel.swift */; };
 		E1F51509B92D61982B2278C2 /* BlockWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B60DA4901A295C4336ADDC /* BlockWebView.swift */; };
 		F99B6628F08B1511007B84D3 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1674AC0273239D1899A9CCC /* WebKit.framework */; };
+		A1SHARE00000000000000002 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1SHARE00000000000000001 /* ShareViewController.swift */; };
+		A1SHARE0000000000000000E /* CaptureHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1SHARE0000000000000000C /* CaptureHandoff.swift */; };
+		A1SHARE0000000000000000D /* CaptureHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1SHARE0000000000000000C /* CaptureHandoff.swift */; };
+		A1SHARE00000000000000011 /* Share.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1SHARE00000000000000004 /* Share.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +41,11 @@
 		C1674AC0273239D1899A9CCC /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = "<group>"; };
 		D4323AC29BFCE9540F2C0AF9 /* LibraryModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibraryModel.swift; path = FNMN/LibraryModel.swift; sourceTree = "<group>"; };
 		D6A411717639703C556A3A9B /* FNMN.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FNMN.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1SHARE00000000000000001 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Share/ShareViewController.swift; sourceTree = "<group>"; };
+		A1SHARE00000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Share/Info.plist; sourceTree = "<group>"; };
+		A1SHARE00000000000000004 /* Share.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Share.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1SHARE0000000000000000C /* CaptureHandoff.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CaptureHandoff.swift; path = ../Sources/FNMNCore/CaptureHandoff.swift; sourceTree = "<group>"; };
+		A1SHARE00000000000000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = FNMN/Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -56,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				D6A411717639703C556A3A9B /* FNMN.app */,
+				A1SHARE00000000000000004 /* Share.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -91,6 +101,10 @@
 				8E2C79DDDC04DAAECD3E16A1 /* ReaderView.swift */,
 				534989C7158DF819423EE66A /* Document.swift */,
 				3476D9114EBF885077C36C07 /* Library.swift */,
+				A1SHARE0000000000000000C /* CaptureHandoff.swift */,
+				A1SHARE00000000000000001 /* ShareViewController.swift */,
+				A1SHARE00000000000000003 /* Info.plist */,
+				A1SHARE00000000000000015 /* Info.plist */,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -114,15 +128,34 @@
 				373C74EBF0E1127523ADDABE /* Sources */,
 				1919F3083D3F59B038E5DB17 /* Frameworks */,
 				9ED3285FA94B52E26F19C3FD /* Resources */,
+				A1SHARE00000000000000010 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A1SHARE00000000000000012 /* PBXTargetDependency */,
 			);
 			name = FNMN;
 			productName = FNMN;
 			productReference = D6A411717639703C556A3A9B /* FNMN.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A1SHARE00000000000000005 /* Share */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1SHARE0000000000000000B /* Build configuration list for PBXNativeTarget "Share" */;
+			buildPhases = (
+				A1SHARE00000000000000006 /* Sources */,
+				A1SHARE00000000000000007 /* Frameworks */,
+				A1SHARE00000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Share;
+			productName = Share;
+			productReference = A1SHARE00000000000000004 /* Share.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -147,6 +180,7 @@
 			projectRoot = "";
 			targets = (
 				4344DE416295706141DB6DE7 /* FNMN */,
+				A1SHARE00000000000000005 /* Share */,
 			);
 		};
 /* End PBXProject section */
@@ -177,6 +211,71 @@
 				372232071456131772162561 /* ReaderView.swift in Sources */,
 				98F460E2EAC210CFD145DCF0 /* Document.swift in Sources */,
 				3BA0EC3EF5F002621223B035 /* Library.swift in Sources */,
+				A1SHARE0000000000000000D /* CaptureHandoff.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		A1SHARE00000000000000013 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EDAE67D30E15311546ED678A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1SHARE00000000000000005;
+			remoteInfo = Share;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1SHARE00000000000000010 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1SHARE00000000000000011 /* Share.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1SHARE00000000000000012 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1SHARE00000000000000005 /* Share */;
+			targetProxy = A1SHARE00000000000000013 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1SHARE00000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1SHARE00000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1SHARE00000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1SHARE00000000000000002 /* ShareViewController.swift in Sources */,
+				A1SHARE0000000000000000E /* CaptureHandoff.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -305,7 +404,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FNMN/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -324,13 +426,63 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FNMN/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = local.fnmn.reader;
 				PRODUCT_NAME = FNMN;
 				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A1SHARE00000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Share/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = local.fnmn.reader.share;
+				PRODUCT_NAME = Share;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1SHARE0000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				MARKETING_VERSION = 1.0;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Share/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = local.fnmn.reader.share;
+				PRODUCT_NAME = Share;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -354,6 +506,15 @@
 			buildConfigurations = (
 				C4E702513B0F20358887BDD8 /* Release */,
 				7C99987D9E1037AAAA71ECC1 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1SHARE0000000000000000B /* Build configuration list for PBXNativeTarget "Share" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1SHARE0000000000000000A /* Release */,
+				A1SHARE00000000000000009 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

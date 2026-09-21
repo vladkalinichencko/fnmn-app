@@ -9,6 +9,10 @@ struct FNMNApp: App {
             LibraryView()
                 .environment(library)
                 .task { await library.load() }
+                .onOpenURL { url in
+                    guard let shared = CaptureHandoff.sharedURL(from: url) else { return }
+                    library.pendingShare = shared
+                }
         }
     }
 }
