@@ -11,7 +11,9 @@
 :root { color-scheme: light dark; }
 body { margin: 20px; font: -apple-system-body; overflow-wrap: anywhere; }
 img { max-width: 100%; height: auto; }
-.katex-display { overflow-x: auto; overflow-y: hidden; }
+video { max-width: 100%; height: auto; }
+.katex-display { display: block; text-align: left; margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
+iframe.interactive { display: block; width: 100%; border: 0; }
 .footnotes { font-size: .9em; }
 </style>
 </head>
@@ -29,6 +31,23 @@ function protectMath(source) {
   text = text.replace(/\\\(([\s\S]+?)\\\)/g, hold(false));
   text = text.replace(/\$([^$\n]+?)\$/g, hold(false));
   return { text, slots };
+}
+
+function mountMedia(article, base) {
+  article.querySelectorAll("pre > code.language-fnmn-interactive").forEach((code) => {
+    const frame = document.createElement("iframe");
+    frame.className = "interactive";
+    frame.setAttribute("sandbox", "allow-scripts");
+    frame.src = base + code.textContent.trim();
+    code.parentElement.replaceWith(frame);
+  });
+  article.querySelectorAll("pre > code.language-fnmn-video").forEach((code) => {
+    const path = code.textContent.trim();
+    const video = document.createElement("video");
+    video.controls = true;
+    video.src = path.indexOf("http") === 0 ? path : base + path;
+    code.parentElement.replaceWith(video);
+  });
 }
 
 async function main() {
@@ -63,6 +82,15 @@ async function main() {
       }
     });
   article.innerHTML = html;
+  const base = "../books/" + encoded + "/";
+  mountMedia(article, base);
+  window.addEventListener("message", (event) => {
+    const data = event.data;
+    if (!data || data.kind !== "fnmn-height" || typeof data.height !== "number" || data.height < 0) return;
+    article.querySelectorAll("iframe.interactive").forEach((frame) => {
+      if (frame.contentWindow === event.source) frame.style.height = Math.ceil(data.height) + "px";
+    });
+  });
   Array.from(article.children).filter(function (node) {
     return /^H[1-6]$/.test(node.tagName);
   }).forEach(function (node, index) {

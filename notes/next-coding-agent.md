@@ -2,10 +2,10 @@
 
 Continue the FNMN iPhone/iPad app in this repository.
 
-Read `APP_SPEC.md`, `notes/plan.md`, `notes/tasks.md`, and `notes/state/fnmn.md`. The capture graph is in `APP_SPEC.md`. Implement the next node on that graph. Use the `coding` skill. Keep IO in the existing Mac client and `LibraryFile`. Do not add a second library, a manager, or a protocol for one caller.
+Read `APP_SPEC.md`, `notes/plan.md`, `notes/tasks.md`, `notes/state/fnmn.md`, and `notes/research/web-article.md`. Use the `coding` skill. A download is one explicit state chain, not loading flags. Keep IO in the Mac adapter and `LibraryFile`.
 
-Current code classifies Web, arXiv, YouTube, X, Substack, ChatGPT, and PDF. Albums are stored by material id. One add sheet takes a link or a document. A web article uses the existing Mac article route and lands in Web. A book folder lands in PDF. Other sources stop with an explicit error. Share opens the app on that same add sheet with the shared link. The Mac still returns HTML blocks for a web article, not Markdown. The video reader is not implemented.
+Web article text is Markdown. Images, GIFs, and video stay files. An interactive subtree is an `fnmn-interactive` fragment shown as a sandboxed frame inside the existing Markdown renderer, sized to that fragment. Display math is left-aligned. `mac/html_markdown.py` performs the translation. The live `/articles` route still returns JSON blocks.
 
-Next task: make the Mac return one text package for a web article: title, author, original link, and Markdown with LaTeX. Read that package in the existing Markdown reader and open the original with a separate action. Do not build arXiv, X, Substack, ChatGPT, or the video player in this task.
+Next task: when importing a web article, download the scripts and assets an interactive fragment needs, as `fetchingPage → fetchingAssets → saving`, and fail the import if a required file is missing. Do not build the YouTube player in this task.
 
 When you finish, present the work in plain language using one short sentence: what you implemented, what now works, and what remains next. Do not give a process report, tables, skill commentary, or a long verification narrative unless the user asks.
