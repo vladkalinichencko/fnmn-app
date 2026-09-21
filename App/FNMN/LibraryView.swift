@@ -1,63 +1,109 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum LibraryDestination: String, Identifiable {
+    case addArticle
+    case importPackage
+    case newFolder
+
+    var id: String { rawValue }
+}
+
+private struct LibraryViewState {
+    var selection: String?
+    var destination: LibraryDestination?
+}
+
+private enum LibraryAction {
+    case select(String?)
+    case present(LibraryDestination)
+    case dismiss
+}
+
+private func reduce(_ state: LibraryViewState, _ action: LibraryAction) -> LibraryViewState {
+    var state = state
+    switch action {
+    case let .select(materialID): state.selection = materialID
+    case let .present(destination): state.destination = destination
+    case .dismiss: state.destination = nil
+    }
+    return state
+}
+
 struct LibraryView: View {
     @Environment(LibraryModel.self) private var library
-    @State private var selection: String?
-    @State private var showingAdd = false
-    @State private var showingImporter = false
-    @State private var showingNewFolder = false
+    @State private var state = LibraryViewState()
     @State private var newFolder = ""
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
-                if let continued = continuedPackage {
-                    SwiftUI.Section("Continue") { MaterialRow(package: continued).tag(continued.material.id) }
-                }
-                SwiftUI.Section("Materials") {
-                    ForEach(library.snapshot.packages, id: \.material.id) { package in
-                        MaterialRow(package: package)
-                            .tag(package.material.id)
-                            .draggable(package.material.id)
+            Group {
+                switch library.loadState {
+                case .loading:
+                    ProgressView("Loading library…")
+                case let .failed(message):
+                    ContentUnavailableView {
+                        Label("Library unavailable", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("Try again") { Task { await library.load() } }
                     }
-                }
-                ForEach(library.snapshot.folders, id: \.self) { folder in
-                    SwiftUI.Section(folder) {
-                        ForEach(library.snapshot.packages.filter { $0.folders.contains(folder) }, id: \.material.id) { package in
-                            MaterialRow(package: package).tag(package.material.id)
+                case .ready:
+                    List(selection: selectionBinding) {
+                        if let continued = continuedPackage {
+                            SwiftUI.Section("Continue") { MaterialRow(package: continued).tag(continued.material.id) }
                         }
-                    }
-                    .dropDestination(for: String.self) { ids, _ in
-                        for id in ids {
-                            Task { await library.move(materialID: id, to: folder) }
+                        SwiftUI.Section("Materials") {
+                            ForEach(library.snapshot.packages, id: \.material.id) { package in
+                                MaterialRow(package: package)
+                                    .tag(package.material.id)
+                                    .draggable(package.material.id)
+                            }
                         }
-                        return !ids.isEmpty
+                        ForEach(library.snapshot.folders, id: \.self) { folder in
+                            SwiftUI.Section(folder) {
+                                ForEach(library.snapshot.packages.filter { $0.folders.contains(folder) }, id: \.material.id) { package in
+                                    MaterialRow(package: package).tag(package.material.id)
+                                }
+                            }
+                            .dropDestination(for: String.self) { ids, _ in
+                                for id in ids {
+                                    Task { await library.move(materialID: id, to: folder) }
+                                }
+                                return !ids.isEmpty
+                            }
+                        }
                     }
                 }
             }
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItemGroup {
-                    Button("Add article", systemImage: "link.badge.plus") { showingAdd = true }
-                    Button("Import package", systemImage: "doc.badge.plus") { showingImporter = true }
-                    Button("New folder", systemImage: "folder.badge.plus") { showingNewFolder = true }
+                    Button("Add article", systemImage: "link.badge.plus") { send(.present(.addArticle)) }
+                    Button("Import package", systemImage: "doc.badge.plus") { send(.present(.importPackage)) }
+                    Button("New folder", systemImage: "folder.badge.plus") { send(.present(.newFolder)) }
                 }
+                .disabled(library.loadState != .ready)
             }
         } detail: {
             if let package = selectedPackage {
-                ReaderView(package: package)
+                ReaderView(package: package).id(package.material.id)
             } else {
                 ContentUnavailableView("Choose a material", systemImage: "books.vertical")
             }
         }
-        .sheet(isPresented: $showingAdd) { AddArticleView() }
-        .alert("New folder", isPresented: $showingNewFolder) {
+        .sheet(isPresented: destinationBinding(.addArticle)) { AddArticleView() }
+        .alert("New folder", isPresented: destinationBinding(.newFolder)) {
             TextField("Name", text: $newFolder)
-            Button("Create") { Task { await library.addFolder(newFolder); newFolder = "" } }
+            Button("Create") {
+                Task { await library.addFolder(newFolder) }
+                newFolder = ""
+                send(.dismiss)
+            }
             Button("Cancel", role: .cancel) { newFolder = "" }
         }
-        .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json]) { result in
+        .fileImporter(isPresented: destinationBinding(.importPackage), allowedContentTypes: [.json]) { result in
             guard case let .success(url) = result else { return }
             Task {
                 let access = url.startAccessingSecurityScopedResource()
@@ -67,24 +113,39 @@ struct LibraryView: View {
                     }
                 }
                 do { try await library.importData(Data(contentsOf: url)) }
-                catch { library.errorMessage = error.localizedDescription }
+                catch { library.operationError = error.localizedDescription }
             }
         }
-        .alert("Import failed", isPresented: .init(get: { library.errorMessage != nil }, set: {
+        .alert("Couldn’t save changes", isPresented: .init(get: { library.operationError != nil }, set: {
             if !$0 {
-                library.errorMessage = nil
+                library.operationError = nil
             }
         })) {
-            Button("OK") { library.errorMessage = nil }
-        } message: { Text(library.errorMessage ?? "") }
+            Button("OK") { library.operationError = nil }
+        } message: { Text(library.operationError ?? "") }
     }
 
     private var selectedPackage: ImportPackage? {
-        library.snapshot.packages.first { $0.material.id == selection }
+        library.snapshot.packages.first { $0.material.id == state.selection }
     }
 
     private var continuedPackage: ImportPackage? {
         library.snapshot.packages.first { library.snapshot.positions[$0.material.id] != nil }
+    }
+
+    private var selectionBinding: Binding<String?> {
+        Binding(get: { state.selection }, set: { send(.select($0)) })
+    }
+
+    private func destinationBinding(_ destination: LibraryDestination) -> Binding<Bool> {
+        Binding(
+            get: { state.destination == destination },
+            set: { isPresented in send(isPresented ? .present(destination) : .dismiss) }
+        )
+    }
+
+    private func send(_ action: LibraryAction) {
+        state = reduce(state, action)
     }
 }
 
@@ -103,7 +164,7 @@ private struct AddArticleView: View {
     @State private var token = ""
     @State private var folder = "Inbox"
     @State private var allowsInsecureLAN = false
-    @State private var submitting = false
+    @State private var state = ArticleImportState.editing
 
     var body: some View {
         NavigationStack {
@@ -116,38 +177,83 @@ private struct AddArticleView: View {
                 }
                 TextField("Folder", text: $folder)
             }
+            .disabled(state.isSubmitting)
             .navigationTitle("Add article")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(state.isSubmitting) }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { submit() }.disabled(submitting || URL(string: articleURL) == nil || URL(string: endpoint) == nil || token.isEmpty)
+                    Button("Add") { send(.submit) }.disabled(state.isSubmitting || URL(string: articleURL) == nil || URL(string: endpoint) == nil || token.isEmpty)
                 }
             }
             .overlay {
-                if submitting {
+                if state.isSubmitting {
                     ProgressView()
                 }
             }
         }
+        .alert("Import failed", isPresented: .init(
+            get: { state.failure != nil },
+            set: { if !$0 { send(.dismissFailure) } }
+        )) {
+            Button("OK") { send(.dismissFailure) }
+        } message: {
+            Text(state.failure ?? "")
+        }
     }
 
-    private func submit() {
+    private func send(_ action: ArticleImportAction) {
+        state = reduce(state, action)
+        guard case .submit = action else {
+            if case .completed = state { dismiss() }
+            return
+        }
         guard let url = URL(string: articleURL), let server = URL(string: endpoint) else { return }
-        submitting = true
+        let token = token
+        let folder = folder.isEmpty ? nil : folder
+        let allowsInsecureLAN = allowsInsecureLAN
         Task {
             do {
                 try await library.importArticle(
                     url: url,
                     endpoint: server,
                     token: token,
-                    folder: folder.isEmpty ? nil : folder,
+                    folder: folder,
                     allowsInsecureLAN: allowsInsecureLAN
                 )
-                dismiss()
+                send(.succeeded)
             } catch {
-                library.errorMessage = error.localizedDescription
-                submitting = false
+                send(.failed(error.localizedDescription))
             }
         }
+    }
+}
+
+private enum ArticleImportState: Equatable {
+    case editing
+    case submitting
+    case failed(String)
+    case completed
+
+    var isSubmitting: Bool { self == .submitting }
+    var failure: String? {
+        guard case let .failed(message) = self else { return nil }
+        return message
+    }
+}
+
+private enum ArticleImportAction {
+    case submit
+    case succeeded
+    case failed(String)
+    case dismissFailure
+}
+
+private func reduce(_ state: ArticleImportState, _ action: ArticleImportAction) -> ArticleImportState {
+    switch (state, action) {
+    case (.editing, .submit), (.failed, .submit): .submitting
+    case (.submitting, .succeeded): .completed
+    case let (.submitting, .failed(message)): .failed(message)
+    case (.failed, .dismissFailure): .editing
+    default: state
     }
 }

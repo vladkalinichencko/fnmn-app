@@ -1,10 +1,17 @@
 import Foundation
 import Observation
 
+enum LibraryLoadState: Equatable {
+    case loading
+    case ready
+    case failed(String)
+}
+
 @MainActor @Observable
 final class LibraryModel {
     var snapshot = LibrarySnapshot()
-    var errorMessage: String?
+    var loadState: LibraryLoadState = .loading
+    var operationError: String?
     private let file: LibraryFile
 
     init(file: LibraryFile? = nil) {
@@ -13,8 +20,13 @@ final class LibraryModel {
     }
 
     func load() async {
-        do { snapshot = try await file.load() }
-        catch { errorMessage = error.localizedDescription }
+        loadState = .loading
+        do {
+            snapshot = try await file.load()
+            loadState = .ready
+        } catch {
+            loadState = .failed(error.localizedDescription)
+        }
     }
 
     func importData(_ data: Data) async throws {
@@ -40,7 +52,7 @@ final class LibraryModel {
         do { try await file.saveState(snapshot) }
         catch {
             snapshot.positions[materialID] = previous
-            errorMessage = error.localizedDescription
+            operationError = error.localizedDescription
         }
     }
 
@@ -50,7 +62,7 @@ final class LibraryModel {
         do { try await file.saveState(snapshot) }
         catch {
             snapshot.positions[materialID] = previous
-            errorMessage = error.localizedDescription
+            operationError = error.localizedDescription
         }
     }
 
@@ -76,7 +88,7 @@ final class LibraryModel {
         do { try await file.saveState(snapshot) }
         catch {
             snapshot.folders = previous
-            errorMessage = error.localizedDescription
+            operationError = error.localizedDescription
         }
     }
 
@@ -86,7 +98,7 @@ final class LibraryModel {
         do { try await persist() }
         catch {
             snapshot = previous
-            errorMessage = error.localizedDescription
+            operationError = error.localizedDescription
         }
     }
 

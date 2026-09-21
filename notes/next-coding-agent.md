@@ -2,7 +2,7 @@
 
 Continue the FNMN iPhone/iPad app in this repository.
 
-Read `AGENTS.md`, `notes/plan.md`, `notes/tasks.md`, and `notes/state/fnmn.md`. Use the `architect` skill first to define the user flow, state, events, adapters, and module ownership. Then use the `coding` skill to implement the smallest clear version in the existing files. Keep the code readable from the top-level flow down into details. Do not add generic managers, speculative protocols, or new layers without a concrete second implementation.
+Read `AGENTS.md`, `APP_SPEC.md`, `notes/plan.md`, `notes/tasks.md`, and `notes/state/fnmn.md`. Update the visible lifecycle and state diagrams in `APP_SPEC.md` before changing the flow. Use the `architect` skill first to define the user flow, state, events, adapters, and module ownership. Then use the `coding` skill to implement the smallest clear version in the existing files. Keep the code readable from the top-level flow down into details. Do not add generic managers, speculative protocols, or new layers without a concrete second implementation.
 
 Current code already has a Mac REST article preparer, a shared document package, JSON library persistence, article import, folders, block-by-block reading, section navigation, saved reading position, and one editable note per block. Search, Share to FNMN, mass source import, and the learning feed are not implemented.
 
