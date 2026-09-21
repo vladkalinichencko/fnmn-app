@@ -47,6 +47,18 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         packages.filter { $0.folders.contains(folder) }
     }
 
+    public func matchingPackages(_ query: String) -> [ImportPackage] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return packages }
+        return packages.filter { $0.matches(needle) }
+    }
+
+    public func matchingBooks(_ query: String) -> [BookRecord] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return books }
+        return books.filter { $0.matches(needle) }
+    }
+
     public mutating func importPackage(_ package: ImportPackage) throws {
         guard package.version == 1 else { throw LibraryError.unsupportedVersion(package.version) }
         guard !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
@@ -194,5 +206,22 @@ public actor LibraryFile {
             books: snapshot.books
         )
         try encoder.encode(state).write(to: directory.appending(path: "state.json"), options: .atomic)
+    }
+}
+
+extension ImportPackage {
+    func matches(_ query: String) -> Bool {
+        var fields = [material.title, material.sourceURL.absoluteString] + folders + sections.map(\.title)
+        if let byline = material.byline { fields.append(byline) }
+        return fields.contains { $0.localizedStandardContains(query) }
+    }
+}
+
+extension BookRecord {
+    func matches(_ query: String) -> Bool {
+        var fields = [metadata.title, metadata.sourceName] + metadata.authors + metadata.toc.map(\.title)
+        if let subtitle = metadata.subtitle { fields.append(subtitle) }
+        if let contributors = metadata.contributors { fields.append(contentsOf: contributors) }
+        return fields.contains { $0.localizedStandardContains(query) }
     }
 }

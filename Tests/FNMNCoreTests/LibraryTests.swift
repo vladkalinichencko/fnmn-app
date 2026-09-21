@@ -147,3 +147,42 @@ private var sampleBook: URL {
     let snapshot = try await LibraryFile(url: directory).load()
     #expect(snapshot.books.isEmpty)
 }
+
+private let namedArticle = ImportPackage(
+    material: Material(id: "article:https://example.com/search", kind: .article, title: "Kernel Methods", sourceURL: URL(string: "https://example.com/search")!, byline: "Alice"),
+    sections: [Section(id: "s1", parentID: nil, title: "NTK", level: 1, firstBlockID: "b1")],
+    blocks: [Block(id: "b1", sectionID: "s1", kind: .paragraph, html: "<p>hidden body text</p>")],
+    folders: ["Papers"]
+)
+
+private let namedBook = BookRecord(
+    metadata: BookMetadata(
+        title: "The Principles of Deep Learning Theory",
+        subtitle: "An Effective Theory Approach",
+        authors: ["Daniel A. Roberts"],
+        contributors: nil,
+        language: "en",
+        sourceName: "principles-of-deep-learning-theory.pdf",
+        schemaVersion: 1,
+        contentFile: "content.md",
+        assetsDirectory: "assets",
+        toc: [BookTOCEntry(ordinal: 1, level: 1, title: "Effective Theory")]
+    )
+)
+
+@Test func librarySearchMatchesCatalogFieldsAndIgnoresBody() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(namedArticle)
+    library.importBook(namedBook)
+    #expect(library.matchingPackages("").map(\.material.id) == [namedArticle.material.id])
+    #expect(library.matchingBooks(" ").map(\.id) == [namedBook.id])
+    #expect(library.matchingPackages("kernel").map(\.material.id) == [namedArticle.material.id])
+    #expect(library.matchingPackages("Alice").map(\.material.id) == [namedArticle.material.id])
+    #expect(library.matchingPackages("Papers").map(\.material.id) == [namedArticle.material.id])
+    #expect(library.matchingPackages("NTK").map(\.material.id) == [namedArticle.material.id])
+    #expect(library.matchingPackages("hidden body text").isEmpty)
+    #expect(library.matchingBooks("roberts").map(\.id) == [namedBook.id])
+    #expect(library.matchingBooks("Effective Theory").map(\.id) == [namedBook.id])
+    #expect(library.matchingPackages("xyzzy").isEmpty)
+    #expect(library.matchingBooks("xyzzy").isEmpty)
+}

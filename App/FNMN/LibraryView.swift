@@ -13,12 +13,14 @@ private enum LibraryDestination: String, Identifiable {
 private struct LibraryViewState {
     var selection: String?
     var destination: LibraryDestination?
+    var query = ""
 }
 
 private enum LibraryAction {
     case select(String?)
     case present(LibraryDestination)
     case dismiss
+    case search(String)
 }
 
 private func reduce(_ state: LibraryViewState, _ action: LibraryAction) -> LibraryViewState {
@@ -27,6 +29,7 @@ private func reduce(_ state: LibraryViewState, _ action: LibraryAction) -> Libra
     case let .select(materialID): state.selection = materialID
     case let .present(destination): state.destination = destination
     case .dismiss: state.destination = nil
+    case let .search(query): state.query = query
     }
     return state
 }
@@ -51,7 +54,8 @@ struct LibraryView: View {
                         Button("Try again") { Task { await library.load() } }
                     }
                 case .ready:
-                    LibraryReadyList(selection: selectionBinding)
+                    LibraryReadyList(selection: selectionBinding, query: state.query)
+                        .searchable(text: queryBinding)
                 }
             }
             .navigationTitle("Library")
@@ -137,6 +141,10 @@ struct LibraryView: View {
         })
     }
 
+    private var queryBinding: Binding<String> {
+        Binding(get: { state.query }, set: { send(.search($0)) })
+    }
+
     private func destinationBinding(_ destination: LibraryDestination) -> Binding<Bool> {
         Binding(
             get: { state.destination == destination },
@@ -152,37 +160,56 @@ struct LibraryView: View {
 private struct LibraryReadyList: View {
     @Environment(LibraryModel.self) private var library
     @Binding var selection: String?
+    var query: String
 
     var body: some View {
-        List(selection: $selection) {
-            if let materialID = library.snapshot.continuedID {
-                SwiftUI.Section("Continue") {
-                    if let package = library.snapshot.packages.first(where: { $0.material.id == materialID }) {
-                        row(package)
-                    } else if let book = library.snapshot.books.first(where: { $0.id == materialID }) {
-                        row(book)
+        let packages = library.snapshot.matchingPackages(query)
+        let books = library.snapshot.matchingBooks(query)
+        let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if searching && packages.isEmpty && books.isEmpty {
+            ContentUnavailableView.search(text: query)
+        } else {
+            List(selection: $selection) {
+                if searching {
+                    SwiftUI.Section("Results") {
+                        ForEach(packages, id: \.material.id) { package in
+                            row(package)
+                        }
+                        ForEach(books) { book in
+                            row(book)
+                        }
                     }
-                }
-            }
-            SwiftUI.Section("Materials") {
-                ForEach(library.snapshot.packages, id: \.material.id) { package in
-                    row(package).draggable(package.material.id)
-                }
-                ForEach(library.snapshot.books) { book in
-                    row(book)
-                }
-            }
-            ForEach(library.snapshot.folders, id: \.self) { folder in
-                SwiftUI.Section(folder) {
-                    ForEach(library.snapshot.packages(in: folder), id: \.material.id) { package in
-                        row(package)
+                } else {
+                    if let materialID = library.snapshot.continuedID {
+                        SwiftUI.Section("Continue") {
+                            if let package = library.snapshot.packages.first(where: { $0.material.id == materialID }) {
+                                row(package)
+                            } else if let book = library.snapshot.books.first(where: { $0.id == materialID }) {
+                                row(book)
+                            }
+                        }
                     }
-                }
-                .dropDestination(for: String.self) { ids, _ in
-                    for id in ids {
-                        Task { await library.move(materialID: id, to: folder) }
+                    SwiftUI.Section("Materials") {
+                        ForEach(library.snapshot.packages, id: \.material.id) { package in
+                            row(package).draggable(package.material.id)
+                        }
+                        ForEach(library.snapshot.books) { book in
+                            row(book)
+                        }
                     }
-                    return !ids.isEmpty
+                    ForEach(library.snapshot.folders, id: \.self) { folder in
+                        SwiftUI.Section(folder) {
+                            ForEach(library.snapshot.packages(in: folder), id: \.material.id) { package in
+                                row(package)
+                            }
+                        }
+                        .dropDestination(for: String.self) { ids, _ in
+                            for id in ids {
+                                Task { await library.move(materialID: id, to: folder) }
+                            }
+                            return !ids.isEmpty
+                        }
+                    }
                 }
             }
         }
