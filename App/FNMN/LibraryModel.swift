@@ -12,6 +12,7 @@ final class LibraryModel {
     var snapshot = LibrarySnapshot()
     var loadState: LibraryLoadState = .loading
     var operationError: String?
+    var storageURL: URL { file.root }
     private let file: LibraryFile
 
     init(file: LibraryFile? = nil) {
@@ -26,7 +27,11 @@ final class LibraryModel {
             loadState = .ready
         } catch {
             loadState = .failed(error.localizedDescription)
+            return
         }
+        guard let runtime = Bundle.main.url(forResource: "MarkdownRuntime", withExtension: nil) else { return }
+        do { try await file.installRuntime(from: runtime) }
+        catch { operationError = error.localizedDescription }
     }
 
     func importData(_ data: Data) async throws {
@@ -44,6 +49,23 @@ final class LibraryModel {
         try snapshot.importPackage(package)
         do { try await persist() }
         catch { snapshot = previous; throw error }
+    }
+
+    func importBook(from directory: URL) async throws {
+        let imported = try BookCatalog.inspect(from: directory)
+        let previous = snapshot
+        let replacing = previous.books.contains { $0.id == imported.record.id }
+        snapshot.importBook(imported.record)
+        do {
+            try await file.copyBook(from: directory, named: imported.record.directoryName)
+            try await file.saveState(snapshot)
+        } catch {
+            snapshot = previous
+            if !replacing {
+                try await file.removeBook(named: imported.record.directoryName)
+            }
+            throw error
+        }
     }
 
     func recordOpening(materialID: String, at date: Date = .now) async {

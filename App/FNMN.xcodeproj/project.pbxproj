@@ -11,6 +11,10 @@
 		372232071456131772162561 /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E2C79DDDC04DAAECD3E16A1 /* ReaderView.swift */; };
 		3BA0EC3EF5F002621223B035 /* Library.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3476D9114EBF885077C36C07 /* Library.swift */; };
 		3F0A8559A7670449E8A98FB4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 939C7C29C0763F80271E6304 /* Foundation.framework */; };
+		8B1C0D2E3F4A5B6C7D8E9F02 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */; };
+		8B1C0D2E3F4A5B6C7D8E9F04 /* BookReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1C0D2E3F4A5B6C7D8E9F03 /* BookReaderView.swift */; };
+		8B1C0D2E3F4A5B6C7D8E9F06 /* BookWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1C0D2E3F4A5B6C7D8E9F05 /* BookWebView.swift */; };
+		8B1C0D2E3F4A5B6C7D8E9F08 /* MarkdownRuntime in Resources */ = {isa = PBXBuildFile; fileRef = 8B1C0D2E3F4A5B6C7D8E9F07 /* MarkdownRuntime */; };
 		98F460E2EAC210CFD145DCF0 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534989C7158DF819423EE66A /* Document.swift */; };
 		AE87C319066733279308AC1C /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F938AACA51E893E5F5C036 /* LibraryView.swift */; };
 		C5D59E4B171DA2124DA6B4DD /* LibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4323AC29BFCE9540F2C0AF9 /* LibraryModel.swift */; };
@@ -22,6 +26,10 @@
 		3476D9114EBF885077C36C07 /* Library.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Library.swift; path = ../Sources/FNMNCore/Library.swift; sourceTree = "<group>"; };
 		534989C7158DF819423EE66A /* Document.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Document.swift; path = ../Sources/FNMNCore/Document.swift; sourceTree = "<group>"; };
 		75B60DA4901A295C4336ADDC /* BlockWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BlockWebView.swift; path = FNMN/BlockWebView.swift; sourceTree = "<group>"; };
+		8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Book.swift; path = ../Sources/FNMNCore/Book.swift; sourceTree = "<group>"; };
+		8B1C0D2E3F4A5B6C7D8E9F03 /* BookReaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BookReaderView.swift; path = FNMN/BookReaderView.swift; sourceTree = "<group>"; };
+		8B1C0D2E3F4A5B6C7D8E9F05 /* BookWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BookWebView.swift; path = FNMN/BookWebView.swift; sourceTree = "<group>"; };
+		8B1C0D2E3F4A5B6C7D8E9F07 /* MarkdownRuntime */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MarkdownRuntime; path = FNMN/MarkdownRuntime; sourceTree = "<group>"; };
 		8E2C79DDDC04DAAECD3E16A1 /* ReaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReaderView.swift; path = FNMN/ReaderView.swift; sourceTree = "<group>"; };
 		939C7C29C0763F80271E6304 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		97F938AACA51E893E5F5C036 /* LibraryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibraryView.swift; path = FNMN/LibraryView.swift; sourceTree = "<group>"; };
@@ -73,9 +81,13 @@
 			isa = PBXGroup;
 			children = (
 				75B60DA4901A295C4336ADDC /* BlockWebView.swift */,
+				8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */,
+				8B1C0D2E3F4A5B6C7D8E9F03 /* BookReaderView.swift */,
+				8B1C0D2E3F4A5B6C7D8E9F05 /* BookWebView.swift */,
 				A03F29758142BE6B7DD211B8 /* FNMNApp.swift */,
 				D4323AC29BFCE9540F2C0AF9 /* LibraryModel.swift */,
 				97F938AACA51E893E5F5C036 /* LibraryView.swift */,
+				8B1C0D2E3F4A5B6C7D8E9F07 /* MarkdownRuntime */,
 				8E2C79DDDC04DAAECD3E16A1 /* ReaderView.swift */,
 				534989C7158DF819423EE66A /* Document.swift */,
 				3476D9114EBF885077C36C07 /* Library.swift */,
@@ -144,6 +156,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B1C0D2E3F4A5B6C7D8E9F08 /* MarkdownRuntime in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,6 +168,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				E1F51509B92D61982B2278C2 /* BlockWebView.swift in Sources */,
+				8B1C0D2E3F4A5B6C7D8E9F02 /* Book.swift in Sources */,
+				8B1C0D2E3F4A5B6C7D8E9F04 /* BookReaderView.swift in Sources */,
+				8B1C0D2E3F4A5B6C7D8E9F06 /* BookWebView.swift in Sources */,
 				2F008D21E0F9352EB47F7A73 /* FNMNApp.swift in Sources */,
 				C5D59E4B171DA2124DA6B4DD /* LibraryModel.swift in Sources */,
 				AE87C319066733279308AC1C /* LibraryView.swift in Sources */,

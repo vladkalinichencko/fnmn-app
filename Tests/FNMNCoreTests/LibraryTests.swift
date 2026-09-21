@@ -91,3 +91,59 @@ private let laterArticle = ImportPackage(
     #expect(!accepted)
     #expect(library.positions[article.material.id] == ReadingPosition(blockID: "next"))
 }
+
+private var sampleBook: URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appending(path: "fixtures/books/principles-of-deep-learning-theory")
+}
+
+@Test func bookCatalogInspectsValidatedFixture() throws {
+    let imported = try BookCatalog.inspect(from: sampleBook)
+    #expect(imported.record.metadata.title == "The Principles of Deep Learning Theory")
+    #expect(imported.record.metadata.toc.count == 223)
+    #expect(imported.validation.headings == 223)
+    #expect(imported.validation.images == 10)
+    #expect(imported.validation.errors.isEmpty)
+    #expect(imported.imagePaths.count == 10)
+    #expect(imported.footnoteIDs.count == 313)
+}
+
+@Test func bookImportRejectsValidationErrors() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.copyItem(at: sampleBook, to: directory)
+    try Data(#"{"headings":0,"images":0,"errors":["missing_images"]}"#.utf8)
+        .write(to: directory.appending(path: "validation.json"))
+    #expect(throws: BookError.rejected(["missing_images"])) {
+        try BookCatalog.inspect(from: directory)
+    }
+}
+
+@Test func bookImportCopiesCatalogIntoLibrary() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory)
+    let imported = try BookCatalog.inspect(from: sampleBook)
+    var library = LibrarySnapshot()
+    library.importBook(imported.record)
+    try await file.copyBook(from: sampleBook, named: imported.record.directoryName)
+    try await file.saveState(library)
+    let loaded = try await file.load()
+    #expect(loaded.books.count == 1)
+    #expect(loaded.books[0].metadata.toc.count == 223)
+    let copied = directory.appending(path: "books").appending(path: imported.record.directoryName)
+    #expect(FileManager.default.fileExists(atPath: copied.appending(path: "content.md").path))
+    for image in imported.imagePaths {
+        #expect(FileManager.default.fileExists(atPath: copied.appending(path: image).path))
+    }
+}
+
+@Test func oldStateWithoutBooksStillLoads() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data(#"{"positions":{},"notes":[],"folders":[]}"#.utf8)
+        .write(to: directory.appending(path: "state.json"))
+    let snapshot = try await LibraryFile(url: directory).load()
+    #expect(snapshot.books.isEmpty)
+}

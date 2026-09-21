@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 private enum LibraryDestination: String, Identifiable {
     case addArticle
     case importPackage
+    case importBook
     case newFolder
 
     var id: String { rawValue }
@@ -59,6 +60,7 @@ struct LibraryView: View {
                     Group {
                         Button("Add article", systemImage: "link.badge.plus") { send(.present(.addArticle)) }
                         Button("Import package", systemImage: "doc.badge.plus") { send(.present(.importPackage)) }
+                        Button("Import book", systemImage: "book.badge.plus") { send(.present(.importBook)) }
                         Button("New folder", systemImage: "folder.badge.plus") { send(.present(.newFolder)) }
                     }
                     .disabled(library.loadState != .ready)
@@ -67,6 +69,8 @@ struct LibraryView: View {
         } detail: {
             if let package = selectedPackage {
                 ReaderView(package: package).id(package.material.id)
+            } else if let book = selectedBook {
+                BookReaderView(record: book).id(book.id)
             } else {
                 ContentUnavailableView("Choose a material", systemImage: "books.vertical")
             }
@@ -94,6 +98,19 @@ struct LibraryView: View {
                 catch { library.operationError = error.localizedDescription }
             }
         }
+        .fileImporter(isPresented: destinationBinding(.importBook), allowedContentTypes: [.folder]) { result in
+            guard case let .success(url) = result else { return }
+            Task {
+                let access = url.startAccessingSecurityScopedResource()
+                defer {
+                    if access {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
+                do { try await library.importBook(from: url) }
+                catch { library.operationError = error.localizedDescription }
+            }
+        }
         .alert("Couldn’t save changes", isPresented: .init(get: { library.operationError != nil }, set: {
             if !$0 {
                 library.operationError = nil
@@ -105,6 +122,10 @@ struct LibraryView: View {
 
     private var selectedPackage: ImportPackage? {
         library.snapshot.packages.first { $0.material.id == state.selection }
+    }
+
+    private var selectedBook: BookRecord? {
+        library.snapshot.books.first { $0.id == state.selection }
     }
 
     private var selectionBinding: Binding<String?> {
@@ -134,14 +155,21 @@ private struct LibraryReadyList: View {
 
     var body: some View {
         List(selection: $selection) {
-            if let continued = library.snapshot.continuedPackage {
+            if let materialID = library.snapshot.continuedID {
                 SwiftUI.Section("Continue") {
-                    row(continued)
+                    if let package = library.snapshot.packages.first(where: { $0.material.id == materialID }) {
+                        row(package)
+                    } else if let book = library.snapshot.books.first(where: { $0.id == materialID }) {
+                        row(book)
+                    }
                 }
             }
             SwiftUI.Section("Materials") {
                 ForEach(library.snapshot.packages, id: \.material.id) { package in
                     row(package).draggable(package.material.id)
+                }
+                ForEach(library.snapshot.books) { book in
+                    row(book)
                 }
             }
             ForEach(library.snapshot.folders, id: \.self) { folder in
@@ -162,17 +190,30 @@ private struct LibraryReadyList: View {
 
     private func row(_ package: ImportPackage) -> some View {
         MaterialRow(
-            package: package,
+            title: package.material.title,
+            systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text",
             isRead: library.snapshot.readings[package.material.id]?.isRead ?? false
         ) { isRead in
             Task { await library.setRead(isRead, materialID: package.material.id) }
         }
         .tag(package.material.id)
     }
+
+    private func row(_ book: BookRecord) -> some View {
+        MaterialRow(
+            title: book.metadata.title,
+            systemImage: "book",
+            isRead: library.snapshot.readings[book.id]?.isRead ?? false
+        ) { isRead in
+            Task { await library.setRead(isRead, materialID: book.id) }
+        }
+        .tag(book.id)
+    }
 }
 
 private struct MaterialRow: View {
-    let package: ImportPackage
+    let title: String
+    let systemImage: String
     let isRead: Bool
     let setRead: (Bool) -> Void
 
@@ -188,11 +229,11 @@ private struct MaterialRow: View {
 
     @ViewBuilder
     private var labeledTitle: some View {
-        let title = Label(package.material.title, systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text")
+        let label = Label(title, systemImage: systemImage)
         if isRead {
-            title
+            label
         } else {
-            title.badge("Unread")
+            label.badge("Unread")
         }
     }
 }

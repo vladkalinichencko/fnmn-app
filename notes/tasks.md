@@ -24,7 +24,7 @@
 - [ ] Проверить синхронизацию и локальное чтение без Mac; затем выбрать автоматизацию импорта.
 - [ ] Подключить тяжёлый разбор PDF, изображения и интерактивные вставки с явным покрытием форматов.
 - [x] Зафиксировать формат PDF-книги и положить проверочный пакет с экспортёром: [`mac/pdf-book/`](../mac/pdf-book/README.md), [`fixtures/books/principles-of-deep-learning-theory/`](../fixtures/books/principles-of-deep-learning-theory/). Структурная проверка образца не заменяет ручную семантическую проверку книги.
-- [ ] Импортировать каталог PDF-книги в библиотеку: проверить `metadata.json` и пустой `validation.json.errors`, скопировать `content.md` и `assets/`, построить оглавление по `toc`, отрендерить Markdown, LaTeX, изображения и Markdown-сноски.
+- [x] Импортировать каталог PDF-книги в библиотеку: проверить `metadata.json` и пустой `validation.json.errors`, скопировать `content.md` и `assets/`, построить оглавление по `toc`, отрендерить Markdown, LaTeX, изображения и Markdown-сноски.
 - [ ] Выбрать метод автоматической классификации и ручного исправления категорий; отдельно проверить пользу семантического поиска.
 - [ ] Проверить Send to ChatGPT/Claude/Gemini, ограничения ChatGPT Projects и нужные действия App Intents.
 - [ ] Уточнить «TypeSafe Jev API» и выбирать Apple Intelligence, Foundation Models, Core ML или Core AI под конкретную операцию.

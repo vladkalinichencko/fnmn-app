@@ -6,14 +6,15 @@
 
 - Добавить статью по URL через запущенный на Mac сервис.
 - Импортировать готовый JSON-пакет статьи или видео.
-- Открыть материал, перейти к предыдущему или следующему блоку и выбрать раздел.
+- Импортировать каталог PDF-книги (`content.md`, `metadata.json`, `assets/`, `validation.json`).
+- Открыть статью по блокам или книгу по оглавлению из `metadata.json.toc`.
 - Вернуться через «Продолжить» к материалу, который открывали последним, и к его сохранённому блоку; для видео сохранить время текущего блока.
 - Явно отметить материал прочитанным или непрочитанным.
 - Создать или отредактировать одну заметку у текущего блока.
 - Создать папку и перетащить в неё материал.
 - Открыть исходный URL.
 
-Приложение пока не принимает PDF, DjVu или EPUB напрямую, не имеет поиска и Share Extension и не переносит заметки между изменившимися версиями документа.
+Приложение пока не принимает исходный PDF, DjVu или EPUB напрямую, не имеет поиска и Share Extension и не переносит заметки между изменившимися версиями документа.
 
 ## Жизненный цикл
 
@@ -31,6 +32,12 @@ flowchart TD
     Library --> AddJSON[Выбрать JSON-пакет]
     AddJSON --> Decode[JSONDecoder → ImportPackage]
     Decode --> Import
+    Library --> AddBook[Выбрать каталог книги]
+    AddBook --> Inspect[BookCatalog.inspect]
+    Inspect -->|errors пуст| CopyBook[LibraryFile.copyBook]
+    Inspect -->|errors не пуст| ImportFail[Ошибка импорта]
+    CopyBook --> SaveBook[LibrarySnapshot.importBook]
+    SaveBook --> Persist
     Import --> Persist[LibraryFile.save]
     Persist --> Library
 
@@ -40,12 +47,16 @@ flowchart TD
     Select --> RecordOpen[LibrarySnapshot.recordOpening]
     RecordOpen --> PersistState[LibraryFile.saveState]
     PersistState --> Restore[Найти ReadingPosition]
-    Restore --> Reader[Показать текущий Block]
+    Restore --> Reader[Статья: текущий Block]
+    Restore --> BookReader[Книга: Markdown по toc]
     Library --> MarkRead[Отметить прочитанным или непрочитанным]
     MarkRead --> PersistState
     Reader --> Move[Предыдущий / следующий / раздел]
     Move --> SavePosition[LibraryFile.saveState]
     SavePosition --> Reader
+    BookReader --> BookSection[Раздел из toc]
+    BookSection --> SavePosition
+    SavePosition --> BookReader
     Reader --> EditNote[Открыть заметку текущего блока]
     EditNote --> SaveNote[LibraryModel.save note]
     SaveNote --> SavePosition
@@ -58,6 +69,7 @@ classDiagram
     FNMNApp --> LibraryModel
     LibraryView --> LibraryModel
     ReaderView --> LibraryModel
+    BookReaderView --> LibraryModel
     LibraryModel --> LibrarySnapshot
     LibraryModel --> LibraryFile
     LibraryModel --> ArticleClient
@@ -65,10 +77,13 @@ classDiagram
     ImportPackage o-- Material
     ImportPackage o-- Section
     ImportPackage o-- Block
+    LibrarySnapshot o-- BookRecord
+    BookRecord o-- BookMetadata
     LibrarySnapshot o-- ReadingPosition
     LibrarySnapshot o-- MaterialReading
     LibrarySnapshot o-- Note
     ReaderView --> BlockWebView
+    BookReaderView --> BookWebView
 
     class LibraryModel {
       +snapshot: LibrarySnapshot
@@ -76,15 +91,23 @@ classDiagram
       +load()
       +importData()
       +importArticle()
+      +importBook()
       +recordOpening()
       +setRead()
       +save(position)
       +save(note)
     }
     class LibrarySnapshot {
-      +continuedPackage: ImportPackage?
+      +continuedID: String?
       +recordOpening()
       +setRead()
+    }
+    class BookRecord {
+      +id: String
+      +directoryName: String
+    }
+    class BookCatalog {
+      +inspect(directory)
     }
     class MaterialReading {
       +openedAt: Date?
@@ -94,13 +117,14 @@ classDiagram
       +load()
       +save(snapshot)
       +saveState(snapshot)
+      +copyBook()
     }
     class ArticleClient {
       +prepare(url, folder)
     }
 ```
 
-`LibrarySnapshot` — единственный владелец сохранённых данных, включая место чтения и `MaterialReading` (время открытия и явная отметка прочтения). «Продолжить» — селектор `continuedPackage`: материал с самым поздним `openedAt`; если открытий ещё не записывали, берётся первый пакет с сохранённой позицией. `LibraryModel` выполняет операции над снимком и вызывает адаптеры. SwiftUI-экраны владеют только временным взаимодействием и отправляют действия в небольшие редьюсеры рядом с экраном. `LibraryFile`, `ArticleClient` и `BlockWebView` — границы эффектов.
+`LibrarySnapshot` — единственный владелец сохранённых данных: JSON-пакеты статей, записи книг, место чтения и `MaterialReading`. Книга хранится каталогом, а не массивом HTML-блоков; оглавление берётся из `metadata.json.toc`. «Продолжить» — селектор `continuedID`: материал с самым поздним `openedAt`; если открытий ещё не записывали, берётся первая статья или книга с сохранённой позицией. Для книги `ReadingPosition.blockID` — `toc:<ordinal>`. Читатель книги — один `WKWebView` с прокруткой документа, локальным base URL и бандлом Markdown/KaTeX; SwiftUI владеет списком, оглавлением и действиями. `LibraryFile`, `ArticleClient`, `BlockWebView` и `BookWebView` — границы эффектов.
 
 ## Состояния экранов
 
@@ -133,6 +157,13 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    [*] --> reading
+    reading --> outline: открыть разделы книги
+    outline --> reading: выбрать раздел или закрыть
+```
+
+```mermaid
+stateDiagram-v2
     [*] --> editing
     editing --> saving: сохранить непустой текст
     saving --> [*]: заметка сохранена
@@ -146,14 +177,15 @@ stateDiagram-v2
 ## Инварианты
 
 - `ImportPackage.version == 1`, а `blocks` не пуст.
-- Повторный импорт заменяет пакет с тем же `material.id`, не создавая копию.
+- Книга принимается только при `schema_version == 1` и пустом `validation.json.errors`; отсутствуют `content.md` или файл из `assets/` — ошибка импорта, без частичного чтения.
+- Повторный импорт заменяет пакет или книгу с тем же id, не создавая копию.
 - Для пары `materialID + blockID` существует не больше одной заметки.
-- `ReadingPosition.blockID` указывает на блок открытого пакета; устаревшее время видео не переводит читатель обратно к старому блоку.
+- `ReadingPosition.blockID` указывает на блок статьи или на `toc:<ordinal>` открытой книги; устаревшее время видео не переводит читатель обратно к старому блоку.
 - `MaterialReading.openedAt` обновляется при выборе материала; `isRead` меняется только явным действием пользователя и не выводится из позиции или открытия.
-- Старый `state.json` без `readings` загружается как пустой словарь.
+- Старый `state.json` без `readings` или `books` загружается с пустыми значениями.
 - Сначала меняется снимок в памяти, затем он сохраняется атомарно; ошибка записи возвращает прежний снимок.
 - Результат асинхронной операции применяется только к экрану и материалу, которые её запустили.
 
 ## Как добавлять следующий срез
 
-До кода в этот файл добавляются видимое действие пользователя, его переходы состояния, владелец данных и граница эффекта. В коде добавляется минимальный сквозной путь через существующие типы. Следующий срез: импорт каталога PDF-книги (`content.md`, `metadata.json`, `assets/`, `validation.json`) без сведения его к JSON-блокам статьи.
+До кода в этот файл добавляются видимое действие пользователя, его переходы состояния, владелец данных и граница эффекта. В коде добавляется минимальный сквозной путь через существующие типы. Следующий срез: поиск в библиотеке или Share to FNMN, без учебной ленты.
