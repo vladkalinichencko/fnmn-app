@@ -52,7 +52,7 @@
 - [x] Передать ссылку из Share Extension в тот же вход, без второй библиотеки.
 - [x] Зафиксировать тело веб-статьи: текст в Markdown, картинки и видео файлами, интерактив отдельным кадром внутри документа. [Заметка](research/web-article.md).
 - [ ] Докачивать скрипты интерактивного фрагмента одной цепочкой fetchingPage, fetchingAssets, saving, failed. Не скачался обязательный файл — нет карточки.
-- [ ] Проверить две живые страницы Distill: [Why Momentum Really Works](https://distill.pub/2017/momentum/) и [A Gentle Introduction to Graph Neural Networks](https://distill.pub/2021/gnn-intro/). Текст читается как Markdown, фигура двигается в своём кадре, формулы по левому краю, оригинал открывается отдельно.
+- [ ] Проверить две живые страницы Distill: [Why Momentum Really Works](https://distill.pub/2017/momentum/) и [A Gentle Introduction to Graph Neural Networks](https://distill.pub/2021/gnn-intro/). Текст идёт в потоке SwiftUI, фигура — отдельным WKWebView на своём месте, формулы по левому краю, оригинал открывается отдельно.
 - [ ] Подключить импорт веб-статьи к Markdown-пакету: название, автор, ссылка, текст, файлы картинок и видео, кадры `fnmn-interactive`.
 - [ ] Читать этот пакет в уже существующем Markdown-читателе и открывать оригинал отдельным действием.
 - [ ] Готовить arXiv из LaTeX source; если source нет, скачивать PDF и проводить его через пайплайн книги.
