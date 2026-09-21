@@ -1,0 +1,1134 @@
+{
+  "type": "book",
+  "title": "The Principles of Deep Learning Theory",
+  "subtitle": "An Effective Theory Approach to Understanding Neural Networks",
+  "authors": [
+    "Daniel A. Roberts",
+    "Sho Yaida"
+  ],
+  "contributors": [
+    "Boris Hanin"
+  ],
+  "language": "en",
+  "source_name": "The Principles of Deep Learning Theory.pdf",
+  "schema_version": 1,
+  "content_file": "content.md",
+  "assets_directory": "assets",
+  "toc": [
+    {
+      "ordinal": 1,
+      "level": 1,
+      "title": "Initialization"
+    },
+    {
+      "ordinal": 2,
+      "level": 2,
+      "title": "An Effective Theory Approach"
+    },
+    {
+      "ordinal": 3,
+      "level": 2,
+      "title": "The Theoretical Minimum"
+    },
+    {
+      "ordinal": 4,
+      "level": 3,
+      "title": "Problem 1"
+    },
+    {
+      "ordinal": 5,
+      "level": 3,
+      "title": "Problem 2"
+    },
+    {
+      "ordinal": 6,
+      "level": 3,
+      "title": "Problem 3"
+    },
+    {
+      "ordinal": 7,
+      "level": 3,
+      "title": "A Principle of Sparsity"
+    },
+    {
+      "ordinal": 8,
+      "level": 1,
+      "title": "Pretraining"
+    },
+    {
+      "ordinal": 9,
+      "level": 2,
+      "title": "Gaussian Integrals"
+    },
+    {
+      "ordinal": 10,
+      "level": 3,
+      "title": "Single-variable Gaussian integrals"
+    },
+    {
+      "ordinal": 11,
+      "level": 3,
+      "title": "Multivariable Gaussian integrals"
+    },
+    {
+      "ordinal": 12,
+      "level": 2,
+      "title": "Probability, Correlation and Statistics, and All That"
+    },
+    {
+      "ordinal": 13,
+      "level": 2,
+      "title": "Nearly-Gaussian Distributions"
+    },
+    {
+      "ordinal": 14,
+      "level": 3,
+      "title": "Quadratic action and the Gaussian distribution"
+    },
+    {
+      "ordinal": 15,
+      "level": 3,
+      "title": "Quartic action and perturbation theory"
+    },
+    {
+      "ordinal": 16,
+      "level": 3,
+      "title": "Aside: statistical independence and interactions"
+    },
+    {
+      "ordinal": 17,
+      "level": 3,
+      "title": "Nearly-Gaussian actions"
+    },
+    {
+      "ordinal": 18,
+      "level": 1,
+      "title": "Neural Networks"
+    },
+    {
+      "ordinal": 19,
+      "level": 2,
+      "title": "Function Approximation"
+    },
+    {
+      "ordinal": 20,
+      "level": 2,
+      "title": "Activation Functions"
+    },
+    {
+      "ordinal": 21,
+      "level": 3,
+      "title": "Perceptron"
+    },
+    {
+      "ordinal": 22,
+      "level": 3,
+      "title": "Sigmoid"
+    },
+    {
+      "ordinal": 23,
+      "level": 3,
+      "title": "Tanh"
+    },
+    {
+      "ordinal": 24,
+      "level": 3,
+      "title": "Sin"
+    },
+    {
+      "ordinal": 25,
+      "level": 3,
+      "title": "Scale-invariant: linear, ReLU, and leaky ReLU"
+    },
+    {
+      "ordinal": 26,
+      "level": 3,
+      "title": "ReLU-like: softplus, SWISH, and GELU"
+    },
+    {
+      "ordinal": 27,
+      "level": 2,
+      "title": "Ensembles"
+    },
+    {
+      "ordinal": 28,
+      "level": 3,
+      "title": "Initialization distribution of biases and weights"
+    },
+    {
+      "ordinal": 29,
+      "level": 3,
+      "title": "Induced distributions"
+    },
+    {
+      "ordinal": 30,
+      "level": 3,
+      "title": "Deterministic distributions and the Dirac delta function"
+    },
+    {
+      "ordinal": 31,
+      "level": 3,
+      "title": "Induced distributions, redux"
+    },
+    {
+      "ordinal": 32,
+      "level": 1,
+      "title": "Effective Theory of Deep Linear Networks at Initialization"
+    },
+    {
+      "ordinal": 33,
+      "level": 2,
+      "title": "Deep Linear Networks"
+    },
+    {
+      "ordinal": 34,
+      "level": 2,
+      "title": "Criticality"
+    },
+    {
+      "ordinal": 35,
+      "level": 3,
+      "title": "Math: recursion for the two-point correlator"
+    },
+    {
+      "ordinal": 36,
+      "level": 3,
+      "title": "Physics: criticality"
+    },
+    {
+      "ordinal": 37,
+      "level": 2,
+      "title": "Fluctuations"
+    },
+    {
+      "ordinal": 38,
+      "level": 3,
+      "title": "Math: recursion for the four-point correlator"
+    },
+    {
+      "ordinal": 39,
+      "level": 2,
+      "title": "Chaos"
+    },
+    {
+      "ordinal": 40,
+      "level": 3,
+      "title": "Math: recursions for six-point and higher-point correlators"
+    },
+    {
+      "ordinal": 41,
+      "level": 3,
+      "title": "Physics: breakdown of perturbation theory and the emergence of chaos"
+    },
+    {
+      "ordinal": 42,
+      "level": 1,
+      "title": "RG Flow of Preactivations"
+    },
+    {
+      "ordinal": 43,
+      "level": 2,
+      "title": "First Layer: Good-Old Gaussian"
+    },
+    {
+      "ordinal": 44,
+      "level": 3,
+      "title": "Wick this way: combinatorial derivation via correlators"
+    },
+    {
+      "ordinal": 45,
+      "level": 3,
+      "title": "Hubbard-Stratonovich this way: algebraic derivation via action"
+    },
+    {
+      "ordinal": 46,
+      "level": 3,
+      "title": "Gaussian action in action"
+    },
+    {
+      "ordinal": 47,
+      "level": 2,
+      "title": "Second Layer: Genesis of Non-Gaussianity"
+    },
+    {
+      "ordinal": 48,
+      "level": 3,
+      "title": "Second-layer conditional distribution"
+    },
+    {
+      "ordinal": 49,
+      "level": 3,
+      "title": "Wick Wick Wick: combinatorial derivation"
+    },
+    {
+      "ordinal": 50,
+      "level": 3,
+      "title": "Schwinger-Dyson this way: algebraic derivation"
+    },
+    {
+      "ordinal": 51,
+      "level": 3,
+      "title": "Nearly-Gaussian action in action"
+    },
+    {
+      "ordinal": 52,
+      "level": 2,
+      "title": "Deeper Layers: Accumulation of Non-Gaussianity"
+    },
+    {
+      "ordinal": 53,
+      "level": 3,
+      "title": "Recursion"
+    },
+    {
+      "ordinal": 54,
+      "level": 3,
+      "title": "Action"
+    },
+    {
+      "ordinal": 55,
+      "level": 3,
+      "title": "Large-width expansion"
+    },
+    {
+      "ordinal": 56,
+      "level": 2,
+      "title": "Marginalization Rules"
+    },
+    {
+      "ordinal": 57,
+      "level": 3,
+      "title": "Marginalization over samples"
+    },
+    {
+      "ordinal": 58,
+      "level": 3,
+      "title": "Marginalization over neurons"
+    },
+    {
+      "ordinal": 59,
+      "level": 3,
+      "title": "Running couplings with partial marginalizations"
+    },
+    {
+      "ordinal": 60,
+      "level": 2,
+      "title": "Subleading Corrections"
+    },
+    {
+      "ordinal": 61,
+      "level": 2,
+      "title": "RG Flow and RG Flow"
+    },
+    {
+      "ordinal": 62,
+      "level": 1,
+      "title": "Effective Theory of Preactivations at Initialization"
+    },
+    {
+      "ordinal": 63,
+      "level": 2,
+      "title": "Criticality Analysis of the Kernel"
+    },
+    {
+      "ordinal": 64,
+      "level": 3,
+      "title": "A single input"
+    },
+    {
+      "ordinal": 65,
+      "level": 3,
+      "title": "Two inputs"
+    },
+    {
+      "ordinal": 66,
+      "level": 3,
+      "title": "Deriving bootstrapped recursions"
+    },
+    {
+      "ordinal": 67,
+      "level": 3,
+      "title": "Summary"
+    },
+    {
+      "ordinal": 68,
+      "level": 2,
+      "title": "Criticality for Scale-Invariant Activations"
+    },
+    {
+      "ordinal": 69,
+      "level": 2,
+      "title": "Universality beyond Scale-Invariant Activations"
+    },
+    {
+      "ordinal": 70,
+      "level": 3,
+      "title": "General Strategy"
+    },
+    {
+      "ordinal": 71,
+      "level": 3,
+      "title": "No Criticality: sigmoid, softplus, nonlinear monomials, etc."
+    },
+    {
+      "ordinal": 72,
+      "level": 3,
+      "title": "$K^{*}=0$  Universality Class: tanh, sin, etc."
+    },
+    {
+      "ordinal": 73,
+      "level": 4,
+      "title": "Deep asymptotic analysis for the midpoint kernel"
+    },
+    {
+      "ordinal": 74,
+      "level": 4,
+      "title": "Deep asymptotic analysis for parallel perturbations"
+    },
+    {
+      "ordinal": 75,
+      "level": 4,
+      "title": "Deep asymptotic analysis for perpendicular perturbations"
+    },
+    {
+      "ordinal": 76,
+      "level": 3,
+      "title": "Half-Stable Universality Classes: SWISH, etc. and GELU, etc."
+    },
+    {
+      "ordinal": 77,
+      "level": 2,
+      "title": "Fluctuations"
+    },
+    {
+      "ordinal": 78,
+      "level": 3,
+      "title": "A single input, reloaded"
+    },
+    {
+      "ordinal": 79,
+      "level": 3,
+      "title": "Fluctuations for the Scale-Invariant Universality Class"
+    },
+    {
+      "ordinal": 80,
+      "level": 3,
+      "title": "Fluctuations for the  $K^{\\star}=0$  Universality Class"
+    },
+    {
+      "ordinal": 81,
+      "level": 4,
+      "title": "Four-Point Vertex"
+    },
+    {
+      "ordinal": 82,
+      "level": 4,
+      "title": "NLO metric, bare"
+    },
+    {
+      "ordinal": 83,
+      "level": 4,
+      "title": "NLO metric, renormalized"
+    },
+    {
+      "ordinal": 84,
+      "level": 2,
+      "title": "Finite-Angle Analysis for the Scale-Invariant Universality Class"
+    },
+    {
+      "ordinal": 85,
+      "level": 3,
+      "title": "RG flow of the polar angle"
+    },
+    {
+      "ordinal": 86,
+      "level": 3,
+      "title": "Criticality analysis of the polar angle"
+    },
+    {
+      "ordinal": 87,
+      "level": 1,
+      "title": "Bayesian Learning"
+    },
+    {
+      "ordinal": 88,
+      "level": 2,
+      "title": "Bayesian Probability"
+    },
+    {
+      "ordinal": 89,
+      "level": 2,
+      "title": "Bayesian Inference and Neural Networks"
+    },
+    {
+      "ordinal": 90,
+      "level": 3,
+      "title": "Bayesian Model Fitting"
+    },
+    {
+      "ordinal": 91,
+      "level": 4,
+      "title": "Approximation methods for model marginalization: MAP and MLE"
+    },
+    {
+      "ordinal": 92,
+      "level": 4,
+      "title": "Exact method for model marginalization: effective theory"
+    },
+    {
+      "ordinal": 93,
+      "level": 3,
+      "title": "Bayesian Model Comparison"
+    },
+    {
+      "ordinal": 94,
+      "level": 4,
+      "title": "Occam's razor"
+    },
+    {
+      "ordinal": 95,
+      "level": 4,
+      "title": "Inductive Bias"
+    },
+    {
+      "ordinal": 96,
+      "level": 2,
+      "title": "Bayesian Inference at Infinite Width"
+    },
+    {
+      "ordinal": 97,
+      "level": 3,
+      "title": "The Evidence for Criticality"
+    },
+    {
+      "ordinal": 98,
+      "level": 3,
+      "title": "Let's Not Wire Together"
+    },
+    {
+      "ordinal": 99,
+      "level": 3,
+      "title": "Absence of Representation Learning"
+    },
+    {
+      "ordinal": 100,
+      "level": 2,
+      "title": "Bayesian Inference at Finite Width"
+    },
+    {
+      "ordinal": 101,
+      "level": 3,
+      "title": "Hebbian Learning, Inc."
+    },
+    {
+      "ordinal": 102,
+      "level": 3,
+      "title": "Let's Wire Together"
+    },
+    {
+      "ordinal": 103,
+      "level": 3,
+      "title": "Presence of Representation Learning"
+    },
+    {
+      "ordinal": 104,
+      "level": 1,
+      "title": "Gradient-Based Learning"
+    },
+    {
+      "ordinal": 105,
+      "level": 2,
+      "title": "Supervised Learning"
+    },
+    {
+      "ordinal": 106,
+      "level": 2,
+      "title": "Gradient Descent and Function Approximation"
+    },
+    {
+      "ordinal": 107,
+      "level": 3,
+      "title": "Tensorial Gradient Descent"
+    },
+    {
+      "ordinal": 108,
+      "level": 3,
+      "title": "Neural Tangent Kernel"
+    },
+    {
+      "ordinal": 109,
+      "level": 1,
+      "title": "RG Flow of the Neural Tangent Kernel"
+    },
+    {
+      "ordinal": 110,
+      "level": 2,
+      "title": "Forward Equation for the NTK"
+    },
+    {
+      "ordinal": 111,
+      "level": 3,
+      "title": "Scaling in the effective theory"
+    },
+    {
+      "ordinal": 112,
+      "level": 3,
+      "title": "Getting things backwards"
+    },
+    {
+      "ordinal": 113,
+      "level": 2,
+      "title": "First Layer: Deterministic NTK"
+    },
+    {
+      "ordinal": 114,
+      "level": 2,
+      "title": "Second Layer: Fluctuating NTK"
+    },
+    {
+      "ordinal": 115,
+      "level": 2,
+      "title": "Deeper Layers: Accumulation of NTK Fluctuations"
+    },
+    {
+      "ordinal": 116,
+      "level": 3,
+      "title": "Interlude: Interlayer Correlations"
+    },
+    {
+      "ordinal": 117,
+      "level": 3,
+      "title": "NTK Mean"
+    },
+    {
+      "ordinal": 118,
+      "level": 3,
+      "title": "NTK-Preactivation Cross Correlations"
+    },
+    {
+      "ordinal": 119,
+      "level": 4,
+      "title": "D-recursion"
+    },
+    {
+      "ordinal": 120,
+      "level": 4,
+      "title": "F-recursion"
+    },
+    {
+      "ordinal": 121,
+      "level": 3,
+      "title": "NTK Variance"
+    },
+    {
+      "ordinal": 122,
+      "level": 4,
+      "title": "B-recursion"
+    },
+    {
+      "ordinal": 123,
+      "level": 4,
+      "title": "A-recursion"
+    },
+    {
+      "ordinal": 124,
+      "level": 1,
+      "title": "Effective Theory of the NTK at Initialization"
+    },
+    {
+      "ordinal": 125,
+      "level": 2,
+      "title": "Criticality Analysis of the NTK"
+    },
+    {
+      "ordinal": 126,
+      "level": 3,
+      "title": "Leading-order NTK recursions for a single input"
+    },
+    {
+      "ordinal": 127,
+      "level": 3,
+      "title": "The relevance of scaling laws"
+    },
+    {
+      "ordinal": 128,
+      "level": 3,
+      "title": "Formalities: perpendicular perturbations and the frozen NTK"
+    },
+    {
+      "ordinal": 129,
+      "level": 2,
+      "title": "Scale-Invariant Universality Class"
+    },
+    {
+      "ordinal": 130,
+      "level": 3,
+      "title": "NTK mean (frozen NTK)"
+    },
+    {
+      "ordinal": 131,
+      "level": 3,
+      "title": "NTK variance and NTK-preactivation cross correlation (agitated NTK)"
+    },
+    {
+      "ordinal": 132,
+      "level": 2,
+      "title": "$K^{\\star}=0$  Universality Class"
+    },
+    {
+      "ordinal": 133,
+      "level": 3,
+      "title": "NTK mean (frozen NTK)"
+    },
+    {
+      "ordinal": 134,
+      "level": 3,
+      "title": "NTK variance and NTK-preactivation cross correlation (agitated NTK)"
+    },
+    {
+      "ordinal": 135,
+      "level": 2,
+      "title": "Criticality, Exploding and Vanishing Problems, and None of That"
+    },
+    {
+      "ordinal": 136,
+      "level": 3,
+      "title": "Traditional view on the exploding and vanishing gradient problem"
+    },
+    {
+      "ordinal": 137,
+      "level": 3,
+      "title": "Critical view on the exploding and vanishing gradient problem"
+    },
+    {
+      "ordinal": 138,
+      "level": 3,
+      "title": "An equivalence principle for learning rates"
+    },
+    {
+      "ordinal": 139,
+      "level": 1,
+      "title": "Kernel Learning"
+    },
+    {
+      "ordinal": 140,
+      "level": 2,
+      "title": "A Small Step"
+    },
+    {
+      "ordinal": 141,
+      "level": 3,
+      "title": "No Wiring"
+    },
+    {
+      "ordinal": 142,
+      "level": 3,
+      "title": "No Representation Learning"
+    },
+    {
+      "ordinal": 143,
+      "level": 2,
+      "title": "A Giant Leap"
+    },
+    {
+      "ordinal": 144,
+      "level": 3,
+      "title": "Newton's Method"
+    },
+    {
+      "ordinal": 145,
+      "level": 3,
+      "title": "Algorithm Independence"
+    },
+    {
+      "ordinal": 146,
+      "level": 3,
+      "title": "Aside: Cross-Entropy Loss"
+    },
+    {
+      "ordinal": 147,
+      "level": 3,
+      "title": "Kernel Prediction"
+    },
+    {
+      "ordinal": 148,
+      "level": 4,
+      "title": "That One Place Where Gradient Descent = Exact Bayesian Inference"
+    },
+    {
+      "ordinal": 149,
+      "level": 2,
+      "title": "Generalization"
+    },
+    {
+      "ordinal": 150,
+      "level": 3,
+      "title": "Bias-Variance Tradeoff and Criticality"
+    },
+    {
+      "ordinal": 151,
+      "level": 4,
+      "title": "$K^{\\star}=0$  Universality Class"
+    },
+    {
+      "ordinal": 152,
+      "level": 4,
+      "title": "Scale-Invariant Universality Class"
+    },
+    {
+      "ordinal": 153,
+      "level": 3,
+      "title": "Interpolation and Extrapolation"
+    },
+    {
+      "ordinal": 154,
+      "level": 4,
+      "title": "Linear  $*$ -Polation by Deep Linear Networks"
+    },
+    {
+      "ordinal": 155,
+      "level": 4,
+      "title": "Nonlinear  $*$ -Polation by Smooth Nonlinear Deep Networks"
+    },
+    {
+      "ordinal": 156,
+      "level": 2,
+      "title": "Linear Models and Kernel Methods"
+    },
+    {
+      "ordinal": 157,
+      "level": 3,
+      "title": "Linear Models"
+    },
+    {
+      "ordinal": 158,
+      "level": 3,
+      "title": "Kernel Methods"
+    },
+    {
+      "ordinal": 159,
+      "level": 3,
+      "title": "Infinite-Width Networks as Linear Models"
+    },
+    {
+      "ordinal": 160,
+      "level": 1,
+      "title": "Representation Learning"
+    },
+    {
+      "ordinal": 161,
+      "level": 2,
+      "title": "Differential of the Neural Tangent Kernel"
+    },
+    {
+      "ordinal": 162,
+      "level": 2,
+      "title": "RG Flow of the dNTK"
+    },
+    {
+      "ordinal": 163,
+      "level": 3,
+      "title": "Forward Equation for the dNTK"
+    },
+    {
+      "ordinal": 164,
+      "level": 3,
+      "title": "First Layer: Zero dNTK"
+    },
+    {
+      "ordinal": 165,
+      "level": 3,
+      "title": "Second Layer: Nonzero dNTK"
+    },
+    {
+      "ordinal": 166,
+      "level": 3,
+      "title": "Deeper Layers: Growing dNTK"
+    },
+    {
+      "ordinal": 167,
+      "level": 4,
+      "title": "Interlude 2: Interlayer Correlations Reloaded"
+    },
+    {
+      "ordinal": 168,
+      "level": 4,
+      "title": "dNTK-Preactivation Cross Correlations"
+    },
+    {
+      "ordinal": 169,
+      "level": 4,
+      "title": "P-recursion"
+    },
+    {
+      "ordinal": 170,
+      "level": 4,
+      "title": "Q-recursion"
+    },
+    {
+      "ordinal": 171,
+      "level": 2,
+      "title": "Effective Theory of the dNTK at Initialization"
+    },
+    {
+      "ordinal": 172,
+      "level": 3,
+      "title": "Scale-Invariant Universality Class"
+    },
+    {
+      "ordinal": 173,
+      "level": 3,
+      "title": "$K^{*}=0$  Universality Class"
+    },
+    {
+      "ordinal": 174,
+      "level": 2,
+      "title": "Nonlinear Models and Nearly-Kernel Methods"
+    },
+    {
+      "ordinal": 175,
+      "level": 3,
+      "title": "Nonlinear Models"
+    },
+    {
+      "ordinal": 176,
+      "level": 4,
+      "title": "Nearly-Linear Quadratic Regression"
+    },
+    {
+      "ordinal": 177,
+      "level": 4,
+      "title": "Aside: Model Comparison of Linear Regression and Quadratic Regression"
+    },
+    {
+      "ordinal": 178,
+      "level": 3,
+      "title": "Nearly-Kernel Methods"
+    },
+    {
+      "ordinal": 179,
+      "level": 4,
+      "title": "Trained-Kernel Prediction"
+    },
+    {
+      "ordinal": 180,
+      "level": 3,
+      "title": "Finite-Width Networks as Nonlinear Models"
+    },
+    {
+      "ordinal": 181,
+      "level": 4,
+      "title": "Deep Learning: A Non-Minimal Model of Representation Learning"
+    },
+    {
+      "ordinal": 182,
+      "level": 1,
+      "title": "The End of Training"
+    },
+    {
+      "ordinal": 183,
+      "level": 2,
+      "title": "Two More Differentials"
+    },
+    {
+      "ordinal": 184,
+      "level": 2,
+      "title": "I. I. Rabi, quipping about the  $O(1/n)$  ddNTKs."
+    },
+    {
+      "ordinal": 185,
+      "level": 2,
+      "title": "ddNTK Statistics"
+    },
+    {
+      "ordinal": 186,
+      "level": 2,
+      "title": "ddNTK Scalings"
+    },
+    {
+      "ordinal": 187,
+      "level": 2,
+      "title": "$K^{\\star}=0$  Universality Class"
+    },
+    {
+      "ordinal": 188,
+      "level": 2,
+      "title": "Scale-Invariant Universality Class"
+    },
+    {
+      "ordinal": 189,
+      "level": 2,
+      "title": "Training at Finite Width"
+    },
+    {
+      "ordinal": 190,
+      "level": 3,
+      "title": "An Infinite-Width Giant Leap at Finite Width"
+    },
+    {
+      "ordinal": 191,
+      "level": 3,
+      "title": "A Small Step Following a Giant Leap"
+    },
+    {
+      "ordinal": 192,
+      "level": 4,
+      "title": "First Update: One Final Generalization of Gradient Decent"
+    },
+    {
+      "ordinal": 193,
+      "level": 4,
+      "title": "Second Update: Representation Learning Strikes Back"
+    },
+    {
+      "ordinal": 194,
+      "level": 3,
+      "title": "Many Many Steps of Gradient Descent"
+    },
+    {
+      "ordinal": 195,
+      "level": 4,
+      "title": "Free Theory: Step-Independent NTK"
+    },
+    {
+      "ordinal": 196,
+      "level": 4,
+      "title": "Interacting Theory: Dynamical NTK and dNTK"
+    },
+    {
+      "ordinal": 197,
+      "level": 3,
+      "title": "Prediction at Finite Width"
+    },
+    {
+      "ordinal": 198,
+      "level": 4,
+      "title": "Generalization at Finite Width"
+    },
+    {
+      "ordinal": 199,
+      "level": 4,
+      "title": "Inductive Bias of the Training Algorithm"
+    },
+    {
+      "ordinal": 200,
+      "level": 4,
+      "title": "There’s No Place Where Gradient Descent = Exact Bayesian Inference"
+    },
+    {
+      "ordinal": 201,
+      "level": 2,
+      "title": "RG Flow of the ddNTKs: The Full Expressions"
+    },
+    {
+      "ordinal": 202,
+      "level": 3,
+      "title": "ddH Recursion"
+    },
+    {
+      "ordinal": 203,
+      "level": 3,
+      "title": "ddIIH Recursions"
+    },
+    {
+      "ordinal": 204,
+      "level": 1,
+      "title": "Epilogue: Model Complexity from the Macroscopic Perspective"
+    },
+    {
+      "ordinal": 205,
+      "level": 2,
+      "title": "Sparsity at Infinite Width"
+    },
+    {
+      "ordinal": 206,
+      "level": 2,
+      "title": "Near-Sparsity at Finite Width"
+    },
+    {
+      "ordinal": 207,
+      "level": 2,
+      "title": "Model Complexity of Fully-Trained Neural Networks"
+    },
+    {
+      "ordinal": 208,
+      "level": 2,
+      "title": "☐☐☐☐"
+    },
+    {
+      "ordinal": 209,
+      "level": 1,
+      "title": "Information in Deep Learning"
+    },
+    {
+      "ordinal": 210,
+      "level": 2,
+      "title": "Entropy and Mutual Information"
+    },
+    {
+      "ordinal": 211,
+      "level": 2,
+      "title": "Information at Infinite Width: Criticality"
+    },
+    {
+      "ordinal": 212,
+      "level": 2,
+      "title": "Information at Finite Width: Optimal Aspect Ratio"
+    },
+    {
+      "ordinal": 213,
+      "level": 3,
+      "title": "Leading-Order Correction: Nonzero Mutual Information"
+    },
+    {
+      "ordinal": 214,
+      "level": 3,
+      "title": "NLO Correction: Optimal Aspect Ratio and Tripartite Information"
+    },
+    {
+      "ordinal": 215,
+      "level": 1,
+      "title": "Residual Learning"
+    },
+    {
+      "ordinal": 216,
+      "level": 2,
+      "title": "Residual Multilayer Perceptrons"
+    },
+    {
+      "ordinal": 217,
+      "level": 2,
+      "title": "Residual Infinite Width: Criticality Analysis"
+    },
+    {
+      "ordinal": 218,
+      "level": 2,
+      "title": "Residual Finite Width: Optimal Aspect Ratio"
+    },
+    {
+      "ordinal": 219,
+      "level": 3,
+      "title": "Scale-Invariant Universality Class"
+    },
+    {
+      "ordinal": 220,
+      "level": 3,
+      "title": "$K^{*}=0$  Universality Class"
+    },
+    {
+      "ordinal": 221,
+      "level": 3,
+      "title": "Physics of the Optimal Aspect Ratio"
+    },
+    {
+      "ordinal": 222,
+      "level": 2,
+      "title": "Residual Building Blocks"
+    },
+    {
+      "ordinal": 223,
+      "level": 1,
+      "title": "References"
+    }
+  ]
+}

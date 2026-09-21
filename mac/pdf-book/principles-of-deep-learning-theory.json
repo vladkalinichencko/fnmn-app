@@ -1,0 +1,19 @@
+{
+  "type": "book",
+  "title": "The Principles of Deep Learning Theory",
+  "subtitle": "An Effective Theory Approach to Understanding Neural Networks",
+  "authors": [
+    "Daniel A. Roberts",
+    "Sho Yaida"
+  ],
+  "contributors": [
+    "Boris Hanin"
+  ],
+  "language": "en",
+  "source_name": "The Principles of Deep Learning Theory.pdf",
+  "content_start": "0 Initialization",
+  "drop_sections": [
+    "Index"
+  ],
+  "strip_heading_numbers": true
+}
