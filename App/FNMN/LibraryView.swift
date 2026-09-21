@@ -3,9 +3,8 @@ import UniformTypeIdentifiers
 
 private enum LibraryDestination: String, Identifiable {
     case addArticle
-    case importPackage
-    case importBook
     case newFolder
+    case renameFolder
 
     var id: String { rawValue }
 }
@@ -14,6 +13,7 @@ private struct LibraryViewState {
     var selection: String?
     var destination: LibraryDestination?
     var query = ""
+    var renaming: String?
 }
 
 private enum LibraryAction {
@@ -21,6 +21,7 @@ private enum LibraryAction {
     case present(LibraryDestination)
     case dismiss
     case search(String)
+    case beginRename(String)
 }
 
 private func reduce(_ state: LibraryViewState, _ action: LibraryAction) -> LibraryViewState {
@@ -28,8 +29,13 @@ private func reduce(_ state: LibraryViewState, _ action: LibraryAction) -> Libra
     switch action {
     case let .select(materialID): state.selection = materialID
     case let .present(destination): state.destination = destination
-    case .dismiss: state.destination = nil
+    case .dismiss:
+        state.destination = nil
+        state.renaming = nil
     case let .search(query): state.query = query
+    case let .beginRename(name):
+        state.renaming = name
+        state.destination = .renameFolder
     }
     return state
 }
@@ -38,6 +44,7 @@ struct LibraryView: View {
     @Environment(LibraryModel.self) private var library
     @State private var state = LibraryViewState()
     @State private var newFolder = ""
+    @State private var renameText = ""
 
     var body: some View {
         NavigationSplitView {
@@ -54,7 +61,10 @@ struct LibraryView: View {
                         Button("Try again") { Task { await library.load() } }
                     }
                 case .ready:
-                    LibraryReadyList(selection: selectionBinding, query: state.query)
+                    LibraryReadyList(selection: selectionBinding, query: state.query) { folder in
+                        renameText = folder
+                        send(.beginRename(folder))
+                    }
                         .searchable(text: queryBinding)
                 }
             }
@@ -62,9 +72,7 @@ struct LibraryView: View {
             .toolbar {
                 ToolbarItemGroup {
                     Group {
-                        Button("Add article", systemImage: "link.badge.plus") { send(.present(.addArticle)) }
-                        Button("Import package", systemImage: "doc.badge.plus") { send(.present(.importPackage)) }
-                        Button("Import book", systemImage: "book.badge.plus") { send(.present(.importBook)) }
+                        Button("Add", systemImage: "plus") { send(.present(.addArticle)) }
                         Button("New folder", systemImage: "folder.badge.plus") { send(.present(.newFolder)) }
                     }
                     .disabled(library.loadState != .ready)
@@ -83,37 +91,24 @@ struct LibraryView: View {
         .alert("New folder", isPresented: destinationBinding(.newFolder)) {
             TextField("Name", text: $newFolder)
             Button("Create") {
-                Task { await library.addFolder(newFolder) }
+                let name = newFolder
                 newFolder = ""
                 send(.dismiss)
+                Task { await library.addFolder(name) }
             }
             Button("Cancel", role: .cancel) { newFolder = "" }
         }
-        .fileImporter(isPresented: destinationBinding(.importPackage), allowedContentTypes: [.json]) { result in
-            guard case let .success(url) = result else { return }
-            Task {
-                let access = url.startAccessingSecurityScopedResource()
-                defer {
-                    if access {
-                        url.stopAccessingSecurityScopedResource()
-                    }
+        .alert("Rename folder", isPresented: destinationBinding(.renameFolder)) {
+            TextField("Name", text: $renameText)
+            Button("Rename") {
+                let newName = renameText
+                renameText = ""
+                if let name = state.renaming {
+                    Task { await library.renameFolder(from: name, to: newName) }
                 }
-                do { try await library.importData(Data(contentsOf: url)) }
-                catch { library.operationError = error.localizedDescription }
+                send(.dismiss)
             }
-        }
-        .fileImporter(isPresented: destinationBinding(.importBook), allowedContentTypes: [.folder]) { result in
-            guard case let .success(url) = result else { return }
-            Task {
-                let access = url.startAccessingSecurityScopedResource()
-                defer {
-                    if access {
-                        url.stopAccessingSecurityScopedResource()
-                    }
-                }
-                do { try await library.importBook(from: url) }
-                catch { library.operationError = error.localizedDescription }
-            }
+            Button("Cancel", role: .cancel) { renameText = "" }
         }
         .alert("Couldn’t save changes", isPresented: .init(get: { library.operationError != nil }, set: {
             if !$0 {
@@ -161,6 +156,7 @@ private struct LibraryReadyList: View {
     @Environment(LibraryModel.self) private var library
     @Binding var selection: String?
     var query: String
+    var rename: (String) -> Void
 
     var body: some View {
         let packages = library.snapshot.matchingPackages(query)
@@ -194,13 +190,25 @@ private struct LibraryReadyList: View {
                             row(package).draggable(package.material.id)
                         }
                         ForEach(library.snapshot.books) { book in
-                            row(book)
+                            row(book).draggable(book.id)
                         }
                     }
                     ForEach(library.snapshot.folders, id: \.self) { folder in
-                        SwiftUI.Section(folder) {
-                            ForEach(library.snapshot.packages(in: folder), id: \.material.id) { package in
+                        SwiftUI.Section {
+                            let folderPackages = library.snapshot.packages(in: folder)
+                            let folderBooks = library.snapshot.books(in: folder)
+                            if folderPackages.isEmpty && folderBooks.isEmpty {
+                                Text("No materials").foregroundStyle(.secondary)
+                            }
+                            ForEach(folderPackages, id: \.material.id) { package in
                                 row(package)
+                            }
+                            ForEach(folderBooks) { book in
+                                row(book)
+                            }
+                        } header: {
+                            Text(folder).contextMenu {
+                                Button("Rename") { rename(folder) }
                             }
                         }
                         .dropDestination(for: String.self) { ids, _ in
@@ -271,27 +279,29 @@ private struct AddArticleView: View {
     @State private var articleURL = ""
     @State private var endpoint = "http://127.0.0.1:8765"
     @State private var token = ""
-    @State private var folder = "Inbox"
     @State private var allowsInsecureLAN = false
+    @State private var pickingDocument = false
+    @State private var pickingBookFolder = false
     @State private var state = ArticleImportState.editing
 
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Article URL", text: $articleURL).textContentType(.URL).keyboardType(.URL)
+                Button("Choose document") { pickingDocument = true }
+                Button("Choose book folder") { pickingBookFolder = true }
                 SwiftUI.Section("Mac service") {
                     TextField("Server URL", text: $endpoint).textContentType(.URL).keyboardType(.URL)
                     SecureField("Bearer token", text: $token)
                     Toggle("Allow HTTP on local network", isOn: $allowsInsecureLAN)
                 }
-                TextField("Folder", text: $folder)
             }
             .disabled(state.isSubmitting)
-            .navigationTitle("Add article")
+            .navigationTitle("Add")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(state.isSubmitting) }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { send(.submit) }.disabled(state.isSubmitting || URL(string: articleURL) == nil || URL(string: endpoint) == nil || token.isEmpty)
+                    Button("Add") { send(.submit) }.disabled(state.isSubmitting || URL(string: articleURL) == nil)
                 }
             }
             .overlay {
@@ -308,17 +318,43 @@ private struct AddArticleView: View {
         } message: {
             Text(state.failure ?? "")
         }
+        .fileImporter(isPresented: $pickingDocument, allowedContentTypes: [.json, .pdf]) { result in
+            guard case let .success(url) = result else { return }
+            state = reduce(state, .submit)
+            Task { await importDocument(url) }
+        }
+        .fileImporter(isPresented: $pickingBookFolder, allowedContentTypes: [.folder]) { result in
+            guard case let .success(url) = result else { return }
+            state = reduce(state, .submit)
+            Task { await importDocument(url) }
+        }
     }
 
     private func send(_ action: ArticleImportAction) {
-        state = reduce(state, action)
-        guard case .submit = action else {
-            if case .completed = state { dismiss() }
+        if case .submit = action {
+            submitLink()
             return
         }
-        guard let url = URL(string: articleURL), let server = URL(string: endpoint) else { return }
+        state = reduce(state, action)
+        if case .completed = state { dismiss() }
+    }
+
+    private func submitLink() {
+        guard let url = URL(string: articleURL) else { return }
+        state = reduce(state, .submit)
+        guard let source = CaptureRoute.source(for: url) else {
+            state = reduce(state, .failed("Enter an http or https link."))
+            return
+        }
+        if source != .web {
+            state = reduce(state, .failed(CaptureError.unprepared(source).localizedDescription))
+            return
+        }
+        guard let server = URL(string: endpoint), !token.isEmpty else {
+            state = reduce(state, .failed("The Mac service needs a server URL and token."))
+            return
+        }
         let token = token
-        let folder = folder.isEmpty ? nil : folder
         let allowsInsecureLAN = allowsInsecureLAN
         Task {
             do {
@@ -326,13 +362,26 @@ private struct AddArticleView: View {
                     url: url,
                     endpoint: server,
                     token: token,
-                    folder: folder,
+                    folder: CaptureSource.web.folderName,
                     allowsInsecureLAN: allowsInsecureLAN
                 )
                 send(.succeeded)
             } catch {
                 send(.failed(error.localizedDescription))
             }
+        }
+    }
+
+    private func importDocument(_ url: URL) async {
+        let access = url.startAccessingSecurityScopedResource()
+        defer {
+            if access { url.stopAccessingSecurityScopedResource() }
+        }
+        do {
+            try await library.importPickedDocument(from: url)
+            send(.succeeded)
+        } catch {
+            send(.failed(error.localizedDescription))
         }
     }
 }

@@ -186,3 +186,39 @@ private let namedBook = BookRecord(
     #expect(library.matchingPackages("xyzzy").isEmpty)
     #expect(library.matchingBooks("xyzzy").isEmpty)
 }
+
+@Test func captureRouteNamesSourceFromLinkOrPDF() {
+    #expect(CaptureRoute.source(for: URL(string: "https://example.com/post")!) == .web)
+    #expect(CaptureRoute.source(for: URL(string: "https://youtu.be/abc")!) == .youtube)
+    #expect(CaptureRoute.source(for: URL(string: "https://www.youtube.com/watch?v=abc")!) == .youtube)
+    #expect(CaptureRoute.source(for: URL(string: "https://arxiv.org/abs/1706.03762")!) == .arxiv)
+    #expect(CaptureRoute.source(for: URL(string: "https://x.com/someone/status/1")!) == .x)
+    #expect(CaptureRoute.source(for: URL(string: "https://twitter.com/someone/status/1")!) == .x)
+    #expect(CaptureRoute.source(for: URL(string: "https://name.substack.com/p/hello")!) == .substack)
+    #expect(CaptureRoute.source(for: URL(string: "https://chatgpt.com/share/abc")!) == .chatgpt)
+    #expect(CaptureRoute.source(for: URL(string: "https://example.com/paper.pdf")!) == .pdf)
+    #expect(CaptureRoute.source(for: URL(string: "https://arxiv.org/pdf/1706.03762.pdf")!) == .arxiv)
+    #expect(CaptureRoute.source(for: URL(string: "ftp://example.com/a")!) == nil)
+    #expect(CaptureError.unprepared(.youtube).errorDescription?.contains("YouTube") == true)
+}
+
+@Test func albumKeepsACardInEveryFolderItWasDroppedInto() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article)
+    library.place(materialID: namedBook.id, in: "PDF")
+    library.importBook(namedBook)
+    library.place(materialID: article.material.id, in: "Web")
+    library.place(materialID: namedBook.id, in: "Reading")
+    #expect(library.packages(in: "Inbox").map(\.material.id) == [article.material.id])
+    #expect(library.packages(in: "Web").map(\.material.id) == [article.material.id])
+    #expect(library.books(in: "PDF").map(\.id) == [namedBook.id])
+    #expect(library.books(in: "Reading").map(\.id) == [namedBook.id])
+    let renamed = library.renameFolder(from: "Inbox", to: "Papers")
+    #expect(renamed)
+    #expect(library.packages(in: "Inbox").isEmpty)
+    #expect(library.packages(in: "Papers").map(\.material.id) == [article.material.id])
+    #expect(library.packages(in: "Web").map(\.material.id) == [article.material.id])
+    let collided = library.renameFolder(from: "Papers", to: "Web")
+    #expect(!collided)
+    #expect(library.packages(in: "Papers").map(\.material.id) == [article.material.id])
+}

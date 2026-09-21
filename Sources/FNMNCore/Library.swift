@@ -7,6 +7,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var readings: [String: MaterialReading] = [:]
     public var notes: [Note] = []
     public var folders: [String] = []
+    public var placements: [String: [String]] = [:]
 
     public init() {}
 
@@ -43,8 +44,17 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         readings[materialID, default: MaterialReading()].isRead = isRead
     }
 
+    public func folderNames(for materialID: String) -> [String] {
+        if let names = placements[materialID] { return names }
+        return packages.first { $0.material.id == materialID }?.folders ?? []
+    }
+
     public func packages(in folder: String) -> [ImportPackage] {
-        packages.filter { $0.folders.contains(folder) }
+        packages.filter { folderNames(for: $0.material.id).contains(folder) }
+    }
+
+    public func books(in folder: String) -> [BookRecord] {
+        books.filter { folderNames(for: $0.id).contains(folder) }
     }
 
     public func matchingPackages(_ query: String) -> [ImportPackage] {
@@ -56,27 +66,67 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public func matchingBooks(_ query: String) -> [BookRecord] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return books }
-        return books.filter { $0.matches(needle) }
+        return books.filter { book in
+            book.matches(needle) || folderNames(for: book.id).contains { $0.localizedStandardContains(needle) }
+        }
     }
 
     public mutating func importPackage(_ package: ImportPackage) throws {
         guard package.version == 1 else { throw LibraryError.unsupportedVersion(package.version) }
         guard !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
+        let prior = folderNames(for: package.material.id)
+        let merged = Array(Set(prior + package.folders)).sorted()
+        let stored = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: merged)
         if let index = packages.firstIndex(where: { $0.material.id == package.material.id }) {
-            let mergedFolders = Array(Set(packages[index].folders + package.folders)).sorted()
-            packages[index] = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: mergedFolders)
+            packages[index] = stored
         } else {
-            packages.append(package)
+            packages.append(stored)
         }
-        folders = Array(Set(folders + package.folders)).sorted()
+        placements[package.material.id] = merged
+        folders = Array(Set(folders + merged)).sorted()
+    }
+
+    public mutating func place(materialID: String, in folder: String) {
+        var names = folderNames(for: materialID)
+        if !names.contains(folder) { names.append(folder) }
+        names.sort()
+        placements[materialID] = names
+        folders = Array(Set(folders + [folder])).sorted()
+        writePackageFolders(materialID, names)
     }
 
     public mutating func move(materialID: String, to folder: String) {
+        place(materialID: materialID, in: folder)
+    }
+
+    public mutating func renameFolder(from name: String, to newName: String) -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard folders.contains(name) else { return false }
+        if trimmed == name { return true }
+        guard !trimmed.isEmpty, !folders.contains(trimmed) else { return false }
+        let ids = Set(placements.keys).union(packages.map(\.material.id)).union(books.map(\.id))
+        for id in ids {
+            var names = folderNames(for: id)
+            guard names.contains(name) else { continue }
+            names = Array(Set(names.map { $0 == name ? trimmed : $0 })).sorted()
+            placements[id] = names
+            writePackageFolders(id, names)
+        }
+        folders = Array(Set(folders.map { $0 == name ? trimmed : $0 })).sorted()
+        return true
+    }
+
+    public mutating func adoptPackageFolders() {
+        for package in packages where placements[package.material.id] == nil && !package.folders.isEmpty {
+            placements[package.material.id] = package.folders.sorted()
+            folders = Array(Set(folders + package.folders)).sorted()
+        }
+    }
+
+    private mutating func writePackageFolders(_ materialID: String, _ names: [String]) {
         guard let index = packages.firstIndex(where: { $0.material.id == materialID }) else { return }
-        let names = Array(Set(packages[index].folders + [folder])).sorted()
         let package = packages[index]
         packages[index] = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: names)
-        folders = Array(Set(folders + [folder])).sorted()
     }
 
     public mutating func recordVideoTime(materialID: String, blockID: String, seconds: Double) -> Bool {
@@ -110,19 +160,22 @@ public actor LibraryFile {
         var folders: [String]
         var readings: [String: MaterialReading]
         var books: [BookRecord]
+        var placements: [String: [String]]
 
         init(
             positions: [String: ReadingPosition],
             notes: [Note],
             folders: [String],
             readings: [String: MaterialReading],
-            books: [BookRecord]
+            books: [BookRecord],
+            placements: [String: [String]]
         ) {
             self.positions = positions
             self.notes = notes
             self.folders = folders
             self.readings = readings
             self.books = books
+            self.placements = placements
         }
 
         init(from decoder: Decoder) throws {
@@ -132,6 +185,7 @@ public actor LibraryFile {
             folders = try container.decode([String].self, forKey: .folders)
             readings = try container.decodeIfPresent([String: MaterialReading].self, forKey: .readings) ?? [:]
             books = try container.decodeIfPresent([BookRecord].self, forKey: .books) ?? []
+            placements = try container.decodeIfPresent([String: [String]].self, forKey: .placements) ?? [:]
         }
     }
 
@@ -158,7 +212,9 @@ public actor LibraryFile {
             snapshot.folders = state.folders
             snapshot.readings = state.readings
             snapshot.books = state.books
+            snapshot.placements = state.placements
         }
+        snapshot.adoptPackageFolders()
         return snapshot
     }
 
@@ -203,7 +259,8 @@ public actor LibraryFile {
             notes: snapshot.notes,
             folders: snapshot.folders,
             readings: snapshot.readings,
-            books: snapshot.books
+            books: snapshot.books,
+            placements: snapshot.placements
         )
         try encoder.encode(state).write(to: directory.appending(path: "state.json"), options: .atomic)
     }
@@ -223,5 +280,50 @@ extension BookRecord {
         if let subtitle = metadata.subtitle { fields.append(subtitle) }
         if let contributors = metadata.contributors { fields.append(contentsOf: contributors) }
         return fields.contains { $0.localizedStandardContains(query) }
+    }
+}
+
+public enum CaptureSource: String, Codable, Equatable, Sendable {
+    case web, arxiv, youtube, x, substack, chatgpt, pdf
+
+    public var folderName: String {
+        switch self {
+        case .web: "Web"
+        case .arxiv: "arXiv"
+        case .youtube: "YouTube"
+        case .x: "X"
+        case .substack: "Substack"
+        case .chatgpt: "ChatGPT"
+        case .pdf: "PDF"
+        }
+    }
+}
+
+public enum CaptureRoute {
+    public static func source(for url: URL) -> CaptureSource? {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
+        let host = url.host?.lowercased() ?? ""
+        guard !host.isEmpty else { return nil }
+        if host == "youtu.be" || host == "youtube.com" || host.hasSuffix(".youtube.com") { return .youtube }
+        if host == "arxiv.org" || host.hasSuffix(".arxiv.org") { return .arxiv }
+        if host == "x.com" || host.hasSuffix(".x.com") || host == "twitter.com" || host.hasSuffix(".twitter.com") { return .x }
+        if host == "substack.com" || host.hasSuffix(".substack.com") { return .substack }
+        if host == "chatgpt.com" || host.hasSuffix(".chatgpt.com") || host == "chat.openai.com" { return .chatgpt }
+        if url.pathExtension.lowercased() == "pdf" { return .pdf }
+        return .web
+    }
+}
+
+public enum CaptureError: Error, Equatable {
+    case unprepared(CaptureSource)
+    case unrecognizedDocument
+}
+
+extension CaptureError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case let .unprepared(source): "\(source.folderName) is recognized, but the Mac service does not prepare it yet."
+        case .unrecognizedDocument: "Choose an article package, a book folder, or a PDF."
+        }
     }
 }

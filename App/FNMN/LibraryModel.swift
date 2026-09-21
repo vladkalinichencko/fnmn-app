@@ -38,6 +38,8 @@ final class LibraryModel {
         let package = try JSONDecoder().decode(ImportPackage.self, from: data)
         let previous = snapshot
         try snapshot.importPackage(package)
+        let sourceFolder = package.material.kind == .video ? CaptureSource.youtube.folderName : CaptureSource.web.folderName
+        snapshot.place(materialID: package.material.id, in: sourceFolder)
         do { try await persist() }
         catch { snapshot = previous; throw error }
     }
@@ -47,8 +49,24 @@ final class LibraryModel {
             .prepare(url: url, folder: folder)
         let previous = snapshot
         try snapshot.importPackage(package)
+        snapshot.place(materialID: package.material.id, in: CaptureSource.web.folderName)
         do { try await persist() }
         catch { snapshot = previous; throw error }
+    }
+
+    func importPickedDocument(from url: URL) async throws {
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            try await importBook(from: url)
+            return
+        }
+        if url.pathExtension.lowercased() == "pdf" {
+            throw CaptureError.unprepared(.pdf)
+        }
+        guard url.pathExtension.lowercased() == "json" else {
+            throw CaptureError.unrecognizedDocument
+        }
+        try await importData(Data(contentsOf: url))
     }
 
     func importBook(from directory: URL) async throws {
@@ -56,6 +74,7 @@ final class LibraryModel {
         let previous = snapshot
         let replacing = previous.books.contains { $0.id == imported.record.id }
         snapshot.importBook(imported.record)
+        snapshot.place(materialID: imported.record.id, in: CaptureSource.pdf.folderName)
         do {
             try await file.copyBook(from: directory, named: imported.record.directoryName)
             try await file.saveState(snapshot)
@@ -130,6 +149,19 @@ final class LibraryModel {
         do { try await file.saveState(snapshot) }
         catch {
             snapshot.folders = previous
+            operationError = error.localizedDescription
+        }
+    }
+
+    func renameFolder(from name: String, to newName: String) async {
+        let previous = snapshot
+        guard snapshot.renameFolder(from: name, to: newName) else {
+            operationError = "Choose a new album name that is not already used."
+            return
+        }
+        do { try await persist() }
+        catch {
+            snapshot = previous
             operationError = error.localizedDescription
         }
     }
