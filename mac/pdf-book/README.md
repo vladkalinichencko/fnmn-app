@@ -18,7 +18,7 @@ python3 mac/pdf-book/export-app-book.py \
   /path/to/output-book
 ```
 
-The source Markdown must have its referenced figure files beside it at the relative paths used in the Markdown. The exporter stops when headings remain numbered, an image is missing, footnote references do not match definitions, or page markers and excess blank lines survive.
+The source Markdown must have its referenced figure files beside it at the relative paths used in the Markdown. The exporter stops when headings remain numbered, an image is missing, footnote references do not match definitions, page markers and excess blank lines survive, or a display formula has unbalanced braces or an unmatched `\left`/`\right`.
 
 `fixtures/books/principles-of-deep-learning-theory/` is the checked package from the completed OCR build. It is a reader fixture and contract sample, not a replacement for the archival OCR run. The full OCR and assembly trail, including model inputs, per-page evidence, candidates, and footnote overrides, remains in the Research Tree artifact that produced this package.
 
