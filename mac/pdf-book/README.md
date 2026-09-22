@@ -1,25 +1,40 @@
-# PDF book package
+# PDF book pipeline
 
-`export-app-book.py` turns verified archival Markdown into the directory that FNMN will import for a PDF book. The directory is self-contained:
+These scripts turn any born-digital PDF into a checked FNMN book package:
 
-- `content.md` is Markdown from the selected first heading through the retained final section. It has no printed contents, index, PDF-page comments, heading numbers, or page-boundary runs of blank lines.
-- `metadata.json` has `schema_version: 1`, `title`, optional `subtitle`, `authors`, optional `contributors`, `language`, `source_name`, `content_file`, `assets_directory`, and the ordered `toc`. Each TOC entry has a one-based `ordinal`, Markdown `level`, and displayed `title`.
-- `assets/` contains every image named by `content.md`. Markdown resolves each image relative to this directory.
-- `validation.json` records the heading and image counts plus `errors`. Import accepts a package only when `errors` is empty.
-
-The included [`principles-of-deep-learning-theory.json`](principles-of-deep-learning-theory.json) defines the presentation boundary for the sample book. `content_start` and `drop_sections` are per-book decisions. Do not infer them from a publisher's front matter.
-
-To make a package from an already checked archival Markdown file, run this from the repository root:
-
-```bash
-python3 mac/pdf-book/export-app-book.py \
-  /path/to/book.md \
-  mac/pdf-book/principles-of-deep-learning-theory.json \
-  /path/to/output-book
+```text
+PDF -> grounded page OCR -> deterministic assembly -> typed candidates -> targeted footnote OCR -> checked Markdown -> app package
 ```
 
-The source Markdown must have its referenced figure files beside it at the relative paths used in the Markdown. The exporter stops when headings remain numbered, an image is missing, footnote references do not match definitions, page markers and excess blank lines survive, or a display formula has unbalanced braces or an unmatched `\left`/`\right`.
+Install the pinned OCR environment:
 
-`fixtures/books/principles-of-deep-learning-theory/` is the checked package from the completed OCR build. It is a reader fixture and contract sample, not a replacement for the archival OCR run. The full OCR and assembly trail, including model inputs, per-page evidence, candidates, and footnote overrides, remains in the Research Tree artifact that produced this package.
+```bash
+python3 -m venv .venv-ocr
+.venv-ocr/bin/pip install -r mac/pdf-book/requirements-ocr.txt
+```
 
-The iPhone/iPad app currently imports the older JSON `ImportPackage` only. The next PDF-reader implementation must copy this directory into application storage, decode and validate `metadata.json`, render `content.md` in the local Markdown/LaTeX web bundle, resolve images from the copied `assets/` directory, use `toc` for section navigation, and render Markdown footnotes as links or popovers. It must preserve the package unchanged after successful validation.
+Run the complete pipeline from the repository root:
+
+```bash
+.venv-ocr/bin/python mac/pdf-book/run-ocr2.py \
+  /path/to/book.pdf /path/to/work/ocr
+
+.venv-ocr/bin/python mac/pdf-book/assemble-book.py \
+  /path/to/book.pdf /path/to/work/ocr /path/to/work/book.md
+
+.venv-ocr/bin/python mac/pdf-book/run-footnote-ocr.py \
+  /path/to/work/book.candidates.json /path/to/work/footnote-overrides.json
+
+.venv-ocr/bin/python mac/pdf-book/assemble-book.py \
+  /path/to/book.pdf /path/to/work/ocr /path/to/work/book.md \
+  --footnote-overrides /path/to/work/footnote-overrides.json
+
+python3 mac/pdf-book/export-app-book.py \
+  /path/to/work/book.md /path/to/book-config.json /path/to/output-book
+```
+
+`run-ocr2.py` processes every page with DeepSeek-OCR-2 and retries truncated or repetitive output. `assemble-book.py` combines grounded OCR with PDF text, geometry, bookmarks, equations, figures, and footnotes. It writes `book.audit.json`, `book.candidates.json`, `book.validation.json`, and `assets/` beside the Markdown. Candidate records have explicit types such as `footnote_needs_ocr`, `footnote_reference_missing`, `bare_latex`, `unbalanced_math_delimiter`, `unbalanced_environment`, and `repetition`.
+
+`run-footnote-ocr.py` automatically reprocesses only `footnote_needs_ocr` crops. Other candidate types remain visible for review; the pipeline does not ask a model to guess arbitrary corrections. Re-run the assembler after changing overrides or replacement pages.
+
+`export-app-book.py` makes the self-contained directory imported by FNMN: `content.md`, `metadata.json`, `assets/`, and `validation.json`. Its book config contains presentation decisions that cannot be inferred safely: metadata, `content_start`, and sections to omit. [`principles-of-deep-learning-theory.json`](principles-of-deep-learning-theory.json) is an example config, and [`fixtures/books/principles-of-deep-learning-theory/`](../../fixtures/books/principles-of-deep-learning-theory/) is an example output package.

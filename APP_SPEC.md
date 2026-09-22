@@ -218,7 +218,12 @@ flowchart TD
     Web --> ArticleMac[Mac читает статью, не произвольный сайт]
     Arxiv --> ArxivMac[Mac берёт LaTeX source, иначе PDF-пайплайн]
     Social --> TextMac[Mac превращает доступную страницу в Markdown]
-    Pdf --> PdfMac[Mac готовит каталог книги]
+    Pdf --> PageOCR[DeepSeek OCR обрабатывает все страницы]
+    PageOCR --> Assemble[Сборщик сверяет OCR с текстом, геометрией и оглавлением PDF]
+    Assemble --> Candidates[Типизированные кандидаты ошибок]
+    Candidates --> FootnoteOCR[Повторный OCR повреждённых сносок]
+    FootnoteOCR --> Assemble
+    Assemble --> PdfMac[Проверенный Markdown, assets и audit]
     Tube --> VideoMac[Mac отдаёт ролик и captions]
     ArticleMac --> Markdown[Пакет Markdown]
     ArxivMac --> Markdown
