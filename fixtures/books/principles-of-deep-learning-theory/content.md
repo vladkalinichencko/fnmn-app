@@ -4055,7 +4055,7 @@ From the Bayesian perspective, these initialization hyperparameters are part of 
 Here, we’ve taken familiar objects – the hyperparameters and the initialization distribution characterizing the frequency of potential network realizations – and interpreted them in the way of Bayes – as the hypothesis H and as the prior distribution  $p(\theta|\mathcal{H})$  characterizing our initial beliefs about the value of the model parameters. Another familiar object, of course, is the distribution of  $\ell$ -th-layer preactivations that we’ve spent last three chapters evaluating explicitly. To give that a Bayesian interpretation, let us first denote by  $z_{\mathcal{D}}^{(\ell)} \equiv \left\{ z_{i,j}^{(\ell)} \right\}$  the set of  $\ell$ -th-layer preactivations evaluated on inputs  $x_{j;\delta} \in D$  in some dataset D. Then, the prior distribution over these  $\ell$ -th-layer preactivations can be related to the prior distribution over the model parameters by
 
 $$
-p\Big(z_{\mathcal{D}}^{(\ell)}\Big|\mathcal{H}\Big)=\int\left[\prod_{\mu=1}^{P}d\theta_{\mu}\Big]p\Big(z_{\mathcal{D}}^{(\ell)},\theta\Big|\mathcal{H}\Big)=\int\left[\prod_{\mu=1}^{P}d\theta_{\mu}\right]p\Big(z_{\mathcal{D}}^{(\ell)}\Big|\theta,\mathcal{H}\Big)p(\theta|\mathcal{H}), \quad (6.7)
+p\Big(z_{\mathcal{D}}^{(\ell)}\Big|\mathcal{H}\Big)=\int\left[\prod_{\mu=1}^{P}d\theta_{\mu}\right]p\Big(z_{\mathcal{D}}^{(\ell)},\theta\Big|\mathcal{H}\Big)=\int\left[\prod_{\mu=1}^{P}d\theta_{\mu}\right]p\Big(z_{\mathcal{D}}^{(\ell)}\Big|\theta,\mathcal{H}\Big)p(\theta|\mathcal{H}), \quad (6.7)
 $$
 
 where we’ve applied the sum rule (6.2) in the first equality and the product rule (6.1) in the second. This prior quantifies our initial beliefs about the different neural-network variables. More specifically, for a hidden layer  $\ell$ , this distribution represents our beliefs about a particular feature representation of the input and, for the output layer L, this represents our initial beliefs about the behavior of the function approximation  $f(x;\theta)$ . More generally, for any neural-network observable  $\mathcal{O}=\mathcal{O}(\theta)$ , our prior beliefs are determined by
@@ -6237,7 +6237,7 @@ $$
 Next, for the  $D^{(\ell)}$  recursion, let's start with the slightly more compact expression (9.20). Plugging in the expressions (9.73)–(9.78) along with the learning rates (9.70) and the asymptotic solutions for the four-point vertex (9.66) and the frozen NTK (9.71), we get a recursion
 
 $$
-D^{(\ell+1)}=\left[1-\frac{(p_{\perp}+2)}{\ell}+\cdots\right]D^{(\ell)}+\left\{\left[\frac{2}{3(-a_{1})}\right]\right]\left[-p_{\perp}\widetilde{\lambda}_{b}-(p_{\perp}-1)\frac{\widetilde{\lambda}_{W}\sigma_{1}^{2}}{(-a_{1})}\right]\left(\frac{1}{\ell}\right)^{p_{\perp}}+\cdots\right\}. \quad (9.83)
+D^{(\ell+1)}=\left[1-\frac{(p_{\perp}+2)}{\ell}+\cdots\right]D^{(\ell)}+\left\{\left[\frac{2}{3(-a_{1})}\right]\left[-p_{\perp}\widetilde{\lambda}_{b}-(p_{\perp}-1)\frac{\widetilde{\lambda}_{W}\sigma_{1}^{2}}{(-a_{1})}\right]\left(\frac{1}{\ell}\right)^{p_{\perp}}+\cdots\right\}. \quad (9.83)
 $$
 
 This recursion can also be easily solved by using our scaling ansatz (9.22), giving
@@ -8711,7 +8711,7 @@ $$
 The hat on this ddNTK indicates that it’s also stochastic at initialization, and we will soon detail that it also has  $O(1/n)$  statistics at leading order. Finally,  $\widehat{\mathrm{dd}\Pi}H_{i_{1}i_{2}i_{3}i_{4};\delta_{1}\delta_{2}\delta_{3}\delta_{4}}$ has a more constrained symmetry, only symmetric under a joint swap of the paired set of indices as  $(i_{1},\delta_{1})\leftrightarrow(i_{2},\delta_{2})$  and  $(i_{3},\delta_{4})\leftrightarrow(i_{4},\delta_{4})$ . However, this means that we can also swap indices as
 
 $$
-\sum_{j_{1},j_{2},\bar{\alpha}_{1},\bar{\alpha}_{2}}\widehat{\mathrm{dd}_{\mathrm{II}}H}_{i_{1}i_{2}j_{1}j_{2};\delta_{1}\delta_{2}\bar{\alpha}_{1}\bar{\alpha}_{2}\xi_{j_{1};\bar{\alpha}_{1}}^{\left(\ell\right)}\xi_{j_{2};\bar{\alpha}_{2}}^{\left(\ell\right)}}=\sum_{j_{1},j_{2},\bar{\alpha}_{1},\bar{\alpha}_{2}}\widehat{\mathrm{dd}_{\mathrm{II}}H}_{i_{2}i_{1}j_{1}j_{2};\delta_{2}\delta_{1}\bar{\alpha}_{1}\bar{\alpha}_{2}\xi_{j_{1};\bar{\alpha}_{1}}^{\left(\ell\right)}\xi_{j_{2};\bar{\alpha}_{2}}^{\left(\ell\right)}, \quad   (\infty.8)
+\sum_{j_{1},j_{2},\bar{\alpha}_{1},\bar{\alpha}_{2}}\widehat{\mathrm{dd}_{\mathrm{II}}H}_{i_{1}i_{2}j_{1}j_{2};\delta_{1}\delta_{2}\bar{\alpha}_{1}\bar{\alpha}_{2}}^{(\ell)}\epsilon_{j_{1};\bar{\alpha}_{1}}^{(\ell)}\epsilon_{j_{2};\bar{\alpha}_{2}}^{(\ell)}=\sum_{j_{1},j_{2},\bar{\alpha}_{1},\bar{\alpha}_{2}}\widehat{\mathrm{dd}_{\mathrm{II}}H}_{i_{2}i_{1}j_{1}j_{2};\delta_{2}\delta_{1}\bar{\alpha}_{1}\bar{\alpha}_{2}}^{(\ell)}\epsilon_{j_{1};\bar{\alpha}_{1}}^{(\ell)}\epsilon_{j_{2};\bar{\alpha}_{2}}^{(\ell)}, \quad (\infty.8)
 $$
 
 which we used to simplify the final line of the NTK update  $(\infty.6)$ .
@@ -11516,7 +11516,7 @@ Overall, this hybrid approach realizes one of our goals of using experimentally 
 [^p180-23]: Finally, let’s consider the trivial fixed points with nonzero kernel values  $K^{\star} \neq 0$ . (This can occur, e.g., for the  $K^{\star} = 0$  universality class, for which there exists fixed points  $K^{\star}$  that have  $\chi_{\perp}(K^{\star}) = 1$  but  $\chi_{\parallel}(K^{\star}) < 1$ .) For this analysis, we need to relax the same-norm condition (6.40) and consider the most general form of the two-input kernel. Projecting the kernel into the  $\gamma_{\widehat{\alpha}_{1}\widehat{\alpha}_{2}}^{[a]}$  basis (5.15) as
 
     $$
-    \widetilde{K}_{\widehat{\alpha}_{1}\widehat{\alpha}_{2}}=\left(\frac{\widetilde{K}_{[0]}+\widetilde{K}_{[1]}+\widetilde{K}_{[2]}}{\widetilde{K}_{[0]}-\widetilde{K}_{[2]}}\right)^{2},\quad\widetilde{K}_{[0]}-\widetilde{K}_{[2]}\right), \quad (6.46)
+    \widetilde{K}_{\widehat{\alpha}_{1}\widehat{\alpha}_{2}}=\begin{pmatrix}\frac{\widetilde{K}_{[0]}+\widetilde{K}_{[1]}+\widetilde{K}_{[2]}}{\widetilde{K}_{[0]}-\widetilde{K}_{[2]}} & \frac{\widetilde{K}_{[0]}-\widetilde{K}_{[2]}}{\widetilde{K}_{[0]}-\widetilde{K}_{[1]}+\widetilde{K}_{[2]}}\end{pmatrix}, \quad (6.46)
     $$
 
     we can similarly use (5.20) to decompose the output matrix,  $\Sigma_{\widehat{\alpha}_{1}\widehat{\alpha}_{2}} \equiv \sum_{i=1}^{n_{L}} y_{i;\widehat{\alpha}_{1}} y_{i;\widehat{\alpha}_{2}}$ , into components
