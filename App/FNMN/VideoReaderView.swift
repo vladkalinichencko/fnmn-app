@@ -52,8 +52,10 @@ struct VideoReaderView: View {
             Group {
                 if landscape {
                     HStack(alignment: .top, spacing: 0) {
-                        player
-                        if showCaptions { captions.frame(maxWidth: geometry.size.width * 0.42) }
+                        player.frame(maxWidth: showCaptions ? geometry.size.width * 0.58 : .infinity, maxHeight: .infinity)
+                        if showCaptions {
+                            captions.frame(width: geometry.size.width * 0.42, height: geometry.size.height)
+                        }
                     }
                 } else {
                     VStack(spacing: 0) {
@@ -119,7 +121,7 @@ struct VideoReaderView: View {
     private var captions: some View {
         Group {
             if cues.isEmpty {
-                ContentUnavailableView("No captions", systemImage: "captions.bubble", description: Text("The video still plays."))
+                ContentUnavailableView("No caption text", systemImage: "captions.bubble", description: Text("YouTube did not return the captions. The video still plays."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {

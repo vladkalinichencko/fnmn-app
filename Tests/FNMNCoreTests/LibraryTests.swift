@@ -33,9 +33,12 @@ private let article = ImportPackage(
     var library = LibrarySnapshot()
     try library.importPackage(article)
     library.positions[article.material.id] = ReadingPosition(blockID: "b1", textOffset: 12)
-    library.notes.append(Note(materialID: article.material.id, blockID: "b1", text: "Remember this"))
+    library.notes.append(Note(materialID: article.material.id, blockID: "piece:4", text: "Remember this"))
     try await file.save(library)
-    #expect(try await file.load() == library)
+    let loaded = try await file.load()
+    #expect(loaded.notes.isEmpty)
+    #expect(loaded.positions[article.material.id]?.blockID == "b1")
+    #expect(loaded.highlights.contains { $0.caption == "Remember this" && $0.piece == 4 && $0.mark == nil })
 }
 
 private let laterArticle = ImportPackage(
@@ -225,6 +228,16 @@ private let namedBook = BookRecord(
     #expect(highlight.mark == .highlight)
     #expect(highlight.quote == "old quote")
     #expect(highlight.caption == "kept")
+}
+
+@Test func aSecondQuoteOnTheSameParagraphStays() {
+    let first = applyingAnnotation(to: [], materialID: "article:1", piece: 2, quote: "one phrase", caption: nil, mark: .highlight)
+    let second = applyingAnnotation(to: first, materialID: "article:1", piece: 2, quote: "another phrase", caption: nil, mark: .strikethrough)
+    #expect(second.map(\.quote) == ["one phrase", "another phrase"])
+    let noted = applyingAnnotation(to: second, materialID: "article:1", piece: 2, quote: "one phrase", caption: "a thought", mark: nil)
+    #expect(noted.count == 2)
+    #expect(noted[0].caption == "a thought")
+    #expect(noted[0].mark == .highlight)
 }
 
 @Test func noteOnlyHighlightRoundTripsWithNilMark() throws {

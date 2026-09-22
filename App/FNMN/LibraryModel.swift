@@ -207,25 +207,16 @@ final class LibraryModel {
     }
 
     func annotate(materialID: String, piece: Int, quote: String, caption: String?, mark: TextMark?) async {
-        let trimmedQuote = quote.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuote.isEmpty || !(trimmedCaption ?? "").isEmpty else { return }
         let previous = snapshot.highlights
-        if let index = snapshot.highlights.firstIndex(where: { $0.materialID == materialID && $0.piece == piece }) {
-            if !trimmedQuote.isEmpty { snapshot.highlights[index].quote = trimmedQuote }
-            if let trimmedCaption, !trimmedCaption.isEmpty { snapshot.highlights[index].caption = trimmedCaption }
-            if let mark { snapshot.highlights[index].mark = mark }
-        } else {
-            snapshot.highlights.append(
-                Highlight(
-                    materialID: materialID,
-                    piece: piece,
-                    quote: trimmedQuote,
-                    caption: trimmedCaption ?? "",
-                    mark: mark
-                )
-            )
-        }
+        snapshot.highlights = applyingAnnotation(
+            to: snapshot.highlights,
+            materialID: materialID,
+            piece: piece,
+            quote: quote,
+            caption: caption,
+            mark: mark
+        )
+        guard snapshot.highlights != previous else { return }
         do { try await file.saveState(snapshot) }
         catch {
             snapshot.highlights = previous

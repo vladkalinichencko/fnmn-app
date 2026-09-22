@@ -4,6 +4,8 @@ import tarfile
 import unittest
 from pathlib import Path
 
+import pymupdf
+
 from adapter_arxiv import paper_id
 from adapter_youtube import youtube_package
 from fnmn_service import ImportFailure, import_link
@@ -18,6 +20,16 @@ def archive(files: dict[str, bytes]) -> bytes:
             info.size = len(blob)
             packed.addfile(info, io.BytesIO(blob))
     return buffer.getvalue()
+
+
+def _one_page_pdf(heading: str, paragraph: str) -> bytes:
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 80), heading, fontsize=16)
+    page.insert_text((72, 120), paragraph, fontsize=11)
+    blob = document.tobytes()
+    document.close()
+    return blob
 
 
 PAPER = b"""\\documentclass{article}
@@ -112,15 +124,19 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(package["files"][image], "cG5nLWJ5dGVz")
         self.assertIn("Model", [section["title"] for section in package["sections"]])
 
-    def test_arxiv_pdf_stops_before_the_book_pipeline(self):
-        with self.assertRaises(ImportFailure) as caught:
-            import_link(
-                "https://arxiv.org/abs/1706.03762",
-                lambda url: ATOM,
-                lambda url: b"%PDF-1.7",
-                [],
-            )
-        self.assertIn("book pipeline", str(caught.exception))
+    def test_arxiv_pdf_goes_through_the_book_pipeline(self):
+        pdf = _one_page_pdf("Introduction", "The transformer uses attention.")
+        package = import_link(
+            "https://arxiv.org/abs/1706.03762",
+            lambda url: ATOM,
+            lambda url: pdf,
+            [],
+        )
+        body = package["body"]
+        self.assertIn("Introduction", body)
+        self.assertIn("The transformer uses attention.", body)
+        self.assertNotIn("<!-- PDF page", body)
+        self.assertEqual(package["material"]["title"], "Attention Is All You Need")
 
     def test_x_post_uses_oembed_text(self):
         payload = {

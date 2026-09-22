@@ -100,6 +100,41 @@ public enum TextMark: String, Codable, Sendable {
     case highlight, strikethrough
 }
 
+public func applyingAnnotation(
+    to highlights: [Highlight],
+    materialID: String,
+    piece: Int,
+    quote: String,
+    caption: String?,
+    mark: TextMark?
+) -> [Highlight] {
+    var highlights = highlights
+    let trimmedQuote = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedQuote.isEmpty || !(trimmedCaption ?? "").isEmpty else { return highlights }
+    if let index = highlights.firstIndex(where: {
+        $0.materialID == materialID && $0.piece == piece && $0.quote == trimmedQuote
+    }) {
+        if let trimmedCaption, !trimmedCaption.isEmpty {
+            highlights[index].caption = trimmedCaption
+        }
+        if let mark {
+            highlights[index].mark = mark
+        }
+        return highlights
+    }
+    highlights.append(
+        Highlight(
+            materialID: materialID,
+            piece: piece,
+            quote: trimmedQuote,
+            caption: trimmedCaption ?? "",
+            mark: mark
+        )
+    )
+    return highlights
+}
+
 public struct Highlight: Equatable, Identifiable, Sendable {
     public var id: UUID
     public var materialID: String

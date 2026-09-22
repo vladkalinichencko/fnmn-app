@@ -132,13 +132,9 @@ struct ShelfView: View {
     }
 
     private var shelfNotes: [ShelfNote] {
-        let marked = library.snapshot.highlights.filter { !$0.caption.isEmpty }.map { highlight in
+        library.snapshot.highlights.filter { !$0.caption.isEmpty }.map { highlight in
             ShelfNote(id: highlight.id.uuidString, materialID: highlight.materialID, caption: highlight.caption, quote: highlight.quote)
         }
-        let earlier = library.snapshot.notes.map { note in
-            ShelfNote(id: note.id.uuidString, materialID: note.materialID, caption: note.text, quote: "")
-        }
-        return marked + earlier
     }
 
     @ViewBuilder

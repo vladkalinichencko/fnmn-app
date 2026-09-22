@@ -28,7 +28,11 @@ def arxiv_markdown(url: str, fetch_text, fetch_bytes) -> tuple[str, str | None, 
     if paper is None:
         raise ValueError("arXiv address has no paper id")
     title, authors = _metadata(fetch_text, paper)
-    texts, images = unpack_source(fetch_bytes(f"https://export.arxiv.org/e-print/{quote(paper, safe='/')}"))
+    source = fetch_bytes(f"https://export.arxiv.org/e-print/{quote(paper, safe='/')}")
+    if source.startswith(b"%PDF"):
+        from pdf_book_import import book_markdown
+        return book_markdown(source, title, authors)
+    texts, images = unpack_source(source)
     return render_tex(texts, images, title, authors)
 
 

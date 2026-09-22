@@ -9,9 +9,11 @@ flowchart TD
     Post[Пост X или share ChatGPT] --> TextAdapter[oEmbed и share JSON]
     Pdf[PDF-книга] --> PdfAdapter[pdf-book]
     Tube[YouTube] --> Phone[Телефон: ролик и captions]
-    StopSource[Голый PDF, arXiv без source] --> Stop[Ошибка, не пустая карточка]
+    ArxivPdf[arXiv PDF без source] --> BookAsm[Сборщик книги по текстовому слою]
+    StopSource[Голый PDF] --> Stop[Ошибка, не пустая карточка]
     Phone --> Player[Плеер]
     WebAdapter --> Body[Markdown body]
+    BookAsm --> Body
     ArxivAdapter --> Body
     TextAdapter --> Body
     PdfAdapter --> Content[content.md того же Markdown]

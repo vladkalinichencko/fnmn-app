@@ -89,6 +89,23 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         }
     }
 
+    public mutating func foldLegacyNotes() -> Bool {
+        guard !notes.isEmpty else { return false }
+        for note in notes where !highlights.contains(where: { $0.id == note.id }) {
+            let piece: Int
+            if let blockID = note.blockID, blockID.hasPrefix("piece:"), let index = Int(blockID.dropFirst(6)) {
+                piece = index
+            } else {
+                piece = 0
+            }
+            highlights.append(
+                Highlight(id: note.id, materialID: note.materialID, piece: piece, quote: "", caption: note.text, mark: nil)
+            )
+        }
+        notes = []
+        return true
+    }
+
     public mutating func importPackage(_ package: ImportPackage) throws {
         guard package.version == 1 else { throw LibraryError.unsupportedVersion(package.version) }
         guard !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
@@ -251,6 +268,9 @@ public actor LibraryFile {
             snapshot.archived = state.archived
         }
         snapshot.adoptPackageFolders()
+        if snapshot.foldLegacyNotes() {
+            try saveState(snapshot)
+        }
         return snapshot
     }
 
