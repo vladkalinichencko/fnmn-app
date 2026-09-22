@@ -5,44 +5,18 @@ import json
 from pathlib import Path
 import re
 import shutil
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from math_issues import math_issues  # noqa: E402
 
 
 HEADING = re.compile(r'^(#+) (.+)$', re.M)
 NUMBER = re.compile(r'^(?:\d+(?:\.\d+)*|∞(?:\.\d+)*|[A-Z]\.\d+(?:\.\d+)*)\s+')
 PAGE = re.compile(r'^<!-- PDF page \d+ -->\s*$', re.M)
 FOOTNOTE_DEFINITION = re.compile(r'^\[\^[^]]+\]:', re.M)
-MATH_ENVIRONMENT = re.compile(r'\\begin\{(aligned|cases|gather|equation\*?)\}(.*?)\\end\{\1\}', re.S)
-
-
 def math_delimiter_errors(text):
-    errors = []
-    for match in MATH_ENVIRONMENT.finditer(text):
-        formula = match.group(0)
-        if _group_depth(formula) != 0 or _delimiter_count(formula, 'left') != _delimiter_count(formula, 'right'):
-            line = text[:match.start()].count('\n') + 1
-            errors.append(f'math_delimiters:{line}')
-    return errors
-
-
-def _group_depth(formula):
-    depth = 0
-    index = 0
-    while index < len(formula):
-        if formula[index] == '\\':
-            index += 2 if index + 1 < len(formula) else 1
-            continue
-        if formula[index] == '{':
-            depth += 1
-        elif formula[index] == '}':
-            depth -= 1
-            if depth < 0:
-                return depth
-        index += 1
-    return depth
-
-
-def _delimiter_count(formula, name):
-    return len(re.findall(r'\\' + name + r'(?![a-zA-Z])', formula))
+    return [f'{issue["type"]}:{issue["line"]}' for issue in math_issues(text)]
 
 
 def section_bounds(text, title):

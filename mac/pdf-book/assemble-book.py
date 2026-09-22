@@ -6,9 +6,13 @@ from difflib import SequenceMatcher
 import json
 from pathlib import Path
 import re
+import sys
 import unicodedata
 
 import pymupdf
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from math_issues import math_issues  # noqa: E402
 
 
 GROUNDING = re.compile(r'<\|ref\|>(.*?)<\|/ref\|><\|det\|>(.*?)<\|/det\|>\s*')
@@ -193,12 +197,15 @@ def missing_footnote_targets(pdf, prose, textual, pairs, notes, note_blocks, bod
 
 
 def latex(text):
+    """Rewrite only spellings that have one legal result. Brace repairs stay issues."""
+
     def inner(value):
         value = value.replace('∞', r'\infty').replace(
             r'\begin{align*}', r'\begin{aligned}').replace(r'\end{align*}', r'\end{aligned}')
         return value.replace(r'\begin{aligned}=&', r'\begin{aligned}&')
 
     text = re.sub(r'\\\[(.*?)\\\]', lambda match: f'\n$$\n{inner(match[1]).strip()}\n$$\n', text, flags=re.S)
+    text = re.sub(r'\$\$(.*?)\$\$', lambda match: f'\n$$\n{inner(match[1]).strip()}\n$$\n', text, flags=re.S)
     return re.sub(r'\\\((.*?)\\\)', lambda match: f'${inner(match[1]).strip()}$', text, flags=re.S)
 
 
@@ -274,7 +281,7 @@ def extract_image(page, block, number, index, assets):
     return f'![Figure from PDF page {number}](assets/{name})'
 
 
-def build_page(page, number, ocr, outline, level, assets, repeated_margins, footnote_overrides):
+def build_page(page, number, ocr, outline, level, assets, repeated_margins, footnote_overrides, formula_overrides):
     pdf, body_size = pdf_blocks(page)
     multicolumn = is_multicolumn(pdf)
     notes = footnotes(pdf, body_size)
@@ -295,6 +302,7 @@ def build_page(page, number, ocr, outline, level, assets, repeated_margins, foot
     equations = [block for block in ocr if block['kind'] == 'equation']
     labels = equation_labels(page, equations)
     equation_index = image_index = 0
+    equation_issues = []
     for block in ocr:
         kind, bbox, text = block['kind'], block['bbox'], block['text']
         if in_footnote(block):
@@ -305,6 +313,10 @@ def build_page(page, number, ocr, outline, level, assets, repeated_margins, foot
             changes.append({'type': 'removed_margin', 'text': text})
             continue
         if kind == 'equation':
+            override = formula_overrides.get(f'{number}:{equation_index + 1}')
+            if override:
+                text = override
+                changes.append({'type': 'replaced_formula', 'equation': equation_index + 1})
             if equation_index in labels:
                 text, added = add_label(text, labels[equation_index])
                 if added:
@@ -335,7 +347,17 @@ def build_page(page, number, ocr, outline, level, assets, repeated_margins, foot
         for note_number in note_numbers:
             text = re.sub(r'\\\(\s*\^\{' + re.escape(note_number) + r'\}\s*\\\)',
                           f'[^p{number}-{note_number}]', text)
-        content.append((bbox[1], latex(text)))
+        rendered = latex(text)
+        if kind == 'equation':
+            defects = math_issues(rendered)
+            if defects:
+                image = extract_region(
+                    page, bbox, f'page-{number}-formula-{equation_index}.png', assets, padding=3)
+                for defect in defects:
+                    defect['image'] = f'assets/{image}'
+                    defect['equation'] = equation_index
+                equation_issues.extend(defects)
+        content.append((bbox[1], rendered))
     for note in notes:
         override = footnote_overrides.get(f'{number}:{note["number"]}')
         if override or not note['needs_ocr']:
@@ -364,6 +386,11 @@ def build_page(page, number, ocr, outline, level, assets, repeated_margins, foot
         for pair in pairs if pair['score'] < .60]
     markdown = '\n\n'.join([*(text for _, text in content), *definitions])
     issues = syntax_issues(markdown)
+    known_formulas = {issue['formula'] for issue in equation_issues}
+    issues.extend(equation_issues)
+    issues.extend(issue for issue in math_issues(markdown)
+                  if not any(issue['formula'] in formula or formula in issue['formula']
+                             for formula in known_formulas))
     issues.extend({'type': 'footnote_reference_missing', 'number': number}
                   for number in missing_references)
     for note in notes:
@@ -436,6 +463,7 @@ def main():
     parser.add_argument('output', type=Path)
     parser.add_argument('--replacements', type=Path)
     parser.add_argument('--footnote-overrides', type=Path)
+    parser.add_argument('--formula-overrides', type=Path)
     parser.add_argument('--exclude-pages', type=int, nargs='+', default=[])
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -443,6 +471,8 @@ def main():
     assets.mkdir(exist_ok=True)
     footnote_overrides = (json.loads(args.footnote_overrides.read_text())
                           if args.footnote_overrides and args.footnote_overrides.exists() else {})
+    formula_overrides = (json.loads(args.formula_overrides.read_text())
+                         if args.formula_overrides and args.formula_overrides.exists() else {})
     with pymupdf.open(args.pdf) as document:
         outline = document.get_toc()
         raw, metrics = {}, {}
@@ -457,7 +487,7 @@ def main():
             if number in args.exclude_pages:
                 continue
             text, audit, level = build_page(page, number, read_ocr(raw[number]), document.get_toc(),
-                                            level, assets, margins, footnote_overrides)
+                                            level, assets, margins, footnote_overrides, formula_overrides)
             audit['finish_reason'] = metrics[number]['finish_reason']
             repetition = repetition_issue(raw[number])
             if repetition:

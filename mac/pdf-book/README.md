@@ -3,7 +3,7 @@
 These scripts turn any born-digital PDF into a checked FNMN book package:
 
 ```text
-PDF -> grounded page OCR -> deterministic assembly -> typed candidates -> targeted footnote OCR -> checked Markdown -> app package
+PDF text + grounded page OCR -> assembly -> unambiguous cleanup -> formula and footnote crops back to the model -> app package
 ```
 
 Install the pinned OCR environment:
@@ -25,16 +25,22 @@ Run the complete pipeline from the repository root:
 .venv-ocr/bin/python mac/pdf-book/run-footnote-ocr.py \
   /path/to/work/book.candidates.json /path/to/work/footnote-overrides.json
 
+.venv-ocr/bin/python mac/pdf-book/run-formula-ocr.py \
+  /path/to/work/book.candidates.json /path/to/work/formula-overrides.json
+
 .venv-ocr/bin/python mac/pdf-book/assemble-book.py \
   /path/to/book.pdf /path/to/work/ocr /path/to/work/book.md \
-  --footnote-overrides /path/to/work/footnote-overrides.json
+  --footnote-overrides /path/to/work/footnote-overrides.json \
+  --formula-overrides /path/to/work/formula-overrides.json
 
 python3 mac/pdf-book/export-app-book.py \
   /path/to/work/book.md /path/to/book-config.json /path/to/output-book
 ```
 
-`run-ocr2.py` processes every page with DeepSeek-OCR-2 and retries truncated or repetitive output. `assemble-book.py` combines grounded OCR with PDF text, geometry, bookmarks, equations, figures, and footnotes. It writes `book.audit.json`, `book.candidates.json`, `book.validation.json`, and `assets/` beside the Markdown. Candidate records have explicit types such as `footnote_needs_ocr`, `footnote_reference_missing`, `bare_latex`, `unbalanced_math_delimiter`, `unbalanced_environment`, and `repetition`.
+`run-ocr2.py` sends every full page to DeepSeek-OCR-2 with `Convert the document to markdown` and retries truncated or repetitive output. `assemble-book.py` reads the PDF text layer and combines it with that OCR, geometry, bookmarks, equations, figures, and footnotes. It rewrites only math spellings that have one legal result, such as `\[...\]` to `$$` and `align*` to `aligned`. A brace or `\left`/`\right` repair that has more than one legal result stays an issue and keeps a crop of that equation. The same check later stops `export-app-book.py` from publishing a package that still contains one.
 
-`run-footnote-ocr.py` automatically reprocesses only `footnote_needs_ocr` crops. Other candidate types remain visible for review; the pipeline does not ask a model to guess arbitrary corrections. Re-run the assembler after changing overrides or replacement pages.
+Assembly writes `book.audit.json`, `book.candidates.json`, `book.validation.json`, and `assets/` beside the Markdown. Candidate types include `footnote_needs_ocr`, `footnote_reference_missing`, `bare_latex`, `unbalanced_math_delimiter`, `unbalanced_environment`, `unbalanced_group`, `unbalanced_left_right`, and `repetition`.
+
+`run-footnote-ocr.py` sends each `footnote_needs_ocr` crop back to the same model and prompt. `run-formula-ocr.py` does that for equation crops whose braces or `\left`/`\right` do not balance. A formula transcription is kept only when it contains one math region and that region balances; otherwise the original equation stays and the issue remains. Re-run the assembler with both override files.
 
 `export-app-book.py` makes the self-contained directory imported by FNMN: `content.md`, `metadata.json`, `assets/`, and `validation.json`. Its book config contains presentation decisions that cannot be inferred safely: metadata, `content_start`, and sections to omit. [`principles-of-deep-learning-theory.json`](principles-of-deep-learning-theory.json) is an example config, and [`fixtures/books/principles-of-deep-learning-theory/`](../../fixtures/books/principles-of-deep-learning-theory/) is an example output package.
