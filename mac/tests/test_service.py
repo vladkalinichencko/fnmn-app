@@ -61,6 +61,16 @@ class ArticleTests(unittest.TestCase):
             import_web_article("https://example.com/notes", lambda url: source, fetch_bytes, [])
         self.assertEqual(caught.exception.phase, "fetchingAssets")
 
+    def test_heading_with_math_stays_one_section(self):
+        source = """
+        <html><body><article>
+          <h2>The <script type="math/tex">\\sigma</script>-algebra</h2>
+          <p>Next paragraph.</p>
+        </article></body></html>
+        """
+        package = import_web_article("https://example.com/sigma", lambda url: source, lambda url: b"", [])
+        self.assertEqual([section["title"] for section in package["sections"]], ["The $\\sigma$-algebra"])
+
     def test_unread_page_fails_during_page_fetch(self):
         def fetch_text(url):
             raise OSError("down")

@@ -194,7 +194,7 @@ def _outline(url: str, markdown: str, title: str) -> tuple[list[dict[str, Any]],
     for chunk in re.split(r"\n\n+", markdown.strip()):
         if chunk.startswith("```") or chunk.startswith("!["):
             continue
-        heading = re.match(r"(#+)\s+(.*)", chunk)
+        heading = re.fullmatch(r"(#{1,6})[ \t]+(\S.*)", chunk.strip())
         if heading:
             text = heading.group(2).strip()
             level = len(heading.group(1))

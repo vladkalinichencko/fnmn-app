@@ -87,10 +87,39 @@ public struct ReadingPosition: Codable, Equatable, Sendable {
 public struct MaterialReading: Codable, Equatable, Sendable {
     public var openedAt: Date?
     public var isRead: Bool
+    public var progress: Double?
 
-    public init(openedAt: Date? = nil, isRead: Bool = false) {
+    public init(openedAt: Date? = nil, isRead: Bool = false, progress: Double? = nil) {
         self.openedAt = openedAt
         self.isRead = isRead
+        self.progress = progress
+    }
+}
+
+public struct Highlight: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var materialID: String
+    public var piece: Int
+    public var quote: String
+    public var caption: String
+
+    public init(id: UUID = UUID(), materialID: String, piece: Int, quote: String, caption: String) {
+        self.id = id
+        self.materialID = materialID
+        self.piece = piece
+        self.quote = quote
+        self.caption = caption
+    }
+}
+
+extension ReadingPosition {
+    public static func piece(_ index: Int) -> ReadingPosition {
+        ReadingPosition(blockID: "piece:\(index)")
+    }
+
+    public var pieceIndex: Int? {
+        guard blockID.hasPrefix("piece:") else { return nil }
+        return Int(blockID.dropFirst(6))
     }
 }
 

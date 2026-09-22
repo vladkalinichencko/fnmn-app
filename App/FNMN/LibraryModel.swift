@@ -7,12 +7,21 @@ enum LibraryLoadState: Equatable {
     case failed(String)
 }
 
+enum Preparation: Equatable {
+    case idle
+    case working(String)
+    case choosing(String)
+    case failed(String)
+}
+
 @MainActor @Observable
 final class LibraryModel {
     var snapshot = LibrarySnapshot()
     var loadState: LibraryLoadState = .loading
     var operationError: String?
     var pendingShare: URL?
+    var preparation: Preparation = .idle
+    var openMaterialID: String?
     var storageURL: URL { file.root }
     private let file: LibraryFile
 
@@ -28,42 +37,42 @@ final class LibraryModel {
             loadState = .ready
         } catch {
             loadState = .failed(error.localizedDescription)
-            return
         }
-        guard let runtime = Bundle.main.url(forResource: "MarkdownRuntime", withExtension: nil) else { return }
-        do { try await file.installRuntime(from: runtime) }
-        catch { operationError = error.localizedDescription }
     }
 
-    func importData(_ data: Data) async throws {
-        let package = try JSONDecoder().decode(ImportPackage.self, from: data)
+    func importData(_ data: Data) async throws -> String {
+        let decoded = try JSONDecoder().decode(ImportPackage.self, from: data)
+        let package = ImportPackage(material: decoded.material, sections: decoded.sections, blocks: decoded.blocks, body: decoded.body)
         let previous = snapshot
         try snapshot.importPackage(package)
-        let sourceFolder = package.material.kind == .video ? CaptureSource.youtube.folderName : CaptureSource.web.folderName
-        snapshot.place(materialID: package.material.id, in: sourceFolder)
-        do { try await persist() }
-        catch { snapshot = previous; throw error }
-    }
-
-    func storeArticle(_ package: ImportPackage, files: [String: Data]) async throws {
-        let previous = snapshot
-        try snapshot.importPackage(package)
-        snapshot.place(materialID: package.material.id, in: CaptureSource.web.folderName)
         do {
-            try await file.saveArticleFiles(files, materialID: package.material.id)
             try await persist()
+            return package.material.id
         } catch {
             snapshot = previous
-            try? await file.removeArticleFiles(materialID: package.material.id)
             throw error
         }
     }
 
-    func importPickedDocument(from url: URL) async throws {
+    func storeArticle(_ package: ImportPackage, files: [String: Data]) async throws -> String {
+        let stored = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, body: package.body)
+        let previous = snapshot
+        try snapshot.importPackage(stored)
+        do {
+            try await file.saveArticleFiles(files, materialID: stored.material.id)
+            try await persist()
+            return stored.material.id
+        } catch {
+            snapshot = previous
+            try? await file.removeArticleFiles(materialID: stored.material.id)
+            throw error
+        }
+    }
+
+    func importPickedDocument(from url: URL) async throws -> String {
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            try await importBook(from: url)
-            return
+            return try await importBook(from: url)
         }
         if url.pathExtension.lowercased() == "pdf" {
             throw CaptureError.unprepared(.pdf)
@@ -71,24 +80,79 @@ final class LibraryModel {
         guard url.pathExtension.lowercased() == "json" else {
             throw CaptureError.unrecognizedDocument
         }
-        try await importData(Data(contentsOf: url))
+        return try await importData(Data(contentsOf: url))
     }
 
-    func importBook(from directory: URL) async throws {
+    func importBook(from directory: URL) async throws -> String {
         let imported = try BookCatalog.inspect(from: directory)
         let previous = snapshot
         let replacing = previous.books.contains { $0.id == imported.record.id }
         snapshot.importBook(imported.record)
-        snapshot.place(materialID: imported.record.id, in: CaptureSource.pdf.folderName)
         do {
             try await file.copyBook(from: directory, named: imported.record.directoryName)
             try await file.saveState(snapshot)
+            return imported.record.id
         } catch {
             snapshot = previous
             if !replacing {
                 try await file.removeBook(named: imported.record.directoryName)
             }
             throw error
+        }
+    }
+
+    func prepareLink(url: URL, endpoint: URL, token: String, allowsInsecureLAN: Bool) async {
+        guard acceptsPreparation else { return }
+        preparation = .working("Fetching the page")
+        ImportActivity.start(title: url.host ?? "Article", status: "Fetching the page")
+        do {
+            let (package, files) = try await ArticleClient(endpoint: endpoint, token: token, allowsInsecureLAN: allowsInsecureLAN)
+                .prepare(url: url, folder: nil)
+            preparation = .working("Saving")
+            await ImportActivity.update(status: "Saving", fraction: 0.8)
+            let materialID = try await storeArticle(package, files: files)
+            await ImportActivity.end(status: "Ready")
+            preparation = .choosing(materialID)
+        } catch {
+            await ImportActivity.end(status: "Failed")
+            preparation = .failed(error.localizedDescription)
+        }
+    }
+
+    func prepareFile(at url: URL) async {
+        guard acceptsPreparation else { return }
+        preparation = .working("Saving")
+        ImportActivity.start(title: url.lastPathComponent, status: "Saving")
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let materialID = try await importPickedDocument(from: url)
+            await ImportActivity.end(status: "Ready")
+            preparation = .choosing(materialID)
+        } catch {
+            await ImportActivity.end(status: "Failed")
+            preparation = .failed(error.localizedDescription)
+        }
+    }
+
+    func finishPreparation() {
+        preparation = .idle
+    }
+
+    private var acceptsPreparation: Bool {
+        switch preparation {
+        case .idle, .failed: true
+        case .working, .choosing: false
+        }
+    }
+
+    func assign(materialID: String, to folders: [String]) async {
+        let previous = snapshot
+        snapshot.assign(materialID: materialID, to: folders)
+        do { try await persist() }
+        catch {
+            snapshot = previous
+            operationError = error.localizedDescription
         }
     }
 
@@ -112,14 +176,43 @@ final class LibraryModel {
         }
     }
 
-    func save(position: ReadingPosition, materialID: String) async {
-        let previous = snapshot.positions[materialID]
+    func save(position: ReadingPosition, materialID: String, progress: Double) async {
+        let previousPosition = snapshot.positions[materialID]
+        let previousReading = snapshot.readings[materialID]
         snapshot.positions[materialID] = position
+        snapshot.setProgress(progress, materialID: materialID)
         do { try await file.saveState(snapshot) }
         catch {
-            snapshot.positions[materialID] = previous
+            snapshot.positions[materialID] = previousPosition
+            snapshot.readings[materialID] = previousReading
             operationError = error.localizedDescription
         }
+    }
+
+    func save(highlightQuote quote: String, caption: String, materialID: String, piece: Int) async {
+        let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let previous = snapshot.highlights
+        snapshot.highlights.append(Highlight(materialID: materialID, piece: piece, quote: trimmed, caption: caption))
+        do { try await file.saveState(snapshot) }
+        catch {
+            snapshot.highlights = previous
+            operationError = error.localizedDescription
+        }
+    }
+
+    func setArchived(_ isArchived: Bool, materialID: String) async {
+        let previous = snapshot.archived
+        snapshot.setArchived(isArchived, materialID: materialID)
+        do { try await file.saveState(snapshot) }
+        catch {
+            snapshot.archived = previous
+            operationError = error.localizedDescription
+        }
+    }
+
+    func open(_ materialID: String) {
+        openMaterialID = materialID
     }
 
     func saveVideoTime(_ seconds: Double, materialID: String, blockID: String) async {

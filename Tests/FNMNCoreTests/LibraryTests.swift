@@ -18,6 +18,15 @@ private let article = ImportPackage(
     #expect(library.packages[0].folders == ["Inbox", "Papers"])
 }
 
+@Test func importKeepsTheMarkdownBody() throws {
+    var library = LibrarySnapshot()
+    let packaged = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: article.folders, body: "A $x$ line.")
+    try library.importPackage(packaged)
+    let renamed = library.renameFolder(from: "Inbox", to: "Later")
+    #expect(renamed)
+    #expect(library.packages[0].body == "A $x$ line.")
+}
+
 @Test func positionAndNoteSurviveDiskRoundTrip() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory.appending(path: "library.json"))

@@ -6,7 +6,7 @@ struct FNMNApp: App {
 
     var body: some Scene {
         WindowGroup {
-            LibraryView()
+            AppShell()
                 .environment(library)
                 .task { await library.load() }
                 .onOpenURL { url in

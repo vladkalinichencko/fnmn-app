@@ -8,13 +8,15 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var notes: [Note] = []
     public var folders: [String] = []
     public var placements: [String: [String]] = [:]
+    public var highlights: [Highlight] = []
+    public var archived: [String] = []
 
     public init() {}
 
     public var continuedID: String? {
         let known = Set(packages.map(\.material.id) + books.map(\.id))
         let opened = readings.compactMap { materialID, reading -> (String, Date)? in
-            guard let openedAt = reading.openedAt, known.contains(materialID) else { return nil }
+            guard let openedAt = reading.openedAt, known.contains(materialID), !archived.contains(materialID) else { return nil }
             return (materialID, openedAt)
         }
         if let materialID = opened.max(by: { $0.1 < $1.1 })?.0 { return materialID }
@@ -42,6 +44,22 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
 
     public mutating func setRead(_ isRead: Bool, materialID: String) {
         readings[materialID, default: MaterialReading()].isRead = isRead
+    }
+
+    public mutating func setProgress(_ progress: Double, materialID: String) {
+        readings[materialID, default: MaterialReading()].progress = progress
+    }
+
+    public mutating func setArchived(_ isArchived: Bool, materialID: String) {
+        if isArchived {
+            if !archived.contains(materialID) { archived.append(materialID) }
+        } else {
+            archived.removeAll { $0 == materialID }
+        }
+    }
+
+    public func isArchived(_ materialID: String) -> Bool {
+        archived.contains(materialID)
     }
 
     public func folderNames(for materialID: String) -> [String] {
@@ -76,7 +94,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         guard !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
         let prior = folderNames(for: package.material.id)
         let merged = Array(Set(prior + package.folders)).sorted()
-        let stored = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: merged)
+        let stored = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: merged, body: package.body)
         if let index = packages.firstIndex(where: { $0.material.id == package.material.id }) {
             packages[index] = stored
         } else {
@@ -84,6 +102,13 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         }
         placements[package.material.id] = merged
         folders = Array(Set(folders + merged)).sorted()
+    }
+
+    public mutating func assign(materialID: String, to folders: [String]) {
+        let names = Array(Set(folders.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted()
+        placements[materialID] = names
+        self.folders = Array(Set(self.folders + names)).sorted()
+        writePackageFolders(materialID, names)
     }
 
     public mutating func place(materialID: String, in folder: String) {
@@ -126,7 +151,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     private mutating func writePackageFolders(_ materialID: String, _ names: [String]) {
         guard let index = packages.firstIndex(where: { $0.material.id == materialID }) else { return }
         let package = packages[index]
-        packages[index] = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: names)
+        packages[index] = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: names, body: package.body)
     }
 
     public mutating func recordVideoTime(materialID: String, blockID: String, seconds: Double) -> Bool {
@@ -162,6 +187,8 @@ public actor LibraryFile {
         var readings: [String: MaterialReading]
         var books: [BookRecord]
         var placements: [String: [String]]
+        var highlights: [Highlight]
+        var archived: [String]
 
         init(
             positions: [String: ReadingPosition],
@@ -169,7 +196,9 @@ public actor LibraryFile {
             folders: [String],
             readings: [String: MaterialReading],
             books: [BookRecord],
-            placements: [String: [String]]
+            placements: [String: [String]],
+            highlights: [Highlight],
+            archived: [String]
         ) {
             self.positions = positions
             self.notes = notes
@@ -177,6 +206,8 @@ public actor LibraryFile {
             self.readings = readings
             self.books = books
             self.placements = placements
+            self.highlights = highlights
+            self.archived = archived
         }
 
         init(from decoder: Decoder) throws {
@@ -187,6 +218,8 @@ public actor LibraryFile {
             readings = try container.decodeIfPresent([String: MaterialReading].self, forKey: .readings) ?? [:]
             books = try container.decodeIfPresent([BookRecord].self, forKey: .books) ?? []
             placements = try container.decodeIfPresent([String: [String]].self, forKey: .placements) ?? [:]
+            highlights = try container.decodeIfPresent([Highlight].self, forKey: .highlights) ?? []
+            archived = try container.decodeIfPresent([String].self, forKey: .archived) ?? []
         }
     }
 
@@ -214,6 +247,8 @@ public actor LibraryFile {
             snapshot.readings = state.readings
             snapshot.books = state.books
             snapshot.placements = state.placements
+            snapshot.highlights = state.highlights
+            snapshot.archived = state.archived
         }
         snapshot.adoptPackageFolders()
         return snapshot
@@ -261,9 +296,27 @@ public actor LibraryFile {
             folders: snapshot.folders,
             readings: snapshot.readings,
             books: snapshot.books,
-            placements: snapshot.placements
+            placements: snapshot.placements,
+            highlights: snapshot.highlights,
+            archived: snapshot.archived
         )
         try encoder.encode(state).write(to: directory.appending(path: "state.json"), options: .atomic)
+    }
+
+    public func bookText(directoryName: String, contentFile: String) throws -> String {
+        guard let url = Self.bookFile(root: directory, directoryName: directoryName, path: contentFile) else {
+            throw LibraryError.escapedPath
+        }
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    public static func bookFile(root: URL, directoryName: String, path: String) -> URL? {
+        guard !directoryName.isEmpty, !directoryName.hasPrefix("/"), !directoryName.contains(".."), !directoryName.contains("/") else { return nil }
+        let folder = root.appending(path: "books").appending(path: directoryName).standardizedFileURL
+        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return nil }
+        let destination = folder.appending(path: path).standardizedFileURL
+        guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
+        return destination
     }
 
     public static func articleFile(root: URL, materialID: String, path: String) -> URL? {
