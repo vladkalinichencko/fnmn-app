@@ -15,6 +15,7 @@ from xml.sax.saxutils import escape
 from adapter_arxiv import arxiv_markdown
 from adapter_chatgpt import chatgpt_markdown
 from adapter_x import x_markdown
+from adapter_youtube import youtube_package_live
 from html_markdown import article_markdown
 from sources import NAMES, source_kind
 
@@ -182,7 +183,14 @@ def import_link(
     if kind in {"web", "substack"}:
         return import_web_article(url, fetch_text, fetch_bytes, folders)
     if kind == "youtube":
-        raise ImportFailure("saving", "YouTube opens on the phone.")
+        try:
+            return youtube_package_live(url, folders or [])
+        except ImportFailure:
+            raise
+        except ValueError as error:
+            raise ImportFailure("saving", str(error)) from error
+        except Exception as error:
+            raise ImportFailure("fetchingPage", str(error)) from error
     try:
         if kind == "arxiv":
             markdown, author, files = arxiv_markdown(url, fetch_text, fetch_bytes)

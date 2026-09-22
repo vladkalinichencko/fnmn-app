@@ -2,6 +2,7 @@ import io
 import json
 import tarfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import pymupdf
@@ -307,10 +308,24 @@ class AdapterTests(unittest.TestCase):
         video = next(block for block in package["blocks"] if block["kind"] == "video")
         self.assertEqual(video["mediaURL"], "https://www.youtube.com/embed/abcdefghijk")
 
-    def test_server_leaves_youtube_to_the_phone(self):
-        with self.assertRaises(ImportFailure) as caught:
-            import_link("https://youtu.be/abcdefghijk", lambda page: "", lambda page: b"", [])
-        self.assertIn("phone", str(caught.exception))
+    def test_youtube_import_asks_the_server_for_the_package(self):
+        sentinel = {"material": {"kind": "video", "id": "youtube:abcdefghijk"}}
+        with patch("fnmn_service.youtube_package_live", return_value=sentinel) as called:
+            package = import_link("https://youtu.be/abcdefghijk", lambda page: "", lambda page: b"", [])
+        called.assert_called_once_with("https://youtu.be/abcdefghijk", [])
+        self.assertEqual(package, sentinel)
+
+    def test_youtube_solver_passes_yt_dlp_checks(self):
+        import hashlib
+
+        import yt_dlp_ejs
+        from yt_dlp.extractor.youtube.jsc._builtin.vendor import HASHES, VERSION
+
+        self.assertEqual(yt_dlp_ejs.version, VERSION)
+        core = hashlib.sha3_512(yt_dlp_ejs.yt.solver.core().encode()).hexdigest()
+        lib = hashlib.sha3_512(yt_dlp_ejs.yt.solver.lib().encode()).hexdigest()
+        self.assertEqual(core, HASHES["yt.solver.core.min.js"])
+        self.assertEqual(lib, HASHES["yt.solver.lib.min.js"])
 
     def test_pdf_links_still_stop(self):
         with self.assertRaises(ImportFailure) as caught:

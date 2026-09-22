@@ -8,10 +8,10 @@ flowchart TD
     Arxiv[arXiv e-print] --> ArxivAdapter[adapter_arxiv]
     Post[Пост X или share ChatGPT] --> TextAdapter[oEmbed и share JSON]
     Pdf[PDF-книга] --> PdfAdapter[pdf-book]
-    Tube[YouTube] --> Phone[Телефон: ролик и captions]
+    Tube[YouTube] --> TubeMac[yt-dlp на Mac: название и captions]
     ArxivPdf[arXiv PDF без source] --> BookAsm[Сборщик книги по текстовому слою]
     StopSource[Голый PDF] --> Stop[Ошибка, не пустая карточка]
-    Phone --> Player[Плеер]
+    TubeMac --> Player[Плеер]
     WebAdapter --> Body[Markdown body]
     BookAsm --> Body
     ArxivAdapter --> Body

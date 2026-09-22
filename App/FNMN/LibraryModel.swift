@@ -101,23 +101,6 @@ final class LibraryModel {
         }
     }
 
-    func prepareYouTube(url: URL) async {
-        guard acceptsPreparation else { return }
-        preparation = .working("Opening the video")
-        ImportActivity.start(title: url.host ?? "YouTube", status: "Opening the video")
-        do {
-            let package = try await YouTubeImport.package(for: url)
-            preparation = .working("Saving")
-            await ImportActivity.update(status: "Saving", fraction: 0.8)
-            let materialID = try await storeArticle(package, files: [:])
-            await ImportActivity.end(status: "Ready")
-            preparation = .choosing(materialID)
-        } catch {
-            await ImportActivity.end(status: "Failed")
-            preparation = .failed(error.localizedDescription)
-        }
-    }
-
     func prepareLink(url: URL, endpoint: URL, token: String, allowsInsecureLAN: Bool) async {
         guard acceptsPreparation else { return }
         preparation = .working("Fetching the page")

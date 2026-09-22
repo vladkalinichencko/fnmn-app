@@ -23,6 +23,29 @@ def _stable_id(prefix: str, value: str) -> str:
     return f"{prefix}:{hashlib.sha256(value.encode()).hexdigest()[:24]}"
 
 
+def youtube_package_live(url: str, folders: list[str] | None = None) -> dict:
+    video_id = video_id_from_url(url)
+    if video_id is None:
+        raise ValueError("YouTube address has no video id")
+    source_url = f"https://www.youtube.com/watch?v={video_id}"
+    info = _ytdlp_info(source_url, download=False)
+    title = (info.get("title") or "").strip() or video_id
+    author = (info.get("uploader") or info.get("channel") or "").strip() or None
+    language = _caption_language(info)
+    cues: list[tuple[float, str]] = []
+    note = None
+    if language:
+        try:
+            cues = _download_cues(source_url, language)
+        except Exception as error:
+            note = f"Captions did not download: {error}"
+    if not cues and note is None:
+        note = "YouTube did not return caption text."
+    if cues:
+        note = None
+    return _package(video_id, source_url, title, author, cues, note, folders or [])
+
+
 def youtube_package(url: str, fetch_text, folders: list[str] | None = None) -> dict:
     video_id = video_id_from_url(url)
     if video_id is None:
@@ -216,6 +239,74 @@ def _vtt_seconds(stamp: str) -> float:
 def _clean(text: str) -> str:
     plain = re.sub(r"<[^>]+>", "", html.unescape(text))
     return " ".join(plain.replace("\n", " ").split())
+
+
+def _ytdlp_info(url: str, download: bool) -> dict:
+    import yt_dlp
+
+    options = {
+        "skip_download": True,
+        "noplaylist": True,
+        "quiet": True,
+        "js_runtimes": {"node": {"path": "node"}},
+    }
+    with yt_dlp.YoutubeDL(options) as ydl:
+        info = ydl.extract_info(url, download=download)
+    if not isinstance(info, dict):
+        raise ValueError("yt-dlp returned no video")
+    return info
+
+
+def _caption_language(info: dict) -> str | None:
+    manual = info.get("subtitles") or {}
+    automatic = info.get("automatic_captions") or {}
+    preferred = [info.get("language") or "", "en", "en-US", "en-orig"]
+    for code in preferred:
+        code = str(code).lower()
+        if not code:
+            continue
+        for tracks in (manual, automatic):
+            for key in tracks:
+                if key == "live_chat":
+                    continue
+                if key == code or key.startswith(code + "-"):
+                    return key
+    for tracks in (manual, automatic):
+        for key in tracks:
+            if key != "live_chat":
+                return key
+    return None
+
+
+def _download_cues(url: str, language: str) -> list[tuple[float, str]]:
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        options_holder = Path(tmp)
+        _ytdlp_download(url, language, options_holder)
+        files = sorted(options_holder.glob("*.vtt"))
+        if not files:
+            return []
+        return cues_from_timedtext(files[0].read_text(encoding="utf-8"))
+
+
+def _ytdlp_download(url: str, language: str, directory) -> None:
+    import yt_dlp
+
+    options = {
+        "skip_download": True,
+        "noplaylist": True,
+        "quiet": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitleslangs": [language],
+        "subtitlesformat": "vtt",
+        "outtmpl": str(directory / "%(id)s"),
+        "js_runtimes": {"node": {"path": "node"}},
+    }
+    with yt_dlp.YoutubeDL(options) as ydl:
+        ydl.extract_info(url, download=True)
 
 
 def _package(

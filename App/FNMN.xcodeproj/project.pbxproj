@@ -28,7 +28,6 @@
 		C0FFEE000000000000000122 /* ReadingIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000121 /* ReadingIntents.swift */; };
 		C0FFEE000000000000000132 /* VideoReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000131 /* VideoReaderView.swift */; };
 		C0FFEE000000000000000142 /* ReadingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000141 /* ReadingSession.swift */; };
-		C0FFEE000000000000000152 /* YouTubeImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000151 /* YouTubeImport.swift */; };
 		C0FFEE000000000000000162 /* ReadingFold.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000161 /* ReadingFold.swift */; };
 		C0FFEE000000000000000172 /* YouTube.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000171 /* YouTube.swift */; };
 		F99B6628F08B1511007B84D3 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1674AC0273239D1899A9CCC /* WebKit.framework */; };
@@ -57,7 +56,6 @@
 		C0FFEE000000000000000121 /* ReadingIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReadingIntents.swift; path = FNMN/ReadingIntents.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000131 /* VideoReaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VideoReaderView.swift; path = FNMN/VideoReaderView.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000141 /* ReadingSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReadingSession.swift; path = FNMN/ReadingSession.swift; sourceTree = "<group>"; };
-		C0FFEE000000000000000151 /* YouTubeImport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YouTubeImport.swift; path = FNMN/YouTubeImport.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000161 /* ReadingFold.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReadingFold.swift; path = ../Sources/FNMNCore/ReadingFold.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000171 /* YouTube.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YouTube.swift; path = ../Sources/FNMNCore/YouTube.swift; sourceTree = "<group>"; };
 		8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Book.swift; path = ../Sources/FNMNCore/Book.swift; sourceTree = "<group>"; };
@@ -136,7 +134,6 @@
 				C0FFEE000000000000000121 /* ReadingIntents.swift */,
 				C0FFEE000000000000000131 /* VideoReaderView.swift */,
 				C0FFEE000000000000000141 /* ReadingSession.swift */,
-				C0FFEE000000000000000151 /* YouTubeImport.swift */,
 				C0FFEE000000000000000161 /* ReadingFold.swift */,
 				C0FFEE000000000000000171 /* YouTube.swift */,
 				8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */,
@@ -287,7 +284,6 @@
 				C0FFEE000000000000000122 /* ReadingIntents.swift in Sources */,
 				C0FFEE000000000000000132 /* VideoReaderView.swift in Sources */,
 				C0FFEE000000000000000142 /* ReadingSession.swift in Sources */,
-				C0FFEE000000000000000152 /* YouTubeImport.swift in Sources */,
 				C0FFEE000000000000000162 /* ReadingFold.swift in Sources */,
 				C0FFEE000000000000000172 /* YouTube.swift in Sources */,
 				8B1C0D2E3F4A5B6C7D8E9F02 /* Book.swift in Sources */,

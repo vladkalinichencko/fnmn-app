@@ -4,3 +4,5 @@ lxml==6.0.1
 PyMuPDF==1.28.2
 trafilatura==2.0.0
 uvicorn==0.37.0
+yt-dlp==2026.8.19
+yt-dlp-ejs==0.8.0

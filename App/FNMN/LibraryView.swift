@@ -455,10 +455,7 @@ private struct AddArticleView: View {
             return
         }
         switch source {
-        case .youtube:
-            Task { await library.prepareYouTube(url: url) }
-            return
-        case .web, .arxiv, .x, .substack, .chatgpt:
+        case .web, .arxiv, .youtube, .x, .substack, .chatgpt:
             break
         case .pdf:
             library.preparation = .failed(CaptureError.unprepared(source).localizedDescription)
