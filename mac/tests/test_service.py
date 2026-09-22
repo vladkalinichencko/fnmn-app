@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from fnmn_service import prepare_article
+from fnmn_service import ImportFailure, import_web_article, prepare_article
 
 
 class ArticleTests(unittest.TestCase):
@@ -16,6 +16,58 @@ class ArticleTests(unittest.TestCase):
         self.assertEqual(json.dumps(package).count("<mi>x</mi>"), 1)
         self.assertIn("image", kinds)
         self.assertIn("https://example.com/figure.png", json.dumps(package))
+
+    def test_import_downloads_picture_files_and_leaves_the_figure_on_the_live_page(self):
+        source = """
+        <html><head><script src="https://cdn.example/app.js"></script></head>
+        <body><article>
+          <h1>Notes</h1>
+          <p><img alt="slope" src="pic.png"></p>
+          <figure id="chart"><div id="plot"></div><script>draw()</script></figure>
+        </article></body></html>
+        """
+        seen = []
+
+        def fetch_text(url):
+            seen.append(("text", url))
+            if url != "https://example.com/notes":
+                raise OSError(url)
+            return source
+
+        def fetch_bytes(url):
+            seen.append(("bytes", url))
+            if url != "https://example.com/pic.png":
+                raise OSError(url)
+            return b"png"
+
+        package = import_web_article("https://example.com/notes", fetch_text, fetch_bytes, ["Web"])
+        self.assertEqual(package["material"]["title"], "Notes")
+        self.assertIn("```fnmn-interactive\nhttps://example.com/notes\n#chart\n```", package["body"])
+        self.assertNotIn("draw()", package["body"])
+        path, encoded = next(iter(package["files"].items()))
+        self.assertEqual(len(package["files"]), 1)
+        self.assertTrue(path.startswith("assets/") and path.endswith(".png"))
+        self.assertEqual(encoded, "cG5n")
+        self.assertIn(f"]({path})", package["body"])
+        self.assertEqual(seen, [("text", "https://example.com/notes"), ("bytes", "https://example.com/pic.png")])
+
+    def test_missing_picture_fails_during_asset_fetch_and_returns_nothing(self):
+        source = "<html><body><article><p>Hi</p><img src='pic.png'></article></body></html>"
+
+        def fetch_bytes(url):
+            raise OSError("missing")
+
+        with self.assertRaises(ImportFailure) as caught:
+            import_web_article("https://example.com/notes", lambda url: source, fetch_bytes, [])
+        self.assertEqual(caught.exception.phase, "fetchingAssets")
+
+    def test_unread_page_fails_during_page_fetch(self):
+        def fetch_text(url):
+            raise OSError("down")
+
+        with self.assertRaises(ImportFailure) as caught:
+            import_web_article("https://example.com/notes", fetch_text, lambda url: b"", [])
+        self.assertEqual(caught.exception.phase, "fetchingPage")
 
 
 if __name__ == "__main__":

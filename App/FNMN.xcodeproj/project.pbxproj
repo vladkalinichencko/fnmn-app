@@ -19,6 +19,9 @@
 		AE87C319066733279308AC1C /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97F938AACA51E893E5F5C036 /* LibraryView.swift */; };
 		C5D59E4B171DA2124DA6B4DD /* LibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4323AC29BFCE9540F2C0AF9 /* LibraryModel.swift */; };
 		E1F51509B92D61982B2278C2 /* BlockWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B60DA4901A295C4336ADDC /* BlockWebView.swift */; };
+		C0FFEE0000000000000000A2 /* ArticleBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000A1 /* ArticleBody.swift */; };
+		C0FFEE0000000000000000B2 /* ArticleFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000B1 /* ArticleFlowView.swift */; };
+		C0FFEE0000000000000000C2 /* LiveCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000C1 /* LiveCropView.swift */; };
 		F99B6628F08B1511007B84D3 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1674AC0273239D1899A9CCC /* WebKit.framework */; };
 		A1SHARE00000000000000002 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1SHARE00000000000000001 /* ShareViewController.swift */; };
 		A1SHARE0000000000000000E /* CaptureHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1SHARE0000000000000000C /* CaptureHandoff.swift */; };
@@ -30,6 +33,9 @@
 		3476D9114EBF885077C36C07 /* Library.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Library.swift; path = ../Sources/FNMNCore/Library.swift; sourceTree = "<group>"; };
 		534989C7158DF819423EE66A /* Document.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Document.swift; path = ../Sources/FNMNCore/Document.swift; sourceTree = "<group>"; };
 		75B60DA4901A295C4336ADDC /* BlockWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BlockWebView.swift; path = FNMN/BlockWebView.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000A1 /* ArticleBody.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ArticleBody.swift; path = ../Sources/FNMNCore/ArticleBody.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000B1 /* ArticleFlowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ArticleFlowView.swift; path = FNMN/ArticleFlowView.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000C1 /* LiveCropView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LiveCropView.swift; path = FNMN/LiveCropView.swift; sourceTree = "<group>"; };
 		8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Book.swift; path = ../Sources/FNMNCore/Book.swift; sourceTree = "<group>"; };
 		8B1C0D2E3F4A5B6C7D8E9F03 /* BookReaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BookReaderView.swift; path = FNMN/BookReaderView.swift; sourceTree = "<group>"; };
 		8B1C0D2E3F4A5B6C7D8E9F05 /* BookWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BookWebView.swift; path = FNMN/BookWebView.swift; sourceTree = "<group>"; };
@@ -91,6 +97,9 @@
 			isa = PBXGroup;
 			children = (
 				75B60DA4901A295C4336ADDC /* BlockWebView.swift */,
+				C0FFEE0000000000000000A1 /* ArticleBody.swift */,
+				C0FFEE0000000000000000B1 /* ArticleFlowView.swift */,
+				C0FFEE0000000000000000C1 /* LiveCropView.swift */,
 				8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */,
 				8B1C0D2E3F4A5B6C7D8E9F03 /* BookReaderView.swift */,
 				8B1C0D2E3F4A5B6C7D8E9F05 /* BookWebView.swift */,
@@ -202,6 +211,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				E1F51509B92D61982B2278C2 /* BlockWebView.swift in Sources */,
+				C0FFEE0000000000000000A2 /* ArticleBody.swift in Sources */,
+				C0FFEE0000000000000000B2 /* ArticleFlowView.swift in Sources */,
+				C0FFEE0000000000000000C2 /* LiveCropView.swift in Sources */,
 				8B1C0D2E3F4A5B6C7D8E9F02 /* Book.swift in Sources */,
 				8B1C0D2E3F4A5B6C7D8E9F04 /* BookReaderView.swift in Sources */,
 				8B1C0D2E3F4A5B6C7D8E9F06 /* BookWebView.swift in Sources */,

@@ -45,14 +45,18 @@ final class LibraryModel {
         catch { snapshot = previous; throw error }
     }
 
-    func importArticle(url: URL, endpoint: URL, token: String, folder: String?, allowsInsecureLAN: Bool) async throws {
-        let package = try await ArticleClient(endpoint: endpoint, token: token, allowsInsecureLAN: allowsInsecureLAN)
-            .prepare(url: url, folder: folder)
+    func storeArticle(_ package: ImportPackage, files: [String: Data]) async throws {
         let previous = snapshot
         try snapshot.importPackage(package)
         snapshot.place(materialID: package.material.id, in: CaptureSource.web.folderName)
-        do { try await persist() }
-        catch { snapshot = previous; throw error }
+        do {
+            try await file.saveArticleFiles(files, materialID: package.material.id)
+            try await persist()
+        } catch {
+            snapshot = previous
+            try? await file.removeArticleFiles(materialID: package.material.id)
+            throw error
+        }
     }
 
     func importPickedDocument(from url: URL) async throws {
@@ -187,7 +191,7 @@ struct ArticleClient {
     let token: String
     let allowsInsecureLAN: Bool
 
-    func prepare(url: URL, folder: String?) async throws -> ImportPackage {
+    func prepare(url: URL, folder: String?) async throws -> (ImportPackage, [String: Data]) {
         let isLocalhost = endpoint.host == "127.0.0.1" || endpoint.host == "localhost"
         guard endpoint.scheme == "https" || isLocalhost || allowsInsecureLAN else {
             throw URLError(.secureConnectionFailed)
@@ -198,9 +202,45 @@ struct ArticleClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(ArticleRequest(url: url, folders: folder.map { [$0] } ?? []))
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, 200 ..< 300 ~= http.statusCode else { throw URLError(.badServerResponse) }
-        return try JSONDecoder().decode(ImportPackage.self, from: data)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        guard 200 ..< 300 ~= http.statusCode else {
+            let detail = (try? JSONDecoder().decode(FailureBody.self, from: data))?.detail
+            throw ArticleServiceError.rejected(detail ?? String(decoding: data, as: UTF8.self))
+        }
+        let delivery = try JSONDecoder().decode(ArticleDelivery.self, from: data)
+        return (delivery.package, delivery.files)
     }
 
     private struct ArticleRequest: Encodable { let url: URL; let folders: [String] }
+    private struct FailureBody: Decodable { let detail: String }
+}
+
+private enum ArticleServiceError: Error, LocalizedError {
+    case rejected(String)
+
+    var errorDescription: String? {
+        guard case let .rejected(message) = self else { return nil }
+        return message
+    }
+}
+
+private struct ArticleDelivery: Decodable {
+    let package: ImportPackage
+    let files: [String: Data]
+
+    init(from decoder: Decoder) throws {
+        package = try ImportPackage(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let encoded = try container.decodeIfPresent([String: String].self, forKey: .files) ?? [:]
+        var files: [String: Data] = [:]
+        for (path, value) in encoded {
+            guard let data = Data(base64Encoded: value) else {
+                throw DecodingError.dataCorruptedError(forKey: .files, in: container, debugDescription: path)
+            }
+            files[path] = data
+        }
+        self.files = files
+    }
+
+    private enum CodingKeys: String, CodingKey { case files }
 }

@@ -141,6 +141,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
 public enum LibraryError: Error, Equatable {
     case unsupportedVersion(Int)
     case emptyDocument
+    case escapedPath
 }
 
 extension BookError: LocalizedError {
@@ -263,6 +264,39 @@ public actor LibraryFile {
             placements: snapshot.placements
         )
         try encoder.encode(state).write(to: directory.appending(path: "state.json"), options: .atomic)
+    }
+
+    public static func articleFile(root: URL, materialID: String, path: String) -> URL? {
+        let folder = articleDirectory(root: root, materialID: materialID).standardizedFileURL
+        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return nil }
+        let destination = folder.appending(path: path).standardizedFileURL
+        guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
+        return destination
+    }
+
+    public func saveArticleFiles(_ files: [String: Data], materialID: String) throws {
+        let folder = Self.articleDirectory(root: directory, materialID: materialID)
+        if FileManager.default.fileExists(atPath: folder.path) {
+            try FileManager.default.removeItem(at: folder)
+        }
+        for (path, data) in files {
+            guard let destination = Self.articleFile(root: directory, materialID: materialID, path: path) else {
+                throw LibraryError.escapedPath
+            }
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: destination, options: .atomic)
+        }
+    }
+
+    public func removeArticleFiles(materialID: String) throws {
+        let folder = Self.articleDirectory(root: directory, materialID: materialID)
+        guard FileManager.default.fileExists(atPath: folder.path) else { return }
+        try FileManager.default.removeItem(at: folder)
+    }
+
+    private static func articleDirectory(root: URL, materialID: String) -> URL {
+        let name = Data(materialID.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
+        return root.appending(path: "articles").appending(path: name)
     }
 }
 

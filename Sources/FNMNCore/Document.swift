@@ -6,13 +6,15 @@ public struct ImportPackage: Codable, Equatable, Sendable {
     public let sections: [Section]
     public let blocks: [Block]
     public let folders: [String]
+    public let body: String?
 
-    public init(version: Int = 1, material: Material, sections: [Section], blocks: [Block], folders: [String] = []) {
+    public init(version: Int = 1, material: Material, sections: [Section], blocks: [Block], folders: [String] = [], body: String? = nil) {
         self.version = version
         self.material = material
         self.sections = sections
         self.blocks = blocks
         self.folders = folders
+        self.body = body
     }
 }
 

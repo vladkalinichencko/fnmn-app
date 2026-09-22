@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urljoin, urlparse
+
+from html_markdown import article_markdown
 
 import httpx
 import trafilatura
@@ -124,6 +128,123 @@ def prepare_article(url: str, source_html: str, folders: list[str] | None = None
     }
 
 
+class ImportFailure(Exception):
+    def __init__(self, phase: str, reason: str):
+        self.phase = phase
+        super().__init__(f"{phase}: {reason}")
+
+
+def import_web_article(
+    url: str,
+    fetch_text: Callable[[str], str],
+    fetch_bytes: Callable[[str], bytes],
+    folders: list[str] | None = None,
+) -> dict[str, Any]:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ImportFailure("fetchingPage", "article URL must be absolute HTTP or HTTPS")
+    try:
+        source = fetch_text(url)
+        markdown, assets = article_markdown(source, url)
+    except ImportFailure:
+        raise
+    except Exception as error:
+        raise ImportFailure("fetchingPage", str(error)) from error
+    files: dict[str, str] = {}
+    try:
+        for path, asset_url in assets.items():
+            files[path] = base64.b64encode(fetch_bytes(asset_url)).decode("ascii")
+    except Exception as error:
+        raise ImportFailure("fetchingAssets", str(error)) from error
+    try:
+        package = _markdown_package(url, source, markdown, folders or [])
+    except Exception as error:
+        raise ImportFailure("saving", str(error)) from error
+    package["files"] = files
+    return package
+
+
+def _markdown_package(url: str, source: str, markdown: str, folders: list[str]) -> dict[str, Any]:
+    document = html.fromstring(source)
+    heading = next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")), "")
+    title_values = document.xpath("string(//title)")
+    title = heading or (title_values or "").strip() or urlparse(url).netloc
+    author_values = document.xpath("//meta[@name='author']/@content")
+    sections, blocks = _outline(url, markdown, title)
+    return {
+        "version": 1,
+        "material": {
+            "id": stable_id("article", url),
+            "kind": "article",
+            "title": title,
+            "sourceURL": url,
+            "byline": next(iter(author_values), None),
+        },
+        "sections": sections,
+        "blocks": blocks,
+        "folders": folders,
+        "body": markdown,
+    }
+
+
+def _outline(url: str, markdown: str, title: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    sections: list[dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
+    section_id: str | None = None
+    for chunk in re.split(r"\n\n+", markdown.strip()):
+        if chunk.startswith("```") or chunk.startswith("!["):
+            continue
+        heading = re.match(r"(#+)\s+(.*)", chunk)
+        if heading:
+            text = heading.group(2).strip()
+            level = len(heading.group(1))
+        else:
+            text = " ".join(chunk.split())
+            level = 0
+        if not text:
+            continue
+        block_id = stable_id("block", f"{url}:{len(blocks)}:{text}")
+        if level:
+            section_id = stable_id("section", f"{url}:{len(sections)}:{text}")
+            sections.append({"id": section_id, "parentID": None, "title": text, "level": level, "firstBlockID": block_id})
+            kind = "heading"
+        else:
+            kind = "paragraph"
+        blocks.append({
+            "id": block_id,
+            "sectionID": section_id,
+            "kind": kind,
+            "html": text,
+            "sourceFragment": None,
+            "mediaURL": None,
+            "startSeconds": None,
+        })
+    if not blocks:
+        block_id = stable_id("block", url)
+        section_id = stable_id("section", f"{url}:{title}")
+        sections.append({"id": section_id, "parentID": None, "title": title, "level": 1, "firstBlockID": block_id})
+        blocks.append({
+            "id": block_id,
+            "sectionID": section_id,
+            "kind": "paragraph",
+            "html": title,
+            "sourceFragment": None,
+            "mediaURL": None,
+            "startSeconds": None,
+        })
+    if not sections:
+        sections.append({"id": "root", "parentID": None, "title": title, "level": 1, "firstBlockID": blocks[0]["id"]})
+        for block in blocks:
+            block["sectionID"] = "root"
+    return sections, blocks
+
+
+def _http_get(url: str) -> httpx.Response:
+    response = httpx.get(url, follow_redirects=True, timeout=30, headers={"User-Agent": "FNMN/1.0 article reader"})
+    response.raise_for_status()
+    return response
+
+
 def require_token(authorization: str | None = Header(default=None)) -> None:
     token = os.environ.get("FNMN_TOKEN")
     if not token:
@@ -143,13 +264,8 @@ def health() -> dict[str, str]:
 @app.post("/articles", dependencies=[Depends(require_token)])
 def article(request: ArticleRequest) -> dict[str, Any]:
     try:
-        parsed = urlparse(request.url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("article URL must be absolute HTTP or HTTPS")
-        response = httpx.get(request.url, follow_redirects=True, timeout=30, headers={"User-Agent": "FNMN/1.0 article reader"})
-        response.raise_for_status()
-        return prepare_article(request.url, response.text, request.folders)
-    except (ValueError, httpx.HTTPError) as error:
+        return import_web_article(request.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, request.folders)
+    except ImportFailure as error:
         raise HTTPException(422, str(error)) from error
 
 
@@ -159,9 +275,8 @@ def main() -> None:
     parser.add_argument("--folder", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    response = httpx.get(args.url, follow_redirects=True, timeout=30, headers={"User-Agent": "FNMN/1.0 article reader"})
-    response.raise_for_status()
-    args.output.write_text(json.dumps(prepare_article(args.url, response.text, args.folder), ensure_ascii=False, indent=2))
+    package = import_web_article(args.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, args.folder)
+    args.output.write_text(json.dumps(package, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

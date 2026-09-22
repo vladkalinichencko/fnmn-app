@@ -80,7 +80,11 @@ struct LibraryView: View {
             }
         } detail: {
             if let package = selectedPackage {
-                ReaderView(package: package).id(package.material.id)
+                if package.body?.isEmpty == false {
+                    ArticleFlowView(package: package).id(package.material.id)
+                } else {
+                    ReaderView(package: package).id(package.material.id)
+                }
             } else if let book = selectedBook {
                 BookReaderView(record: book).id(book.id)
             } else {
@@ -310,17 +314,17 @@ private struct AddArticleView: View {
                     Toggle("Allow HTTP on local network", isOn: $allowsInsecureLAN)
                 }
             }
-            .disabled(state.isSubmitting)
+            .disabled(state.isBusy)
             .navigationTitle("Add")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(state.isSubmitting) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(state.isBusy) }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { send(.submit) }.disabled(state.isSubmitting || URL(string: articleURL) == nil)
+                    Button("Add") { send(.submit) }.disabled(state.isBusy || URL(string: articleURL) == nil)
                 }
             }
             .overlay {
-                if state.isSubmitting {
-                    ProgressView()
+                if let activity = state.activity {
+                    ProgressView(activity)
                 }
             }
         }
@@ -340,12 +344,12 @@ private struct AddArticleView: View {
         }
         .fileImporter(isPresented: $pickingDocument, allowedContentTypes: [.json, .pdf]) { result in
             guard case let .success(url) = result else { return }
-            state = reduce(state, .submit)
+            state = reduce(state, .saveLocal)
             Task { await importDocument(url) }
         }
         .fileImporter(isPresented: $pickingBookFolder, allowedContentTypes: [.folder]) { result in
             guard case let .success(url) = result else { return }
-            state = reduce(state, .submit)
+            state = reduce(state, .saveLocal)
             Task { await importDocument(url) }
         }
     }
@@ -378,13 +382,13 @@ private struct AddArticleView: View {
         let allowsInsecureLAN = allowsInsecureLAN
         Task {
             do {
-                try await library.importArticle(
-                    url: url,
+                let (package, files) = try await ArticleClient(
                     endpoint: server,
                     token: token,
-                    folder: CaptureSource.web.folderName,
                     allowsInsecureLAN: allowsInsecureLAN
-                )
+                ).prepare(url: url, folder: CaptureSource.web.folderName)
+                send(.pageFetched)
+                try await library.storeArticle(package, files: files)
                 send(.succeeded)
             } catch {
                 send(.failed(error.localizedDescription))
@@ -408,11 +412,26 @@ private struct AddArticleView: View {
 
 private enum ArticleImportState: Equatable {
     case editing
-    case submitting
+    case fetchingPage
+    case saving
     case failed(String)
     case completed
 
-    var isSubmitting: Bool { self == .submitting }
+    var isBusy: Bool {
+        switch self {
+        case .fetchingPage, .saving: true
+        default: false
+        }
+    }
+
+    var activity: String? {
+        switch self {
+        case .fetchingPage: "Fetching the page"
+        case .saving: "Saving"
+        default: nil
+        }
+    }
+
     var failure: String? {
         guard case let .failed(message) = self else { return nil }
         return message
@@ -421,6 +440,8 @@ private enum ArticleImportState: Equatable {
 
 private enum ArticleImportAction {
     case submit
+    case saveLocal
+    case pageFetched
     case succeeded
     case failed(String)
     case dismissFailure
@@ -428,9 +449,11 @@ private enum ArticleImportAction {
 
 private func reduce(_ state: ArticleImportState, _ action: ArticleImportAction) -> ArticleImportState {
     switch (state, action) {
-    case (.editing, .submit), (.failed, .submit): .submitting
-    case (.submitting, .succeeded): .completed
-    case let (.submitting, .failed(message)): .failed(message)
+    case (.editing, .submit), (.failed, .submit): .fetchingPage
+    case (.editing, .saveLocal), (.failed, .saveLocal): .saving
+    case (.fetchingPage, .pageFetched): .saving
+    case (.saving, .succeeded): .completed
+    case let (.fetchingPage, .failed(message)), let (.saving, .failed(message)): .failed(message)
     case (.failed, .dismissFailure): .editing
     default: state
     }
