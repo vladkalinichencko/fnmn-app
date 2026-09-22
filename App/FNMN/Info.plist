@@ -4,6 +4,11 @@
 <dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>chatgpt</string>
+		<string>com.openai.chat</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

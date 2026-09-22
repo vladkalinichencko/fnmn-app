@@ -10,7 +10,13 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urljoin, urlparse
 
+from xml.sax.saxutils import escape
+
+from adapter_arxiv import arxiv_markdown
+from adapter_chatgpt import chatgpt_markdown
+from adapter_x import x_markdown
 from html_markdown import article_markdown
+from sources import NAMES, source_kind
 
 import httpx
 import trafilatura
@@ -164,6 +170,57 @@ def import_web_article(
     return package
 
 
+def import_link(
+    url: str,
+    fetch_text: Callable[[str], str],
+    fetch_bytes: Callable[[str], bytes],
+    folders: list[str] | None = None,
+) -> dict[str, Any]:
+    kind = source_kind(url)
+    if kind is None:
+        raise ImportFailure("fetchingPage", "article URL must be absolute HTTP or HTTPS")
+    if kind in {"web", "substack"}:
+        return import_web_article(url, fetch_text, fetch_bytes, folders)
+    if kind == "youtube":
+        raise ImportFailure("saving", "YouTube opens on the phone.")
+    try:
+        if kind == "arxiv":
+            markdown, author, files = arxiv_markdown(url, fetch_text, fetch_bytes)
+        elif kind == "x":
+            markdown, author, files = x_markdown(url, fetch_text)
+        elif kind == "chatgpt":
+            markdown, author, files = chatgpt_markdown(url, fetch_text)
+        else:
+            raise ImportFailure("saving", f"{NAMES[kind]} is recognized, but the Mac service does not prepare it yet.")
+    except ImportFailure:
+        raise
+    except ValueError as error:
+        raise ImportFailure("saving", str(error)) from error
+    except Exception as error:
+        raise ImportFailure("fetchingPage", str(error)) from error
+    try:
+        return _text_package(url, markdown, author, files, folders or [])
+    except Exception as error:
+        raise ImportFailure("saving", str(error)) from error
+
+
+def _text_package(
+    url: str,
+    markdown: str,
+    author: str | None,
+    files: dict[str, bytes],
+    folders: list[str],
+) -> dict[str, Any]:
+    author_tag = ""
+    if author:
+        safe_author = escape(author).replace('"', "&quot;")
+        author_tag = f'<meta name="author" content="{safe_author}">'
+    source = f"<html><head><title></title>{author_tag}</head><body></body></html>"
+    package = _markdown_package(url, source, markdown, folders)
+    package["files"] = {path: base64.b64encode(blob).decode("ascii") for path, blob in files.items()}
+    return package
+
+
 def _markdown_package(url: str, source: str, markdown: str, folders: list[str]) -> dict[str, Any]:
     document = html.fromstring(source)
     heading = next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")), "")
@@ -264,18 +321,18 @@ def health() -> dict[str, str]:
 @app.post("/articles", dependencies=[Depends(require_token)])
 def article(request: ArticleRequest) -> dict[str, Any]:
     try:
-        return import_web_article(request.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, request.folders)
+        return import_link(request.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, request.folders)
     except ImportFailure as error:
         raise HTTPException(422, str(error)) from error
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare one explicitly supplied web article for FNMN")
+    parser = argparse.ArgumentParser(description="Prepare one explicitly supplied article link for FNMN")
     parser.add_argument("url")
     parser.add_argument("--folder", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    package = import_web_article(args.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, args.folder)
+    package = import_link(args.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, args.folder)
     args.output.write_text(json.dumps(package, ensure_ascii=False, indent=2))
 
 

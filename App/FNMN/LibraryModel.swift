@@ -101,6 +101,23 @@ final class LibraryModel {
         }
     }
 
+    func prepareYouTube(url: URL) async {
+        guard acceptsPreparation else { return }
+        preparation = .working("Opening the video")
+        ImportActivity.start(title: url.host ?? "YouTube", status: "Opening the video")
+        do {
+            let package = try await YouTubeImport.package(for: url)
+            preparation = .working("Saving")
+            await ImportActivity.update(status: "Saving", fraction: 0.8)
+            let materialID = try await storeArticle(package, files: [:])
+            await ImportActivity.end(status: "Ready")
+            preparation = .choosing(materialID)
+        } catch {
+            await ImportActivity.end(status: "Failed")
+            preparation = .failed(error.localizedDescription)
+        }
+    }
+
     func prepareLink(url: URL, endpoint: URL, token: String, allowsInsecureLAN: Bool) async {
         guard acceptsPreparation else { return }
         preparation = .working("Fetching the page")
@@ -189,11 +206,26 @@ final class LibraryModel {
         }
     }
 
-    func save(highlightQuote quote: String, caption: String, materialID: String, piece: Int) async {
-        let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+    func annotate(materialID: String, piece: Int, quote: String, caption: String?, mark: TextMark?) async {
+        let trimmedQuote = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuote.isEmpty || !(trimmedCaption ?? "").isEmpty else { return }
         let previous = snapshot.highlights
-        snapshot.highlights.append(Highlight(materialID: materialID, piece: piece, quote: trimmed, caption: caption))
+        if let index = snapshot.highlights.firstIndex(where: { $0.materialID == materialID && $0.piece == piece }) {
+            if !trimmedQuote.isEmpty { snapshot.highlights[index].quote = trimmedQuote }
+            if let trimmedCaption, !trimmedCaption.isEmpty { snapshot.highlights[index].caption = trimmedCaption }
+            if let mark { snapshot.highlights[index].mark = mark }
+        } else {
+            snapshot.highlights.append(
+                Highlight(
+                    materialID: materialID,
+                    piece: piece,
+                    quote: trimmedQuote,
+                    caption: trimmedCaption ?? "",
+                    mark: mark
+                )
+            )
+        }
         do { try await file.saveState(snapshot) }
         catch {
             snapshot.highlights = previous
@@ -222,21 +254,6 @@ final class LibraryModel {
         catch {
             snapshot.positions[materialID] = previous
             operationError = error.localizedDescription
-        }
-    }
-
-    func save(note text: String, materialID: String, blockID: String) async throws {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let previous = snapshot.notes
-        if let index = snapshot.notes.firstIndex(where: { $0.materialID == materialID && $0.blockID == blockID }) {
-            snapshot.notes[index].text = text
-        } else {
-            snapshot.notes.append(Note(materialID: materialID, blockID: blockID, text: text))
-        }
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.notes = previous
-            throw error
         }
     }
 

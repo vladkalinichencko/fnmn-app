@@ -219,6 +219,23 @@ private let namedBook = BookRecord(
     #expect(CaptureHandoff.sharedURL(from: URL(string: "https://example.com")!) == nil)
 }
 
+@Test func oldHighlightWithoutMarkDecodesAsHighlight() throws {
+    let data = Data(#"{"id":"00000000-0000-0000-0000-000000000001","materialID":"article:1","piece":2,"quote":"old quote","caption":"kept"}"#.utf8)
+    let highlight = try JSONDecoder().decode(Highlight.self, from: data)
+    #expect(highlight.mark == .highlight)
+    #expect(highlight.quote == "old quote")
+    #expect(highlight.caption == "kept")
+}
+
+@Test func noteOnlyHighlightRoundTripsWithNilMark() throws {
+    let note = Highlight(materialID: "article:1", piece: 0, quote: "paragraph text", caption: "my note", mark: nil)
+    let data = try JSONEncoder().encode(note)
+    let decoded = try JSONDecoder().decode(Highlight.self, from: data)
+    #expect(decoded.mark == nil)
+    #expect(decoded.caption == "my note")
+    #expect(decoded.quote == "paragraph text")
+}
+
 @Test func albumKeepsACardInEveryFolderItWasDroppedInto() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article)

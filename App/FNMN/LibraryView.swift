@@ -66,7 +66,11 @@ struct LibraryView: View {
             }
         } detail: {
             if let package = selectedPackage {
-                ArticleFlowView(package: package).id(package.material.id)
+                if package.material.kind == .video {
+                    VideoReaderView(package: package).id(package.material.id)
+                } else {
+                    ArticleFlowView(package: package).id(package.material.id)
+                }
             } else if let book = selectedBook {
                 BookReaderView(record: book).id(book.id)
             } else {
@@ -450,7 +454,13 @@ private struct AddArticleView: View {
             library.preparation = .failed("Enter an http or https link.")
             return
         }
-        if source != .web {
+        switch source {
+        case .youtube:
+            Task { await library.prepareYouTube(url: url) }
+            return
+        case .web, .arxiv, .x, .substack, .chatgpt:
+            break
+        case .pdf:
             library.preparation = .failed(CaptureError.unprepared(source).localizedDescription)
             return
         }

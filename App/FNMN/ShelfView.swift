@@ -57,6 +57,13 @@ private struct SearchView: View {
     }
 }
 
+private struct ShelfNote: Identifiable {
+    let id: String
+    let materialID: String
+    let caption: String
+    let quote: String
+}
+
 struct ShelfView: View {
     @Environment(LibraryModel.self) private var library
 
@@ -64,18 +71,29 @@ struct ShelfView: View {
         NavigationStack {
             List {
                 SwiftUI.Section("Notes") {
-                    if library.snapshot.notes.isEmpty {
+                    let entries = shelfNotes
+                    if entries.isEmpty {
                         Text("No notes").foregroundStyle(.secondary)
                     }
-                    ForEach(library.snapshot.notes) { note in
-                        Button(note.text) { library.open(note.materialID) }
+                    ForEach(entries) { entry in
+                        Button {
+                            library.open(entry.materialID)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(entry.caption)
+                                if !entry.quote.isEmpty {
+                                    Text(entry.quote).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                 }
                 SwiftUI.Section("Highlights") {
-                    if library.snapshot.highlights.isEmpty {
+                    let marked = library.snapshot.highlights.filter { $0.mark != nil }
+                    if marked.isEmpty {
                         Text("No highlights").foregroundStyle(.secondary)
                     }
-                    ForEach(library.snapshot.highlights) { highlight in
+                    ForEach(marked) { highlight in
                         Button {
                             library.open(highlight.materialID)
                         } label: {
@@ -111,6 +129,16 @@ struct ShelfView: View {
             }
             .navigationTitle("Shelf")
         }
+    }
+
+    private var shelfNotes: [ShelfNote] {
+        let marked = library.snapshot.highlights.filter { !$0.caption.isEmpty }.map { highlight in
+            ShelfNote(id: highlight.id.uuidString, materialID: highlight.materialID, caption: highlight.caption, quote: highlight.quote)
+        }
+        let earlier = library.snapshot.notes.map { note in
+            ShelfNote(id: note.id.uuidString, materialID: note.materialID, caption: note.text, quote: "")
+        }
+        return marked + earlier
     }
 
     @ViewBuilder

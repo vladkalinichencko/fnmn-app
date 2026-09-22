@@ -96,19 +96,62 @@ public struct MaterialReading: Codable, Equatable, Sendable {
     }
 }
 
-public struct Highlight: Codable, Equatable, Identifiable, Sendable {
+public enum TextMark: String, Codable, Sendable {
+    case highlight, strikethrough
+}
+
+public struct Highlight: Equatable, Identifiable, Sendable {
     public var id: UUID
     public var materialID: String
     public var piece: Int
     public var quote: String
     public var caption: String
+    public var mark: TextMark?
 
-    public init(id: UUID = UUID(), materialID: String, piece: Int, quote: String, caption: String) {
+    public init(
+        id: UUID = UUID(),
+        materialID: String,
+        piece: Int,
+        quote: String,
+        caption: String,
+        mark: TextMark? = nil
+    ) {
         self.id = id
         self.materialID = materialID
         self.piece = piece
         self.quote = quote
         self.caption = caption
+        self.mark = mark
+    }
+}
+
+extension Highlight: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, materialID, piece, quote, caption, mark
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        materialID = try container.decode(String.self, forKey: .materialID)
+        piece = try container.decode(Int.self, forKey: .piece)
+        quote = try container.decode(String.self, forKey: .quote)
+        caption = try container.decode(String.self, forKey: .caption)
+        if container.contains(.mark) {
+            mark = try container.decodeIfPresent(TextMark.self, forKey: .mark)
+        } else {
+            mark = quote.isEmpty ? nil : .highlight
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(materialID, forKey: .materialID)
+        try container.encode(piece, forKey: .piece)
+        try container.encode(quote, forKey: .quote)
+        try container.encode(caption, forKey: .caption)
+        try container.encode(mark, forKey: .mark)
     }
 }
 

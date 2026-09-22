@@ -52,9 +52,6 @@ struct BookReaderView: View {
     @Environment(LibraryModel.self) private var library
     let record: BookRecord
     @State private var state = BookReaderState()
-    @State private var highlightPiece: Int?
-    @State private var highlightQuote = ""
-    @State private var highlightCaption = ""
 
     var body: some View {
         Group {
@@ -64,17 +61,13 @@ struct BookReaderView: View {
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open the book", systemImage: "book.closed", description: Text(message))
             case let .ready(markdown):
-                DocumentColumn(
+                ReadingSession(
                     markdown: markdown,
                     file: { LibraryFile.bookFile(root: library.storageURL, directoryName: record.directoryName, path: $0) },
+                    materialID: record.id,
+                    title: record.metadata.title,
                     piece: state.scrollPiece,
-                    highlights: library.snapshot.highlights.filter { $0.materialID == record.id },
-                    onVisiblePiece: { index, count in send(.visible(index), count: count) },
-                    onHighlight: { piece, quote in
-                        highlightPiece = piece
-                        highlightQuote = quote
-                        highlightCaption = ""
-                    }
+                    onVisiblePiece: { index, count in send(.visible(index), count: count) }
                 )
                 .dynamicTypeSize(ReaderAppearance.typeSize)
                 .background(ReaderAppearance.background ?? Color.clear)
@@ -105,19 +98,6 @@ struct BookReaderView: View {
             case .settings:
                 ReaderSettingsForm()
             }
-        }
-        .alert("Highlight", isPresented: Binding(get: { highlightPiece != nil }, set: { if !$0 { highlightPiece = nil } })) {
-            TextField("Caption", text: $highlightCaption)
-            Button("Save") {
-                guard let piece = highlightPiece else { return }
-                let quote = highlightQuote
-                let caption = highlightCaption
-                highlightPiece = nil
-                Task { await library.save(highlightQuote: quote, caption: caption, materialID: record.id, piece: piece) }
-            }
-            Button("Cancel", role: .cancel) { highlightPiece = nil }
-        } message: {
-            Text(highlightQuote)
         }
         .task { await open() }
     }

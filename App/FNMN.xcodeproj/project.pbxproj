@@ -24,6 +24,13 @@
 		C0FFEE0000000000000000E2 /* SelectableParagraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000E1 /* SelectableParagraph.swift */; };
 		C0FFEE0000000000000000F2 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000F1 /* ReaderSettings.swift */; };
 		C0FFEE000000000000000102 /* ShelfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000101 /* ShelfView.swift */; };
+		C0FFEE000000000000000112 /* ChatGPTHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000111 /* ChatGPTHandoff.swift */; };
+		C0FFEE000000000000000122 /* ReadingIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000121 /* ReadingIntents.swift */; };
+		C0FFEE000000000000000132 /* VideoReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000131 /* VideoReaderView.swift */; };
+		C0FFEE000000000000000142 /* ReadingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000141 /* ReadingSession.swift */; };
+		C0FFEE000000000000000152 /* YouTubeImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000151 /* YouTubeImport.swift */; };
+		C0FFEE000000000000000162 /* ReadingFold.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000161 /* ReadingFold.swift */; };
+		C0FFEE000000000000000172 /* YouTube.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000171 /* YouTube.swift */; };
 		F99B6628F08B1511007B84D3 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1674AC0273239D1899A9CCC /* WebKit.framework */; };
 		A1SHARE00000000000000002 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1SHARE00000000000000001 /* ShareViewController.swift */; };
 		A1SHARE0000000000000000E /* CaptureHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1SHARE0000000000000000C /* CaptureHandoff.swift */; };
@@ -46,6 +53,13 @@
 		C0FFEE0000000000000000E1 /* SelectableParagraph.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SelectableParagraph.swift; path = FNMN/SelectableParagraph.swift; sourceTree = "<group>"; };
 		C0FFEE0000000000000000F1 /* ReaderSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReaderSettings.swift; path = FNMN/ReaderSettings.swift; sourceTree = "<group>"; };
 		C0FFEE000000000000000101 /* ShelfView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ShelfView.swift; path = FNMN/ShelfView.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000111 /* ChatGPTHandoff.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ChatGPTHandoff.swift; path = FNMN/ChatGPTHandoff.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000121 /* ReadingIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReadingIntents.swift; path = FNMN/ReadingIntents.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000131 /* VideoReaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VideoReaderView.swift; path = FNMN/VideoReaderView.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000141 /* ReadingSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReadingSession.swift; path = FNMN/ReadingSession.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000151 /* YouTubeImport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YouTubeImport.swift; path = FNMN/YouTubeImport.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000161 /* ReadingFold.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReadingFold.swift; path = ../Sources/FNMNCore/ReadingFold.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000171 /* YouTube.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = YouTube.swift; path = ../Sources/FNMNCore/YouTube.swift; sourceTree = "<group>"; };
 		8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Book.swift; path = ../Sources/FNMNCore/Book.swift; sourceTree = "<group>"; };
 		8B1C0D2E3F4A5B6C7D8E9F03 /* BookReaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BookReaderView.swift; path = FNMN/BookReaderView.swift; sourceTree = "<group>"; };
 		8B1C0D2E3F4A5B6C7D8E9F07 /* MarkdownRuntime */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MarkdownRuntime; path = FNMN/MarkdownRuntime; sourceTree = "<group>"; };
@@ -118,6 +132,13 @@
 				C0FFEE0000000000000000E1 /* SelectableParagraph.swift */,
 				C0FFEE0000000000000000F1 /* ReaderSettings.swift */,
 				C0FFEE000000000000000101 /* ShelfView.swift */,
+				C0FFEE000000000000000111 /* ChatGPTHandoff.swift */,
+				C0FFEE000000000000000121 /* ReadingIntents.swift */,
+				C0FFEE000000000000000131 /* VideoReaderView.swift */,
+				C0FFEE000000000000000141 /* ReadingSession.swift */,
+				C0FFEE000000000000000151 /* YouTubeImport.swift */,
+				C0FFEE000000000000000161 /* ReadingFold.swift */,
+				C0FFEE000000000000000171 /* YouTube.swift */,
 				8B1C0D2E3F4A5B6C7D8E9F01 /* Book.swift */,
 				8B1C0D2E3F4A5B6C7D8E9F03 /* BookReaderView.swift */,
 				A03F29758142BE6B7DD211B8 /* FNMNApp.swift */,
@@ -262,6 +283,13 @@
 				C0FFEE0000000000000000E2 /* SelectableParagraph.swift in Sources */,
 				C0FFEE0000000000000000F2 /* ReaderSettings.swift in Sources */,
 				C0FFEE000000000000000102 /* ShelfView.swift in Sources */,
+				C0FFEE000000000000000112 /* ChatGPTHandoff.swift in Sources */,
+				C0FFEE000000000000000122 /* ReadingIntents.swift in Sources */,
+				C0FFEE000000000000000132 /* VideoReaderView.swift in Sources */,
+				C0FFEE000000000000000142 /* ReadingSession.swift in Sources */,
+				C0FFEE000000000000000152 /* YouTubeImport.swift in Sources */,
+				C0FFEE000000000000000162 /* ReadingFold.swift in Sources */,
+				C0FFEE000000000000000172 /* YouTube.swift in Sources */,
 				8B1C0D2E3F4A5B6C7D8E9F02 /* Book.swift in Sources */,
 				8B1C0D2E3F4A5B6C7D8E9F04 /* BookReaderView.swift in Sources */,
 				2F008D21E0F9352EB47F7A73 /* FNMNApp.swift in Sources */,
