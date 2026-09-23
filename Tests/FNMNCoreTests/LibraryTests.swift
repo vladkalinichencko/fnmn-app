@@ -37,13 +37,32 @@ private let article = ImportPackage(
     let stateURL = directory.appending(path: "library.json").appending(path: "state.json")
     var text = try String(contentsOf: stateURL, encoding: .utf8)
     let note = #"[{"id":"00000000-0000-0000-0000-000000000009","materialID":"\#(article.material.id)","blockID":"piece:4","text":"Remember this"}]"#
-    text = text.replacingOccurrences(of: "\"notes\":[]", with: "\"notes\":\(note)")
+    if let brace = text.firstIndex(of: "{") {
+        text.replaceSubrange(brace...brace, with: "{\"notes\":\(note),")
+    }
     try Data(text.utf8).write(to: stateURL)
     let loaded = try await file.load()
     #expect(loaded.positions[article.material.id]?.blockID == "b1")
     #expect(loaded.highlights.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.caption == "Remember this" && $0.piece == 4 && $0.mark == nil })
     let saved = try String(contentsOf: stateURL, encoding: .utf8)
-    #expect(saved.contains("\"notes\":[]"))
+    #expect(!saved.contains("\"notes\""))
+}
+
+@Test func legacyBlockPositionBecomesAPiece() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory)
+    let placed = ImportPackage(
+        material: Material(id: "article:https://example.com/placed", kind: .article, title: "Placed", sourceURL: URL(string: "https://example.com/placed")!),
+        sections: [Section(id: "s1", parentID: nil, title: "Hello", level: 1, firstBlockID: "b1")],
+        blocks: [Block(id: "b1", sectionID: "s1", kind: .heading, html: "Hello")],
+        body: "# Hello\n\nAfter"
+    )
+    var library = LibrarySnapshot()
+    try library.importPackage(placed)
+    library.positions[placed.material.id] = ReadingPosition(blockID: "b1")
+    try await file.save(library)
+    let loaded = try await file.load()
+    #expect(loaded.positions[placed.material.id]?.pieceIndex == 0)
 }
 
 @Test func articleBodyImportsWithoutBlocks() throws {
@@ -217,6 +236,15 @@ private let namedBook = BookRecord(
     #expect(library.matchingBooks("Effective Theory").map(\.id) == [namedBook.id])
     #expect(library.matchingPackages("xyzzy").isEmpty)
     #expect(library.matchingBooks("xyzzy").isEmpty)
+    let headed = ImportPackage(
+        material: Material(id: "article:headed", kind: .article, title: "Plain", sourceURL: URL(string: "https://example.com/headed")!),
+        sections: [],
+        blocks: [],
+        body: "# Kernel Trick\n\nhidden body text"
+    )
+    try library.importPackage(headed)
+    #expect(library.matchingPackages("Kernel Trick").map(\.material.id) == ["article:headed"])
+    #expect(library.matchingPackages("hidden body text").isEmpty)
 }
 
 @Test func captureRouteNamesSourceFromLinkOrPDF() throws {

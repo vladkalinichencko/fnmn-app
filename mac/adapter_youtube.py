@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import html
-import json
 import re
-import xml.etree.ElementTree as ET
 from urllib.parse import parse_qs, urlparse
 
 _ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -33,17 +31,12 @@ def youtube_package_live(url: str, folders: list[str] | None = None, cookies_fro
     author = (info.get("uploader") or info.get("channel") or "").strip() or None
     language = _caption_language(info)
     cues: list[tuple[float, str]] = []
-    note = None
     if language:
         try:
             cues = _download_cues(source_url, language, cookies_from_browser)
-        except Exception as error:
-            note = f"Captions did not download: {error}"
-    if not cues and note is None:
-        note = "YouTube did not return caption text."
-    if cues:
-        note = None
-    return _package(video_id, source_url, title, author, cues, note, folders or [])
+        except Exception:
+            cues = []
+    return _package(video_id, source_url, title, author, cues, folders or [])
 
 
 def video_id_from_url(url: str) -> str | None:
@@ -64,58 +57,9 @@ def video_id_from_url(url: str) -> str | None:
 
 def cues_from_timedtext(payload: str) -> list[tuple[float, str]]:
     text = payload.strip()
-    if not text:
+    if not text.startswith("WEBVTT"):
         return []
-    if text.startswith("{"):
-        return _cues_from_json3(json.loads(text))
-    if text.startswith("WEBVTT"):
-        return _cues_from_vtt(text)
-    if text.startswith("<"):
-        return _cues_from_xml(text)
-    return []
-
-
-def _cues_from_json3(data: dict) -> list[tuple[float, str]]:
-    cues: list[tuple[float, str]] = []
-    for event in data.get("events") or []:
-        if not isinstance(event, dict):
-            continue
-        start_ms = event.get("tStartMs")
-        if start_ms is None:
-            continue
-        parts = []
-        for segment in event.get("segs") or []:
-            if isinstance(segment, dict) and segment.get("utf8"):
-                parts.append(segment["utf8"])
-        text = _clean("".join(parts))
-        if text:
-            cues.append((float(start_ms) / 1000.0, text))
-    return cues
-
-
-def _cues_from_xml(payload: str) -> list[tuple[float, str]]:
-    try:
-        root = ET.fromstring(payload)
-    except ET.ParseError:
-        return []
-    cues: list[tuple[float, str]] = []
-    for node in root.iter():
-        tag = node.tag.rsplit("}", 1)[-1].lower()
-        if tag not in {"text", "p"}:
-            continue
-        start = node.get("start") or node.get("t")
-        if start is None:
-            continue
-        try:
-            seconds = float(start)
-            if node.get("t") is not None and "." not in start and seconds > 1000:
-                seconds = seconds / 1000.0
-        except ValueError:
-            continue
-        text = _clean("".join(node.itertext()))
-        if text:
-            cues.append((seconds, text))
-    return cues
+    return _cues_from_vtt(text)
 
 
 def _cues_from_vtt(payload: str) -> list[tuple[float, str]]:
@@ -231,7 +175,6 @@ def _package(
     title: str,
     author: str | None,
     cues: list[tuple[float, str]],
-    caption_note: str | None,
     folders: list[str],
 ) -> dict:
     material_id = f"youtube:{video_id}"
@@ -260,9 +203,7 @@ def _package(
         })
         paragraphs.append(text)
     body = "\n\n".join(paragraphs)
-    if caption_note and not cues:
-        body = ""
-    package = {
+    return {
         "version": 1,
         "material": {
             "id": material_id,
@@ -283,6 +224,3 @@ def _package(
         "body": body,
         "files": {},
     }
-    if caption_note:
-        package["captionNote"] = caption_note
-    return package

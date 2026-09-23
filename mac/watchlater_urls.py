@@ -19,7 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-WATCH_LATER = "https://www.youtube.com/playlist?list=WL"
+# Authenticated pseudo-URL: the plain playlist?list=WL address is not
+# resolvable ("playlist does not exist") even with valid login cookies.
+WATCH_LATER = ":ytwatchlater"
 
 
 def build_command(url: str, cookies_from_browser: str | None, cookies_file: str | None) -> list[str]:
@@ -41,7 +43,6 @@ def build_command(url: str, cookies_from_browser: str | None, cookies_file: str 
 def urls_from_lines(lines) -> list[str]:
     urls: list[str] = []
     seen: set[str] = set()
-    skipped = 0
     for line in lines:
         line = line.strip()
         if not line:
@@ -49,11 +50,9 @@ def urls_from_lines(lines) -> list[str]:
         try:
             entry = json.loads(line)
         except json.JSONDecodeError:
-            skipped += 1
             continue
         video_id = entry.get("id") if isinstance(entry, dict) else None
         if not isinstance(video_id, str) or not video_id:
-            skipped += 1
             continue
         if video_id in seen:
             continue

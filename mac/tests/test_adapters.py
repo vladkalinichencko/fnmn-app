@@ -259,20 +259,21 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn("\ue200", body)
 
     def test_youtube_prepares_video_cues_from_timedtext(self):
-        payload = json.dumps({
-            "events": [
-                {"tStartMs": 0, "segs": [{"utf8": "Hello"}]},
-                {"tStartMs": 1500, "segs": [{"utf8": "world"}]},
-                {"tStartMs": 2000},
-            ]
-        })
+        payload = """
+        WEBVTT
+
+        00:00:00.000 --> 00:00:01.000
+        Hello
+
+        00:00:01.500 --> 00:00:02.000
+        world
+        """
         package = _package(
             "abcdefghijk",
             "https://www.youtube.com/watch?v=abcdefghijk",
             "Fixture talk",
             "Channel",
             cues_from_timedtext(payload),
-            None,
             [],
         )
         self.assertEqual(package["material"]["kind"], "video")

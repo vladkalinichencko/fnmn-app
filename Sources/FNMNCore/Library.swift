@@ -178,6 +178,13 @@ extension BookError: LocalizedError {
     }
 }
 
+private struct Note: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    let materialID: String
+    let blockID: String?
+    var text: String
+}
+
 public actor LibraryFile {
     private struct UserState: Codable {
         var positions: [String: ReadingPosition]
@@ -198,7 +205,6 @@ public actor LibraryFile {
 
         init(
             positions: [String: ReadingPosition],
-            notes: [Note],
             folders: [String],
             readings: [String: MaterialReading],
             books: [BookRecord],
@@ -209,7 +215,7 @@ public actor LibraryFile {
             articleRevisions: [String: String]
         ) {
             self.positions = positions
-            self.notes = notes
+            self.notes = []
             self.folders = folders
             self.readings = readings
             self.books = books
@@ -223,7 +229,7 @@ public actor LibraryFile {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             positions = try container.decode([String: ReadingPosition].self, forKey: .positions)
-            notes = try container.decode([Note].self, forKey: .notes)
+            notes = try container.decodeIfPresent([Note].self, forKey: .notes) ?? []
             folders = try container.decode([String].self, forKey: .folders)
             readings = try container.decodeIfPresent([String: MaterialReading].self, forKey: .readings) ?? [:]
             books = try container.decodeIfPresent([BookRecord].self, forKey: .books) ?? []
@@ -238,7 +244,6 @@ public actor LibraryFile {
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(positions, forKey: .positions)
-            try container.encode(notes, forKey: .notes)
             try container.encode(folders, forKey: .folders)
             try container.encode(readings, forKey: .readings)
             try container.encode(books, forKey: .books)
@@ -291,7 +296,9 @@ public actor LibraryFile {
         try sweepUnreferencedBooks(snapshot)
         try sweepArticleRevisions(snapshot)
         snapshot.adoptPackageFolders()
-        if absorbLegacyNotes(legacyNotes, into: &snapshot) {
+        let foldedNotes = absorbLegacyNotes(legacyNotes, into: &snapshot)
+        let foldedPlaces = absorbLegacyArticlePositions(into: &snapshot)
+        if foldedNotes || foldedPlaces {
             try saveState(snapshot)
         }
         return snapshot
@@ -394,7 +401,6 @@ public actor LibraryFile {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let state = UserState(
             positions: snapshot.positions,
-            notes: [],
             folders: snapshot.folders,
             readings: snapshot.readings,
             books: snapshot.books,
@@ -466,6 +472,17 @@ public actor LibraryFile {
             )
         }
         return true
+    }
+
+    private func absorbLegacyArticlePositions(into snapshot: inout LibrarySnapshot) -> Bool {
+        var changed = false
+        for (materialID, position) in snapshot.positions {
+            guard let package = snapshot.packages.first(where: { $0.material.id == materialID }),
+                  let piece = ArticleBody.legacyPiece(for: position, in: package) else { continue }
+            snapshot.positions[materialID] = .piece(piece)
+            changed = true
+        }
+        return changed
     }
 
     private func readLegacyPackages() -> [ImportPackage] {
@@ -590,7 +607,9 @@ public actor LibraryFile {
 
 extension ImportPackage {
     func matches(_ query: String) -> Bool {
+        let markdown = ArticleBody.readingMarkdown(body: body, blocks: blocks)
         var fields = [material.title, material.sourceURL.absoluteString] + sections.map(\.title)
+        fields.append(contentsOf: ArticleBody.headings(in: markdown).map(\.title))
         if let byline = material.byline { fields.append(byline) }
         return fields.contains { $0.localizedStandardContains(query) }
     }

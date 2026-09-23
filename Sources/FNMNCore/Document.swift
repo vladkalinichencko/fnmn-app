@@ -200,17 +200,3 @@ extension ReadingPosition {
         return Int(blockID.dropFirst(6))
     }
 }
-
-public struct Note: Codable, Equatable, Identifiable, Sendable {
-    public let id: UUID
-    public let materialID: String
-    public let blockID: String?
-    public var text: String
-
-    public init(id: UUID = UUID(), materialID: String, blockID: String?, text: String) {
-        self.id = id
-        self.materialID = materialID
-        self.blockID = blockID
-        self.text = text
-    }
-}

@@ -1,12 +1,5 @@
 import SwiftUI
 
-struct OutlineEntry: Identifiable, Equatable {
-    let piece: Int
-    let level: Int
-    let title: String
-    var id: Int { piece }
-}
-
 private enum ReaderDestination: String, Identifiable {
     case outline
     case settings
@@ -53,7 +46,7 @@ struct MaterialReader: View {
     let materialID: String
     let title: String
     var sourceURL: URL?
-    let outline: [OutlineEntry]
+    let outline: [ArticleHeading]
     let startPiece: Int?
     @State private var state = ReaderState()
 
@@ -136,20 +129,8 @@ struct ArticleFlowView: View {
             materialID: package.material.id,
             title: package.material.title,
             sourceURL: package.material.sourceURL,
-            outline: ArticleBody.headings(in: markdown).map {
-                OutlineEntry(piece: $0.piece, level: $0.level, title: $0.title)
-            },
-            startPiece: startPiece
+            outline: ArticleBody.headings(in: markdown),
+            startPiece: library.snapshot.positions[package.material.id]?.pieceIndex
         )
-    }
-
-    private var startPiece: Int? {
-        guard let position = library.snapshot.positions[package.material.id] else { return nil }
-        if let piece = position.pieceIndex { return piece }
-        guard let block = package.blocks.first(where: { $0.id == position.blockID }),
-              let index = package.sections.firstIndex(where: { $0.id == block.sectionID }) else { return nil }
-        let headings = ArticleBody.headings(in: markdown)
-        guard headings.indices.contains(index) else { return nil }
-        return headings[index].piece
     }
 }

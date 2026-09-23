@@ -281,156 +281,167 @@ def extract_image(page, block, number, index, assets):
     return f'![Figure from PDF page {number}](assets/{name})'
 
 
+class PageBuild:
+    def __init__(self, page, number, ocr, outline, level, assets, repeated_margins, footnote_overrides, formula_overrides):
+        self.page = page
+        self.number = number
+        self.ocr = ocr
+        self.outline = outline
+        self.level = level
+        self.assets = assets
+        self.repeated_margins = repeated_margins
+        self.footnote_overrides = footnote_overrides
+        self.formula_overrides = formula_overrides
+
+    def run(self):
+        pdf, body_size = pdf_blocks(self.page)
+        self.pdf = pdf
+        self.multicolumn = is_multicolumn(pdf)
+        self.notes = footnotes(pdf, body_size)
+        note_blocks = {id(pdf[i]) for note in self.notes for i in note['indices']}
+        note_regions = [merged([pdf[index] for index in note['indices']])['bbox'] for note in self.notes]
+        self.prose = [block for block in pdf if id(block) not in note_blocks and not is_heading(block, body_size)
+                      and len(normalized(block['text']).split()) >= 5]
+
+        def in_footnote(block):
+            return any(vertical_overlap(block['bbox'], region) >= .5 for region in note_regions)
+
+        self.textual = [block for block in self.ocr if block['kind'] in {'text', 'figure_title'} and not in_footnote(block)]
+        self.pairs = align(self.prose, self.textual)
+        self.paired_pdf = {index for pair in self.pairs for index in pair['pdf']}
+        self.note_numbers = {note['number'] for note in self.notes}
+        self.reference_targets, self.missing_references = missing_footnote_targets(
+            pdf, self.prose, self.textual, self.pairs, self.notes, note_blocks, body_size)
+        equations = [block for block in self.ocr if block['kind'] == 'equation']
+        self.labels = equation_labels(self.page, equations)
+        self.in_footnote = in_footnote
+        self.content = []
+        self.changes = []
+        self.equation_issues = []
+        self.image_index = 0
+        self.render()
+        self.definitions = self.footnote_definitions()
+        self.unmatched = self.restore_prose()
+        return self.finish()
+
+    def render(self):
+        used_outline = set()
+        equation_index = 0
+        for block in self.ocr:
+            kind, bbox, text = block['kind'], block['bbox'], block['text']
+            if self.in_footnote(block):
+                self.changes.append({'type': 'removed_ocr_footnote', 'text': text})
+                continue
+            margin = bbox[3] < 100 or bbox[1] > 930
+            if kind in {'header', 'footer'} or (kind == 'text' and margin and self.repeated_margins[normalized(text)] >= 3):
+                self.changes.append({'type': 'removed_margin', 'text': text})
+                continue
+            if kind == 'equation':
+                override = self.formula_overrides.get(f'{self.number}:{equation_index + 1}')
+                if override:
+                    text = override
+                    self.changes.append({'type': 'replaced_formula', 'equation': equation_index + 1})
+                if equation_index in self.labels:
+                    text, added = add_label(text, self.labels[equation_index])
+                    if added:
+                        self.changes.append({'type': 'restored_equation_label', 'label': self.labels[equation_index]})
+                equation_index += 1
+            elif kind == 'image':
+                self.image_index += 1
+                text = extract_image(self.page, block, self.number, self.image_index, self.assets)
+            elif kind in {'title', 'sub_title'}:
+                title = re.sub(r'^#+\s*', '', text).strip()
+                candidates = [(heading_similarity(title, entry[1]), i, entry) for i, entry in enumerate(self.outline)
+                              if entry[2] == self.number and i not in used_outline]
+                score, index, entry = max(candidates, default=(0, -1, None))
+                if score >= .90:
+                    self.level = entry[0]
+                    used_outline.add(index)
+                    if self.level == 1:
+                        title = entry[1]
+                    heading_level = self.level
+                elif re.fullmatch(r'(?:Chapter\s+\S+|Appendix\s+[A-Z])', title, re.I):
+                    continue
+                else:
+                    heading_level = min(self.level + 1, 6) if self.level else 2
+                text = '#' * heading_level + ' ' + title
+            for note_number in self.reference_targets.get(id(block), []):
+                text += rf' \(^{{{note_number}}}\)'
+                self.changes.append({'type': 'restored_footnote_reference', 'number': note_number})
+            for note_number in self.note_numbers:
+                text = re.sub(r'\\\(\s*\^\{' + re.escape(note_number) + r'\}\s*\\\)',
+                              f'[^p{self.number}-{note_number}]', text)
+            rendered = latex(text)
+            if kind == 'equation':
+                defects = math_issues(rendered)
+                if defects:
+                    image = extract_region(
+                        self.page, bbox, f'page-{self.number}-formula-{equation_index}.png', self.assets, padding=3)
+                    for defect in defects:
+                        defect['image'] = f'assets/{image}'
+                        defect['equation'] = equation_index
+                    self.equation_issues.extend(defects)
+            self.content.append((bbox[1], rendered))
+
+    def footnote_definitions(self):
+        definitions = []
+        for note in self.notes:
+            override = self.footnote_overrides.get(f'{self.number}:{note["number"]}')
+            if override or not note['needs_ocr']:
+                definitions.append(footnote_definition(
+                    f'p{self.number}-{note["number"]}', latex(override) if override else note['text']))
+        return definitions
+
+    def restore_prose(self):
+        page_ocr = ' '.join(block['text'] for block in self.textual)
+        unmatched = []
+        if not self.multicolumn:
+            for index, block in enumerate(self.prose):
+                if index in self.paired_pdf or word_coverage(block['text'], page_ocr) >= .75:
+                    continue
+                safe = (block['math_ratio'] < .08
+                        and not re.search(r'[\x00-\x08\x0b\x0c\x0e-\x1f\uf8eb-\uf8ff]', block['text']))
+                if safe and contiguous_coverage(block['text'], page_ocr) < .45:
+                    text = clean_pdf_text(block['text'])
+                    self.content.append((block['bbox'][1], text))
+                    self.changes.append({'type': 'restored_pdf_prose', 'text': text, 'bbox': block['bbox']})
+                else:
+                    unmatched.append({'text': block['text'], 'bbox': block['bbox'],
+                                      'coverage': round(word_coverage(block['text'], page_ocr), 3),
+                                      'math_ratio': round(block['math_ratio'], 3)})
+        return unmatched
+
+    def finish(self):
+        self.content.sort(key=lambda item: item[0])
+        weak = [] if self.multicolumn else [
+            {**pair, 'pdf_text': merged([self.prose[i] for i in pair['pdf']])['text'],
+             'ocr_text': merged([self.textual[i] for i in pair['ocr']])['text']}
+            for pair in self.pairs if pair['score'] < .60]
+        markdown = '\n\n'.join([*(text for _, text in self.content), *self.definitions])
+        issues = syntax_issues(markdown)
+        known_formulas = {issue['formula'] for issue in self.equation_issues}
+        issues.extend(self.equation_issues)
+        issues.extend(issue for issue in math_issues(markdown)
+                      if not any(issue['formula'] in formula or formula in issue['formula']
+                                 for formula in known_formulas))
+        issues.extend({'type': 'footnote_reference_missing', 'number': missing}
+                      for missing in self.missing_references)
+        for note in self.notes:
+            key = f'{self.number}:{note["number"]}'
+            if not note['needs_ocr'] or key in self.footnote_overrides:
+                continue
+            blocks = [self.pdf[index] for index in note['indices']]
+            bbox = merged(blocks)['bbox']
+            image = extract_region(self.page, bbox, f'page-{self.number}-footnote-{note["number"]}.png', self.assets, padding=3)
+            issues.append({'type': 'footnote_needs_ocr', 'number': note['number'],
+                           'text': note['text'], 'bbox': bbox, 'image': f'assets/{image}'})
+        return (markdown,
+                {'page': self.number, 'alignment': self.pairs, 'weak_matches': weak, 'unmatched_pdf': self.unmatched,
+                 'changes': self.changes, 'footnotes': self.notes, 'images': self.image_index, 'issues': issues}, self.level)
+
+
 def build_page(page, number, ocr, outline, level, assets, repeated_margins, footnote_overrides, formula_overrides):
-    pdf, body_size = pdf_blocks(page)
-    multicolumn = is_multicolumn(pdf)
-    notes = footnotes(pdf, body_size)
-    note_blocks = {id(pdf[i]) for note in notes for i in note['indices']}
-    note_regions = [merged([pdf[index] for index in note['indices']])['bbox'] for note in notes]
-    prose = [block for block in pdf if id(block) not in note_blocks and not is_heading(block, body_size)
-             and len(normalized(block['text']).split()) >= 5]
-
-    def in_footnote(block):
-        return any(vertical_overlap(block['bbox'], region) >= .5 for region in note_regions)
-
-    textual = [block for block in ocr if block['kind'] in {'text', 'figure_title'} and not in_footnote(block)]
-    pairs = align(prose, textual)
-    paired_pdf = {index for pair in pairs for index in pair['pdf']}
-    note_numbers = {note['number'] for note in notes}
-    reference_targets, missing_references = missing_footnote_targets(
-        pdf, prose, textual, pairs, notes, note_blocks, body_size)
-    equations = [block for block in ocr if block['kind'] == 'equation']
-    labels = equation_labels(page, equations)
-    content, changes, level, equation_issues, image_index = render_page_blocks(
-        page, number, ocr, outline, level, assets, repeated_margins, formula_overrides,
-        in_footnote, reference_targets, note_numbers, labels)
-    definitions = footnote_definitions(number, notes, footnote_overrides)
-    content, unmatched = restore_unmatched_prose(content, changes, prose, paired_pdf, textual, multicolumn)
-    return assemble_page_record(
-        page, number, content, definitions, changes, pairs, prose, textual, unmatched,
-        equation_issues, missing_references, notes, footnote_overrides, pdf, image_index, level, assets)
-
-
-def render_page_blocks(page, number, ocr, outline, level, assets, repeated_margins, formula_overrides, in_footnote, reference_targets, note_numbers, labels):
-    content, changes, used_outline = [], [], set()
-    equation_index = image_index = 0
-    equation_issues = []
-    for block in ocr:
-        kind, bbox, text = block['kind'], block['bbox'], block['text']
-        if in_footnote(block):
-            changes.append({'type': 'removed_ocr_footnote', 'text': text})
-            continue
-        margin = bbox[3] < 100 or bbox[1] > 930
-        if kind in {'header', 'footer'} or (kind == 'text' and margin and repeated_margins[normalized(text)] >= 3):
-            changes.append({'type': 'removed_margin', 'text': text})
-            continue
-        if kind == 'equation':
-            override = formula_overrides.get(f'{number}:{equation_index + 1}')
-            if override:
-                text = override
-                changes.append({'type': 'replaced_formula', 'equation': equation_index + 1})
-            if equation_index in labels:
-                text, added = add_label(text, labels[equation_index])
-                if added:
-                    changes.append({'type': 'restored_equation_label', 'label': labels[equation_index]})
-            equation_index += 1
-        elif kind == 'image':
-            image_index += 1
-            text = extract_image(page, block, number, image_index, assets)
-        elif kind in {'title', 'sub_title'}:
-            title = re.sub(r'^#+\s*', '', text).strip()
-            candidates = [(heading_similarity(title, entry[1]), i, entry) for i, entry in enumerate(outline)
-                          if entry[2] == number and i not in used_outline]
-            score, index, entry = max(candidates, default=(0, -1, None))
-            if score >= .90:
-                level = entry[0]
-                used_outline.add(index)
-                if level == 1:
-                    title = entry[1]
-                heading_level = level
-            elif re.fullmatch(r'(?:Chapter\s+\S+|Appendix\s+[A-Z])', title, re.I):
-                continue
-            else:
-                heading_level = min(level + 1, 6) if level else 2
-            text = '#' * heading_level + ' ' + title
-        for note_number in reference_targets.get(id(block), []):
-            text += rf' \(^{{{note_number}}}\)'
-            changes.append({'type': 'restored_footnote_reference', 'number': note_number})
-        for note_number in note_numbers:
-            text = re.sub(r'\\\(\s*\^\{' + re.escape(note_number) + r'\}\s*\\\)',
-                          f'[^p{number}-{note_number}]', text)
-        rendered = latex(text)
-        if kind == 'equation':
-            defects = math_issues(rendered)
-            if defects:
-                image = extract_region(
-                    page, bbox, f'page-{number}-formula-{equation_index}.png', assets, padding=3)
-                for defect in defects:
-                    defect['image'] = f'assets/{image}'
-                    defect['equation'] = equation_index
-                equation_issues.extend(defects)
-        content.append((bbox[1], rendered))
-    return content, changes, level, equation_issues, image_index
-
-
-def footnote_definitions(number, notes, footnote_overrides):
-    definitions = []
-    for note in notes:
-        override = footnote_overrides.get(f'{number}:{note["number"]}')
-        if override or not note['needs_ocr']:
-            definitions.append(footnote_definition(
-                f'p{number}-{note["number"]}', latex(override) if override else note['text']))
-    return definitions
-
-
-def restore_unmatched_prose(content, changes, prose, paired_pdf, textual, multicolumn):
-    page_ocr = ' '.join(block['text'] for block in textual)
-    unmatched = []
-    if not multicolumn:
-        for index, block in enumerate(prose):
-            if index in paired_pdf or word_coverage(block['text'], page_ocr) >= .75:
-                continue
-            safe = (block['math_ratio'] < .08
-                    and not re.search(r'[\x00-\x08\x0b\x0c\x0e-\x1f\uf8eb-\uf8ff]', block['text']))
-            if safe and contiguous_coverage(block['text'], page_ocr) < .45:
-                text = clean_pdf_text(block['text'])
-                content.append((block['bbox'][1], text))
-                changes.append({'type': 'restored_pdf_prose', 'text': text, 'bbox': block['bbox']})
-            else:
-                unmatched.append({'text': block['text'], 'bbox': block['bbox'],
-                                  'coverage': round(word_coverage(block['text'], page_ocr), 3),
-                                  'math_ratio': round(block['math_ratio'], 3)})
-    return content, unmatched
-
-
-def assemble_page_record(page, number, content, definitions, changes, pairs, prose, textual, unmatched, equation_issues, missing_references, notes, footnote_overrides, pdf, image_index, level, assets):
-    content.sort(key=lambda item: item[0])
-    multicolumn = is_multicolumn(pdf)
-    weak = [] if multicolumn else [
-        {**pair, 'pdf_text': merged([prose[i] for i in pair['pdf']])['text'],
-         'ocr_text': merged([textual[i] for i in pair['ocr']])['text']}
-        for pair in pairs if pair['score'] < .60]
-    markdown = '\n\n'.join([*(text for _, text in content), *definitions])
-    issues = syntax_issues(markdown)
-    known_formulas = {issue['formula'] for issue in equation_issues}
-    issues.extend(equation_issues)
-    issues.extend(issue for issue in math_issues(markdown)
-                  if not any(issue['formula'] in formula or formula in issue['formula']
-                             for formula in known_formulas))
-    issues.extend({'type': 'footnote_reference_missing', 'number': number}
-                  for number in missing_references)
-    for note in notes:
-        key = f'{number}:{note["number"]}'
-        if not note['needs_ocr'] or key in footnote_overrides:
-            continue
-        blocks = [pdf[index] for index in note['indices']]
-        bbox = merged(blocks)['bbox']
-        image = extract_region(page, bbox, f'page-{number}-footnote-{note["number"]}.png', assets, padding=3)
-        issues.append({'type': 'footnote_needs_ocr', 'number': note['number'],
-                       'text': note['text'], 'bbox': bbox, 'image': f'assets/{image}'})
-    return (markdown,
-            {'page': number, 'alignment': pairs, 'weak_matches': weak, 'unmatched_pdf': unmatched,
-             'changes': changes, 'footnotes': notes, 'images': image_index, 'issues': issues}, level)
+    return PageBuild(page, number, ocr, outline, level, assets, repeated_margins, footnote_overrides, formula_overrides).run()
 
 
 def syntax_issues(text):

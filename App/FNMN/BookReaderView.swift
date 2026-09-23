@@ -6,18 +6,6 @@ private enum BookText: Equatable {
     case failed(String)
 }
 
-private enum BookLoadAction {
-    case loaded(String)
-    case failed(String)
-}
-
-private func reduce(_ text: BookText, _ action: BookLoadAction) -> BookText {
-    switch action {
-    case let .loaded(markdown): .ready(markdown)
-    case let .failed(message): .failed(message)
-    }
-}
-
 struct BookReaderView: View {
     @Environment(LibraryModel.self) private var library
     let record: BookRecord
@@ -51,17 +39,18 @@ struct BookReaderView: View {
         let contentFile = record.metadata.contentFile
         do {
             let markdown = try await LibraryFile(url: storage).bookText(directoryName: directoryName, contentFile: contentFile)
-            text = reduce(text, .loaded(markdown))
+            text = .ready(markdown)
         } catch {
-            text = reduce(text, .failed(error.localizedDescription))
+            text = .failed(error.localizedDescription)
         }
     }
 
-    private func outline(in markdown: String) -> [OutlineEntry] {
-        let ordinals = ArticleBody.headingOrdinals(in: ArticleBody.pieces(in: markdown))
+    private func outline(in markdown: String) -> [ArticleHeading] {
+        let headings = ArticleBody.headings(in: markdown)
         return record.metadata.toc.compactMap { entry in
-            guard let piece = ordinals.firstIndex(where: { $0 == entry.ordinal }) else { return nil }
-            return OutlineEntry(piece: piece, level: entry.level, title: entry.title)
+            let index = entry.ordinal - 1
+            guard headings.indices.contains(index) else { return nil }
+            return ArticleHeading(level: entry.level, title: entry.title, piece: headings[index].piece)
         }
     }
 
@@ -69,6 +58,9 @@ struct BookReaderView: View {
         guard let position = library.snapshot.positions[record.id] else { return nil }
         if let piece = position.pieceIndex { return piece }
         guard let heading = BookCatalog.headingID(in: position) else { return nil }
-        return ArticleBody.headingOrdinals(in: ArticleBody.pieces(in: markdown)).firstIndex { $0 == heading }
+        let headings = ArticleBody.headings(in: markdown)
+        let index = heading - 1
+        guard headings.indices.contains(index) else { return nil }
+        return headings[index].piece
     }
 }

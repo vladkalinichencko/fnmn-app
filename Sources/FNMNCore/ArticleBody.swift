@@ -13,10 +13,11 @@ public enum ArticlePiece: Equatable, Sendable {
     case interactive(url: URL, selector: String?)
 }
 
-public struct ArticleHeading: Equatable, Sendable {
+public struct ArticleHeading: Equatable, Identifiable, Sendable {
     public let level: Int
     public let title: String
     public let piece: Int
+    public var id: Int { piece }
 }
 
 public enum ArticleBody {
@@ -25,6 +26,15 @@ public enum ArticleBody {
             guard case let .paragraph(runs) = piece, let heading = heading(runs) else { return nil }
             return ArticleHeading(level: heading.level, title: heading.title, piece: index)
         }
+    }
+
+    public static func legacyPiece(for position: ReadingPosition, in package: ImportPackage) -> Int? {
+        guard position.pieceIndex == nil, package.material.kind == .article else { return nil }
+        guard let block = package.blocks.first(where: { $0.id == position.blockID }),
+              let index = package.sections.firstIndex(where: { $0.id == block.sectionID }) else { return nil }
+        let headings = headings(in: readingMarkdown(body: package.body, blocks: package.blocks))
+        guard headings.indices.contains(index) else { return nil }
+        return headings[index].piece
     }
 
     public static func readingMarkdown(body: String?, blocks: [Block]) -> String {
