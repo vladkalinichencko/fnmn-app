@@ -36,9 +36,9 @@ struct VideoReaderView: View {
         package.blocks.first { $0.kind == .video }
     }
 
-    private var embedURL: URL? {
-        if let media = videoBlock?.mediaURL { return media }
-        return Self.embedURL(from: package.material.sourceURL)
+    private var playbackID: String? {
+        let candidates = [videoBlock?.mediaURL, package.material.sourceURL].compactMap { $0 }
+        return candidates.compactMap(YouTube.videoID(in:)).first
     }
 
     private var activeCueID: String? {
@@ -72,7 +72,7 @@ struct VideoReaderView: View {
             Link("Source", destination: package.material.sourceURL)
         }
         .onAppear {
-            if embedURL == nil { phase = .failed }
+            if playbackID == nil { phase = .failed }
             restore()
         }
         .onDisappear { persist(seconds, force: true) }
@@ -88,9 +88,9 @@ struct VideoReaderView: View {
     @ViewBuilder
     private var player: some View {
         ZStack {
-            if let embedURL {
+            if let playbackID {
                 YouTubeEmbedView(
-                    url: embedURL,
+                    videoID: playbackID,
                     startSeconds: library.snapshot.positions[package.material.id]?.videoSeconds ?? 0,
                     seekTo: $seekTo,
                     seconds: $seconds,
@@ -180,22 +180,10 @@ struct VideoReaderView: View {
         }
     }
 
-    private static func embedURL(from source: URL) -> URL? {
-        let host = source.host?.lowercased() ?? ""
-        if host.contains("youtu") {
-            if let items = URLComponents(url: source, resolvingAgainstBaseURL: false)?.queryItems,
-               let id = items.first(where: { $0.name == "v" })?.value {
-                return URL(string: "https://www.youtube.com/embed/\(id)")
-            }
-            let last = source.lastPathComponent
-            if last.count == 11 { return URL(string: "https://www.youtube.com/embed/\(last)") }
-        }
-        return nil
-    }
 }
 
 private struct YouTubeEmbedView: UIViewRepresentable {
-    let url: URL
+    let videoID: String
     let startSeconds: Double
     @Binding var seekTo: Double?
     @Binding var seconds: Double
@@ -222,10 +210,10 @@ private struct YouTubeEmbedView: UIViewRepresentable {
     func updateUIView(_ view: WKWebView, context: Context) {
         context.coordinator.onSeconds = { seconds = $0 }
         context.coordinator.onPhase = { phase = $0 }
-        if context.coordinator.loaded != url {
-            context.coordinator.loaded = url
+        if context.coordinator.loaded != videoID {
+            context.coordinator.loaded = videoID
             phase = .loading
-            view.loadHTMLString(Self.page(url: url, start: startSeconds), baseURL: URL(string: "https://www.youtube.com"))
+            view.loadHTMLString(Self.page(videoID: videoID, start: startSeconds), baseURL: URL(string: "https://www.youtube.com"))
         }
         if phase == .ready, let value = seekTo {
             view.evaluateJavaScript("window.fnmnSeek && window.fnmnSeek(\(value));") { _, _ in
@@ -241,7 +229,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        var loaded: URL?
+        var loaded: String?
         var onSeconds: ((Double) -> Void)?
         var onPhase: ((EmbedPhase) -> Void)?
 
@@ -272,8 +260,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         }
     }
 
-    private static func page(url: URL, start: Double) -> String {
-        let src = url.absoluteString.replacingOccurrences(of: "\"", with: "")
+    private static func page(videoID: String, start: Double) -> String {
         let startAt = max(0, Int(start.rounded(.down)))
         return """
         <!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -291,7 +278,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         function onYouTubeIframeAPIReady(){
           player = new YT.Player('player', {
             width: '100%', height: '100%',
-            videoId: new URL("\(src)").pathname.split('/').filter(Boolean).pop(),
+            videoId: "\(videoID)",
             playerVars: { playsinline: 1, rel: 0, start: \(startAt), origin: 'https://www.youtube.com' },
             events: {
               onReady: function(){

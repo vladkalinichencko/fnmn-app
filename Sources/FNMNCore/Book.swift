@@ -42,7 +42,7 @@ public struct BookRecord: Codable, Equatable, Identifiable, Sendable {
     public init(metadata: BookMetadata) {
         id = "book:\(metadata.sourceName)"
         self.metadata = metadata
-        directoryName = BookCatalog.directoryName(for: metadata.sourceName)
+        directoryName = BookCatalog.storageName(for: id)
     }
 }
 
@@ -88,10 +88,11 @@ public enum BookCatalog {
         ReadingPosition(blockID: "toc:\(heading)")
     }
 
-    static func directoryName(for sourceName: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
-        let name = String(sourceName.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" })
-        return name.isEmpty ? "book" : name
+    static func storageName(for id: String) -> String {
+        Data(id.utf8).base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
     }
 
     private static let decoder = JSONDecoder()

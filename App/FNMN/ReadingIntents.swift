@@ -39,7 +39,7 @@ struct AddLinkIntent: AppIntent {
 struct AskAboutSelectionIntent: AppIntent {
     static let title: LocalizedStringResource = "Ask About This Passage"
     static let description = IntentDescription("Send the passage last selected in FNMN to ChatGPT.")
-    static let supportedModes: IntentModes = .background
+    static let supportedModes: IntentModes = .foreground(.immediate)
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {

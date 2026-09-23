@@ -34,39 +34,25 @@ final class LibraryModel {
         loadState = .loading
         do {
             snapshot = try await file.load()
+            let corrupt = await file.corruptPackageNames
             loadState = .ready
+            if !corrupt.isEmpty {
+                operationError = "Couldn't read \(corrupt.joined(separator: ", ")). The rest of the library is open."
+            }
         } catch {
             loadState = .failed(error.localizedDescription)
         }
     }
 
     func importData(_ data: Data) async throws -> String {
-        let decoded = try JSONDecoder().decode(ImportPackage.self, from: data)
-        let package = ImportPackage(material: decoded.material, sections: decoded.sections, blocks: decoded.blocks, body: decoded.body)
-        let previous = snapshot
-        try snapshot.importPackage(package)
-        do {
-            try await persist()
-            return package.material.id
-        } catch {
-            snapshot = previous
-            throw error
-        }
+        let package = try JSONDecoder().decode(ImportPackage.self, from: data)
+        snapshot = try await file.storeArticle(package, files: [:], into: snapshot)
+        return package.material.id
     }
 
     func storeArticle(_ package: ImportPackage, files: [String: Data]) async throws -> String {
-        let stored = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, body: package.body)
-        let previous = snapshot
-        try snapshot.importPackage(stored)
-        do {
-            try await file.saveArticleFiles(files, materialID: stored.material.id)
-            try await persist()
-            return stored.material.id
-        } catch {
-            snapshot = previous
-            try? await file.removeArticleFiles(materialID: stored.material.id)
-            throw error
-        }
+        snapshot = try await file.storeArticle(package, files: files, into: snapshot)
+        return package.material.id
     }
 
     func importPickedDocument(from url: URL) async throws -> String {
@@ -85,20 +71,8 @@ final class LibraryModel {
 
     func importBook(from directory: URL) async throws -> String {
         let imported = try BookCatalog.inspect(from: directory)
-        let previous = snapshot
-        let replacing = previous.books.contains { $0.id == imported.record.id }
-        snapshot.importBook(imported.record)
-        do {
-            try await file.copyBook(from: directory, named: imported.record.directoryName)
-            try await file.saveState(snapshot)
-            return imported.record.id
-        } catch {
-            snapshot = previous
-            if !replacing {
-                try await file.removeBook(named: imported.record.directoryName)
-            }
-            throw error
-        }
+        snapshot = try await file.storeBook(imported.record, from: directory, into: snapshot)
+        return imported.record.id
     }
 
     func prepareLink(url: URL, endpoint: URL, token: String, allowsInsecureLAN: Bool) async {
@@ -147,74 +121,39 @@ final class LibraryModel {
     }
 
     func assign(materialID: String, to folders: [String]) async {
-        let previous = snapshot
-        snapshot.assign(materialID: materialID, to: folders)
-        do { try await persist() }
-        catch {
-            snapshot = previous
-            operationError = error.localizedDescription
-        }
+        await commit { $0.assign(materialID: materialID, to: folders) }
     }
 
     func recordOpening(materialID: String, at date: Date = .now) async {
-        let previous = snapshot.readings[materialID]
-        snapshot.recordOpening(materialID: materialID, at: date)
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.readings[materialID] = previous
-            operationError = error.localizedDescription
-        }
+        await commit { $0.recordOpening(materialID: materialID, at: date) }
     }
 
     func setRead(_ isRead: Bool, materialID: String) async {
-        let previous = snapshot.readings[materialID]
-        snapshot.setRead(isRead, materialID: materialID)
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.readings[materialID] = previous
-            operationError = error.localizedDescription
-        }
+        await commit { $0.setRead(isRead, materialID: materialID) }
     }
 
     func save(position: ReadingPosition, materialID: String, progress: Double) async {
-        let previousPosition = snapshot.positions[materialID]
-        let previousReading = snapshot.readings[materialID]
-        snapshot.positions[materialID] = position
-        snapshot.setProgress(progress, materialID: materialID)
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.positions[materialID] = previousPosition
-            snapshot.readings[materialID] = previousReading
-            operationError = error.localizedDescription
+        await commit {
+            $0.positions[materialID] = position
+            $0.setProgress(progress, materialID: materialID)
         }
     }
 
     func annotate(materialID: String, piece: Int, quote: String, caption: String?, mark: TextMark?) async {
-        let previous = snapshot.highlights
-        snapshot.highlights = applyingAnnotation(
-            to: snapshot.highlights,
-            materialID: materialID,
-            piece: piece,
-            quote: quote,
-            caption: caption,
-            mark: mark
-        )
-        guard snapshot.highlights != previous else { return }
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.highlights = previous
-            operationError = error.localizedDescription
+        await commit {
+            $0.highlights = applyingAnnotation(
+                to: $0.highlights,
+                materialID: materialID,
+                piece: piece,
+                quote: quote,
+                caption: caption,
+                mark: mark
+            )
         }
     }
 
     func setArchived(_ isArchived: Bool, materialID: String) async {
-        let previous = snapshot.archived
-        snapshot.setArchived(isArchived, materialID: materialID)
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.archived = previous
-            operationError = error.localizedDescription
-        }
+        await commit { $0.setArchived(isArchived, materialID: materialID) }
     }
 
     func open(_ materialID: String) {
@@ -222,51 +161,42 @@ final class LibraryModel {
     }
 
     func saveVideoTime(_ seconds: Double, materialID: String, blockID: String) async {
-        let previous = snapshot.positions[materialID]
-        guard snapshot.recordVideoTime(materialID: materialID, blockID: blockID, seconds: seconds) else { return }
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.positions[materialID] = previous
-            operationError = error.localizedDescription
-        }
+        await commit { _ = $0.recordVideoTime(materialID: materialID, blockID: blockID, seconds: seconds) }
     }
 
     func addFolder(_ name: String) async {
         guard !name.isEmpty else { return }
-        let previous = snapshot.folders
-        snapshot.folders = Array(Set(snapshot.folders + [name])).sorted()
-        do { try await file.saveState(snapshot) }
-        catch {
-            snapshot.folders = previous
-            operationError = error.localizedDescription
-        }
+        await commit { $0.folders = Array(Set($0.folders + [name])).sorted() }
     }
 
     func renameFolder(from name: String, to newName: String) async {
-        let previous = snapshot
-        guard snapshot.renameFolder(from: name, to: newName) else {
+        var next = snapshot
+        guard next.renameFolder(from: name, to: newName) else {
             operationError = "Choose a new album name that is not already used."
             return
         }
-        do { try await persist() }
-        catch {
-            snapshot = previous
+        do {
+            try await file.saveState(next)
+            snapshot = next
+        } catch {
             operationError = error.localizedDescription
         }
     }
 
-    func move(materialID: String, to folder: String) async {
-        let previous = snapshot
-        snapshot.move(materialID: materialID, to: folder)
-        do { try await persist() }
-        catch {
-            snapshot = previous
-            operationError = error.localizedDescription
-        }
+    func place(materialID: String, in folder: String) async {
+        await commit { $0.place(materialID: materialID, in: folder) }
     }
 
-    private func persist() async throws {
-        try await file.save(snapshot)
+    private func commit(_ change: (inout LibrarySnapshot) -> Void) async {
+        var next = snapshot
+        change(&next)
+        guard next != snapshot else { return }
+        do {
+            try await file.saveState(next)
+            snapshot = next
+        } catch {
+            operationError = error.localizedDescription
+        }
     }
 }
 
@@ -276,8 +206,7 @@ struct ArticleClient {
     let allowsInsecureLAN: Bool
 
     func prepare(url: URL, folder: String?) async throws -> (ImportPackage, [String: Data]) {
-        let isLocalhost = endpoint.host == "127.0.0.1" || endpoint.host == "localhost"
-        guard endpoint.scheme == "https" || isLocalhost || allowsInsecureLAN else {
+        guard CaptureRoute.acceptsService(endpoint, insecureLAN: allowsInsecureLAN) else {
             throw URLError(.secureConnectionFailed)
         }
         var request = URLRequest(url: endpoint.appending(path: "articles"))

@@ -275,7 +275,7 @@ private struct FoldersView: View {
                 }
                 .dropDestination(for: String.self) { ids, _ in
                     for id in ids {
-                        Task { await library.move(materialID: id, to: folder) }
+                        Task { await library.place(materialID: id, in: folder) }
                     }
                     return !ids.isEmpty
                 }

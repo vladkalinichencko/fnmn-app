@@ -10,6 +10,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var placements: [String: [String]] = [:]
     public var highlights: [Highlight] = []
     public var archived: [String] = []
+    public var articleRevisions: [String: String] = [:]
 
     public init() {}
 
@@ -31,10 +32,15 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     }
 
     public mutating func importBook(_ record: BookRecord) {
+        let replacing = books.contains { $0.id == record.id }
         if let index = books.firstIndex(where: { $0.id == record.id }) {
             books[index] = record
         } else {
             books.append(record)
+        }
+        if replacing {
+            positions[record.id] = nil
+            highlights.removeAll { $0.materialID == record.id }
         }
     }
 
@@ -68,17 +74,19 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     }
 
     public func packages(in folder: String) -> [ImportPackage] {
-        packages.filter { folderNames(for: $0.material.id).contains(folder) }
+        packages.filter { folderNames(for: $0.material.id).contains(folder) && !isArchived($0.material.id) }
     }
 
     public func books(in folder: String) -> [BookRecord] {
-        books.filter { folderNames(for: $0.id).contains(folder) }
+        books.filter { folderNames(for: $0.id).contains(folder) && !isArchived($0.id) }
     }
 
     public func matchingPackages(_ query: String) -> [ImportPackage] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return packages }
-        return packages.filter { $0.matches(needle) }
+        return packages.filter {
+            $0.matches(needle) || folderNames(for: $0.material.id).contains { $0.localizedStandardContains(needle) }
+        }
     }
 
     public func matchingBooks(_ query: String) -> [BookRecord] {
@@ -111,11 +119,15 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         guard !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
         let prior = folderNames(for: package.material.id)
         let merged = Array(Set(prior + package.folders)).sorted()
-        let stored = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: merged, body: package.body)
+        if let existing = packages.first(where: { $0.material.id == package.material.id }),
+           existing.body != package.body || existing.blocks != package.blocks {
+            positions[package.material.id] = nil
+            highlights.removeAll { $0.materialID == package.material.id }
+        }
         if let index = packages.firstIndex(where: { $0.material.id == package.material.id }) {
-            packages[index] = stored
+            packages[index] = package
         } else {
-            packages.append(stored)
+            packages.append(package)
         }
         placements[package.material.id] = merged
         folders = Array(Set(folders + merged)).sorted()
@@ -125,7 +137,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         let names = Array(Set(folders.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })).sorted()
         placements[materialID] = names
         self.folders = Array(Set(self.folders + names)).sorted()
-        writePackageFolders(materialID, names)
     }
 
     public mutating func place(materialID: String, in folder: String) {
@@ -134,11 +145,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         names.sort()
         placements[materialID] = names
         folders = Array(Set(folders + [folder])).sorted()
-        writePackageFolders(materialID, names)
-    }
-
-    public mutating func move(materialID: String, to folder: String) {
-        place(materialID: materialID, in: folder)
     }
 
     public mutating func renameFolder(from name: String, to newName: String) -> Bool {
@@ -152,7 +158,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
             guard names.contains(name) else { continue }
             names = Array(Set(names.map { $0 == name ? trimmed : $0 })).sorted()
             placements[id] = names
-            writePackageFolders(id, names)
         }
         folders = Array(Set(folders.map { $0 == name ? trimmed : $0 })).sorted()
         return true
@@ -163,12 +168,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
             placements[package.material.id] = package.folders.sorted()
             folders = Array(Set(folders + package.folders)).sorted()
         }
-    }
-
-    private mutating func writePackageFolders(_ materialID: String, _ names: [String]) {
-        guard let index = packages.firstIndex(where: { $0.material.id == materialID }) else { return }
-        let package = packages[index]
-        packages[index] = ImportPackage(material: package.material, sections: package.sections, blocks: package.blocks, folders: names, body: package.body)
     }
 
     public mutating func recordVideoTime(materialID: String, blockID: String, seconds: Double) -> Bool {
@@ -206,6 +205,13 @@ public actor LibraryFile {
         var placements: [String: [String]]
         var highlights: [Highlight]
         var archived: [String]
+        var packages: [ImportPackage]?
+        var articleRevisions: [String: String]
+        var readPackageFiles = false
+
+        enum CodingKeys: String, CodingKey {
+            case positions, notes, folders, readings, books, placements, highlights, archived, packages, articleRevisions
+        }
 
         init(
             positions: [String: ReadingPosition],
@@ -215,7 +221,9 @@ public actor LibraryFile {
             books: [BookRecord],
             placements: [String: [String]],
             highlights: [Highlight],
-            archived: [String]
+            archived: [String],
+            packages: [ImportPackage],
+            articleRevisions: [String: String]
         ) {
             self.positions = positions
             self.notes = notes
@@ -225,6 +233,8 @@ public actor LibraryFile {
             self.placements = placements
             self.highlights = highlights
             self.archived = archived
+            self.packages = packages
+            self.articleRevisions = articleRevisions
         }
 
         init(from decoder: Decoder) throws {
@@ -237,10 +247,28 @@ public actor LibraryFile {
             placements = try container.decodeIfPresent([String: [String]].self, forKey: .placements) ?? [:]
             highlights = try container.decodeIfPresent([Highlight].self, forKey: .highlights) ?? []
             archived = try container.decodeIfPresent([String].self, forKey: .archived) ?? []
+            packages = try container.decodeIfPresent([ImportPackage].self, forKey: .packages)
+            articleRevisions = try container.decodeIfPresent([String: String].self, forKey: .articleRevisions) ?? [:]
+            readPackageFiles = !container.contains(.packages)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(positions, forKey: .positions)
+            try container.encode(notes, forKey: .notes)
+            try container.encode(folders, forKey: .folders)
+            try container.encode(readings, forKey: .readings)
+            try container.encode(books, forKey: .books)
+            try container.encode(placements, forKey: .placements)
+            try container.encode(highlights, forKey: .highlights)
+            try container.encode(archived, forKey: .archived)
+            try container.encode(packages ?? [], forKey: .packages)
+            try container.encode(articleRevisions, forKey: .articleRevisions)
         }
     }
 
     public nonisolated let root: URL
+    public private(set) var corruptPackageNames: [String] = []
     private var directory: URL { root }
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -250,11 +278,10 @@ public actor LibraryFile {
     }
 
     public func load() throws -> LibrarySnapshot {
+        try recoverReplacedDirectories(in: directory.appending(path: "books"))
+        try recoverReplacedItem(named: "runtime")
         var snapshot = LibrarySnapshot()
-        let packagesDirectory = directory.appending(path: "packages")
-        if let files = try? FileManager.default.contentsOfDirectory(at: packagesDirectory, includingPropertiesForKeys: nil) {
-            snapshot.packages = try files.filter { $0.pathExtension == "json" }.map { try decoder.decode(ImportPackage.self, from: Data(contentsOf: $0)) }
-        }
+        var stateIncludesPackages = false
         let stateURL = directory.appending(path: "state.json")
         if FileManager.default.fileExists(atPath: stateURL.path) {
             let state = try decoder.decode(UserState.self, from: Data(contentsOf: stateURL))
@@ -266,7 +293,19 @@ public actor LibraryFile {
             snapshot.placements = state.placements
             snapshot.highlights = state.highlights
             snapshot.archived = state.archived
+            snapshot.articleRevisions = state.articleRevisions
+            stateIncludesPackages = !state.readPackageFiles
+            if stateIncludesPackages {
+                snapshot.packages = state.packages ?? []
+            }
         }
+        if stateIncludesPackages {
+            corruptPackageNames = []
+        } else {
+            snapshot.packages = readLegacyPackages()
+        }
+        try sweepUnreferencedBooks(snapshot)
+        try sweepArticleRevisions(snapshot)
         snapshot.adoptPackageFolders()
         if snapshot.foldLegacyNotes() {
             try saveState(snapshot)
@@ -275,23 +314,79 @@ public actor LibraryFile {
     }
 
     public func save(_ snapshot: LibrarySnapshot) throws {
-        let packagesDirectory = directory.appending(path: "packages")
-        try FileManager.default.createDirectory(at: packagesDirectory, withIntermediateDirectories: true)
-        for package in snapshot.packages {
-            let name = package.material.id.data(using: .utf8)!.base64EncodedString().replacingOccurrences(of: "/", with: "_")
-            try encoder.encode(package).write(to: packagesDirectory.appending(path: "\(name).json"), options: .atomic)
-        }
         try saveState(snapshot)
+    }
+
+    public func storeArticle(_ package: ImportPackage, files: [String: Data], into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        var next = snapshot
+        try next.importPackage(package)
+        guard !files.isEmpty else {
+            try save(next)
+            return next
+        }
+        let revision = UUID().uuidString
+        do {
+            try writeArticleRevision(files, materialID: package.material.id, revision: revision)
+            next.articleRevisions[package.material.id] = revision
+            try save(next)
+            try sweepArticleRevisions(next)
+            return next
+        } catch {
+            try? removeArticleRevision(materialID: package.material.id, revision: revision)
+            throw error
+        }
+    }
+
+    public func storeBook(_ record: BookRecord, from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let previousName = snapshot.books.first { $0.id == record.id }?.directoryName
+        var next = snapshot
+        next.importBook(record)
+        let books = directory.appending(path: "books")
+        try FileManager.default.createDirectory(at: books, withIntermediateDirectories: true)
+        let destination = books.appending(path: record.directoryName)
+        let incoming = destination.appendingPathExtension("incoming")
+        if FileManager.default.fileExists(atPath: incoming.path) {
+            try FileManager.default.removeItem(at: incoming)
+        }
+        do {
+            try FileManager.default.copyItem(at: source, to: incoming)
+        } catch {
+            try? FileManager.default.removeItem(at: incoming)
+            throw error
+        }
+        let hadLive = FileManager.default.fileExists(atPath: destination.path)
+        do {
+            try replaceDirectory(at: destination, with: incoming)
+            try saveState(next)
+            try discardRetired(destination)
+            if let previousName, previousName != record.directoryName {
+                try removeBook(named: previousName)
+            }
+            return next
+        } catch {
+            if hadLive {
+                try? restoreRetired(destination)
+            } else if FileManager.default.fileExists(atPath: destination.path) {
+                try? FileManager.default.removeItem(at: destination)
+            }
+            if FileManager.default.fileExists(atPath: incoming.path) {
+                try? FileManager.default.removeItem(at: incoming)
+            }
+            throw error
+        }
     }
 
     public func copyBook(from source: URL, named directoryName: String) throws {
         let books = directory.appending(path: "books")
         try FileManager.default.createDirectory(at: books, withIntermediateDirectories: true)
         let destination = books.appending(path: directoryName)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
+        let incoming = destination.appendingPathExtension("incoming")
+        if FileManager.default.fileExists(atPath: incoming.path) {
+            try FileManager.default.removeItem(at: incoming)
         }
-        try FileManager.default.copyItem(at: source, to: destination)
+        try FileManager.default.copyItem(at: source, to: incoming)
+        try replaceDirectory(at: destination, with: incoming)
+        try discardRetired(destination)
     }
 
     public func removeBook(named directoryName: String) throws {
@@ -302,10 +397,13 @@ public actor LibraryFile {
 
     public func installRuntime(from bundle: URL) throws {
         let destination = directory.appending(path: "runtime")
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
+        let incoming = destination.appendingPathExtension("incoming")
+        if FileManager.default.fileExists(atPath: incoming.path) {
+            try FileManager.default.removeItem(at: incoming)
         }
-        try FileManager.default.copyItem(at: bundle, to: destination)
+        try FileManager.default.copyItem(at: bundle, to: incoming)
+        try replaceDirectory(at: destination, with: incoming)
+        try discardRetired(destination)
     }
 
     public func saveState(_ snapshot: LibrarySnapshot) throws {
@@ -318,7 +416,9 @@ public actor LibraryFile {
             books: snapshot.books,
             placements: snapshot.placements,
             highlights: snapshot.highlights,
-            archived: snapshot.archived
+            archived: snapshot.archived,
+            packages: snapshot.packages,
+            articleRevisions: snapshot.articleRevisions
         )
         try encoder.encode(state).write(to: directory.appending(path: "state.json"), options: .atomic)
     }
@@ -339,21 +439,22 @@ public actor LibraryFile {
         return destination
     }
 
-    public static func articleFile(root: URL, materialID: String, path: String) -> URL? {
-        let folder = articleDirectory(root: root, materialID: materialID).standardizedFileURL
+    public static func articleFile(root: URL, materialID: String, path: String, revision: String? = nil) -> URL? {
+        guard revision?.contains("/") != true, revision?.contains("..") != true else { return nil }
+        var folder = articleDirectory(root: root, materialID: materialID)
+        if let revision, !revision.isEmpty {
+            folder = folder.appending(path: revision)
+        }
+        folder = folder.standardizedFileURL
         guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return nil }
         let destination = folder.appending(path: path).standardizedFileURL
         guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
         return destination
     }
 
-    public func saveArticleFiles(_ files: [String: Data], materialID: String) throws {
-        let folder = Self.articleDirectory(root: directory, materialID: materialID)
-        if FileManager.default.fileExists(atPath: folder.path) {
-            try FileManager.default.removeItem(at: folder)
-        }
+    private func writeArticleRevision(_ files: [String: Data], materialID: String, revision: String) throws {
         for (path, data) in files {
-            guard let destination = Self.articleFile(root: directory, materialID: materialID, path: path) else {
+            guard let destination = Self.articleFile(root: directory, materialID: materialID, path: path, revision: revision) else {
                 throw LibraryError.escapedPath
             }
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -361,10 +462,124 @@ public actor LibraryFile {
         }
     }
 
-    public func removeArticleFiles(materialID: String) throws {
-        let folder = Self.articleDirectory(root: directory, materialID: materialID)
+    private func removeArticleRevision(materialID: String, revision: String) throws {
+        let folder = Self.articleDirectory(root: directory, materialID: materialID).appending(path: revision)
         guard FileManager.default.fileExists(atPath: folder.path) else { return }
         try FileManager.default.removeItem(at: folder)
+    }
+
+    private func readLegacyPackages() -> [ImportPackage] {
+        let packagesDirectory = directory.appending(path: "packages")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: packagesDirectory, includingPropertiesForKeys: nil) else {
+            corruptPackageNames = []
+            return []
+        }
+        var packages: [ImportPackage] = []
+        var corrupt: [String] = []
+        for file in files.filter({ $0.pathExtension == "json" }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            do {
+                packages.append(try decoder.decode(ImportPackage.self, from: Data(contentsOf: file)))
+            } catch {
+                corrupt.append(file.lastPathComponent)
+            }
+        }
+        corruptPackageNames = corrupt
+        return packages
+    }
+
+    private func sweepUnreferencedBooks(_ snapshot: LibrarySnapshot) throws {
+        let books = directory.appending(path: "books")
+        guard let children = try? FileManager.default.contentsOfDirectory(at: books, includingPropertiesForKeys: nil) else { return }
+        let referenced = Set(snapshot.books.map(\.directoryName))
+        for child in children {
+            let name = child.lastPathComponent
+            if name.hasSuffix(".incoming") || name.hasSuffix(".retired") { continue }
+            if !referenced.contains(name) {
+                try FileManager.default.removeItem(at: child)
+            }
+        }
+    }
+
+    private func sweepArticleRevisions(_ snapshot: LibrarySnapshot) throws {
+        let articles = directory.appending(path: "articles")
+        guard let keys = try? FileManager.default.contentsOfDirectory(at: articles, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
+        let live = Dictionary(uniqueKeysWithValues: snapshot.articleRevisions.map {
+            (Self.articleDirectory(root: directory, materialID: $0.key).lastPathComponent, $0.value)
+        })
+        for keyURL in keys {
+            let revision = live[keyURL.lastPathComponent]
+            guard let children = try? FileManager.default.contentsOfDirectory(at: keyURL, includingPropertiesForKeys: nil) else { continue }
+            for child in children {
+                if let revision {
+                    if child.lastPathComponent != revision {
+                        try FileManager.default.removeItem(at: child)
+                    }
+                } else if UUID(uuidString: child.lastPathComponent) != nil {
+                    try FileManager.default.removeItem(at: child)
+                }
+            }
+        }
+    }
+
+    private func recoverReplacedDirectories(in folder: URL) throws {
+        guard let children = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
+        for item in children where item.pathExtension == "retired" {
+            try finishReplacement(of: item.deletingPathExtension())
+        }
+        for item in children where item.pathExtension == "incoming" {
+            try FileManager.default.removeItem(at: item)
+        }
+    }
+
+    private func recoverReplacedItem(named name: String) throws {
+        try finishReplacement(of: directory.appending(path: name))
+        let incoming = directory.appending(path: name).appendingPathExtension("incoming")
+        if FileManager.default.fileExists(atPath: incoming.path) {
+            try FileManager.default.removeItem(at: incoming)
+        }
+    }
+
+    private func finishReplacement(of destination: URL) throws {
+        let retired = destination.appendingPathExtension("retired")
+        guard FileManager.default.fileExists(atPath: retired.path) else { return }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: retired)
+        } else {
+            try FileManager.default.moveItem(at: retired, to: destination)
+        }
+    }
+
+    private func replaceDirectory(at destination: URL, with incoming: URL) throws {
+        let retired = destination.appendingPathExtension("retired")
+        if FileManager.default.fileExists(atPath: retired.path) {
+            try FileManager.default.removeItem(at: retired)
+        }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.moveItem(at: destination, to: retired)
+        }
+        do {
+            try FileManager.default.moveItem(at: incoming, to: destination)
+        } catch {
+            if FileManager.default.fileExists(atPath: retired.path), !FileManager.default.fileExists(atPath: destination.path) {
+                try? FileManager.default.moveItem(at: retired, to: destination)
+            }
+            throw error
+        }
+    }
+
+    private func discardRetired(_ destination: URL) throws {
+        let retired = destination.appendingPathExtension("retired")
+        guard FileManager.default.fileExists(atPath: retired.path) else { return }
+        try FileManager.default.removeItem(at: retired)
+    }
+
+    private func restoreRetired(_ destination: URL) throws {
+        let retired = destination.appendingPathExtension("retired")
+        guard FileManager.default.fileExists(atPath: retired.path) else { return }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.moveItem(at: retired, to: destination)
     }
 
     private static func articleDirectory(root: URL, materialID: String) -> URL {
@@ -375,7 +590,7 @@ public actor LibraryFile {
 
 extension ImportPackage {
     func matches(_ query: String) -> Bool {
-        var fields = [material.title, material.sourceURL.absoluteString] + folders + sections.map(\.title)
+        var fields = [material.title, material.sourceURL.absoluteString] + sections.map(\.title)
         if let byline = material.byline { fields.append(byline) }
         return fields.contains { $0.localizedStandardContains(query) }
     }
@@ -418,6 +633,21 @@ public enum CaptureRoute {
         if host == "chatgpt.com" || host.hasSuffix(".chatgpt.com") || host == "chat.openai.com" { return .chatgpt }
         if url.pathExtension.lowercased() == "pdf" { return .pdf }
         return .web
+    }
+
+    public static func acceptsService(_ url: URL, insecureLAN: Bool) -> Bool {
+        if url.scheme == "https" { return true }
+        guard url.scheme == "http", let host = url.host?.lowercased(), !host.isEmpty else { return false }
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" { return true }
+        guard insecureLAN else { return false }
+        if host.hasSuffix(".local") { return true }
+        let parts = host.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+        if parts[0] == 10 { return true }
+        if parts[0] == 192 && parts[1] == 168 { return true }
+        if parts[0] == 172 && (16...31).contains(parts[1]) { return true }
+        if parts[0] == 169 && parts[1] == 254 { return true }
+        return false
     }
 }
 

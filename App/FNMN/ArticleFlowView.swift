@@ -51,7 +51,7 @@ struct ArticleFlowView: View {
     var body: some View {
         ReadingSession(
             markdown: markdown,
-            file: { LibraryFile.articleFile(root: library.storageURL, materialID: package.material.id, path: $0) },
+            file: { LibraryFile.articleFile(root: library.storageURL, materialID: package.material.id, path: $0, revision: library.snapshot.articleRevisions[package.material.id]) },
             materialID: package.material.id,
             title: package.material.title,
             piece: state.scrollPiece,

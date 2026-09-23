@@ -15,7 +15,7 @@ private let article = ImportPackage(
     let second = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: ["Papers"])
     try library.importPackage(second)
     #expect(library.packages.count == 1)
-    #expect(library.packages[0].folders == ["Inbox", "Papers"])
+    #expect(library.placements[article.material.id] == ["Inbox", "Papers"])
 }
 
 @Test func importKeepsTheMarkdownBody() throws {
@@ -268,4 +268,125 @@ private let namedBook = BookRecord(
     let collided = library.renameFolder(from: "Papers", to: "Web")
     #expect(!collided)
     #expect(library.packages(in: "Papers").map(\.material.id) == [article.material.id])
+}
+
+@Test func reimportKeepsMarksUntilTheBodyChanges() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article)
+    library.positions[article.material.id] = ReadingPosition(blockID: "b1")
+    library.highlights.append(Highlight(materialID: article.material.id, piece: 0, quote: "Text", caption: "", mark: .highlight))
+    try library.importPackage(article)
+    #expect(library.highlights.count == 1)
+    #expect(library.positions[article.material.id]?.blockID == "b1")
+    let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "A different page.")
+    try library.importPackage(changed)
+    #expect(library.highlights.isEmpty)
+    #expect(library.positions[article.material.id] == nil)
+}
+
+@Test func bookDirectoriesFollowTheBookIdentity() {
+    let slash = BookRecord(metadata: bookMetadata(sourceName: "foo/bar.pdf"))
+    let space = BookRecord(metadata: bookMetadata(sourceName: "foo bar.pdf"))
+    #expect(slash.id != space.id)
+    #expect(slash.directoryName != space.directoryName)
+    #expect(!slash.directoryName.contains("/"))
+    #expect(!space.directoryName.contains(" "))
+}
+
+@Test func failedArticleReplacementKeepsThePreviousFiles() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory)
+    let stored = try await file.storeArticle(article, files: ["note.txt": Data("old".utf8)], into: LibrarySnapshot())
+    let revision = try #require(stored.articleRevisions[article.material.id])
+    let note = try #require(LibraryFile.articleFile(root: directory, materialID: article.material.id, path: "note.txt", revision: revision))
+    try FileManager.default.removeItem(at: directory.appending(path: "state.json"))
+    try FileManager.default.createDirectory(at: directory.appending(path: "state.json"), withIntermediateDirectories: true)
+    let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "new")
+    await #expect(throws: (any Error).self) {
+        try await file.storeArticle(changed, files: ["note.txt": Data("new".utf8)], into: stored)
+    }
+    #expect(try String(contentsOf: note, encoding: .utf8) == "old")
+}
+
+@Test func failedBookReplacementKeepsThePreviousBook() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory)
+    let original = directory.appending(path: "original")
+    try makeBook(at: original, sourceName: "notes.pdf", content: "old")
+    let stored = try await file.storeBook(try BookCatalog.inspect(from: original).record, from: original, into: LibrarySnapshot())
+    let content = directory.appending(path: "books").appending(path: stored.books[0].directoryName).appending(path: "content.md")
+    try FileManager.default.removeItem(at: directory.appending(path: "state.json"))
+    try FileManager.default.createDirectory(at: directory.appending(path: "state.json"), withIntermediateDirectories: true)
+    let replacement = directory.appending(path: "replacement")
+    try makeBook(at: replacement, sourceName: "notes.pdf", content: "new")
+    await #expect(throws: (any Error).self) {
+        try await file.storeBook(try BookCatalog.inspect(from: replacement).record, from: replacement, into: stored)
+    }
+    #expect(try String(contentsOf: content, encoding: .utf8) == "old")
+}
+
+@Test func oneCorruptPackageDoesNotHideTheOthers() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let packages = directory.appending(path: "packages")
+    try FileManager.default.createDirectory(at: packages, withIntermediateDirectories: true)
+    try JSONEncoder().encode(article).write(to: packages.appending(path: "good.json"))
+    try Data("not json".utf8).write(to: packages.appending(path: "bad.json"))
+    try Data(#"{"positions":{},"notes":[],"folders":[]}"#.utf8).write(to: directory.appending(path: "state.json"))
+    let file = LibraryFile(url: directory)
+    let loaded = try await file.load()
+    #expect(loaded.packages.map(\.material.id) == [article.material.id])
+    #expect(await file.corruptPackageNames == ["bad.json"])
+}
+
+@Test func legacyArticleAssetsSurviveLoad() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory)
+    var library = LibrarySnapshot()
+    try library.importPackage(article)
+    try await file.save(library)
+    let picture = try #require(LibraryFile.articleFile(root: directory, materialID: article.material.id, path: "assets/pic.txt"))
+    try FileManager.default.createDirectory(at: picture.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("pic".utf8).write(to: picture)
+    _ = try await file.load()
+    #expect(try String(contentsOf: picture, encoding: .utf8) == "pic")
+}
+
+@Test func cleartextServiceStaysOnTheLocalNetwork() {
+    #expect(CaptureRoute.acceptsService(URL(string: "https://example.com")!, insecureLAN: false))
+    #expect(CaptureRoute.acceptsService(URL(string: "http://127.0.0.1:8787")!, insecureLAN: false))
+    #expect(CaptureRoute.acceptsService(URL(string: "http://192.168.1.20:8787")!, insecureLAN: true))
+    #expect(!CaptureRoute.acceptsService(URL(string: "http://192.168.1.20:8787")!, insecureLAN: false))
+    #expect(!CaptureRoute.acceptsService(URL(string: "http://example.com")!, insecureLAN: true))
+}
+
+private func bookMetadata(sourceName: String) -> BookMetadata {
+    BookMetadata(
+        title: "Notes",
+        subtitle: nil,
+        authors: ["Ada"],
+        contributors: nil,
+        language: "en",
+        sourceName: sourceName,
+        schemaVersion: 1,
+        contentFile: "content.md",
+        assetsDirectory: "assets",
+        toc: []
+    )
+}
+
+private func makeBook(at directory: URL, sourceName: String, content: String) throws {
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let metadata: [String: Any] = [
+        "title": "Notes",
+        "authors": ["Ada"],
+        "language": "en",
+        "source_name": sourceName,
+        "schema_version": 1,
+        "content_file": "content.md",
+        "assets_directory": "assets",
+        "toc": []
+    ]
+    try JSONSerialization.data(withJSONObject: metadata).write(to: directory.appending(path: "metadata.json"))
+    try Data(#"{"headings":0,"images":0,"errors":[]}"#.utf8).write(to: directory.appending(path: "validation.json"))
+    try Data(content.utf8).write(to: directory.appending(path: "content.md"))
 }
