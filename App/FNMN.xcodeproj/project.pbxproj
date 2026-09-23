@@ -20,6 +20,8 @@
 		SMATH000000000000000001 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = SMATH000000000000000003 /* SwiftMath */; };
 		C0FFEE0000000000000000A2 /* ArticleBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000A1 /* ArticleBody.swift */; };
 		C0FFEE0000000000000000B2 /* ArticleFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000B1 /* ArticleFlowView.swift */; };
+		C0FFEE000000000000000182 /* LibraryLists.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000181 /* LibraryLists.swift */; };
+		C0FFEE0000000000000000C4 /* AddArticleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000C3 /* AddArticleView.swift */; };
 		C0FFEE0000000000000000C2 /* LiveCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000C1 /* LiveCropView.swift */; };
 		C0FFEE0000000000000000E2 /* SelectableParagraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000E1 /* SelectableParagraph.swift */; };
 		C0FFEE0000000000000000F2 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE0000000000000000F1 /* ReaderSettings.swift */; };
@@ -48,6 +50,8 @@
 		C0FFEE0000000000000000D1 /* DocumentColumn.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DocumentColumn.swift; path = FNMN/DocumentColumn.swift; sourceTree = "<group>"; };
 		C0FFEE0000000000000000A1 /* ArticleBody.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ArticleBody.swift; path = ../Sources/FNMNCore/ArticleBody.swift; sourceTree = "<group>"; };
 		C0FFEE0000000000000000B1 /* ArticleFlowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ArticleFlowView.swift; path = FNMN/ArticleFlowView.swift; sourceTree = "<group>"; };
+		C0FFEE000000000000000181 /* LibraryLists.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LibraryLists.swift; path = FNMN/LibraryLists.swift; sourceTree = "<group>"; };
+		C0FFEE0000000000000000C3 /* AddArticleView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AddArticleView.swift; path = FNMN/AddArticleView.swift; sourceTree = "<group>"; };
 		C0FFEE0000000000000000C1 /* LiveCropView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LiveCropView.swift; path = FNMN/LiveCropView.swift; sourceTree = "<group>"; };
 		C0FFEE0000000000000000E1 /* SelectableParagraph.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SelectableParagraph.swift; path = FNMN/SelectableParagraph.swift; sourceTree = "<group>"; };
 		C0FFEE0000000000000000F1 /* ReaderSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReaderSettings.swift; path = FNMN/ReaderSettings.swift; sourceTree = "<group>"; };
@@ -126,6 +130,8 @@
 				C0FFEE0000000000000000D1 /* DocumentColumn.swift */,
 				C0FFEE0000000000000000A1 /* ArticleBody.swift */,
 				C0FFEE0000000000000000B1 /* ArticleFlowView.swift */,
+				C0FFEE0000000000000000C3 /* AddArticleView.swift */,
+				C0FFEE000000000000000181 /* LibraryLists.swift */,
 				C0FFEE0000000000000000C1 /* LiveCropView.swift */,
 				C0FFEE0000000000000000E1 /* SelectableParagraph.swift */,
 				C0FFEE0000000000000000F1 /* ReaderSettings.swift */,
@@ -276,6 +282,8 @@
 				C0FFEE0000000000000000D2 /* DocumentColumn.swift in Sources */,
 				C0FFEE0000000000000000A2 /* ArticleBody.swift in Sources */,
 				C0FFEE0000000000000000B2 /* ArticleFlowView.swift in Sources */,
+				C0FFEE0000000000000000C4 /* AddArticleView.swift in Sources */,
+				C0FFEE000000000000000182 /* LibraryLists.swift in Sources */,
 				C0FFEE0000000000000000C2 /* LiveCropView.swift in Sources */,
 				C0FFEE0000000000000000E2 /* SelectableParagraph.swift in Sources */,
 				C0FFEE0000000000000000F2 /* ReaderSettings.swift in Sources */,

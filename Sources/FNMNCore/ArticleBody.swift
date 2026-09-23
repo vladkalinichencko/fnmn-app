@@ -13,7 +13,20 @@ public enum ArticlePiece: Equatable, Sendable {
     case interactive(url: URL, selector: String?)
 }
 
+public struct ArticleHeading: Equatable, Sendable {
+    public let level: Int
+    public let title: String
+    public let piece: Int
+}
+
 public enum ArticleBody {
+    public static func headings(in markdown: String) -> [ArticleHeading] {
+        pieces(in: markdown).enumerated().compactMap { index, piece in
+            guard case let .paragraph(runs) = piece, let heading = heading(runs) else { return nil }
+            return ArticleHeading(level: heading.level, title: heading.title, piece: index)
+        }
+    }
+
     public static func readingMarkdown(body: String?, blocks: [Block]) -> String {
         if let body, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return body

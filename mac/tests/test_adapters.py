@@ -8,7 +8,7 @@ from pathlib import Path
 import pymupdf
 
 from adapter_arxiv import paper_id
-from adapter_youtube import youtube_package
+from adapter_youtube import _package, cues_from_timedtext
 from fnmn_service import ImportFailure, import_link
 from sources import source_kind
 
@@ -69,17 +69,9 @@ ATOM = """<?xml version="1.0"?>
 
 class SourceTests(unittest.TestCase):
     def test_kind_matches_the_app_classifier(self):
-        self.assertEqual(source_kind("https://example.com/post"), "web")
-        self.assertEqual(source_kind("https://youtu.be/abc"), "youtube")
-        self.assertEqual(source_kind("https://www.youtube.com/watch?v=abc"), "youtube")
-        self.assertEqual(source_kind("https://arxiv.org/abs/1706.03762"), "arxiv")
-        self.assertEqual(source_kind("https://arxiv.org/pdf/1706.03762.pdf"), "arxiv")
-        self.assertEqual(source_kind("https://x.com/someone/status/1"), "x")
-        self.assertEqual(source_kind("https://twitter.com/someone/status/1"), "x")
-        self.assertEqual(source_kind("https://name.substack.com/p/hello"), "substack")
-        self.assertEqual(source_kind("https://chatgpt.com/share/abc"), "chatgpt")
-        self.assertEqual(source_kind("https://example.com/paper.pdf"), "pdf")
-        self.assertIsNone(source_kind("ftp://example.com/a"))
+        rows = json.loads((Path(__file__).resolve().parents[2] / "fixtures/capture-sources.json").read_text())
+        for row in rows:
+            self.assertEqual(source_kind(row["url"]), row["source"], row["url"])
 
     def test_paper_id_keeps_version_and_old_category(self):
         self.assertEqual(paper_id("https://arxiv.org/abs/1706.03762v2"), "1706.03762v2")
@@ -123,7 +115,8 @@ class AdapterTests(unittest.TestCase):
         image = next(iter(package["files"]))
         self.assertIn(image, body)
         self.assertEqual(package["files"][image], "cG5nLWJ5dGVz")
-        self.assertIn("Model", [section["title"] for section in package["sections"]])
+        self.assertEqual(package["sections"], [])
+        self.assertEqual(package["blocks"], [])
 
     def test_arxiv_pdf_goes_through_the_book_pipeline(self):
         pdf = _one_page_pdf("Introduction", "The transformer uses attention.")
@@ -266,37 +259,22 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn("\ue200", body)
 
     def test_youtube_prepares_video_cues_from_timedtext(self):
-        track = {
-            "baseUrl": "https://www.youtube.com/api/timedtext?v=abcdefghijk&lang=en",
-            "languageCode": "en",
-            "kind": None,
-        }
-        page = (
-            "ytInitialPlayerResponse = "
-            + json.dumps({
-                "videoDetails": {"title": "Fixture talk", "author": "Channel"},
-                "captions": {"playerCaptionsTracklistRenderer": {"captionTracks": [track]}},
-            })
-            + ";"
-        )
-        cues = {
+        payload = json.dumps({
             "events": [
                 {"tStartMs": 0, "segs": [{"utf8": "Hello"}]},
                 {"tStartMs": 1500, "segs": [{"utf8": "world"}]},
                 {"tStartMs": 2000},
             ]
-        }
-
-        def fetch_text(url):
-            if "oembed" in url:
-                return json.dumps({"title": "Fixture talk", "author_name": "Channel"})
-            if "watch?v=" in url:
-                return page
-            if "timedtext" in url:
-                return json.dumps(cues)
-            raise AssertionError(url)
-
-        package = youtube_package("https://youtu.be/abcdefghijk", fetch_text, [])
+        })
+        package = _package(
+            "abcdefghijk",
+            "https://www.youtube.com/watch?v=abcdefghijk",
+            "Fixture talk",
+            "Channel",
+            cues_from_timedtext(payload),
+            None,
+            [],
+        )
         self.assertEqual(package["material"]["kind"], "video")
         self.assertEqual(package["material"]["id"], "youtube:abcdefghijk")
         self.assertEqual(package["material"]["title"], "Fixture talk")

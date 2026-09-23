@@ -289,18 +289,30 @@ def build_page(page, number, ocr, outline, level, assets, repeated_margins, foot
     note_regions = [merged([pdf[index] for index in note['indices']])['bbox'] for note in notes]
     prose = [block for block in pdf if id(block) not in note_blocks and not is_heading(block, body_size)
              and len(normalized(block['text']).split()) >= 5]
+
     def in_footnote(block):
         return any(vertical_overlap(block['bbox'], region) >= .5 for region in note_regions)
 
     textual = [block for block in ocr if block['kind'] in {'text', 'figure_title'} and not in_footnote(block)]
     pairs = align(prose, textual)
     paired_pdf = {index for pair in pairs for index in pair['pdf']}
-    content, definitions, changes, used_outline = [], [], [], set()
     note_numbers = {note['number'] for note in notes}
     reference_targets, missing_references = missing_footnote_targets(
         pdf, prose, textual, pairs, notes, note_blocks, body_size)
     equations = [block for block in ocr if block['kind'] == 'equation']
     labels = equation_labels(page, equations)
+    content, changes, level, equation_issues, image_index = render_page_blocks(
+        page, number, ocr, outline, level, assets, repeated_margins, formula_overrides,
+        in_footnote, reference_targets, note_numbers, labels)
+    definitions = footnote_definitions(number, notes, footnote_overrides)
+    content, unmatched = restore_unmatched_prose(content, changes, prose, paired_pdf, textual, multicolumn)
+    return assemble_page_record(
+        page, number, content, definitions, changes, pairs, prose, textual, unmatched,
+        equation_issues, missing_references, notes, footnote_overrides, pdf, image_index, level, assets)
+
+
+def render_page_blocks(page, number, ocr, outline, level, assets, repeated_margins, formula_overrides, in_footnote, reference_targets, note_numbers, labels):
+    content, changes, used_outline = [], [], set()
     equation_index = image_index = 0
     equation_issues = []
     for block in ocr:
@@ -358,11 +370,20 @@ def build_page(page, number, ocr, outline, level, assets, repeated_margins, foot
                     defect['equation'] = equation_index
                 equation_issues.extend(defects)
         content.append((bbox[1], rendered))
+    return content, changes, level, equation_issues, image_index
+
+
+def footnote_definitions(number, notes, footnote_overrides):
+    definitions = []
     for note in notes:
         override = footnote_overrides.get(f'{number}:{note["number"]}')
         if override or not note['needs_ocr']:
             definitions.append(footnote_definition(
                 f'p{number}-{note["number"]}', latex(override) if override else note['text']))
+    return definitions
+
+
+def restore_unmatched_prose(content, changes, prose, paired_pdf, textual, multicolumn):
     page_ocr = ' '.join(block['text'] for block in textual)
     unmatched = []
     if not multicolumn:
@@ -379,7 +400,12 @@ def build_page(page, number, ocr, outline, level, assets, repeated_margins, foot
                 unmatched.append({'text': block['text'], 'bbox': block['bbox'],
                                   'coverage': round(word_coverage(block['text'], page_ocr), 3),
                                   'math_ratio': round(block['math_ratio'], 3)})
+    return content, unmatched
+
+
+def assemble_page_record(page, number, content, definitions, changes, pairs, prose, textual, unmatched, equation_issues, missing_references, notes, footnote_overrides, pdf, image_index, level, assets):
     content.sort(key=lambda item: item[0])
+    multicolumn = is_multicolumn(pdf)
     weak = [] if multicolumn else [
         {**pair, 'pdf_text': merged([prose[i] for i in pair['pdf']])['text'],
          'ocr_text': merged([textual[i] for i in pair['ocr']])['text']}

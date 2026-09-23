@@ -1,21 +1,28 @@
-import json
 import unittest
 from pathlib import Path
 
-from fnmn_service import ImportFailure, import_web_article, prepare_article
+from fnmn_service import ImportFailure, import_web_article
 
 
 class ArticleTests(unittest.TestCase):
     def test_fixture_preserves_structure_math_image_and_exact_url_identity(self):
         source = Path(__file__).with_name("fixture.html").read_text()
-        package = prepare_article("https://example.com/article?edition=1", source, ["Inbox"])
-        kinds = [block["kind"] for block in package["blocks"]]
+        package = import_web_article(
+            "https://example.com/article?edition=1",
+            lambda url: source,
+            lambda url: b"",
+            ["Inbox"],
+        )
         self.assertEqual(package["material"]["sourceURL"], "https://example.com/article?edition=1")
-        self.assertEqual([section["title"] for section in package["sections"]], ["Fixture article", "Proof"])
-        self.assertEqual(kinds.count("formula"), 1)
-        self.assertEqual(json.dumps(package).count("<mi>x</mi>"), 1)
-        self.assertIn("image", kinds)
-        self.assertIn("https://example.com/figure.png", json.dumps(package))
+        self.assertEqual(package["material"]["title"], "Fixture article")
+        self.assertEqual(package["sections"], [])
+        self.assertEqual(package["blocks"], [])
+        self.assertIn("# Fixture article", package["body"])
+        self.assertIn("## Proof", package["body"])
+        self.assertIn("x=2", package["body"])
+        self.assertIn("y=3", package["body"])
+        self.assertIn("![A figure](assets/", package["body"])
+        self.assertTrue(any(path.endswith(".png") for path in package["files"]))
 
     def test_import_downloads_picture_files_and_leaves_the_figure_on_the_live_page(self):
         source = """
@@ -69,7 +76,8 @@ class ArticleTests(unittest.TestCase):
         </article></body></html>
         """
         package = import_web_article("https://example.com/sigma", lambda url: source, lambda url: b"", [])
-        self.assertEqual([section["title"] for section in package["sections"]], ["The $\\sigma$-algebra"])
+        self.assertIn("## The $\\sigma$-algebra", package["body"])
+        self.assertEqual(package["sections"], [])
 
     def test_unread_page_fails_during_page_fetch(self):
         def fetch_text(url):

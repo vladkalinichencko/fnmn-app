@@ -1,25 +1,34 @@
 import SwiftUI
 
-private enum ArticleDestination: String, Identifiable {
+struct OutlineEntry: Identifiable, Equatable {
+    let piece: Int
+    let level: Int
+    let title: String
+    var id: Int { piece }
+}
+
+private enum ReaderDestination: String, Identifiable {
     case outline
     case settings
     var id: String { rawValue }
 }
 
-private struct ArticleReaderState {
+private struct ReaderState {
     var scrollPiece: Int?
     var trackedPiece: Int?
-    var destination: ArticleDestination?
+    var destination: ReaderDestination?
+    var didRestore = false
 }
 
-private enum ArticleReaderAction {
+private enum ReaderAction {
     case scroll(Int?)
     case visible(Int)
-    case present(ArticleDestination)
+    case present(ReaderDestination)
     case dismiss
+    case restored
 }
 
-private func reduce(_ state: ArticleReaderState, _ action: ArticleReaderAction) -> ArticleReaderState {
+private func reduce(_ state: ReaderState, _ action: ReaderAction) -> ReaderState {
     var state = state
     switch action {
     case let .scroll(piece):
@@ -31,50 +40,53 @@ private func reduce(_ state: ArticleReaderState, _ action: ArticleReaderAction) 
         state.destination = destination
     case .dismiss:
         state.destination = nil
+    case .restored:
+        state.didRestore = true
     }
     return state
 }
 
-struct ArticleFlowView: View {
+struct MaterialReader: View {
     @Environment(LibraryModel.self) private var library
-    let package: ImportPackage
-    @State private var state = ArticleReaderState()
-
-    private var markdown: String {
-        ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks)
-    }
-
-    private var pieces: [ArticlePiece] {
-        ArticleBody.pieces(in: markdown)
-    }
+    let markdown: String
+    let file: (String) -> URL?
+    let materialID: String
+    let title: String
+    var sourceURL: URL?
+    let outline: [OutlineEntry]
+    let startPiece: Int?
+    @State private var state = ReaderState()
 
     var body: some View {
         ReadingSession(
             markdown: markdown,
-            file: { LibraryFile.articleFile(root: library.storageURL, materialID: package.material.id, path: $0, revision: library.snapshot.articleRevisions[package.material.id]) },
-            materialID: package.material.id,
-            title: package.material.title,
+            file: file,
+            materialID: materialID,
+            title: title,
             piece: state.scrollPiece,
             onVisiblePiece: { index, count in send(.visible(index), count: count) }
         )
         .dynamicTypeSize(ReaderAppearance.typeSize)
         .background(ReaderAppearance.background ?? Color.clear)
-        .navigationTitle(package.material.title)
+        .navigationTitle(title)
         .toolbar {
             Button("Sections", systemImage: "list.bullet.indent") { send(.present(.outline)) }
+                .disabled(outline.isEmpty)
             Button("Text", systemImage: "gearshape") { send(.present(.settings)) }
-            Link("Source", destination: package.material.sourceURL)
+            if let sourceURL {
+                Link("Source", destination: sourceURL)
+            }
         }
         .sheet(item: destinationBinding) { destination in
             switch destination {
             case .outline:
                 NavigationStack {
-                    List(Array(package.sections.enumerated()), id: \.element.id) { index, section in
+                    List(outline) { entry in
                         Button {
-                            if let piece = pieceIndex(forHeading: index + 1) { send(.scroll(piece)) }
+                            send(.scroll(entry.piece))
                             send(.dismiss)
                         } label: {
-                            Text(section.title).padding(.leading, CGFloat(max(0, section.level - 1)) * 12)
+                            Text(entry.title).padding(.leading, CGFloat(max(0, entry.level - 1)) * 12)
                         }
                     }
                     .navigationTitle("Sections")
@@ -83,10 +95,14 @@ struct ArticleFlowView: View {
                 ReaderSettingsForm()
             }
         }
-        .task { restore() }
+        .task {
+            guard !state.didRestore else { return }
+            send(.restored)
+            if let startPiece { send(.scroll(startPiece)) }
+        }
     }
 
-    private var destinationBinding: Binding<ArticleDestination?> {
+    private var destinationBinding: Binding<ReaderDestination?> {
         Binding(
             get: { state.destination },
             set: { destination in
@@ -95,27 +111,45 @@ struct ArticleFlowView: View {
         )
     }
 
-    private func pieceIndex(forHeading ordinal: Int) -> Int? {
-        ArticleBody.headingOrdinals(in: pieces).firstIndex(of: ordinal)
-    }
-
-    private func restore() {
-        guard let position = library.snapshot.positions[package.material.id] else { return }
-        if let piece = position.pieceIndex {
-            send(.scroll(piece))
-            return
-        }
-        guard let block = package.blocks.first(where: { $0.id == position.blockID }) else { return }
-        guard let index = package.sections.firstIndex(where: { $0.id == block.sectionID }) else { return }
-        if let piece = pieceIndex(forHeading: index + 1) { send(.scroll(piece)) }
-    }
-
-    private func send(_ action: ArticleReaderAction, count: Int? = nil) {
+    private func send(_ action: ReaderAction, count: Int? = nil) {
         let previous = state.trackedPiece
         state = reduce(state, action)
         guard case let .visible(index) = action, index != previous else { return }
-        let total = count ?? pieces.count
+        let total = count ?? ArticleBody.pieces(in: markdown).count
         let progress = total == 0 ? 0 : Double(index + 1) / Double(total)
-        Task { await library.save(position: .piece(index), materialID: package.material.id, progress: progress) }
+        Task { await library.save(position: .piece(index), materialID: materialID, progress: progress) }
+    }
+}
+
+struct ArticleFlowView: View {
+    @Environment(LibraryModel.self) private var library
+    let package: ImportPackage
+
+    private var markdown: String {
+        ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks)
+    }
+
+    var body: some View {
+        MaterialReader(
+            markdown: markdown,
+            file: { LibraryFile.articleFile(root: library.storageURL, materialID: package.material.id, path: $0, revision: library.snapshot.articleRevisions[package.material.id]) },
+            materialID: package.material.id,
+            title: package.material.title,
+            sourceURL: package.material.sourceURL,
+            outline: ArticleBody.headings(in: markdown).map {
+                OutlineEntry(piece: $0.piece, level: $0.level, title: $0.title)
+            },
+            startPiece: startPiece
+        )
+    }
+
+    private var startPiece: Int? {
+        guard let position = library.snapshot.positions[package.material.id] else { return nil }
+        if let piece = position.pieceIndex { return piece }
+        guard let block = package.blocks.first(where: { $0.id == position.blockID }),
+              let index = package.sections.firstIndex(where: { $0.id == block.sectionID }) else { return nil }
+        let headings = ArticleBody.headings(in: markdown)
+        guard headings.indices.contains(index) else { return nil }
+        return headings[index].piece
     }
 }

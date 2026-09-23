@@ -33,12 +33,32 @@ private let article = ImportPackage(
     var library = LibrarySnapshot()
     try library.importPackage(article)
     library.positions[article.material.id] = ReadingPosition(blockID: "b1", textOffset: 12)
-    library.notes.append(Note(materialID: article.material.id, blockID: "piece:4", text: "Remember this"))
     try await file.save(library)
+    let stateURL = directory.appending(path: "library.json").appending(path: "state.json")
+    var text = try String(contentsOf: stateURL, encoding: .utf8)
+    let note = #"[{"id":"00000000-0000-0000-0000-000000000009","materialID":"\#(article.material.id)","blockID":"piece:4","text":"Remember this"}]"#
+    text = text.replacingOccurrences(of: "\"notes\":[]", with: "\"notes\":\(note)")
+    try Data(text.utf8).write(to: stateURL)
     let loaded = try await file.load()
-    #expect(loaded.notes.isEmpty)
     #expect(loaded.positions[article.material.id]?.blockID == "b1")
-    #expect(loaded.highlights.contains { $0.caption == "Remember this" && $0.piece == 4 && $0.mark == nil })
+    #expect(loaded.highlights.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.caption == "Remember this" && $0.piece == 4 && $0.mark == nil })
+    let saved = try String(contentsOf: stateURL, encoding: .utf8)
+    #expect(saved.contains("\"notes\":[]"))
+}
+
+@Test func articleBodyImportsWithoutBlocks() throws {
+    var library = LibrarySnapshot()
+    let packaged = ImportPackage(
+        material: article.material,
+        sections: [],
+        blocks: [],
+        body: "# Hello\n\nText"
+    )
+    try library.importPackage(packaged)
+    #expect(library.packages[0].body == "# Hello\n\nText")
+    #expect(throws: LibraryError.emptyDocument) {
+        try library.importPackage(ImportPackage(material: laterArticle.material, sections: [], blocks: []))
+    }
 }
 
 private let laterArticle = ImportPackage(
@@ -199,19 +219,22 @@ private let namedBook = BookRecord(
     #expect(library.matchingBooks("xyzzy").isEmpty)
 }
 
-@Test func captureRouteNamesSourceFromLinkOrPDF() {
-    #expect(CaptureRoute.source(for: URL(string: "https://example.com/post")!) == .web)
-    #expect(CaptureRoute.source(for: URL(string: "https://youtu.be/abc")!) == .youtube)
-    #expect(CaptureRoute.source(for: URL(string: "https://www.youtube.com/watch?v=abc")!) == .youtube)
-    #expect(CaptureRoute.source(for: URL(string: "https://arxiv.org/abs/1706.03762")!) == .arxiv)
-    #expect(CaptureRoute.source(for: URL(string: "https://x.com/someone/status/1")!) == .x)
-    #expect(CaptureRoute.source(for: URL(string: "https://twitter.com/someone/status/1")!) == .x)
-    #expect(CaptureRoute.source(for: URL(string: "https://name.substack.com/p/hello")!) == .substack)
-    #expect(CaptureRoute.source(for: URL(string: "https://chatgpt.com/share/abc")!) == .chatgpt)
-    #expect(CaptureRoute.source(for: URL(string: "https://example.com/paper.pdf")!) == .pdf)
-    #expect(CaptureRoute.source(for: URL(string: "https://arxiv.org/pdf/1706.03762.pdf")!) == .arxiv)
-    #expect(CaptureRoute.source(for: URL(string: "ftp://example.com/a")!) == nil)
+@Test func captureRouteNamesSourceFromLinkOrPDF() throws {
+    let fixture = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appending(path: "fixtures/capture-sources.json")
+    let rows = try JSONDecoder().decode([CaptureSourceRow].self, from: Data(contentsOf: fixture))
+    for row in rows {
+        #expect(CaptureRoute.source(for: row.url)?.rawValue == row.source)
+    }
     #expect(CaptureError.unprepared(.youtube).errorDescription?.contains("YouTube") == true)
+}
+
+private struct CaptureSourceRow: Decodable {
+    let url: URL
+    let source: String?
 }
 
 @Test func shareHandoffRoundTripsAnHTTPLink() {

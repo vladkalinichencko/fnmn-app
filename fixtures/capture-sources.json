@@ -1,0 +1,13 @@
+[
+  {"url": "https://example.com/post", "source": "web"},
+  {"url": "https://youtu.be/abc", "source": "youtube"},
+  {"url": "https://www.youtube.com/watch?v=abc", "source": "youtube"},
+  {"url": "https://arxiv.org/abs/1706.03762", "source": "arxiv"},
+  {"url": "https://arxiv.org/pdf/1706.03762.pdf", "source": "arxiv"},
+  {"url": "https://x.com/someone/status/1", "source": "x"},
+  {"url": "https://twitter.com/someone/status/1", "source": "x"},
+  {"url": "https://name.substack.com/p/hello", "source": "substack"},
+  {"url": "https://chatgpt.com/share/abc", "source": "chatgpt"},
+  {"url": "https://example.com/paper.pdf", "source": "pdf"},
+  {"url": "ftp://example.com/a", "source": null}
+]

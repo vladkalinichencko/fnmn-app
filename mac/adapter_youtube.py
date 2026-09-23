@@ -23,12 +23,12 @@ def _stable_id(prefix: str, value: str) -> str:
     return f"{prefix}:{hashlib.sha256(value.encode()).hexdigest()[:24]}"
 
 
-def youtube_package_live(url: str, folders: list[str] | None = None) -> dict:
+def youtube_package_live(url: str, folders: list[str] | None = None, cookies_from_browser: str | None = None) -> dict:
     video_id = video_id_from_url(url)
     if video_id is None:
         raise ValueError("YouTube address has no video id")
     source_url = f"https://www.youtube.com/watch?v={video_id}"
-    info = _ytdlp_info(source_url, download=False)
+    info = _ytdlp_info(source_url, download=False, cookies_from_browser=cookies_from_browser)
     title = (info.get("title") or "").strip() or video_id
     author = (info.get("uploader") or info.get("channel") or "").strip() or None
     language = _caption_language(info)
@@ -36,7 +36,7 @@ def youtube_package_live(url: str, folders: list[str] | None = None) -> dict:
     note = None
     if language:
         try:
-            cues = _download_cues(source_url, language)
+            cues = _download_cues(source_url, language, cookies_from_browser)
         except Exception as error:
             note = f"Captions did not download: {error}"
     if not cues and note is None:
@@ -44,16 +44,6 @@ def youtube_package_live(url: str, folders: list[str] | None = None) -> dict:
     if cues:
         note = None
     return _package(video_id, source_url, title, author, cues, note, folders or [])
-
-
-def youtube_package(url: str, fetch_text, folders: list[str] | None = None) -> dict:
-    video_id = video_id_from_url(url)
-    if video_id is None:
-        raise ValueError("YouTube address has no video id")
-    source_url = f"https://www.youtube.com/watch?v={video_id}"
-    title, author, tracks = _page_details(video_id, source_url, fetch_text)
-    cues, caption_note = _captions_from_tracks(tracks, fetch_text)
-    return _package(video_id, source_url, title, author, cues, caption_note, folders or [])
 
 
 def video_id_from_url(url: str) -> str | None:
@@ -83,88 +73,6 @@ def cues_from_timedtext(payload: str) -> list[tuple[float, str]]:
     if text.startswith("<"):
         return _cues_from_xml(text)
     return []
-
-
-def _page_details(video_id: str, source_url: str, fetch_text) -> tuple[str, str | None, list[dict]]:
-    title = video_id
-    author = None
-    try:
-        oembed = json.loads(fetch_text(f"https://www.youtube.com/oembed?url={source_url}&format=json"))
-        title = (oembed.get("title") or title).strip() or title
-        author = (oembed.get("author_name") or "").strip() or None
-    except Exception:
-        pass
-    page_title, page_author, tracks = _player_page(video_id, fetch_text)
-    if page_title:
-        title = page_title
-    if page_author:
-        author = page_author
-    return title, author, tracks
-
-
-def _captions_from_tracks(tracks: list[dict], fetch_text) -> tuple[list[tuple[float, str]], str | None]:
-    if not tracks:
-        return [], "Captions were not listed for this video."
-    track = _preferred_track(tracks)
-    base = html.unescape(track.get("baseUrl") or "")
-    if not base:
-        return [], "Caption track had no timedtext URL."
-    for suffix in ("&fmt=json3", "&fmt=srv3", ""):
-        try:
-            payload = fetch_text(base + suffix)
-        except Exception:
-            continue
-        cues = cues_from_timedtext(payload)
-        if cues:
-            return cues, None
-    return [], "Caption track listed, but timedtext returned no cues."
-
-
-def _player_page(video_id: str, fetch_text) -> tuple[str | None, str | None, list[dict]]:
-    try:
-        page = fetch_text(f"https://www.youtube.com/watch?v={video_id}")
-    except Exception:
-        return None, None, []
-    data = _player_response(page)
-    if not data:
-        return None, None, []
-    details = data.get("videoDetails") or {}
-    title = (details.get("title") or "").strip() or None
-    author = (details.get("author") or "").strip() or None
-    tracks = ((data.get("captions") or {}).get("playerCaptionsTracklistRenderer") or {}).get("captionTracks") or []
-    return title, author, [track for track in tracks if isinstance(track, dict)]
-
-
-def _player_response(page: str) -> dict | None:
-    start = page.find("ytInitialPlayerResponse")
-    if start < 0:
-        return None
-    brace = page.find("{", page.find("=", start))
-    if brace < 0:
-        return None
-    depth = 0
-    for index, char in enumerate(page[brace:], brace):
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                try:
-                    parsed = json.loads(page[brace : index + 1])
-                except json.JSONDecodeError:
-                    return None
-                return parsed if isinstance(parsed, dict) else None
-    return None
-
-
-def _preferred_track(tracks: list[dict]) -> dict:
-    def score(track: dict) -> tuple[int, int, str]:
-        lang = (track.get("languageCode") or "").lower()
-        asr = 1 if track.get("kind") == "asr" else 0
-        english = 0 if lang.startswith("en") else 1
-        return (asr, english, lang)
-
-    return sorted(tracks, key=score)[0]
 
 
 def _cues_from_json3(data: dict) -> list[tuple[float, str]]:
@@ -241,7 +149,7 @@ def _clean(text: str) -> str:
     return " ".join(plain.replace("\n", " ").split())
 
 
-def _ytdlp_info(url: str, download: bool) -> dict:
+def _ytdlp_info(url: str, download: bool, cookies_from_browser: str | None = None) -> dict:
     import yt_dlp
 
     options = {
@@ -249,6 +157,7 @@ def _ytdlp_info(url: str, download: bool) -> dict:
         "noplaylist": True,
         "quiet": True,
         "js_runtimes": {"node": {"path": "node"}},
+        **_browser_cookies(cookies_from_browser),
     }
     with yt_dlp.YoutubeDL(options) as ydl:
         info = ydl.extract_info(url, download=download)
@@ -278,20 +187,20 @@ def _caption_language(info: dict) -> str | None:
     return None
 
 
-def _download_cues(url: str, language: str) -> list[tuple[float, str]]:
+def _download_cues(url: str, language: str, cookies_from_browser: str | None = None) -> list[tuple[float, str]]:
     import tempfile
     from pathlib import Path
 
     with tempfile.TemporaryDirectory() as tmp:
         options_holder = Path(tmp)
-        _ytdlp_download(url, language, options_holder)
+        _ytdlp_download(url, language, options_holder, cookies_from_browser)
         files = sorted(options_holder.glob("*.vtt"))
         if not files:
             return []
         return cues_from_timedtext(files[0].read_text(encoding="utf-8"))
 
 
-def _ytdlp_download(url: str, language: str, directory) -> None:
+def _ytdlp_download(url: str, language: str, directory, cookies_from_browser: str | None = None) -> None:
     import yt_dlp
 
     options = {
@@ -304,9 +213,16 @@ def _ytdlp_download(url: str, language: str, directory) -> None:
         "subtitlesformat": "vtt",
         "outtmpl": str(directory / "%(id)s"),
         "js_runtimes": {"node": {"path": "node"}},
+        **_browser_cookies(cookies_from_browser),
     }
     with yt_dlp.YoutubeDL(options) as ydl:
         ydl.extract_info(url, download=True)
+
+
+def _browser_cookies(browser: str | None) -> dict:
+    if not browser:
+        return {}
+    return {"cookiesfrombrowser": (browser,)}
 
 
 def _package(

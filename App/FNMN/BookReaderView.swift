@@ -6,114 +6,43 @@ private enum BookText: Equatable {
     case failed(String)
 }
 
-private enum BookReaderDestination: String, Identifiable {
-    case outline
-    case settings
-    var id: String { rawValue }
-}
-
-private struct BookReaderState {
-    var text = BookText.loading
-    var scrollPiece: Int?
-    var trackedPiece: Int?
-    var destination: BookReaderDestination?
-}
-
-private enum BookReaderAction {
+private enum BookLoadAction {
     case loaded(String)
     case failed(String)
-    case scroll(Int?)
-    case visible(Int)
-    case present(BookReaderDestination)
-    case dismiss
 }
 
-private func reduce(_ state: BookReaderState, _ action: BookReaderAction) -> BookReaderState {
-    var state = state
+private func reduce(_ text: BookText, _ action: BookLoadAction) -> BookText {
     switch action {
-    case let .loaded(markdown):
-        state.text = .ready(markdown)
-    case let .failed(message):
-        state.text = .failed(message)
-    case let .scroll(piece):
-        state.scrollPiece = piece
-        if let piece { state.trackedPiece = piece }
-    case let .visible(piece):
-        state.trackedPiece = piece
-    case let .present(destination):
-        state.destination = destination
-    case .dismiss:
-        state.destination = nil
+    case let .loaded(markdown): .ready(markdown)
+    case let .failed(message): .failed(message)
     }
-    return state
 }
 
 struct BookReaderView: View {
     @Environment(LibraryModel.self) private var library
     let record: BookRecord
-    @State private var state = BookReaderState()
+    @State private var text = BookText.loading
 
     var body: some View {
         Group {
-            switch state.text {
+            switch text {
             case .loading:
                 ProgressView()
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open the book", systemImage: "book.closed", description: Text(message))
             case let .ready(markdown):
-                ReadingSession(
+                MaterialReader(
                     markdown: markdown,
                     file: { LibraryFile.bookFile(root: library.storageURL, directoryName: record.directoryName, path: $0) },
                     materialID: record.id,
                     title: record.metadata.title,
-                    piece: state.scrollPiece,
-                    onVisiblePiece: { index, count in send(.visible(index), count: count) }
+                    outline: outline(in: markdown),
+                    startPiece: startPiece(in: markdown)
                 )
-                .dynamicTypeSize(ReaderAppearance.typeSize)
-                .background(ReaderAppearance.background ?? Color.clear)
             }
         }
         .navigationTitle(record.metadata.title)
-        .toolbar {
-            Button("Sections", systemImage: "list.bullet.indent") { send(.present(.outline)) }
-                .disabled(!bookIsOpen)
-            Button("Text", systemImage: "gearshape") { send(.present(.settings)) }
-        }
-        .sheet(item: destinationBinding) { destination in
-            switch destination {
-            case .outline:
-                NavigationStack {
-                    List(record.metadata.toc) { entry in
-                        Button {
-                            if case let .ready(markdown) = state.text, let piece = pieceIndex(forHeading: entry.ordinal, in: markdown) {
-                                send(.scroll(piece))
-                            }
-                            send(.dismiss)
-                        } label: {
-                            Text(entry.title).padding(.leading, CGFloat(max(0, entry.level - 1)) * 12)
-                        }
-                    }
-                    .navigationTitle("Sections")
-                }
-            case .settings:
-                ReaderSettingsForm()
-            }
-        }
         .task { await open() }
-    }
-
-    private var bookIsOpen: Bool {
-        if case .ready = state.text { return true }
-        return false
-    }
-
-    private var destinationBinding: Binding<BookReaderDestination?> {
-        Binding(
-            get: { state.destination },
-            set: { destination in
-                if let destination { send(.present(destination)) } else { send(.dismiss) }
-            }
-        )
     }
 
     private func open() async {
@@ -122,29 +51,24 @@ struct BookReaderView: View {
         let contentFile = record.metadata.contentFile
         do {
             let markdown = try await LibraryFile(url: storage).bookText(directoryName: directoryName, contentFile: contentFile)
-            send(.loaded(markdown))
-            if let position = library.snapshot.positions[record.id] {
-                if let piece = position.pieceIndex {
-                    send(.scroll(piece))
-                } else if let heading = BookCatalog.headingID(in: position), let piece = pieceIndex(forHeading: heading, in: markdown) {
-                    send(.scroll(piece))
-                }
-            }
+            text = reduce(text, .loaded(markdown))
         } catch {
-            send(.failed(error.localizedDescription))
+            text = reduce(text, .failed(error.localizedDescription))
         }
     }
 
-    private func pieceIndex(forHeading ordinal: Int, in markdown: String) -> Int? {
-        ArticleBody.headingOrdinals(in: ArticleBody.pieces(in: markdown)).firstIndex(of: ordinal)
+    private func outline(in markdown: String) -> [OutlineEntry] {
+        let ordinals = ArticleBody.headingOrdinals(in: ArticleBody.pieces(in: markdown))
+        return record.metadata.toc.compactMap { entry in
+            guard let piece = ordinals.firstIndex(where: { $0 == entry.ordinal }) else { return nil }
+            return OutlineEntry(piece: piece, level: entry.level, title: entry.title)
+        }
     }
 
-    private func send(_ action: BookReaderAction, count: Int? = nil) {
-        let previous = state.trackedPiece
-        state = reduce(state, action)
-        guard case let .visible(index) = action, index != previous else { return }
-        let total = count ?? 0
-        let progress = total == 0 ? 0 : Double(index + 1) / Double(total)
-        Task { await library.save(position: .piece(index), materialID: record.id, progress: progress) }
+    private func startPiece(in markdown: String) -> Int? {
+        guard let position = library.snapshot.positions[record.id] else { return nil }
+        if let piece = position.pieceIndex { return piece }
+        guard let heading = BookCatalog.headingID(in: position) else { return nil }
+        return ArticleBody.headingOrdinals(in: ArticleBody.pieces(in: markdown)).firstIndex { $0 == heading }
     }
 }

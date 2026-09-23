@@ -5,7 +5,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var books: [BookRecord] = []
     public var positions: [String: ReadingPosition] = [:]
     public var readings: [String: MaterialReading] = [:]
-    public var notes: [Note] = []
     public var folders: [String] = []
     public var placements: [String: [String]] = [:]
     public var highlights: [Highlight] = []
@@ -97,26 +96,10 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         }
     }
 
-    public mutating func foldLegacyNotes() -> Bool {
-        guard !notes.isEmpty else { return false }
-        for note in notes where !highlights.contains(where: { $0.id == note.id }) {
-            let piece: Int
-            if let blockID = note.blockID, blockID.hasPrefix("piece:"), let index = Int(blockID.dropFirst(6)) {
-                piece = index
-            } else {
-                piece = 0
-            }
-            highlights.append(
-                Highlight(id: note.id, materialID: note.materialID, piece: piece, quote: "", caption: note.text, mark: nil)
-            )
-        }
-        notes = []
-        return true
-    }
-
     public mutating func importPackage(_ package: ImportPackage) throws {
         guard package.version == 1 else { throw LibraryError.unsupportedVersion(package.version) }
-        guard !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
+        let hasBody = !(package.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasBody || !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
         let prior = folderNames(for: package.material.id)
         let merged = Array(Set(prior + package.folders)).sorted()
         if let existing = packages.first(where: { $0.material.id == package.material.id }),
@@ -282,11 +265,11 @@ public actor LibraryFile {
         try recoverReplacedItem(named: "runtime")
         var snapshot = LibrarySnapshot()
         var stateIncludesPackages = false
+        var legacyNotes: [Note] = []
         let stateURL = directory.appending(path: "state.json")
         if FileManager.default.fileExists(atPath: stateURL.path) {
             let state = try decoder.decode(UserState.self, from: Data(contentsOf: stateURL))
             snapshot.positions = state.positions
-            snapshot.notes = state.notes
             snapshot.folders = state.folders
             snapshot.readings = state.readings
             snapshot.books = state.books
@@ -294,6 +277,7 @@ public actor LibraryFile {
             snapshot.highlights = state.highlights
             snapshot.archived = state.archived
             snapshot.articleRevisions = state.articleRevisions
+            legacyNotes = state.notes
             stateIncludesPackages = !state.readPackageFiles
             if stateIncludesPackages {
                 snapshot.packages = state.packages ?? []
@@ -307,7 +291,7 @@ public actor LibraryFile {
         try sweepUnreferencedBooks(snapshot)
         try sweepArticleRevisions(snapshot)
         snapshot.adoptPackageFolders()
-        if snapshot.foldLegacyNotes() {
+        if absorbLegacyNotes(legacyNotes, into: &snapshot) {
             try saveState(snapshot)
         }
         return snapshot
@@ -410,7 +394,7 @@ public actor LibraryFile {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let state = UserState(
             positions: snapshot.positions,
-            notes: snapshot.notes,
+            notes: [],
             folders: snapshot.folders,
             readings: snapshot.readings,
             books: snapshot.books,
@@ -466,6 +450,22 @@ public actor LibraryFile {
         let folder = Self.articleDirectory(root: directory, materialID: materialID).appending(path: revision)
         guard FileManager.default.fileExists(atPath: folder.path) else { return }
         try FileManager.default.removeItem(at: folder)
+    }
+
+    private func absorbLegacyNotes(_ notes: [Note], into snapshot: inout LibrarySnapshot) -> Bool {
+        guard !notes.isEmpty else { return false }
+        for note in notes where !snapshot.highlights.contains(where: { $0.id == note.id }) {
+            let piece: Int
+            if let blockID = note.blockID, blockID.hasPrefix("piece:"), let index = Int(blockID.dropFirst(6)) {
+                piece = index
+            } else {
+                piece = 0
+            }
+            snapshot.highlights.append(
+                Highlight(id: note.id, materialID: note.materialID, piece: piece, quote: "", caption: note.text, mark: nil)
+            )
+        }
+        return true
     }
 
     private func readLegacyPackages() -> [ImportPackage] {

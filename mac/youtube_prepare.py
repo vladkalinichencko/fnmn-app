@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
-import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
+from adapter_youtube import youtube_package_live
 from fnmn_service import stable_id
 
 
@@ -35,51 +34,16 @@ def prepare(input_path: Path, output_directory: Path, cookies_from_browser: str 
     urls = input_urls(input_path)
     if not urls:
         raise ValueError("input contains no YouTube URLs")
+    output_directory.mkdir(parents=True, exist_ok=True)
+    count = 0
     for url in urls:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
             raise ValueError(f"unsupported YouTube URL: {url}")
-    with tempfile.NamedTemporaryFile("w", delete=False) as batch:
-        batch.write("\n".join(urls))
-        batch_path = batch.name
-    command = ["yt-dlp", "--batch-file", batch_path, "--flat-playlist", "--dump-json", "--skip-download"]
-    if cookies_from_browser:
-        command.extend(["--cookies-from-browser", cookies_from_browser])
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)
-    output_directory.mkdir(parents=True, exist_ok=True)
-    count = 0
-    assert process.stdout is not None
-    for line in process.stdout:
-        metadata = json.loads(line)
-        video_id = metadata.get("id")
-        if not video_id:
-            continue
-        source_url = f"https://www.youtube.com/watch?v={video_id}"
-        package = {
-            "version": 1,
-            "material": {
-                "id": f"youtube:{video_id}",
-                "kind": "video",
-                "title": metadata.get("title") or video_id,
-                "sourceURL": source_url,
-                "byline": metadata.get("channel") or metadata.get("uploader"),
-            },
-            "sections": [{"id": "video", "parentID": None, "title": metadata.get("title") or video_id, "level": 1, "firstBlockID": "video"}],
-            "blocks": [{
-                "id": "video",
-                "sectionID": "video",
-                "kind": "video",
-                "html": "",
-                "sourceFragment": None,
-                "mediaURL": f"https://www.youtube.com/embed/{video_id}?enablejsapi=1",
-                "startSeconds": 0.0,
-            }],
-            "folders": [input_path.stem],
-        }
+        package = youtube_package_live(url, [input_path.stem], cookies_from_browser=cookies_from_browser)
+        video_id = package["material"]["id"].removeprefix("youtube:")
         (output_directory / f"{stable_id('youtube', video_id).replace(':', '-')}.json").write_text(json.dumps(package, ensure_ascii=False, indent=2))
         count += 1
-    if process.wait() != 0:
-        raise RuntimeError("yt-dlp failed; no account or cookies were accessed unless --cookies-from-browser was explicitly supplied")
     return count
 
 
