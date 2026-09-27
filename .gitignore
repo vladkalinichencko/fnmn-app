@@ -6,3 +6,7 @@ __pycache__/
 .DS_Store
 cookies.txt
 watchlater.txt
+playlists.csv
+unavailable-titled-by-playlist.txt
+playlist-picker.html
+.swiftpm/

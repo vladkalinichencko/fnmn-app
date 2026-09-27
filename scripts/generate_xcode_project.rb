@@ -11,7 +11,6 @@ target.build_configurations.each do |config|
   config.build_settings["GENERATE_INFOPLIST_FILE"] = "YES"
   config.build_settings["INFOPLIST_KEY_UILaunchScreen_Generation"] = "YES"
   config.build_settings["TARGETED_DEVICE_FAMILY"] = "1,2"
-  config.build_settings["CODE_SIGNING_ALLOWED"] = "NO"
 end
 
 group = project.main_group.new_group("Sources")

@@ -134,8 +134,10 @@ PDF-книга уже имеет проверенный внешний форм�
 | Плейлисты YouTube | Обычные пользовательские плейлисты доступны через API с авторизацией. [Метод](https://developers.google.com/youtube/v3/docs/playlists/list). |
 | Watch Later | Data API не предоставляет список. Нужен отдельно проверенный путь получения. [Ограничение](https://developers.google.com/youtube/v3/docs/playlistItems/list). |
 | Транскрипты | Официальный `captions.download` требует права редактирования видео. Чужое видео читает Mac через yt-dlp и `yt-dlp-ejs` 0.8.0. На «Me at the zoo» пришли английские реплики со временем. |
-| Safari Reading List | Публичный API описывает добавление, но не перечисление. Локальный формат и разрешения нужно проверить. [SSReadingList](https://developer.apple.com/documentation/safariservices/ssreadinglist). |
-| Вкладки | Расширения дают поддерживаемый путь. Возможность первого скрипта проверяется для конкретного браузера. [Safari](https://developer.apple.com/documentation/safariservices/sfsafariwindow), [Chrome](https://developer.chrome.com/docs/extensions/reference/api/tabs). |
+| Safari Reading List | `~/Library/Safari/Bookmarks.plist`, узел `com.apple.ReadingList`; локальное чтение проверено на 272 ссылках. Экспорт: [`mac/browser_links_export.py`](../mac/browser_links_export.py). [SSReadingList](https://developer.apple.com/documentation/safariservices/ssreadinglist). |
+| Dia bookmarks | `~/Library/Application Support/Dia/User Data/Profile */Bookmarks` содержит JSON с папками. Имена профилей берутся из `Local State`. [`browser_library.py`](../mac/browser_library.py) берёт `Study/Theory Sources`, `Study/Theory Videos` и `Personal/UX/UI` один раз, так как Dia синхронизирует дерево между профилями. Итог объединяет одинаковые URL и сохраняет все места в `saved_in`. |
+| Вкладки и группы Dia | `tabs.db` и `live_data_database.db` в профилях не открываются как обычная SQLite база. Файловый экспорт групп пока не подтверждён. |
+| Вкладки других браузеров | Расширения дают поддерживаемый путь. Возможность первого скрипта проверяется для конкретного браузера. [Safari](https://developer.apple.com/documentation/safariservices/sfsafariwindow), [Chrome](https://developer.chrome.com/docs/extensions/reference/api/tabs). |
 
 Скрипты читают исходные подборки, сохраняя их без изменений. Передача первого обработанного пакета через системный импорт файла предлагается как первый проверяемый путь; автоматическая передача определяется следующим шагом.
 
@@ -162,7 +164,7 @@ PDF-книга уже имеет проверенный внешний форм�
 ## Открытые решения
 
 - VPS публикует постоянный HTTPS-адрес, nginx передаёт `/api/*` во внутренний reverse SSH forward, а Mac хранит данные и выполняет обработку. Нужно подтвердить, доступна ли управляемая DNS-зона; иначе проверить автоматическое обновление публичного IP-сертификата VPS. Контракт аутентификации, запросов, статусов и лимитов файлов фиксируется перед реализацией. [Проверка транспорта](research/vps-relay.md).
-- Установлены Xcode 27.0, iOS SDK 27.0 и Swift 6.4. Сборка и тесты выполняются для выбранной версии 27.
+- Установлены Xcode 27.0, iOS SDK 27.0 и Swift 6.4. Сборка и тесты выполняются для выбранной версии 27. Проект телефона — `App/FNMN.xcodeproj`; для установки на устройство в Signing & Capabilities выбери свою Team для FNMN, Share и Activity.
 - Качество встроенного YouTube не переключается: IFrame больше не применяет выбранный уровень. Переключателя нет. Пропуск рекламы не исследован.
 - Проверить извлечение arXiv из LaTeX с изображениями и формулами, а DjVu — из текстового слоя либо через OCR для сканов.
 - Уточнить «TypeSafe Jev API», способ классификации и применение Foundation Models, Core ML или Core AI к конкретным операциям.

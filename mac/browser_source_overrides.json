@@ -1,0 +1,1693 @@
+{
+  "https://lesswrong.com/": {"source_url": "https://lesswrong.com/", "source_name": "LessWrong", "kind": "publication"},
+  "https://blog.samaltman.com/": {"source_url": "https://blog.samaltman.com/", "source_name": "Sam Altman · Blog", "kind": "personal_blog"},
+  "https://distill.pub/": {"source_url": "https://distill.pub/", "source_name": "Distill", "kind": "publication"},
+  "https://inkandswitch.com/": {"source_url": "https://inkandswitch.com/", "source_name": "Ink & Switch", "kind": "project"},
+  "https://habr.com/ru/articles/719692": {
+    "source_url": "https://habr.com/ru/users/postupashki/publications/articles",
+    "source_name": "Habr · @postupashki",
+    "kind": "author"
+  },
+  "https://22century.ru/biology-and-biotechnology/120552": {
+    "source_url": "https://22century.ru/",
+    "source_name": "22century · Биология и биотехнологии",
+    "kind": "publication"
+  },
+  "https://adgefficiency.com/world-models": {
+    "source_url": "https://adgefficiency.com/",
+    "source_name": "Adg Efficiency",
+    "kind": "personal_blog"
+  },
+  "https://adriancourreges.com/blog": {
+    "source_url": "https://adriancourreges.com/blog",
+    "source_name": "Adrian Courrèges · Blog",
+    "kind": "personal_blog"
+  },
+  "https://ailev.livejournal.com/1197148.html": {
+    "source_url": "https://ailev.livejournal.com/",
+    "source_name": "Александр Ильин · LiveJournal",
+    "kind": "author"
+  },
+  "https://ailev.livejournal.com/1723726.html": {
+    "source_url": "https://ailev.livejournal.com/",
+    "source_name": "Александр Ильин · LiveJournal",
+    "kind": "author"
+  },
+  "https://alechelbling.com/UnderstandingIsomap": {
+    "source_url": "https://alechelbling.com/",
+    "source_name": "Alec Helbling",
+    "kind": "personal_blog"
+  },
+  "https://alexirpan.com/page13": {
+    "source_url": "https://alexirpan.com/",
+    "source_name": "Alex Irpan",
+    "kind": "personal_blog"
+  },
+  "https://alexirpan.com/2018/02/14/rl-hard.html": {
+    "source_url": "https://alexirpan.com/",
+    "source_name": "Alex Irpan",
+    "kind": "personal_blog"
+  },
+  "https://alignmentforum.org/posts/eJGptPbbFPZGLpjsp/highly-opinionated-advice-on-how-to-write-ml-papers": {
+    "source_url": "https://alignmentforum.org/",
+    "source_name": "AI Alignment Forum",
+    "kind": "publication"
+  },
+  "https://altshuller.ru/triz/triz38.asp": {
+    "source_url": "https://altshuller.ru/",
+    "source_name": "Альтшуллер.ру · ТРИЗ",
+    "kind": "publication"
+  },
+  "https://analyticsindiamag.com/ai-origins-evolution/why-everyones-going-gaga-over-togetherai": {
+    "source_url": "https://analyticsindiamag.com/",
+    "source_name": "Analytics India Magazine",
+    "kind": "publication"
+  },
+  "https://andrewkchan.dev/posts/yalm.html": {
+    "source_url": "https://andrewkchan.dev/",
+    "source_name": "Andrew K. Chan",
+    "kind": "personal_blog"
+  },
+  "https://anthropic.com/research/building-effective-agents": {
+    "source_url": "https://www.anthropic.com/research",
+    "source_name": "Anthropic Research",
+    "kind": "company_blog"
+  },
+  "https://archive.org/details/CC501_hypercard": {
+    "source_url": "https://archive.org/details/CC501_hypercard",
+    "source_name": "HyperCard",
+    "kind": "archive_item"
+  },
+  "https://archive.org/details/xeroxstaruserinterface19822of2": {
+    "source_url": "https://archive.org/details/xeroxstaruserinterface19822of2",
+    "source_name": "Xerox Star User Interface (1982), part 2",
+    "kind": "archive_item"
+  },
+  "https://archive.ph/xylH8": {
+    "material_url": "https://www.nytimes.com/2024/09/21/technology/jony-ive-apple-lovefrom.html",
+    "source_url": "https://www.nytimes.com/section/technology",
+    "source_name": "The New York Times · Technology",
+    "kind": "publication"
+  },
+  "https://archive.ph/2024.09.22-113321/https://www.nytimes.com/2024/09/21/technology/jony-ive-apple-lovefrom.html": {
+    "material_url": "https://www.nytimes.com/2024/09/21/technology/jony-ive-apple-lovefrom.html",
+    "source_url": "https://www.nytimes.com/section/technology",
+    "source_name": "The New York Times · Technology",
+    "kind": "publication"
+  },
+  "https://arenaphysica.com/publications/dji-teardown": {
+    "source_url": "https://arenaphysica.com/publications",
+    "source_name": "Arena Physica · Publications",
+    "kind": "publication"
+  },
+  "https://astro-eric.github.io/blogs/surjective": {
+    "source_url": "https://astro-eric.github.io/blogs/",
+    "source_name": "Eric J. Astro · Blog",
+    "kind": "personal_blog"
+  },
+  "https://awdee.ru/podruzhit-tekst-s-kartinkoj": {
+    "source_url": "https://awdee.ru/",
+    "source_name": "Awdee · Дизайн и технологии",
+    "kind": "publication"
+  },
+  "https://awdee.ru/grids-and-key-shapes": {
+    "source_url": "https://awdee.ru/",
+    "source_name": "Awdee · Дизайн и технологии",
+    "kind": "publication"
+  },
+  "https://azlen.me/gallery": {
+    "source_url": "https://azlen.me/",
+    "source_name": "Azlen’s site",
+    "kind": "personal_blog"
+  },
+  "https://baku89.com/": {
+    "source_url": "https://baku89.com/",
+    "source_name": "Baku89",
+    "kind": "personal_blog"
+  },
+  "https://basovphoto.ru/10-printsipov-videomontazha": {
+    "source_url": "https://basovphoto.ru/",
+    "source_name": "Басов Photo",
+    "kind": "personal_blog"
+  },
+  "https://benji.org/family-values": {
+    "source_url": "https://benji.org/",
+    "source_name": "Benji Smith",
+    "kind": "personal_blog"
+  },
+  "https://blog.dshr.org/2021/03/history-of-window-systems.html": {
+    "source_url": "https://blog.dshr.org/",
+    "source_name": "David S. H. Rosenthal · DSHR's Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.ezyang.com/2019/05/pytorch-internals": {
+    "source_url": "https://blog.ezyang.com/",
+    "source_name": "Edward Z. Yang · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.floatingpragma.io/agi_at_home": {
+    "source_url": "https://blog.floatingpragma.io/",
+    "source_name": "Floating Pragma",
+    "kind": "personal_blog"
+  },
+  "https://blog.gregbrockman.com/": {
+    "source_url": "https://blog.gregbrockman.com/",
+    "source_name": "Greg Brockman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.junkato.jp/ja/posts/2024-12-14-exsitu-visiting-scientist": {
+    "source_url": "https://blog.junkato.jp/",
+    "source_name": "Junkato · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.mainfra.me/p/agent-clouds": {
+    "source_url": "https://blog.mainfra.me/",
+    "source_name": "Mainframe · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.maximeheckel.com/posts/shading-motion": {
+    "source_url": "https://blog.maximeheckel.com/",
+    "source_name": "Maxime Heckel · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.research.google/2018/01/the-google-brain-team-looking-back-on.html": {
+    "source_url": "https://blog.research.google/",
+    "source_name": "Google Research Blog",
+    "kind": "company_blog"
+  },
+  "https://blog.samaltman.com/greg": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.samaltman.com/archive": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.samaltman.com/the-days-are-long-but-the-decades-are-short": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.samaltman.com/ai": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.samaltman.com/what-happened-to-innovation-1": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.samaltman.com/successful-people": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.samaltman.com/?page=11": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.samaltman.com/how-to-be-successful": {
+    "source_url": "https://blog.samaltman.com/",
+    "source_name": "Sam Altman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://blog.superhuman.com/how-to-build-a-remarkable-command-palette": {
+    "source_url": "https://blog.superhuman.com/",
+    "source_name": "Superhuman Blog",
+    "kind": "company_blog"
+  },
+  "https://builtformars.com/case-studies/headspace": {
+    "source_url": "https://builtformars.com/",
+    "source_name": "Built for Mars",
+    "kind": "personal_blog"
+  },
+  "http://catb.org/~esr/writings/taouu/html/ch02s05.html": {
+    "source_url": "http://catb.org/~esr/",
+    "source_name": "Eric S. Raymond · writings",
+    "kind": "author"
+  },
+  "https://centralflows.github.io/": {
+    "source_url": "https://centralflows.github.io/",
+    "source_name": "Central Flows",
+    "kind": "personal_blog"
+  },
+  "https://chatgpt.com/c/67a0b5bb-3f34-8002-92b4-c64efb4c1a94": {
+    "source_url": "https://chatgpt.com/c/67a0b5bb-3f34-8002-92b4-c64efb4c1a94",
+    "source_name": "Russian Research Ideas Expansion",
+    "kind": "conversation"
+  },
+  "https://chenyang.co/research.html": {
+    "source_url": "https://chenyang.co/research.html",
+    "source_name": "Chenyang · Research",
+    "kind": "author"
+  },
+  "https://chrbutler.com/understanding-the-eye-mind-connection": {
+    "source_url": "https://chrbutler.com/",
+    "source_name": "Chris Butler",
+    "kind": "personal_blog"
+  },
+  "https://ciechanow.ski/": {
+    "source_url": "https://ciechanow.ski/",
+    "source_name": "Bartosz Ciechanowski",
+    "kind": "personal_blog"
+  },
+  "https://colah.github.io/posts/2015-09-Visual-Information": {
+    "source_url": "https://colah.github.io/",
+    "source_name": "Chris Olah",
+    "kind": "author"
+  },
+  "https://coreauto.com/blog/how-our-data-shaped-neural-architecture-discovery-and-how-automation-can-reshape-the-future": {
+    "source_url": "https://coreauto.com/blog/",
+    "source_name": "Core Auto · Blog",
+    "kind": "company_blog"
+  },
+  "https://crisostomi.github.io/blog/2025/model_merging": {
+    "source_url": "https://crisostomi.github.io/blog/",
+    "source_name": "Crisostomi · Blog",
+    "kind": "personal_blog"
+  },
+  "https://cs.virginia.edu/~robins/YouAndYourResearch.html": {
+    "source_url": "https://cs.virginia.edu/~robins/",
+    "source_name": "Robert L. Robbins · UVA",
+    "kind": "author"
+  },
+  "https://darioamodei.com/machines-of-loving-grace": {
+    "source_url": "https://darioamodei.com/",
+    "source_name": "Dario Amodei",
+    "kind": "author"
+  },
+  "https://datasecrets.ru/articles/20": {
+    "source_url": "https://datasecrets.ru/",
+    "source_name": "Data Secrets",
+    "kind": "publication"
+  },
+  "https://datasecrets.ru/articles/19": {
+    "source_url": "https://datasecrets.ru/",
+    "source_name": "Data Secrets",
+    "kind": "publication"
+  },
+  "https://datasecrets.ru/news/34": {
+    "source_url": "https://datasecrets.ru/",
+    "source_name": "Data Secrets",
+    "kind": "publication"
+  },
+  "https://datasecrets.ru/news/33": {
+    "source_url": "https://datasecrets.ru/",
+    "source_name": "Data Secrets",
+    "kind": "publication"
+  },
+  "https://datasecrets.ru/articles/11": {
+    "source_url": "https://datasecrets.ru/",
+    "source_name": "Data Secrets",
+    "kind": "publication"
+  },
+  "https://datasecrets.ru/articles/9": {
+    "source_url": "https://datasecrets.ru/",
+    "source_name": "Data Secrets",
+    "kind": "publication"
+  },
+  "https://datasecrets.ru/articles/10": {
+    "source_url": "https://datasecrets.ru/",
+    "source_name": "Data Secrets",
+    "kind": "publication"
+  },
+  "https://dbreunig.com/2025/07/31/how-kimi-rl-ed-qualitative-data-to-write-better.html": {
+    "source_url": "https://dbreunig.com/",
+    "source_name": "Dan Breunig",
+    "kind": "personal_blog"
+  },
+  "https://dbreunig.com/2025/08/01/does-the-bitter-lesson-have-limits.html": {
+    "source_url": "https://dbreunig.com/",
+    "source_name": "Dan Breunig",
+    "kind": "personal_blog"
+  },
+  "https://dbreunig.com/2025/07/30/how-kimi-was-post-trained-for-tool-use.html": {
+    "source_url": "https://dbreunig.com/",
+    "source_name": "Dan Breunig",
+    "kind": "personal_blog"
+  },
+  "https://dbreunig.com/2024/12/05/why-llms-are-hitting-a-wall.html": {
+    "source_url": "https://dbreunig.com/",
+    "source_name": "Dan Breunig",
+    "kind": "personal_blog"
+  },
+  "https://deep-ml.com/articles/derivative-rules": {
+    "source_url": "https://deep-ml.com/articles",
+    "source_name": "Deep ML · Articles",
+    "kind": "course"
+  },
+  "https://deep-ml.com/articles/calculus-essentials-ml": {
+    "source_url": "https://deep-ml.com/articles",
+    "source_name": "Deep ML · Articles",
+    "kind": "course"
+  },
+  "https://deeplearning.ai/the-batch/issue-249": {
+    "source_url": "https://deeplearning.ai/the-batch/",
+    "source_name": "The Batch · DeepLearning.AI",
+    "kind": "company_blog"
+  },
+  "https://deepmind.google/blog/ai-pointer": {
+    "source_url": "https://deepmind.google/discover/blog/",
+    "source_name": "Google DeepMind Blog",
+    "kind": "company_blog"
+  },
+  "https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model": {
+    "source_url": "https://deepmind.google/discover/blog/",
+    "source_name": "Google DeepMind Blog",
+    "kind": "company_blog"
+  },
+  "https://diffusion.fyi/tutorials/fundamentals?ch=0": {
+    "source_url": "https://diffusion.fyi/tutorials/",
+    "source_name": "Diffusion · Tutorials",
+    "kind": "course"
+  },
+  "https://distill.pub/2021/understanding-gnns": {
+    "source_url": "https://distill.pub/",
+    "source_name": "Distill",
+    "kind": "publication"
+  },
+  "https://distill.pub/2021/gnn-intro": {
+    "source_url": "https://distill.pub/",
+    "source_name": "Distill",
+    "kind": "publication"
+  },
+  "https://djdumpling.github.io/2026/01/31/frontier_training.html": {
+    "source_url": "https://djdumpling.github.io/",
+    "source_name": "DJ Dumpling · Blog",
+    "kind": "personal_blog"
+  },
+  "https://dl.acm.org/doi/10.1145/3772363.3798460": {
+    "source_url": "https://dl.acm.org/",
+    "source_name": "ACM Digital Library",
+    "kind": "publication"
+  },
+  "https://dl.acm.org/doi/fullHtml/10.1145/3313831.3376204": {
+    "source_url": "https://dl.acm.org/",
+    "source_name": "ACM Digital Library",
+    "kind": "publication"
+  },
+  "https://dl.acm.org/doi/epdf/10.1145/332040.332473": {
+    "source_url": "https://dl.acm.org/",
+    "source_name": "ACM Digital Library",
+    "kind": "publication"
+  },
+  "https://docs.google.com/document/d/1OhhuBRXUetyVDWU5fYT3yHeuWKuBnba8g14ay2xTRmg/mobilebasic": {
+    "source_url": "https://docs.google.com/document/d/1OhhuBRXUetyVDWU5fYT3yHeuWKuBnba8g14ay2xTRmg/mobilebasic",
+    "source_name": "I have to bury my talent in yesterday",
+    "kind": "document"
+  },
+  "https://dsgners.ru/practicum/43856-kak-ustroen-rost-dizaynera-rasskazyivaet-art-direktor": {
+    "source_url": "https://dsgners.ru/",
+    "source_name": "Dsgners",
+    "kind": "publication"
+  },
+  "https://education.yandex.ru/handbook/ml/article/linear-models": {
+    "source_url": "https://education.yandex.ru/handbook/ml/",
+    "source_name": "Яндекс Учебник · ML",
+    "kind": "course"
+  },
+  "https://emilkowal.ski/ui/friction-as-a-feature": {
+    "source_url": "https://emilkowal.ski/",
+    "source_name": "Emil Kowalski",
+    "kind": "personal_blog"
+  },
+  "https://en.wikipedia.org/wiki/Neural_coding": {
+    "source_url": "https://en.wikipedia.org/",
+    "source_name": "Wikipedia",
+    "kind": "publication"
+  },
+  "https://en.wikipedia.org/wiki/Why_Most_Published_Research_Findings_Are_False": {
+    "source_url": "https://en.wikipedia.org/",
+    "source_name": "Wikipedia",
+    "kind": "publication"
+  },
+  "https://en.wikipedia.org/wiki/Hindmarsh%E2%80%93Rose_model": {
+    "source_url": "https://en.wikipedia.org/",
+    "source_name": "Wikipedia",
+    "kind": "publication"
+  },
+  "https://en.wikipedia.org/wiki/Neural_scaling_law": {
+    "source_url": "https://en.wikipedia.org/",
+    "source_name": "Wikipedia",
+    "kind": "publication"
+  },
+  "https://en.wikipedia.org/wiki/Zooming_user_interface": {
+    "source_url": "https://en.wikipedia.org/",
+    "source_name": "Wikipedia",
+    "kind": "publication"
+  },
+  "https://epoch.ai/gradient-updates/ai-progress-is-about-to-speed-up": {
+    "source_url": "https://epoch.ai/",
+    "source_name": "Epoch AI",
+    "kind": "publication"
+  },
+  "https://fatbobman.com/en/posts/taming-row-height-and-spacing-jumps": {
+    "source_url": "https://fatbobman.com/en/",
+    "source_name": "Fatbobman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://fmin.xyz/": {
+    "source_url": "https://fmin.xyz/",
+    "source_name": "Fmin",
+    "kind": "personal_blog"
+  },
+  "https://forbes.com/sites/charliefink/2024/03/14/adaptive-ais-stealthy-20-million-tavus-dev-platform-raises-18m": {
+    "source_url": "https://www.forbes.com/sites/charliefink/",
+    "source_name": "Charlie Fink · Forbes",
+    "kind": "author"
+  },
+  "https://glaze.app/pricing": {
+    "source_url": "https://glaze.app/",
+    "source_name": "Glaze",
+    "kind": "project"
+  },
+  "http://gombru.github.io/2018/05/23/cross_entropy_loss": {
+    "source_url": "http://gombru.github.io/",
+    "source_name": "Gombru · Blog",
+    "kind": "personal_blog"
+  },
+  "https://goodfire.ai/research/stories-in-space": {
+    "source_url": "https://goodfire.ai/research/",
+    "source_name": "Goodfire Research",
+    "kind": "company_blog"
+  },
+  "https://google.com/search?q=Cyberdog+from+opendoc+ui&newwindow=1&sca_esv=e0b0fddfa598641b&udm=2&biw=895&bih=821&sxsrf=APpeQnub2m4JeTrqHD930XCPKISNhypzCQ%3A1783103743538&ei=_wBIasG6IO_n5NoP4N7CkAc&ved=0ahUKEwiBtuyJk7eVAxXvM1kFHWCvEHIQ4dUDCBE&uact=5&oq=Cyberdog+from+opendoc+ui&gs_lp=Egtnd3Mtd2l6LWltZyIYQ3liZXJkb2cgZnJvbSBvcGVuZG9jIHVpSPYKUPwDWLMIcAF4AJABAJgB9QGgAfMEqgEFMC4yLjG4AQPIAQD4AQGYAgCgAgCYAwCIBgGSBwCgBySyBwC4BwDCBwDIBwCACAE&sclient=gws-wiz-img": {
+    "source_url": "https://google.com/search?q=Cyberdog+from+opendoc+ui&udm=2",
+    "source_name": "Google Images · Cyberdog from OpenDoc UI",
+    "kind": "search"
+  },
+  "https://handwiki.org/wiki/Software:Archy": {
+    "source_url": "https://handwiki.org/",
+    "source_name": "HandWiki",
+    "kind": "publication"
+  },
+  "https://handwiki.org/wiki/Zooming_user_interface": {
+    "source_url": "https://handwiki.org/",
+    "source_name": "HandWiki",
+    "kind": "publication"
+  },
+  "https://hanseungwook.github.io/blog/nca-pre-pre-training": {
+    "source_url": "https://hanseungwook.github.io/blog/",
+    "source_name": "Han Seung-Wook · Blog",
+    "kind": "personal_blog"
+  },
+  "https://hudsandguis.com/fui-media": {
+    "source_url": "https://hudsandguis.com/",
+    "source_name": "HUDs+GUIs",
+    "kind": "personal_blog"
+  },
+  "https://huggingface.co/spaces/AlexWortega/borealis-blog": {
+    "source_url": "https://huggingface.co/spaces/AlexWortega/borealis-blog",
+    "source_name": "Borealis Blog",
+    "kind": "project"
+  },
+  "https://huggingface.co/spaces/nanotron/ultrascale-playbook?section=high-level_overview": {
+    "source_url": "https://huggingface.co/spaces/nanotron/ultrascale-playbook",
+    "source_name": "The Ultra-Scale Playbook",
+    "kind": "course"
+  },
+  "https://huggingface.co/spaces/HuggingFaceFW/blogpost-fineweb-v1": {
+    "source_url": "https://huggingface.co/spaces/HuggingFaceFW/blogpost-fineweb-v1",
+    "source_name": "FineWeb",
+    "kind": "project"
+  },
+  "https://hughbzhang.com/blog/rl-on-cot-gpt2-era.html": {
+    "source_url": "https://hughbzhang.com/blog/",
+    "source_name": "Hugh Zhang · Blog",
+    "kind": "personal_blog"
+  },
+  "https://huyenchip.com/blog": {
+    "source_url": "https://huyenchip.com/blog",
+    "source_name": "Chip Huyen · Blog",
+    "kind": "personal_blog"
+  },
+  "https://iliao2345.github.io/blog_posts/arc_agi_without_pretraining/arc_agi_without_pretraining.html": {
+    "source_url": "https://iliao2345.github.io/",
+    "source_name": "Ilya A. · Blog",
+    "kind": "personal_blog"
+  },
+  "https://imaginaryforces.com/project/minority-report": {
+    "source_url": "https://imaginaryforces.com/project/",
+    "source_name": "Imaginary Forces · Projects",
+    "kind": "project"
+  },
+  "https://inkandswitch.com/potluck": {
+    "source_url": "https://inkandswitch.com/",
+    "source_name": "Ink & Switch",
+    "kind": "project"
+  },
+  "https://inkandswitch.com/ink": {
+    "source_url": "https://inkandswitch.com/",
+    "source_name": "Ink & Switch",
+    "kind": "project"
+  },
+  "https://inkandswitch.com/universal-version-control": {
+    "source_url": "https://inkandswitch.com/",
+    "source_name": "Ink & Switch",
+    "kind": "project"
+  },
+  "https://inkandswitch.com/embark": {
+    "source_url": "https://inkandswitch.com/",
+    "source_name": "Ink & Switch",
+    "kind": "project"
+  },
+  "https://itsnicethat.com/features/designing-for-3-billion-how-instagram-built-a-brand-system-that-celebrates-everyones-point-of-view-partnership-170826": {
+    "source_url": "https://itsnicethat.com/features",
+    "source_name": "It’s Nice That · Features",
+    "kind": "publication"
+  },
+  "https://ivanzviahin.by/blog/all/watercheck": {
+    "source_url": "https://ivanzviahin.by/blog/all",
+    "source_name": "Ivan Zviahin · Blog",
+    "kind": "personal_blog"
+  },
+  "https://jacksonmowattgok.com/inside-neural-chameleon": {
+    "source_url": "https://jacksonmowattgok.com/",
+    "source_name": "Jackson Mowatt-Gok · Blog",
+    "kind": "personal_blog"
+  },
+  "https://jacksonpetty.org/ssm-illusion": {
+    "source_url": "https://jacksonpetty.org/",
+    "source_name": "Jackson Petty · Blog",
+    "kind": "personal_blog"
+  },
+  "https://jax-ml.github.io/scaling-book": {
+    "source_url": "https://jax-ml.github.io/scaling-book",
+    "source_name": "How to Scale Your Model",
+    "kind": "course"
+  },
+  "https://jaydenteoh.github.io/blog/2026/nextlat": {
+    "source_url": "https://jaydenteoh.github.io/blog/",
+    "source_name": "Jayden Teoh · Blog",
+    "kind": "personal_blog"
+  },
+  "https://jessylin.com/2025/10/20/continual-learning": {
+    "source_url": "https://jessylin.com/",
+    "source_name": "Jessy Lin · Blog",
+    "kind": "personal_blog"
+  },
+  "https://jnd.org/how-might-people-interact-with-agents": {
+    "source_url": "https://jnd.org/",
+    "source_name": "Don Norman · JND.org",
+    "kind": "personal_blog"
+  },
+  "https://joelsimon.net/lluminate": {
+    "source_url": "https://joelsimon.net/",
+    "source_name": "Joel Simon · Projects",
+    "kind": "project"
+  },
+  "https://joelsimon.net/beyond-slop": {
+    "source_url": "https://joelsimon.net/",
+    "source_name": "Joel Simon · Blog",
+    "kind": "personal_blog"
+  },
+  "https://joschu.net/blog/kl-approx.html": {
+    "source_url": "https://joschu.net/",
+    "source_name": "John Schulman · Blog",
+    "kind": "personal_blog"
+  },
+  "https://justinjay.wang/methods-for-random-gradients": {
+    "source_url": "https://justinjay.wang/",
+    "source_name": "Justin Jay Wang · Blog",
+    "kind": "personal_blog"
+  },
+  "https://karpathy.github.io/2019/04/25/recipe": {
+    "source_url": "https://karpathy.github.io/",
+    "source_name": "Andrej Karpathy · Blog",
+    "kind": "personal_blog"
+  },
+  "https://kindxiaoming.github.io/blog/2026/sparse-attention-2": {
+    "source_url": "https://kindxiaoming.github.io/blog/",
+    "source_name": "Ziming Liu · Blog",
+    "kind": "personal_blog"
+  },
+  "https://kinopoisk.ru/media/article/4011080": {
+    "source_url": "https://kinopoisk.ru/media/",
+    "source_name": "Кинопоиск · Статьи",
+    "kind": "publication"
+  },
+  "https://kvfrans.com/matrix-whitening": {
+    "source_url": "https://kvfrans.com/",
+    "source_name": "Kevin Frans · Blog",
+    "kind": "personal_blog"
+  },
+  "https://lawsofux.com/articles/2024/familiar-vs-novel": {
+    "source_url": "https://lawsofux.com/articles/",
+    "source_name": "Laws of UX · Articles",
+    "kind": "publication"
+  },
+  "https://lena-voita.github.io/nlp_course.html": {
+    "source_url": "https://lena-voita.github.io/nlp_course.html",
+    "source_name": "NLP Course · Lena Voita",
+    "kind": "course"
+  },
+  "https://lerandom.art/editorial/ian-goodfellow-on-inventing-gans": {
+    "source_url": "https://lerandom.art/editorial/",
+    "source_name": "Le Random · Editorial",
+    "kind": "publication"
+  },
+  "https://lesswrong.com/posts/Gn46SEKizaBxFzLN3/no-really-it-predicts-next-tokens": {
+    "source_url": "https://lesswrong.com/",
+    "source_name": "LessWrong",
+    "kind": "publication"
+  },
+  "https://lilianweng.github.io/": {
+    "source_url": "https://lilianweng.github.io/",
+    "source_name": "Lilian Weng · Blog",
+    "kind": "personal_blog"
+  },
+  "https://linear.app/blog/a-design-reset?noRedirect=1": {
+    "source_url": "https://linear.app/blog",
+    "source_name": "Linear · Blog",
+    "kind": "company_blog"
+  },
+  "https://linear.app/now/how-we-redesigned-the-linear-ui?noRedirect=1": {
+    "source_url": "https://linear.app/blog",
+    "source_name": "Linear · Blog",
+    "kind": "company_blog"
+  },
+  "https://lmnt.me/blog/dark-mode-app-icons.html": {
+    "source_url": "https://lmnt.me/blog/",
+    "source_name": "Lmnt · Blog",
+    "kind": "personal_blog"
+  },
+  "https://ludwigabap.com/on-comparing-yourself-to-brilliant-people": {
+    "source_url": "https://ludwigabap.com/",
+    "source_name": "Ludwig Abap · Blog",
+    "kind": "personal_blog"
+  },
+  "https://ma-lab-berkeley.github.io/deep-representation-learning-book": {
+    "source_url": "https://ma-lab-berkeley.github.io/deep-representation-learning-book",
+    "source_name": "Deep Representation Learning Book",
+    "kind": "course"
+  },
+  "https://main-horse.github.io/posts/visualizing-6d": {
+    "source_url": "https://main-horse.github.io/posts/",
+    "source_name": "Main Horse · Blog",
+    "kind": "personal_blog"
+  },
+  "https://makingsoftware.com/chapters/image-compression": {
+    "source_url": "https://makingsoftware.com/",
+    "source_name": "Making Software",
+    "kind": "publication"
+  },
+  "https://math.uci.edu/~rvershyn/teaching/hdp/hdp.html": {
+    "source_url": "https://math.uci.edu/~rvershyn/teaching/hdp/",
+    "source_name": "High-Dimensional Probability · Course",
+    "kind": "course"
+  },
+  "https://matthewstrom.com/writing/ui-density": {
+    "source_url": "https://matthewstrom.com/writing/",
+    "source_name": "Matthew Ström · Writing",
+    "kind": "personal_blog"
+  },
+  "https://matthewstrom.com/writing/the-polish-paradox": {
+    "source_url": "https://matthewstrom.com/writing/",
+    "source_name": "Matthew Ström · Writing",
+    "kind": "personal_blog"
+  },
+  "https://melies.co/cinematic-techniques": {
+    "source_url": "https://melies.co/",
+    "source_name": "Melies · Projects",
+    "kind": "project"
+  },
+  "https://michaelnielsen.org/blog/principles-of-effective-research": {
+    "source_url": "https://michaelnielsen.org/blog/",
+    "source_name": "Michael Nielsen · Blog",
+    "kind": "personal_blog"
+  },
+  "https://minds.md/zakirullin/cognitive": {
+    "source_url": "https://minds.md/zakirullin",
+    "source_name": "Zakir Ullin · Minds.md",
+    "kind": "author"
+  },
+  "https://miniswift.run/": {
+    "source_url": "https://miniswift.run/",
+    "source_name": "MiniSwift",
+    "kind": "project"
+  },
+  "https://minjunes.ai/posts/sleep/index.html": {
+    "source_url": "https://minjunes.ai/posts/",
+    "source_name": "Minjun Kim · Posts",
+    "kind": "personal_blog"
+  },
+  "https://ml-jku.github.io/hopfield-layers": {
+    "source_url": "https://ml-jku.github.io/",
+    "source_name": "Machine Learning Group · JKU",
+    "kind": "project"
+  },
+  "https://mrinalxdev.github.io/mrinalxblogs/blogs/system-design.html": {
+    "source_url": "https://mrinalxdev.github.io/mrinalxblogs/blogs/",
+    "source_name": "Mrinal · Blog",
+    "kind": "personal_blog"
+  },
+  "https://nature.com/articles/d41586-025-00527-z": {
+    "source_url": "https://nature.com/",
+    "source_name": "Nature · News",
+    "kind": "publication"
+  },
+  "https://nebius.com/blog/posts/model-pre-training/transformer-alternatives-2024": {
+    "source_url": "https://nebius.com/blog/",
+    "source_name": "Nebius · Blog",
+    "kind": "company_blog"
+  },
+  "https://news.berkeley.edu/2025/08/27/are-we-truly-on-the-verge-of-the-humanoid-robot-revolution": {
+    "source_url": "https://news.berkeley.edu/",
+    "source_name": "Berkeley News",
+    "kind": "publication"
+  },
+  "https://news.ycombinator.com/item?id=40543854": {
+    "source_url": "https://news.ycombinator.com/",
+    "source_name": "Hacker News",
+    "kind": "publication"
+  },
+  "https://newsletter.maartengrootendorst.com/p/a-visual-guide-to-mamba-and-state": {
+    "source_url": "https://newsletter.maartengrootendorst.com/",
+    "source_name": "Maarten Grootendorst · Newsletter",
+    "kind": "author"
+  },
+  "https://newyorker.com/magazine/2023/08/28/elon-musks-shadow-rule": {
+    "source_url": "https://newyorker.com/magazine/",
+    "source_name": "The New Yorker · Magazine",
+    "kind": "publication"
+  },
+  "https://nianticspatial.com/blog/geometrically-accurate-reconstruction?hss_channel=tw-631577690": {
+    "source_url": "https://nianticspatial.com/blog/",
+    "source_name": "Niantic Spatial · Blog",
+    "kind": "company_blog"
+  },
+  "https://nicholas.carlini.com/writing": {
+    "source_url": "https://nicholas.carlini.com/writing",
+    "source_name": "Nicholas Carlini · Writing",
+    "kind": "author"
+  },
+  "https://nngroup.com/articles/author/jakob-nielsen": {
+    "source_url": "https://nngroup.com/articles/author/jakob-nielsen",
+    "source_name": "NN/g · Jakob Nielsen",
+    "kind": "author"
+  },
+  "https://nngroup.com/articles/ten-usability-heuristics": {
+    "source_url": "https://nngroup.com/articles/",
+    "source_name": "Nielsen Norman Group · Articles",
+    "kind": "publication"
+  },
+  "https://nousresearch.com/the-instruct-monomyth": {
+    "source_url": "https://nousresearch.com/",
+    "source_name": "Nous Research",
+    "kind": "company_blog"
+  },
+  "https://oneusefulthing.org/p/setting-time-on-fire-and-the-temptation": {
+    "source_url": "https://oneusefulthing.org/",
+    "source_name": "One Useful Thing · Ethan Mollick",
+    "kind": "personal_blog"
+  },
+  "https://openai.com/index/chatgpt-memory-dreaming": {
+    "source_url": "https://openai.com/index/",
+    "source_name": "OpenAI · Research and News",
+    "kind": "company_blog"
+  },
+  "https://p9f.org/about.html": {
+    "source_url": "https://p9f.org/",
+    "source_name": "Plan 9 from Bell Labs",
+    "kind": "project"
+  },
+  "https://parkerortolani.blog/2025/04/16/jony-ive-laurene-powell-jobs.html": {
+    "source_url": "https://parkerortolani.blog/",
+    "source_name": "Parker Ortolani · Blog",
+    "kind": "personal_blog"
+  },
+  "https://patentlyapple.com/2024/09/gurman-meta-unveiled-a-flurry-of-new-technologies-this-week-which-underscored-the-idea-that-apple-is-on-the-wrong-track.html": {
+    "source_url": "https://patentlyapple.com/",
+    "source_name": "Patently Apple",
+    "kind": "publication"
+  },
+  "https://patentlyapple.com/2023/06/back-to-the-future-apple-has-updated-their-original-vision-of-a-3d-version-of-macos.html": {
+    "source_url": "https://patentlyapple.com/",
+    "source_name": "Patently Apple",
+    "kind": "publication"
+  },
+  "https://paulgraham.com/hs.html": {
+    "source_url": "https://paulgraham.com/articles.html",
+    "source_name": "Paul Graham · Essays",
+    "kind": "personal_blog"
+  },
+  "https://paulgraham.com/earn.html": {
+    "source_url": "https://paulgraham.com/articles.html",
+    "source_name": "Paul Graham · Essays",
+    "kind": "personal_blog"
+  },
+  "https://paulgraham.com/articles.html": {
+    "source_url": "https://paulgraham.com/articles.html",
+    "source_name": "Paul Graham · Essays",
+    "kind": "personal_blog"
+  },
+  "https://paulgraham.com/greatwork.html": {
+    "source_url": "https://paulgraham.com/articles.html",
+    "source_name": "Paul Graham · Essays",
+    "kind": "personal_blog"
+  },
+  "https://paulgraham.com/richnow.html": {
+    "source_url": "https://paulgraham.com/articles.html",
+    "source_name": "Paul Graham · Essays",
+    "kind": "personal_blog"
+  },
+  "https://paulgraham.com/newthings.html": {
+    "source_url": "https://paulgraham.com/articles.html",
+    "source_name": "Paul Graham · Essays",
+    "kind": "personal_blog"
+  },
+  "https://people.csail.mit.edu/moitra/408c.html": {
+    "source_url": "https://people.csail.mit.edu/moitra/408c.html",
+    "source_name": "Theoretical Foundations for Deep Learning · MIT",
+    "kind": "course"
+  },
+  "https://people.csail.mit.edu/moitra/409.html": {
+    "source_url": "https://people.csail.mit.edu/moitra/409.html",
+    "source_name": "Algorithmic Aspects of Machine Learning · MIT",
+    "kind": "course"
+  },
+  "https://people.idsia.ch/~juergen/physics-nobel-2024-plagiarism.html": {
+    "source_url": "https://people.idsia.ch/~juergen/",
+    "source_name": "Jürgen Schmidhuber · Website",
+    "kind": "author"
+  },
+  "https://percepta.ai/blog/can-llms-be-computers": {
+    "source_url": "https://percepta.ai/blog/",
+    "source_name": "Percepta · Blog",
+    "kind": "company_blog"
+  },
+  "https://physics.allen-zhu.com/part-4-architecture-design/part-4-1": {
+    "source_url": "https://physics.allen-zhu.com/",
+    "source_name": "Physics of Language Models",
+    "kind": "course"
+  },
+  "https://ponnekanti.net/posts/the-indifference-engine": {
+    "source_url": "https://ponnekanti.net/posts/",
+    "source_name": "Ponnekanti · Posts",
+    "kind": "personal_blog"
+  },
+  "https://prabros.com/adjacent-possible": {
+    "source_url": "https://prabros.com/",
+    "source_name": "Prabros · Blog",
+    "kind": "personal_blog"
+  },
+  "https://probably-lang.southpolesteve.workers.dev/": {
+    "source_url": "https://probably-lang.southpolesteve.workers.dev/",
+    "source_name": "Probably Programming Language",
+    "kind": "project"
+  },
+  "https://psyche.co/ideas/the-special-kind-of-knowledge-that-cant-be-put-into-words": {
+    "source_url": "https://psyche.co/ideas/",
+    "source_name": "Psyche · Ideas",
+    "kind": "publication"
+  },
+  "https://psyche.co/ideas/struggling-with-creative-work-doesnt-mean-youre-failing": {
+    "source_url": "https://psyche.co/ideas/",
+    "source_name": "Psyche · Ideas",
+    "kind": "publication"
+  },
+  "https://psyche.co/turning-points/i-was-just-performing-friendship-something-had-to-give": {
+    "source_url": "https://psyche.co/turning-points/",
+    "source_name": "Psyche · Turning Points",
+    "kind": "publication"
+  },
+  "http://joschu.net/blog/opinionated-guide-ml-research.html": {
+    "source_url": "http://joschu.net/",
+    "source_name": "John Schulman · Blog",
+    "kind": "personal_blog"
+  },
+  "http://machinelearning.ru/wiki/index.php?title=%D0%97%D0%B0%D0%B3%D0%BB%D0%B0%D0%B2%D0%BD%D0%B0%D1%8F_%D1%81%D1%82%D1%80%D0%B0%D0%BD%D0%B8%D1%86%D0%B0": {
+    "source_url": "http://machinelearning.ru/wiki/",
+    "source_name": "Машинное обучение · machinelearning.ru",
+    "kind": "publication"
+  },
+  "http://machinelearning.ru/wiki/index.php?title=%D0%9C%D0%B0%D1%88%D0%B8%D0%BD%D0%BD%D0%BE%D0%B5_%D0%BE%D0%B1%D1%83%D1%87%D0%B5%D0%BD%D0%B8%D0%B5_%28%D0%BA%D1%83%D1%80%D1%81_%D0%BB%D0%B5%D0%BA%D1%86%D0%B8%D0%B9%2C_%D0%9A.%D0%92.%D0%92%D0%BE%D1%80%D0%BE%D0%BD%D1%86%D0%BE%D0%B2%29": {
+    "source_url": "http://machinelearning.ru/wiki/",
+    "source_name": "Машинное обучение · Курс лекций Воронцова",
+    "kind": "course"
+  },
+  "https://pushing-pixels.org/2018/04/05/screen-graphics-of-her-interview-with-geoff-mcfetridge.html": {
+    "source_url": "https://pushing-pixels.org/",
+    "source_name": "Pushing Pixels · Blog",
+    "kind": "personal_blog"
+  },
+  "https://pushing-pixels.org/2012/06/01/the-craft-of-screen-graphics-and-movie-user-interfaces-conversation-with-jayse-hansen.html": {
+    "source_url": "https://pushing-pixels.org/",
+    "source_name": "Pushing Pixels · Blog",
+    "kind": "personal_blog"
+  },
+  "https://pytorch.org/blog/hybrid-models-as-first-class-citizens-in-vllm": {
+    "source_url": "https://pytorch.org/blog/",
+    "source_name": "PyTorch · Blog",
+    "kind": "company_blog"
+  },
+  "https://quantamagazine.org/monumental-proof-settles-geometric-langlands-conjecture-20240719": {
+    "source_url": "https://quantamagazine.org/",
+    "source_name": "Quanta Magazine",
+    "kind": "publication"
+  },
+  "https://raais.co/speakers-2026-roberta-raileanu-google-deepmind": {
+    "source_url": "https://raais.co/",
+    "source_name": "RAAIS",
+    "kind": "publication"
+  },
+  "https://radiancefields.com/": {
+    "source_url": "https://radiancefields.com/",
+    "source_name": "Radiance Fields",
+    "kind": "publication"
+  },
+  "https://rail.eecs.berkeley.edu/deeprlcourse": {
+    "source_url": "https://rail.eecs.berkeley.edu/deeprlcourse/",
+    "source_name": "CS 185/285 Deep Reinforcement Learning",
+    "kind": "course"
+  },
+  "https://rauno.me/craft/depth": {
+    "source_url": "https://rauno.me/",
+    "source_name": "Rauno Freiberg",
+    "kind": "personal_blog"
+  },
+  "https://research.google/blog/introducing-tabfm-a-zero-shot-foundation-model-for-tabular-data": {
+    "source_url": "https://research.google/blog/",
+    "source_name": "Google Research Blog",
+    "kind": "company_blog"
+  },
+  "https://research.nvidia.com/labs/dir/cosmos-tokenizer": {
+    "source_url": "https://research.nvidia.com/",
+    "source_name": "NVIDIA Research",
+    "kind": "company_blog"
+  },
+  "https://reuters.com/technology/together-ai-valued-125-bln-salesforce-led-funding-round-2024-03-13": {
+    "source_url": "https://www.reuters.com/technology/",
+    "source_name": "Reuters Technology",
+    "kind": "publication"
+  },
+  "https://reyzharkov.com/blog/posts/interviews-2025-ml-research-engineer-uk": {
+    "source_url": "https://reyzharkov.com/blog/",
+    "source_name": "Reyzharkov Blog",
+    "kind": "personal_blog"
+  },
+  "https://rhizome.org/editorial/2014/feb/03/ill-send-os-world-her-product-spec": {
+    "source_url": "https://rhizome.org/editorial/",
+    "source_name": "Rhizome Editorial",
+    "kind": "publication"
+  },
+  "https://rodneybrooks.com/predictions-scorecard-2025-january-01": {
+    "source_url": "https://rodneybrooks.com/",
+    "source_name": "Rodney Brooks",
+    "kind": "personal_blog"
+  },
+  "https://rosanneliu.com/post/behind-the-talk": {
+    "source_url": "https://rosanneliu.com/",
+    "source_name": "Rosanne Liu",
+    "kind": "personal_blog"
+  },
+  "https://ru.wikipedia.org/wiki/Squeak": {
+    "source_url": "https://ru.wikipedia.org/",
+    "source_name": "Русская Википедия",
+    "kind": "site"
+  },
+  "https://sander.ai/2025/04/15/latents.html": {
+    "source_url": "https://sander.ai/",
+    "source_name": "Sander Dieleman",
+    "kind": "personal_blog"
+  },
+  "https://sandofsky.com/humane": {
+    "source_url": "https://sandofsky.com/",
+    "source_name": "Sandofsky",
+    "kind": "personal_blog"
+  },
+  "https://saola.sg/": {
+    "source_url": "https://saola.sg/",
+    "source_name": "saola.sg",
+    "kind": "site"
+  },
+  "https://scifiinterfaces.com/2014/02/10/a-review-of-os1-in-spike-jonzes-her": {
+    "source_url": "https://scifiinterfaces.com/",
+    "source_name": "Sci-Fi Interfaces",
+    "kind": "publication"
+  },
+  "https://scifiinterfaces.com/author/chrisnoessel": {
+    "source_url": "https://scifiinterfaces.com/author/chrisnoessel",
+    "source_name": "Chris Noessel · Sci-Fi Interfaces",
+    "kind": "author"
+  },
+  "https://seangoedecke.com/in-defense-of-not-understanding-your-codebase": {
+    "source_url": "https://seangoedecke.com/",
+    "source_name": "Sean Goedecke",
+    "kind": "personal_blog"
+  },
+  "https://sebastianraschka.com/blog/2024/understanding-multimodal-llms.html": {
+    "source_url": "https://sebastianraschka.com/blog/",
+    "source_name": "Sebastian Raschka",
+    "kind": "personal_blog"
+  },
+  "https://situational-awareness.ai/": {
+    "source_url": "https://situational-awareness.ai/",
+    "source_name": "Situational Awareness",
+    "kind": "publication"
+  },
+  "https://smashingmagazine.com/2013/03/sci-fi-interaction-designers-gestural-interfaces": {
+    "source_url": "https://www.smashingmagazine.com/",
+    "source_name": "Smashing Magazine",
+    "kind": "publication"
+  },
+  "https://smashingmagazine.com/2016/06/retrofitting-zooming-ui-to-legacy-websites-an-impossible-task": {
+    "source_url": "https://www.smashingmagazine.com/",
+    "source_name": "Smashing Magazine",
+    "kind": "publication"
+  },
+  "https://sockpuppet.org/blog/2026/09/17/how-to-write-with-an-llm": {
+    "source_url": "https://sockpuppet.org/blog/",
+    "source_name": "Sockpuppet Blog",
+    "kind": "personal_blog"
+  },
+  "http://sohl-dickstein.github.io/2024/02/12/fractal.html": {
+    "source_url": "https://sohl-dickstein.github.io/",
+    "source_name": "Jesse Sohl-Dickstein",
+    "kind": "personal_blog"
+  },
+  "https://spectrum.ieee.org/graphical-user-interface/how-windows-first-came-to-the-computer-screen": {
+    "source_url": "https://spectrum.ieee.org/",
+    "source_name": "IEEE Spectrum",
+    "kind": "publication"
+  },
+  "https://srush.github.io/raspy": {
+    "source_url": "https://srush.github.io/",
+    "source_name": "SRush",
+    "kind": "personal_blog"
+  },
+  "http://static.squeak.org/tutorials/morphic-tutorial-1.html": {
+    "source_url": "http://static.squeak.org/tutorials/",
+    "source_name": "Squeak Morphic Tutorials",
+    "kind": "course"
+  },
+  "https://stats385.github.io/lecture_videos": {
+    "source_url": "https://stats385.github.io/",
+    "source_name": "STATS 385",
+    "kind": "course"
+  },
+  "https://stevebromley.com/blog/2009/11/24/the-humane-interface-by-jef-raskin": {
+    "source_url": "https://stevebromley.com/blog/",
+    "source_name": "Steve Bromley",
+    "kind": "personal_blog"
+  },
+  "https://stevejobsarchive.com/exhibits/objects-of-our-life": {
+    "source_url": "https://stevejobsarchive.com/",
+    "source_name": "Steve Jobs Archive",
+    "kind": "project"
+  },
+  "https://studioembed.com/research/tabbars/index.html": {
+    "source_url": "https://studioembed.com/research/",
+    "source_name": "Studio Embed Research",
+    "kind": "project"
+  },
+  "https://supaiku.com/attention-is-logarithmic": {
+    "source_url": "https://supaiku.com/",
+    "source_name": "Supaiku",
+    "kind": "personal_blog"
+  },
+  "https://superhuman.com/products/mail": {
+    "source_url": "https://superhuman.com/",
+    "source_name": "Superhuman",
+    "kind": "site"
+  },
+  "https://swissgrid.posterhouse.org/": {
+    "source_url": "https://swissgrid.posterhouse.org/",
+    "source_name": "Swiss Grid",
+    "kind": "project"
+  },
+  "https://techcrunch.com/2023/11/29/together-lands-102-5m-investment-to-grow-its-cloud-for-training-generative-ai?guccounter=1&guce_referrer=aHR0cHM6Ly95YW5kZXgucnUvc2VhcmNoP2NsaWQ9MTkwNjcyNSZ0ZXh0PXRvZ2V0aGVyK2FpK3RlY2hjcnVuY2gmcmRybmQ9OTM0NDQyJmxyPTEyMTY0MiZyZWRpcmNudD0xNzI5MDk1MTI0LjE&guce_referrer_sig=AQAAAKUAcbKs4wl26A5k0Dl3AatGlwx6n8yq_oDVqKcZAwmkJ7e7V-OmyfJVMnak-VMFx3LCdP42rzM0xoOUwEQlL9Md-VPc1DuW4NyMqY9TBjmJ-D_KXHbnSCnqC5005izXxgC1NpVrZG8l1oGKHscT6fLaJXy5kKF-8osJTZKV9ZVG": {
+    "source_url": "https://techcrunch.com/",
+    "source_name": "TechCrunch",
+    "kind": "publication"
+  },
+  "https://technologyreview.com/2018/03/01/144958/if-youre-so-smart-why-arent-you-rich-turns-out-its-just-chance": {
+    "source_url": "https://www.technologyreview.com/",
+    "source_name": "MIT Technology Review",
+    "kind": "publication"
+  },
+  "https://telegra.ph/Istochniki-gallyucinacij-v-LLM-07-26": {
+    "source_url": "https://telegra.ph/Istochniki-gallyucinacij-v-LLM-07-26",
+    "source_name": "Источники галлюцинаций в LLM",
+    "kind": "document"
+  },
+  "https://telegra.ph/Materialy-dlya-izucheniya-ML-07-15": {
+    "source_url": "https://telegra.ph/Materialy-dlya-izucheniya-ML-07-15",
+    "source_name": "Материалы для изучения ML",
+    "kind": "document"
+  },
+  "https://territorystudio.com/project/blade-runner-2049": {
+    "source_url": "https://territorystudio.com/project/blade-runner-2049",
+    "source_name": "Territory Studio",
+    "kind": "project"
+  },
+  "https://territorystudio.com/project-category/screen-graphics": {
+    "source_url": "https://territorystudio.com/project-category/screen-graphics",
+    "source_name": "Territory Studio",
+    "kind": "project"
+  },
+  "https://theawl.com/2013/02/how-minority-report-trapped-us-in-a-world-of-bad-interfaces": {
+    "source_url": "https://theawl.com/",
+    "source_name": "The Awl",
+    "kind": "publication"
+  },
+  "https://thegradient.pub/mamba-explained": {
+    "source_url": "https://thegradient.pub/",
+    "source_name": "The Gradient",
+    "kind": "publication"
+  },
+  "https://thehumanoid.ai/technology/kinetiq-ascend": {
+    "source_url": "https://thehumanoid.ai/",
+    "source_name": "The Humanoid",
+    "kind": "company_blog"
+  },
+  "https://thenumb.at/Functions-are-Vectors": {
+    "source_url": "https://thenumb.at/",
+    "source_name": "The Numbat",
+    "kind": "personal_blog"
+  },
+  "https://theses.hal.science/tel-02612943v1": {
+    "source_url": "https://theses.hal.science/",
+    "source_name": "HAL theses",
+    "kind": "repository"
+  },
+  "https://thinkingmachines.ai/blog/interaction-models": {
+    "source_url": "https://thinkingmachines.ai/blog/",
+    "source_name": "Thinking Machines Lab Blog",
+    "kind": "company_blog"
+  },
+  "https://timdettmers.com/2022/03/13/how-to-choose-your-grad-school": {
+    "source_url": "https://timdettmers.com/",
+    "source_name": "Tim Dettmers",
+    "kind": "personal_blog"
+  },
+  "https://time.com/collection/best-inventions-2024": {
+    "source_url": "https://time.com/",
+    "source_name": "TIME",
+    "kind": "publication"
+  },
+  "https://time.com/6342827/ceo-of-the-year-2023-sam-altman": {
+    "source_url": "https://time.com/",
+    "source_name": "TIME",
+    "kind": "publication"
+  },
+  "https://tivadardanka.com/books/mathematics-of-machine-learning": {
+    "source_url": "https://tivadardanka.com/",
+    "source_name": "Tivadar Danka",
+    "kind": "personal_blog"
+  },
+  "https://tmodrzyk.github.io/blog/2026/artificial-intelligence-in-research": {
+    "source_url": "https://tmodrzyk.github.io/blog/",
+    "source_name": "Tomasz Modrzyk",
+    "kind": "personal_blog"
+  },
+  "https://towardsdatascience.com/hopfield-networks-neural-memory-machines-4c94be821073": {
+    "source_url": "https://towardsdatascience.com/",
+    "source_name": "Towards Data Science",
+    "kind": "publication"
+  },
+  "https://towardsdatascience.com/drawing-the-transformer-network-from-scratch-part-1-9269ed9a2c5e": {
+    "source_url": "https://towardsdatascience.com/",
+    "source_name": "Towards Data Science",
+    "kind": "publication"
+  },
+  "https://transformer-circuits.pub/2026/workspace/index.html": {
+    "source_url": "https://transformer-circuits.pub/",
+    "source_name": "Transformer Circuits",
+    "kind": "publication"
+  },
+  "https://trends.rbc.ru/trends/social/654387b59a7947176a030434": {
+    "source_url": "https://trends.rbc.ru/",
+    "source_name": "РБК Тренды",
+    "kind": "publication"
+  },
+  "https://turingpost.com/p/jepamap": {
+    "source_url": "https://turingpost.com/",
+    "source_name": "The Turing Post",
+    "kind": "publication"
+  },
+  "https://tutorial.math.lamar.edu/Classes/DE/DE.aspx": {
+    "source_url": "https://tutorial.math.lamar.edu/",
+    "source_name": "Paul's Online Math Notes",
+    "kind": "course"
+  },
+  "https://tympanus.net/codrops/2025/02/26/webgpu-fluid-simulations-high-performance-real-time-rendering": {
+    "source_url": "https://tympanus.net/codrops/",
+    "source_name": "Codrops",
+    "kind": "publication"
+  },
+  "https://tympanus.net/codrops/2025/02/18/rendering-the-simulation-theory-exploring-fractals-glsl-and-the-nature-of-reality": {
+    "source_url": "https://tympanus.net/codrops/",
+    "source_name": "Codrops",
+    "kind": "publication"
+  },
+  "https://uist.acm.org/2025": {
+    "source_url": "https://uist.acm.org/2025/",
+    "source_name": "ACM Symposium on User Interface Software and Technology",
+    "kind": "publication"
+  },
+  "https://uxdesign.cc/using-ai-for-3d-rendering-a-practical-guide-for-designers-a2a037ed1ad0": {
+    "source_url": "https://uxdesign.cc/",
+    "source_name": "UX Collective",
+    "kind": "publication"
+  },
+  "https://uxtigers.com/post/ux-urgency-ai": {
+    "source_url": "https://uxtigers.com/",
+    "source_name": "UX Tigers",
+    "kind": "personal_blog"
+  },
+  "https://uxtigers.com/post/ai-new-ui-paradigm": {
+    "source_url": "https://uxtigers.com/",
+    "source_name": "UX Tigers",
+    "kind": "personal_blog"
+  },
+  "https://uxtigers.com/post/curating-ai": {
+    "source_url": "https://uxtigers.com/",
+    "source_name": "UX Tigers",
+    "kind": "personal_blog"
+  },
+  "https://vfxblog.com/ironman": {
+    "source_url": "https://vfxblog.com/",
+    "source_name": "VFX Blog",
+    "kind": "publication"
+  },
+  "https://vfxblog.com/2017/11/08/a-visual-journey-through-the-screen-graphics-of-blade-runner-2049": {
+    "source_url": "https://vfxblog.com/",
+    "source_name": "VFX Blog",
+    "kind": "publication"
+  },
+  "https://vis.csail.mit.edu/pubs/varv": {
+    "source_url": "https://vis.csail.mit.edu/",
+    "source_name": "MIT Visualization Group",
+    "kind": "project"
+  },
+  "https://voiceinthemachine.com/2026/07/14/prompting-is-not-ai-research": {
+    "source_url": "https://voiceinthemachine.com/",
+    "source_name": "Voice in the Machine",
+    "kind": "personal_blog"
+  },
+  "https://wandb.ai/wandb_fc/tips/reports/The-Problem-with-Quadratic-Attention-in-Transformer-Architectures--Vmlldzo3MDE0Mzcz": {
+    "source_url": "https://wandb.ai/wandb_fc/tips/reports",
+    "source_name": "Weights & Biases · wandb_fc/tips reports",
+    "kind": "publication"
+  },
+  "https://wandb.ai/byyoung3/ml-news/reports/Some-Details-on-OpenAI-s-Sora-and-Diffusion-Transformers--Vmlldzo2ODQwNTM3": {
+    "source_url": "https://wandb.ai/byyoung3/ml-news/reports",
+    "source_name": "Weights & Biases · byyoung3/ml-news reports",
+    "kind": "publication"
+  },
+  "https://wandb.ai/mostafaibrahim17/ml-articles/reports/Talking-to-Machines-The-Breakthrough-of-Speech-Recognition-Technology--VmlldzozNTkwNzU2": {
+    "source_url": "https://wandb.ai/mostafaibrahim17/ml-articles/reports",
+    "source_name": "Weights & Biases · mostafaibrahim17/ml-articles reports",
+    "kind": "publication"
+  },
+  "http://wiki.squeak.org/squeak/30": {
+    "source_url": "https://wiki.squeak.org/",
+    "source_name": "Squeak Wiki",
+    "kind": "project"
+  },
+  "https://wikimili.com/en/Zooming_user_interface": {
+    "source_url": "https://wikimili.com/",
+    "source_name": "Wikimili",
+    "kind": "site"
+  },
+  "https://wired.com/story/russian-startup-mostik-ai-models-communication": {
+    "source_url": "https://wired.com/",
+    "source_name": "WIRED",
+    "kind": "publication"
+  },
+  "https://wired.com/2014/01/will-influential-ui-design-minority-report": {
+    "source_url": "https://wired.com/",
+    "source_name": "WIRED",
+    "kind": "publication"
+  },
+  "https://wired.com/2012/06/minority-report-idea-summit": {
+    "source_url": "https://wired.com/",
+    "source_name": "WIRED",
+    "kind": "publication"
+  },
+  "https://wired.com/story/oblong-minority-report-john-underkoffler": {
+    "source_url": "https://wired.com/",
+    "source_name": "WIRED",
+    "kind": "publication"
+  },
+  "https://worrydream.com/refs/Hamming_1997_-_The_Art_of_Doing_Science_and_Engineering.pdf": {
+    "source_url": "https://worrydream.com/",
+    "source_name": "Worrydream",
+    "kind": "personal_blog"
+  },
+  "https://worrydream.com/MagicInk": {
+    "source_url": "https://worrydream.com/",
+    "source_name": "Worrydream",
+    "kind": "personal_blog"
+  },
+  "https://worrydream.com/refs/Kay_1984_-_Computer_Software.pdf": {
+    "source_url": "https://worrydream.com/",
+    "source_name": "Worrydream",
+    "kind": "personal_blog"
+  },
+  "https://wsj.com/tech/ai/yann-lecun-ai-meta-aa59e2f5": {
+    "source_url": "https://wsj.com/",
+    "source_name": "The Wall Street Journal",
+    "kind": "publication"
+  },
+  "https://www2.gwu.edu/~phy21bio/Reading/Purcell_life_at_low_reynolds_number.pdf": {
+    "source_url": "https://www2.gwu.edu/~phy21bio/Reading/",
+    "source_name": "George Washington University Physics",
+    "kind": "course"
+  },
+  "https://x.ai/news/designing-grok-bot": {
+    "source_url": "https://x.ai/news/",
+    "source_name": "xAI News",
+    "kind": "company_blog"
+  },
+  "http://xahlee.info/comp//gui_vs_command_line_unified_scheme.html": {
+    "source_url": "https://xahlee.info/",
+    "source_name": "Xah Lee",
+    "kind": "personal_blog"
+  },
+  "https://yegor256.com/2019/09/17/be-unhappy-to-be-happy.html": {
+    "source_url": "https://yegor256.com/",
+    "source_name": "Yegor256",
+    "kind": "personal_blog"
+  },
+  "https://yegor256.com/2023/09/19/five-ingredients-career.html": {
+    "source_url": "https://yegor256.com/",
+    "source_name": "Yegor256",
+    "kind": "personal_blog"
+  },
+  "https://yegor256.com/2019/05/28/trust-or-not.html": {
+    "source_url": "https://yegor256.com/",
+    "source_name": "Yegor256",
+    "kind": "personal_blog"
+  },
+  "https://yegor256.com/2019/04/09/beg-them.html": {
+    "source_url": "https://yegor256.com/",
+    "source_name": "Yegor256",
+    "kind": "personal_blog"
+  },
+  "https://zenhabits.net/beginner": {
+    "source_url": "https://zenhabits.net/",
+    "source_name": "Zen Habits",
+    "kind": "personal_blog"
+  },
+  "https://raytracing.github.io/books/RayTracingInOneWeekend.html": {
+    "source_url": "https://raytracing.github.io/",
+    "source_name": "Ray Tracing in One Weekend",
+    "kind": "book_series"
+  },
+  "https://pikuma.com/courses/bit-shifting-operator-tutorial": {
+    "source_url": "https://pikuma.com/courses",
+    "source_name": "Pikuma Courses",
+    "kind": "course_catalog"
+  },
+  "https://pikuma.com/courses/learn-3d-computer-graphics-programming": {
+    "source_url": "https://pikuma.com/courses/learn-3d-computer-graphics-programming",
+    "source_name": "Learn 3D Computer Graphics Programming from Scratch",
+    "kind": "course"
+  },
+  "https://markdaws.net/blog/2019-12-17-toy3d": {
+    "source_url": "https://markdaws.net/blog/",
+    "source_name": "Mark Daws · Blog",
+    "kind": "personal_blog"
+  },
+  "https://docs.google.com/presentation/d/13Zo2gafKyIFEyZCBucEfFHrrrwz9RBQoIImC6nBCgEE/edit?pli=1&slide=id.p": {
+    "source_url": "https://docs.google.com/presentation/d/13Zo2gafKyIFEyZCBucEfFHrrrwz9RBQoIImC6nBCgEE/edit?pli=1&slide=id.p",
+    "source_name": "Cycles X Technical Presentation",
+    "kind": "presentation"
+  },
+  "https://simondev.teachable.com/p/glsl-shaders-from-scratch": {
+    "source_url": "https://simondev.teachable.com/p/glsl-shaders-from-scratch",
+    "source_name": "GLSL Shaders from Scratch",
+    "kind": "course"
+  },
+  "https://en.wikipedia.org/wiki/Marching_cubes": {
+    "source_url": "https://en.wikipedia.org/wiki/Marching_cubes",
+    "source_name": "Marching cubes",
+    "kind": "reference"
+  },
+  "https://en.wikipedia.org/wiki/Structure_from_motion": {
+    "source_url": "https://en.wikipedia.org/wiki/Structure_from_motion",
+    "source_name": "Structure from motion",
+    "kind": "reference"
+  },
+  "https://en.wikipedia.org/wiki/Ray_marching": {
+    "source_url": "https://en.wikipedia.org/wiki/Ray_marching",
+    "source_name": "Ray marching",
+    "kind": "reference"
+  },
+  "https://en.wikipedia.org/wiki/Edwin_Catmull": {
+    "source_url": "https://en.wikipedia.org/wiki/Edwin_Catmull",
+    "source_name": "Edwin Catmull",
+    "kind": "reference"
+  },
+  "https://pix-pro.com/blog/glossary": {
+    "source_url": "https://pix-pro.com/blog/",
+    "source_name": "Pixpro Blog",
+    "kind": "company_blog"
+  },
+  "https://onshape.com/en/blog/how-onshape-has-fundamentally-improved-parametric-cad": {
+    "source_url": "https://onshape.com/en/blog/",
+    "source_name": "Onshape Blog",
+    "kind": "company_blog"
+  },
+  "https://shapr3d.com/blog/what-is-cad-the-technological-foundations-of-cad-software": {
+    "source_url": "https://shapr3d.com/blog/",
+    "source_name": "Shapr3D Blog",
+    "kind": "company_blog"
+  },
+  "https://shapr3d.com/blog/how-does-direct-modeling-actually-work": {
+    "source_url": "https://shapr3d.com/blog/",
+    "source_name": "Shapr3D Blog",
+    "kind": "company_blog"
+  },
+  "https://videomaker.com/article/c3/17836-nodes-vs-layers": {
+    "source_url": "https://videomaker.com/",
+    "source_name": "Videomaker",
+    "kind": "publication"
+  },
+  "https://petrapalusova.com/articles/3d-user-interface-design-part-3-human-interface-and-evolving-guidelines": {
+    "source_url": "https://petrapalusova.com/articles/",
+    "source_name": "Petra Palusova · Articles",
+    "kind": "personal_blog"
+  },
+  "https://numberanalytics.com/blog/mastering-3d-design-in-ui": {
+    "source_url": "https://numberanalytics.com/blog/",
+    "source_name": "Number Analytics Blog",
+    "kind": "company_blog"
+  },
+  "https://blenderartists.org/t/the-big-sdf-thread/1293075": {
+    "source_url": "https://blenderartists.org/t/the-big-sdf-thread/1293075",
+    "source_name": "The big SDF thread",
+    "kind": "discussion"
+  },
+  "https://garagefarm.net/blog/the-new-face-of-nurbs-modeling-plasticity-1-3": {
+    "source_url": "https://garagefarm.net/blog/",
+    "source_name": "GarageFarm Blog",
+    "kind": "company_blog"
+  },
+  "https://deep-ml.com/problems/2": {
+    "source_url": "https://deep-ml.com/problems",
+    "source_name": "Deep-ML Problems",
+    "kind": "exercise_catalog"
+  },
+  "https://coderun.yandex.ru/catalog?groups=ml&sort=EASY_FIRST": {
+    "source_url": "https://coderun.yandex.ru/catalog?groups=ml&sort=EASY_FIRST",
+    "source_name": "CodeRun · ML",
+    "kind": "exercise_catalog"
+  },
+  "https://yandex.ru/yaintern/training/ml-training-2023?ysclid=marah3ncj5544049441": {
+    "source_url": "https://yandex.ru/yaintern/training/ml-training-2023?ysclid=marah3ncj5544049441",
+    "source_name": "Yandex ML Training 2023",
+    "kind": "course"
+  },
+  "https://yandex.ru/yaintern/training/ml-training-october-2024?ysclid=maragm535r589304671": {
+    "source_url": "https://yandex.ru/yaintern/training/ml-training-october-2024?ysclid=maragm535r589304671",
+    "source_name": "Yandex ML Training 2024",
+    "kind": "course"
+  },
+  "https://yandex.ru/yaintern/training/ml-training?ysclid=m2vonrrnqw798079260": {
+    "source_url": "https://yandex.ru/yaintern/training/ml-training?ysclid=m2vonrrnqw798079260",
+    "source_name": "Yandex ML Training",
+    "kind": "course"
+  },
+  "https://uvadlc-notebooks.readthedocs.io/en/latest": {
+    "source_url": "https://uvadlc-notebooks.readthedocs.io/en/latest",
+    "source_name": "UvA Deep Learning Tutorials",
+    "kind": "course"
+  },
+  "https://course.fast.ai/": {
+    "source_url": "https://course.fast.ai/",
+    "source_name": "Practical Deep Learning for Coders",
+    "kind": "course"
+  },
+  "https://d2l.ai/index.html": {
+    "source_url": "https://d2l.ai/index.html",
+    "source_name": "Dive into Deep Learning",
+    "kind": "book"
+  },
+  "https://udlbook.github.io/udlbook": {
+    "source_url": "https://udlbook.github.io/udlbook",
+    "source_name": "Understanding Deep Learning",
+    "kind": "book"
+  },
+  "https://neuronpedia.org/": {
+    "source_url": "https://neuronpedia.org/",
+    "source_name": "Neuronpedia",
+    "kind": "tool"
+  },
+  "https://nn.labml.ai/": {
+    "source_url": "https://nn.labml.ai/",
+    "source_name": "Annotated Deep Learning Paper Implementations",
+    "kind": "publication"
+  },
+  "https://github.com/paperswithcode": {
+    "source_url": "https://github.com/paperswithcode",
+    "source_name": "Papers with Code · GitHub",
+    "kind": "organization"
+  },
+  "https://findmypapers.ai/": {
+    "source_url": "https://findmypapers.ai/",
+    "source_name": "findmypapers.ai",
+    "kind": "tool"
+  },
+  "https://asta.allen.ai/discover?redirect_from=paper-finder": {
+    "source_url": "https://asta.allen.ai/discover?redirect_from=paper-finder",
+    "source_name": "Ai2 Asta Discover",
+    "kind": "tool"
+  },
+  "https://deep-learning-alchemy.github.io/": {
+    "source_url": "https://deep-learning-alchemy.github.io/",
+    "source_name": "Stanford CS 312 · Deep Learning Alchemy",
+    "kind": "course"
+  },
+  "https://deepgenerativemodels.github.io/notes": {
+    "source_url": "https://deepgenerativemodels.github.io/notes",
+    "source_name": "Deep Generative Models · Notes",
+    "kind": "course"
+  },
+  "https://pair.withgoogle.com/explorables": {
+    "source_url": "https://pair.withgoogle.com/explorables",
+    "source_name": "Google PAIR · AI Explorables",
+    "kind": "publication"
+  },
+  "https://pair.withgoogle.com/explorables/grokking": {
+    "source_url": "https://pair.withgoogle.com/explorables",
+    "source_name": "Google PAIR · AI Explorables",
+    "kind": "publication"
+  },
+  "https://thinkingmachines.ai/blog": {
+    "source_url": "https://thinkingmachines.ai/blog",
+    "source_name": "Thinking Machines Lab · Blog",
+    "kind": "company_blog"
+  },
+  "https://distill.pub/2020/circuits": {
+    "source_url": "https://distill.pub/",
+    "source_name": "Distill",
+    "kind": "publication"
+  },
+  "https://distill.pub/2020/growing-ca": {
+    "source_url": "https://distill.pub/",
+    "source_name": "Distill",
+    "kind": "publication"
+  },
+  "https://transformer-circuits.pub/2025/linebreaks/index.html": {
+    "source_url": "https://transformer-circuits.pub/",
+    "source_name": "Transformer Circuits",
+    "kind": "publication"
+  },
+  "https://lesswrong.com/posts/mkbGjzxD8d8XqKHzA": {
+    "source_url": "https://lesswrong.com/",
+    "source_name": "LessWrong",
+    "kind": "publication"
+  },
+  "https://ericjmichaud.com/quanta": {
+    "source_url": "https://ericjmichaud.com/",
+    "source_name": "Eric Michaud",
+    "kind": "personal_blog"
+  },
+  "https://blog.tilderesearch.com/vignettes/regression": {
+    "source_url": "https://blog.tilderesearch.com/",
+    "source_name": "Tilde Research · Blog",
+    "kind": "company_blog"
+  },
+  "https://blog.tilderesearch.com/vignettes/complexity": {
+    "source_url": "https://blog.tilderesearch.com/",
+    "source_name": "Tilde Research · Blog",
+    "kind": "company_blog"
+  },
+  "https://pub.sakana.ai/ctm": {
+    "source_url": "https://pub.sakana.ai/",
+    "source_name": "Sakana AI Publications",
+    "kind": "publication"
+  },
+  "https://ai.meta.com/blog/self-supervised-learning-the-dark-matter-of-intelligence": {
+    "source_url": "https://ai.meta.com/blog/",
+    "source_name": "Meta AI Blog",
+    "kind": "company_blog"
+  },
+  "https://gram-blogposts.github.io/2026/about": {
+    "source_url": "https://gram-blogposts.github.io/2026/",
+    "source_name": "GRaM 2026 Blogposts",
+    "kind": "publication"
+  },
+  "https://nrehiew.github.io/blog/sft_rl_opd": {
+    "source_url": "https://nrehiew.github.io/blog/",
+    "source_name": "wh · Blog",
+    "kind": "personal_blog"
+  },
+  "https://goodfire.ai/research": {
+    "source_url": "https://goodfire.ai/research",
+    "source_name": "Goodfire Research",
+    "kind": "company_research"
+  },
+  "https://paperswithcode.co/": {
+    "source_url": "https://paperswithcode.co/",
+    "source_name": "Papers with Code",
+    "kind": "publication"
+  },
+  "https://vladfeinberg.com/": {
+    "source_url": "https://vladfeinberg.com/",
+    "source_name": "Vlad Feinberg · Blog",
+    "kind": "personal_blog"
+  },
+  "https://curtclifton.net/papers/MoseleyMarks06a.pdf": {
+    "source_url": "https://curtclifton.net/papers/",
+    "source_name": "Curt Clifton · Papers",
+    "kind": "personal_publication"
+  },
+  "https://destroyallsoftware.com/talks/boundaries": {
+    "source_url": "https://destroyallsoftware.com/talks",
+    "source_name": "Destroy All Software · Talks",
+    "kind": "talk_catalog"
+  },
+  "https://cgchannel.com/2018/12/motion-graphics-tools-devs-win-sci-tech-academy-awards": {
+    "source_url": "https://cgchannel.com/",
+    "source_name": "CG Channel",
+    "kind": "publication"
+  },
+  "https://provideocoalition.com/cinema-4d-mograph-toolset-receives-technical-achievement-award": {
+    "source_url": "https://provideocoalition.com/",
+    "source_name": "ProVideo Coalition",
+    "kind": "publication"
+  },
+  "https://novedge.com/blogs/design-news/design-software-history-the-evolution-of-cinema-4d-from-amiga-origins-to-motion-graphics-powerhouse": {
+    "source_url": "https://novedge.com/blogs/design-news",
+    "source_name": "NOVEDGE Blog",
+    "kind": "company_blog"
+  },
+  "https://dl.acm.org/doi/10.1145/37402.37407": {
+    "source_url": "https://dl.acm.org/",
+    "source_name": "ACM Digital Library",
+    "kind": "publication"
+  },
+  "https://youtube.com/@umarjamilai/videos": {
+    "source_url": "https://youtube.com/@umarjamilai",
+    "source_name": "Umar Jamil",
+    "kind": "youtube_channel"
+  }
+}
