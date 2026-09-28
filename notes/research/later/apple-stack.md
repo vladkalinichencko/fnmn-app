@@ -48,4 +48,4 @@ MVP не требует микросервисов для каждого шаг�
 
 Стандартные TabView, NavigationStack, toolbar, sheet, Menu и Button получают системное оформление. Liquid Glass относится к слою управления поверх содержимого. Поэтому пост остаётся текстом без собственной стеклянной карточки, а элементы управления используют стандартное оформление Apple. Веб-формулы и изображения находятся внутри содержимого. [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass).
 
-Исследование тела поста и редактора, включая текущий код Ctrl, находится в [rendering.md](rendering.md).
+Исследование тела поста и редактора, включая текущий код Ctrl, находится в [rendering.md](../rendering.md).
