@@ -84,10 +84,6 @@ public enum BookCatalog {
         return Int(position.blockID.dropFirst(4))
     }
 
-    public static func position(heading: Int) -> ReadingPosition {
-        ReadingPosition(blockID: "toc:\(heading)")
-    }
-
     static func storageName(for id: String) -> String {
         Data(id.utf8).base64EncodedString()
             .replacingOccurrences(of: "/", with: "_")

@@ -119,7 +119,7 @@ final class LibraryModel {
         preparation = .working("Fetching the page")
         ImportActivity.start(title: url.host ?? "Article", status: "Fetching the page")
         do {
-            let (package, files) = try await macService.prepare(url: url, folder: nil, connection: macConnection)
+            let (package, files) = try await macService.prepare(url: url, connection: macConnection)
             preparation = .working("Saving")
             await ImportActivity.update(status: "Saving", fraction: 0.8)
             let materialID = try await storeArticle(package, files: files)
@@ -198,10 +198,6 @@ final class LibraryModel {
 
     func setArchived(_ isArchived: Bool, materialID: String) async {
         await commit { $0.setArchived(isArchived, materialID: materialID) }
-    }
-
-    func saveVideoTime(_ seconds: Double, materialID: String, blockID: String) async {
-        await commit { _ = $0.recordVideoTime(materialID: materialID, blockID: blockID, seconds: seconds) }
     }
 
     func addFolder(_ name: String) async {

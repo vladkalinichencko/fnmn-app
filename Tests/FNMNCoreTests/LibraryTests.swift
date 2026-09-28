@@ -113,7 +113,7 @@ private let laterArticle = ImportPackage(
     library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
     library.recordOpening(materialID: article.material.id, at: Date(timeIntervalSinceReferenceDate: 1))
     library.recordOpening(materialID: laterArticle.material.id, at: Date(timeIntervalSinceReferenceDate: 2))
-    #expect(library.continuedPackage?.material.id == laterArticle.material.id)
+    #expect(library.continuedID == laterArticle.material.id)
 }
 
 @Test func continueFallsBackToSavedPositionWhenNothingWasOpened() throws {
@@ -122,7 +122,7 @@ private let laterArticle = ImportPackage(
     try library.importPackage(laterArticle)
     library.positions[article.material.id] = ReadingPosition(blockID: "b1")
     library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
-    #expect(library.continuedPackage?.material.id == article.material.id)
+    #expect(library.continuedID == article.material.id)
 }
 
 @Test func openingDoesNotMarkMaterialRead() throws {
@@ -150,16 +150,7 @@ private let laterArticle = ImportPackage(
         .write(to: directory.appending(path: "state.json"))
     let snapshot = try await LibraryFile(url: directory).load()
     #expect(snapshot.readings.isEmpty)
-    #expect(snapshot.continuedPackage == nil)
-}
-
-@Test func staleVideoEventCannotMoveReaderBackToOldBlock() throws {
-    var library = LibrarySnapshot()
-    try library.importPackage(article)
-    library.positions[article.material.id] = ReadingPosition(blockID: "next")
-    let accepted = library.recordVideoTime(materialID: article.material.id, blockID: "b1", seconds: 42.125)
-    #expect(!accepted)
-    #expect(library.positions[article.material.id] == ReadingPosition(blockID: "next"))
+    #expect(snapshot.continuedID == nil)
 }
 
 private var sampleBook: URL {
@@ -195,9 +186,7 @@ private var sampleBook: URL {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory)
     let imported = try BookCatalog.inspect(from: sampleBook)
-    var library = LibrarySnapshot()
-    library.importBook(imported.record)
-    try await file.copyBook(from: sampleBook, named: imported.record.directoryName)
+    let library = try await file.storeBook(imported.record, from: sampleBook, into: LibrarySnapshot())
     try await file.saveState(library)
     let loaded = try await file.load()
     #expect(loaded.books.count == 1)

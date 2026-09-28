@@ -6,8 +6,8 @@ struct LibraryReadyList: View {
     var query: String
 
     var body: some View {
-        let packages = library.snapshot.matchingPackages(query).filter { !library.snapshot.isArchived($0.material.id) }
-        let books = library.snapshot.matchingBooks(query).filter { !library.snapshot.isArchived($0.id) }
+        let packages = library.snapshot.unarchivedPackages(matching: query)
+        let books = library.snapshot.unarchivedBooks(matching: query)
         let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if searching && packages.isEmpty && books.isEmpty {
             ContentUnavailableView.search(text: query)
@@ -54,7 +54,7 @@ struct LibraryReadyList: View {
     private func row(_ package: ImportPackage) -> some View {
         MaterialRow(
             title: package.material.title,
-            systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text",
+            systemImage: package.material.kind.systemImage,
             isRead: library.snapshot.readings[package.material.id]?.isRead ?? false,
             progress: library.snapshot.readings[package.material.id]?.progress
         ) { isRead in
@@ -100,7 +100,7 @@ private struct BrowserSourcesView: View {
                                             Button {
                                                 selection = package.material.id
                                             } label: {
-                                                Label(material.title, systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text")
+                                                Label(material.title, systemImage: package.material.kind.systemImage)
                                             }
                                         } else if let url = URL(string: material.url) {
                                             Link(material.title, destination: url)
@@ -236,7 +236,7 @@ struct FolderContents: View {
             }
             ForEach(packages, id: \.material.id) { package in
                 Button { selection = package.material.id } label: {
-                    Label(package.material.title, systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text")
+                    Label(package.material.title, systemImage: package.material.kind.systemImage)
                 }
             }
             ForEach(books) { book in
@@ -246,5 +246,21 @@ struct FolderContents: View {
             }
         }
         .navigationTitle(folder)
+    }
+}
+
+extension Material.Kind {
+    var systemImage: String {
+        self == .video ? "play.rectangle" : "doc.text"
+    }
+}
+
+extension LibrarySnapshot {
+    func unarchivedPackages(matching query: String) -> [ImportPackage] {
+        matchingPackages(query).filter { !isArchived($0.material.id) }
+    }
+
+    func unarchivedBooks(matching query: String) -> [BookRecord] {
+        matchingBooks(query).filter { !isArchived($0.id) }
     }
 }

@@ -58,7 +58,7 @@ struct DocumentColumn: View {
         case let .displayMath(latex):
             if parses(latex) {
                 ScrollView(.horizontal) {
-                    MathLabel(latex: latex, mode: .display)
+                    MathLabel(latex: latex)
                 }
                 .scrollIndicators(.hidden)
             } else {
@@ -143,14 +143,13 @@ struct DocumentColumn: View {
 
 private struct MathLabel: UIViewRepresentable {
     let latex: String
-    let mode: MTMathUILabelMode
 
     func makeUIView(context: Context) -> MTMathUILabel {
         let label = MTMathUILabel()
         label.displayErrorInline = false
         label.textAlignment = .left
-        label.labelMode = mode
-        label.fontSize = mode == .display ? 22 : 17
+        label.labelMode = .display
+        label.fontSize = 22
         label.setContentHuggingPriority(.required, for: .horizontal)
         label.setContentHuggingPriority(.required, for: .vertical)
         return label
@@ -159,7 +158,6 @@ private struct MathLabel: UIViewRepresentable {
     func updateUIView(_ label: MTMathUILabel, context: Context) {
         label.latex = latex
         label.textColor = .label
-        label.labelMode = mode
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: MTMathUILabel, context: Context) -> CGSize? {

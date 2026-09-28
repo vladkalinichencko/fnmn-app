@@ -37,8 +37,8 @@ private struct SearchView: View {
     @State private var query = ""
 
     var body: some View {
-        let packages = library.snapshot.matchingPackages(query).filter { !library.snapshot.isArchived($0.material.id) }
-        let books = library.snapshot.matchingBooks(query).filter { !library.snapshot.isArchived($0.id) }
+        let packages = library.snapshot.unarchivedPackages(matching: query)
+        let books = library.snapshot.unarchivedBooks(matching: query)
         List {
             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Titles, authors, folders, and section headings."))

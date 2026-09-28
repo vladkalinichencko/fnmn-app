@@ -72,15 +72,6 @@ public enum ArticleBody {
         return pieces
     }
 
-    public static func headingOrdinals(in pieces: [ArticlePiece]) -> [Int?] {
-        var count = 0
-        return pieces.map { piece in
-            guard case let .paragraph(runs) = piece, heading(runs) != nil else { return nil }
-            count += 1
-            return count
-        }
-    }
-
     public static func heading(_ runs: [ArticleRun]) -> (level: Int, title: String)? {
         guard case let .text(source) = runs.first else { return nil }
         let start = source.drop(while: { $0 == " " || $0 == "\t" })
@@ -105,7 +96,7 @@ public enum ArticleBody {
         return text.contains("\n")
     }
 
-    private static func plainRun(_ run: ArticleRun) -> String {
+    public static func plainRun(_ run: ArticleRun) -> String {
         switch run {
         case let .text(text): text
         case let .math(latex): "$\(latex)$"

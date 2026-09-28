@@ -45,9 +45,7 @@ import Testing
     #expect(pieces.contains(.paragraph([.text("A ball with "), .math("v^2"), .text(" rolls.")])))
     #expect(pieces.contains(.displayMath("E = mc^2")))
     #expect(pieces.contains(.paragraph([.text("Price is $5 and $6.")])))
-    #expect(ArticleBody.headingOrdinals(in: ArticleBody.pieces(in: "# One\n\n## Two")) == [1, 2])
     let titled = ArticleBody.pieces(in: "## The $\\sigma$-algebra\n\nNext")
-    #expect(ArticleBody.headingOrdinals(in: titled) == [1, nil])
     #expect(ArticleBody.heading(paragraphRuns(titled[0]))?.title == "The $\\sigma$-algebra")
 }
 

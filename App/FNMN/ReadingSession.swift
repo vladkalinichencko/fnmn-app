@@ -181,18 +181,11 @@ func readableText(_ piece: ArticlePiece) -> String? {
         if let heading = ArticleBody.heading(runs) {
             return heading.title
         }
-        let text = runs.map(plainRun).joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = runs.map(ArticleBody.plainRun).joined().trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
     case let .displayMath(latex):
         return latex
     case .image, .video, .interactive:
         return nil
-    }
-}
-
-private func plainRun(_ run: ArticleRun) -> String {
-    switch run {
-    case let .text(text): text
-    case let .math(latex): "$\(latex)$"
     }
 }

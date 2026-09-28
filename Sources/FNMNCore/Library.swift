@@ -27,10 +27,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         return books.first(where: { positions[$0.id] != nil })?.id
     }
 
-    public var continuedPackage: ImportPackage? {
-        packages.first { $0.material.id == continuedID }
-    }
-
     public mutating func importBook(_ record: BookRecord) {
         let replacing = books.contains { $0.id == record.id }
         if let index = books.firstIndex(where: { $0.id == record.id }) {
@@ -153,14 +149,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
             folders = Array(Set(folders + package.folders)).sorted()
         }
     }
-
-    public mutating func recordVideoTime(materialID: String, blockID: String, seconds: Double) -> Bool {
-        if let current = positions[materialID], current.blockID != blockID {
-            return false
-        }
-        positions[materialID] = ReadingPosition(blockID: blockID, videoSeconds: seconds)
-        return true
-    }
 }
 
 public enum LibraryError: Error, Equatable {
@@ -263,7 +251,6 @@ public actor LibraryFile {
 
     public nonisolated let root: URL
     public private(set) var corruptPackageNames: [String] = []
-    private var directory: URL { root }
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -272,12 +259,11 @@ public actor LibraryFile {
     }
 
     public func load() throws -> LibrarySnapshot {
-        try recoverReplacedDirectories(in: directory.appending(path: "books"))
-        try recoverReplacedItem(named: "runtime")
+        try recoverReplacedDirectories(in: root.appending(path: "books"))
         var snapshot = LibrarySnapshot()
         var stateIncludesPackages = false
         var legacyNotes: [Note] = []
-        let stateURL = directory.appending(path: "state.json")
+        let stateURL = root.appending(path: "state.json")
         if FileManager.default.fileExists(atPath: stateURL.path) {
             let state = try decoder.decode(UserState.self, from: Data(contentsOf: stateURL))
             snapshot.positions = state.positions
@@ -372,7 +358,7 @@ public actor LibraryFile {
         let previousName = snapshot.books.first { $0.id == record.id }?.directoryName
         var next = snapshot
         next.importBook(record)
-        let books = directory.appending(path: "books")
+        let books = root.appending(path: "books")
         try FileManager.default.createDirectory(at: books, withIntermediateDirectories: true)
         let destination = books.appending(path: record.directoryName)
         let incoming = destination.appendingPathExtension("incoming")
@@ -407,38 +393,14 @@ public actor LibraryFile {
         }
     }
 
-    public func copyBook(from source: URL, named directoryName: String) throws {
-        let books = directory.appending(path: "books")
-        try FileManager.default.createDirectory(at: books, withIntermediateDirectories: true)
-        let destination = books.appending(path: directoryName)
-        let incoming = destination.appendingPathExtension("incoming")
-        if FileManager.default.fileExists(atPath: incoming.path) {
-            try FileManager.default.removeItem(at: incoming)
-        }
-        try FileManager.default.copyItem(at: source, to: incoming)
-        try replaceDirectory(at: destination, with: incoming)
-        try discardRetired(destination)
-    }
-
     public func removeBook(named directoryName: String) throws {
-        let destination = directory.appending(path: "books").appending(path: directoryName)
+        let destination = root.appending(path: "books").appending(path: directoryName)
         guard FileManager.default.fileExists(atPath: destination.path) else { return }
         try FileManager.default.removeItem(at: destination)
     }
 
-    public func installRuntime(from bundle: URL) throws {
-        let destination = directory.appending(path: "runtime")
-        let incoming = destination.appendingPathExtension("incoming")
-        if FileManager.default.fileExists(atPath: incoming.path) {
-            try FileManager.default.removeItem(at: incoming)
-        }
-        try FileManager.default.copyItem(at: bundle, to: incoming)
-        try replaceDirectory(at: destination, with: incoming)
-        try discardRetired(destination)
-    }
-
     public func saveState(_ snapshot: LibrarySnapshot) throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let state = UserState(
             positions: snapshot.positions,
             folders: snapshot.folders,
@@ -451,11 +413,11 @@ public actor LibraryFile {
             articleRevisions: snapshot.articleRevisions,
             browserCatalog: snapshot.browserCatalog
         )
-        try encoder.encode(state).write(to: directory.appending(path: "state.json"), options: .atomic)
+        try encoder.encode(state).write(to: root.appending(path: "state.json"), options: .atomic)
     }
 
     public func bookText(directoryName: String, contentFile: String) throws -> String {
-        guard let url = Self.bookFile(root: directory, directoryName: directoryName, path: contentFile) else {
+        guard let url = Self.bookFile(root: root, directoryName: directoryName, path: contentFile) else {
             throw LibraryError.escapedPath
         }
         return try String(contentsOf: url, encoding: .utf8)
@@ -485,7 +447,7 @@ public actor LibraryFile {
 
     private func writeArticleRevision(_ files: [String: Data], materialID: String, revision: String) throws {
         for (path, data) in files {
-            guard let destination = Self.articleFile(root: directory, materialID: materialID, path: path, revision: revision) else {
+            guard let destination = Self.articleFile(root: root, materialID: materialID, path: path, revision: revision) else {
                 throw LibraryError.escapedPath
             }
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -494,7 +456,7 @@ public actor LibraryFile {
     }
 
     private func removeArticleRevision(materialID: String, revision: String) throws {
-        let folder = Self.articleDirectory(root: directory, materialID: materialID).appending(path: revision)
+        let folder = Self.articleDirectory(root: root, materialID: materialID).appending(path: revision)
         guard FileManager.default.fileExists(atPath: folder.path) else { return }
         try FileManager.default.removeItem(at: folder)
     }
@@ -503,7 +465,7 @@ public actor LibraryFile {
         guard !notes.isEmpty else { return false }
         for note in notes where !snapshot.highlights.contains(where: { $0.id == note.id }) {
             let piece: Int
-            if let blockID = note.blockID, blockID.hasPrefix("piece:"), let index = Int(blockID.dropFirst(6)) {
+            if let blockID = note.blockID, let index = ReadingPosition(blockID: blockID).pieceIndex {
                 piece = index
             } else {
                 piece = 0
@@ -527,7 +489,7 @@ public actor LibraryFile {
     }
 
     private func readLegacyPackages() -> [ImportPackage] {
-        let packagesDirectory = directory.appending(path: "packages")
+        let packagesDirectory = root.appending(path: "packages")
         guard let files = try? FileManager.default.contentsOfDirectory(at: packagesDirectory, includingPropertiesForKeys: nil) else {
             corruptPackageNames = []
             return []
@@ -546,7 +508,7 @@ public actor LibraryFile {
     }
 
     private func sweepUnreferencedBooks(_ snapshot: LibrarySnapshot) throws {
-        let books = directory.appending(path: "books")
+        let books = root.appending(path: "books")
         guard let children = try? FileManager.default.contentsOfDirectory(at: books, includingPropertiesForKeys: nil) else { return }
         let referenced = Set(snapshot.books.map(\.directoryName))
         for child in children {
@@ -559,10 +521,10 @@ public actor LibraryFile {
     }
 
     private func sweepArticleRevisions(_ snapshot: LibrarySnapshot) throws {
-        let articles = directory.appending(path: "articles")
+        let articles = root.appending(path: "articles")
         guard let keys = try? FileManager.default.contentsOfDirectory(at: articles, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
         let live = Dictionary(uniqueKeysWithValues: snapshot.articleRevisions.map {
-            (Self.articleDirectory(root: directory, materialID: $0.key).lastPathComponent, $0.value)
+            (Self.articleDirectory(root: root, materialID: $0.key).lastPathComponent, $0.value)
         })
         for keyURL in keys {
             let revision = live[keyURL.lastPathComponent]
@@ -586,14 +548,6 @@ public actor LibraryFile {
         }
         for item in children where item.pathExtension == "incoming" {
             try FileManager.default.removeItem(at: item)
-        }
-    }
-
-    private func recoverReplacedItem(named name: String) throws {
-        try finishReplacement(of: directory.appending(path: name))
-        let incoming = directory.appending(path: name).appendingPathExtension("incoming")
-        if FileManager.default.fileExists(atPath: incoming.path) {
-            try FileManager.default.removeItem(at: incoming)
         }
     }
 

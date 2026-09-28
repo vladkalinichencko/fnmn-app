@@ -31,9 +31,9 @@ enum ReaderTypeSize: Int, CaseIterable, Identifiable {
 }
 
 struct ReaderSettingsForm: View {
-    @AppStorage("readerTypeSize") private var typeSize = ReaderTypeSize.large.rawValue
-    @AppStorage("readerUsesBackground") private var usesBackground = false
-    @AppStorage("readerBackgroundHex") private var backgroundHex = "FFFFFF"
+    @AppStorage(ReaderAppearance.typeSizeKey) private var typeSize = ReaderTypeSize.large.rawValue
+    @AppStorage(ReaderAppearance.usesBackgroundKey) private var usesBackground = false
+    @AppStorage(ReaderAppearance.backgroundHexKey) private var backgroundHex = "FFFFFF"
     @State private var color = Color.white
 
     var body: some View {
@@ -59,14 +59,18 @@ struct ReaderSettingsForm: View {
 }
 
 enum ReaderAppearance {
+    static let typeSizeKey = "readerTypeSize"
+    static let usesBackgroundKey = "readerUsesBackground"
+    static let backgroundHexKey = "readerBackgroundHex"
+
     static var typeSize: DynamicTypeSize {
-        let stored = UserDefaults.standard.object(forKey: "readerTypeSize") as? Int ?? ReaderTypeSize.large.rawValue
+        let stored = UserDefaults.standard.object(forKey: typeSizeKey) as? Int ?? ReaderTypeSize.large.rawValue
         return ReaderTypeSize(rawValue: stored)?.dynamicTypeSize ?? .large
     }
 
     static var background: Color? {
-        guard UserDefaults.standard.bool(forKey: "readerUsesBackground") else { return nil }
-        return Color(hex: UserDefaults.standard.string(forKey: "readerBackgroundHex") ?? "")
+        guard UserDefaults.standard.bool(forKey: usesBackgroundKey) else { return nil }
+        return Color(hex: UserDefaults.standard.string(forKey: backgroundHexKey) ?? "")
     }
 }
 

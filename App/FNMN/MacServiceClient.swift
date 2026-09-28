@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 protocol MacServicePort {
     func check(connection: MacConnection) async throws
-    func prepare(url: URL, folder: String?, connection: MacConnection) async throws -> (ImportPackage, [String: Data])
+    func prepare(url: URL, connection: MacConnection) async throws -> (ImportPackage, [String: Data])
 }
 
 struct ArticleClient: MacServicePort {
@@ -16,11 +16,11 @@ struct ArticleClient: MacServicePort {
         guard health.status == "ok" else { throw URLError(.badServerResponse) }
     }
 
-    func prepare(url: URL, folder: String?, connection: MacConnection) async throws -> (ImportPackage, [String: Data]) {
+    func prepare(url: URL, connection: MacConnection) async throws -> (ImportPackage, [String: Data]) {
         var request = authorizedRequest(path: "articles", connection: connection)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(ArticleRequest(url: url, folders: folder.map { [$0] } ?? []))
+        request.httpBody = try JSONEncoder().encode(ArticleRequest(url: url, folders: []))
         let (data, response) = try await URLSession.shared.data(for: request)
         try accept(response, data: data)
         let delivery = try JSONDecoder().decode(ArticleDelivery.self, from: data)

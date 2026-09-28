@@ -14,7 +14,7 @@ private struct ReaderState {
 }
 
 private enum ReaderAction {
-    case scroll(Int?)
+    case scroll(Int)
     case visible(Int)
     case present(ReaderDestination)
     case dismiss
@@ -26,7 +26,7 @@ private func reduce(_ state: ReaderState, _ action: ReaderAction) -> ReaderState
     switch action {
     case let .scroll(piece):
         state.scrollPiece = piece
-        if let piece { state.trackedPiece = piece }
+        state.trackedPiece = piece
     case let .visible(piece):
         state.trackedPiece = piece
     case let .present(destination):
