@@ -3,7 +3,48 @@ import Foundation
 @MainActor
 protocol MacServicePort {
     func check(connection: MacConnection) async throws
-    func prepare(url: URL, connection: MacConnection) async throws -> (ImportPackage, [String: Data])
+    func startJob(url: URL, connection: MacConnection) async throws -> MacJob
+    func job(_ id: String, connection: MacConnection) async throws -> MacJob
+    func package(of id: String, connection: MacConnection) async throws -> (ImportPackage, [String: Data])
+}
+
+struct MacJob: Decodable, Equatable {
+    enum Phase: String, Decodable { case queued, running, done, failed }
+
+    let id: String
+    let phase: Phase
+    let stage: String?
+    let done: Int?
+    let total: Int?
+    let error: String?
+
+    var isWaiting: Bool { phase == .queued || phase == .running }
+
+    var step: ImportStep {
+        let fraction = total.flatMap { total in done.map { total > 0 ? Double($0) / Double(total) : 0 } }
+        return ImportStep(text: text, fraction: fraction)
+    }
+
+    private var text: String {
+        let count = total.map { " \(done ?? 0) of \($0)" } ?? ""
+        switch phase == .queued ? "queued" : stage ?? "" {
+        case "queued": return "Waiting for the Mac"
+        case "fetchingPage": return "Fetching the page"
+        case "fetchingAssets": return "Downloading files" + count
+        case "waitingForOCR": return "Waiting for another PDF to finish"
+        case "ocr": return "Reading page" + count
+        case "assembly": return "Joining OCR with the PDF text"
+        case "footnotes": return "Re-reading footnotes" + count
+        case "formulas": return "Re-reading formulas" + count
+        case "export": return "Checking the result"
+        case let other: return other
+        }
+    }
+}
+
+struct ImportStep: Equatable {
+    let text: String
+    let fraction: Double?
 }
 
 struct ArticleClient: MacServicePort {
@@ -16,15 +57,27 @@ struct ArticleClient: MacServicePort {
         guard health.status == "ok" else { throw URLError(.badServerResponse) }
     }
 
-    func prepare(url: URL, connection: MacConnection) async throws -> (ImportPackage, [String: Data]) {
-        var request = authorizedRequest(path: "articles", connection: connection)
+    func startJob(url: URL, connection: MacConnection) async throws -> MacJob {
+        var request = authorizedRequest(path: "jobs", connection: connection)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(ArticleRequest(url: url, folders: []))
+        request.httpBody = try JSONEncoder().encode(JobRequest(url: url, folders: []))
+        return try await decoded(MacJob.self, for: request)
+    }
+
+    func job(_ id: String, connection: MacConnection) async throws -> MacJob {
+        try await decoded(MacJob.self, for: authorizedRequest(path: "jobs/\(id)", connection: connection))
+    }
+
+    func package(of id: String, connection: MacConnection) async throws -> (ImportPackage, [String: Data]) {
+        let delivery = try await decoded(ArticleDelivery.self, for: authorizedRequest(path: "jobs/\(id)/package", connection: connection))
+        return (delivery.package, delivery.files)
+    }
+
+    private func decoded<Value: Decodable>(_ type: Value.Type, for request: URLRequest) async throws -> Value {
         let (data, response) = try await URLSession.shared.data(for: request)
         try accept(response, data: data)
-        let delivery = try JSONDecoder().decode(ArticleDelivery.self, from: data)
-        return (delivery.package, delivery.files)
+        return try JSONDecoder().decode(type, from: data)
     }
 
     private func authorizedRequest(path: String, connection: MacConnection) -> URLRequest {
@@ -37,16 +90,16 @@ struct ArticleClient: MacServicePort {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard 200 ..< 300 ~= http.statusCode else {
             let detail = (try? JSONDecoder().decode(FailureBody.self, from: data))?.detail
-            throw ArticleServiceError.rejected(detail ?? "Mac service returned HTTP \(http.statusCode).")
+            throw MacServiceError.rejected(detail ?? "Mac service returned HTTP \(http.statusCode).")
         }
     }
 
     private struct Health: Decodable { let status: String }
-    private struct ArticleRequest: Encodable { let url: URL; let folders: [String] }
+    private struct JobRequest: Encodable { let url: URL; let folders: [String] }
     private struct FailureBody: Decodable { let detail: String }
 }
 
-private enum ArticleServiceError: Error, LocalizedError {
+enum MacServiceError: Error, LocalizedError {
     case rejected(String)
 
     var errorDescription: String? {

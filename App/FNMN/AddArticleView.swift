@@ -19,8 +19,15 @@ struct AddArticleView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if case let .working(status) = library.preparation {
-                    ProgressView(status)
+                if case let .working(step) = library.preparation {
+                    Group {
+                        if let fraction = step.fraction {
+                            ProgressView(step.text, value: fraction)
+                        } else {
+                            ProgressView(step.text)
+                        }
+                    }
+                    .padding()
                         .navigationTitle("Add")
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import threading
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 
 from importer import import_link
 from web import LIVE
@@ -31,7 +31,6 @@ class Job:
     total: int | None = None
     error: str | None = None
     package: dict | None = None
-    future: Future | None = field(default=None, repr=False)
 
     def status(self) -> dict:
         return {"id": self.id, "url": self.url, "phase": self.phase, "stage": self.stage,
@@ -42,7 +41,7 @@ def submit(url: str, folders: list[str]) -> Job:
     job = Job(uuid.uuid4().hex, url, folders)
     with _LOCK:
         _JOBS[job.id] = job
-    job.future = _POOL.submit(_run, job)
+    _POOL.submit(_run, job)
     return job
 
 
@@ -51,7 +50,7 @@ def find(job_id: str) -> Job | None:
         return _JOBS.get(job_id)
 
 
-def _run(job: Job) -> dict:
+def _run(job: Job) -> None:
     job.phase = "running"
 
     def report(stage: str, done: int | None, total: int | None) -> None:
@@ -61,6 +60,5 @@ def _run(job: Job) -> dict:
         job.package = import_link(job.url, job.folders, LIVE, report)
     except Exception as error:
         job.phase, job.error = "failed", str(error)
-        raise
+        return
     job.phase = "done"
-    return job.package

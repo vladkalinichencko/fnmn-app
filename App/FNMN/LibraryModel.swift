@@ -9,7 +9,7 @@ enum LibraryLoadState: Equatable {
 
 enum Preparation: Equatable {
     case idle
-    case working(String)
+    case working(ImportStep)
     case choosing(String)
     case failed(String)
 }
@@ -116,12 +116,19 @@ final class LibraryModel {
             preparation = .failed(MacConnectionError.notConfigured.localizedDescription)
             return
         }
-        preparation = .working("Fetching the page")
-        ImportActivity.start(title: url.host ?? "Article", status: "Fetching the page")
+        show(ImportStep(text: "Sending the link to the Mac", fraction: nil), title: url.host ?? "Article")
         do {
-            let (package, files) = try await macService.prepare(url: url, connection: macConnection)
-            preparation = .working("Saving")
-            await ImportActivity.update(status: "Saving", fraction: 0.8)
+            var job = try await macService.startJob(url: url, connection: macConnection)
+            while job.isWaiting {
+                await show(job.step)
+                try await Task.sleep(for: .seconds(1))
+                job = try await macService.job(job.id, connection: macConnection)
+            }
+            guard job.phase == .done else {
+                throw MacServiceError.rejected(job.error ?? "The Mac could not prepare this link.")
+            }
+            await show(ImportStep(text: "Saving", fraction: nil))
+            let (package, files) = try await macService.package(of: job.id, connection: macConnection)
             let materialID = try await storeArticle(package, files: files)
             await ImportActivity.end(status: "Ready")
             preparation = .choosing(materialID)
@@ -131,10 +138,19 @@ final class LibraryModel {
         }
     }
 
+    private func show(_ step: ImportStep, title: String) {
+        preparation = .working(step)
+        ImportActivity.start(title: title, step: step)
+    }
+
+    private func show(_ step: ImportStep) async {
+        preparation = .working(step)
+        await ImportActivity.update(step)
+    }
+
     func prepareFile(at url: URL) async {
         guard acceptsPreparation else { return }
-        preparation = .working("Saving")
-        ImportActivity.start(title: url.lastPathComponent, status: "Saving")
+        show(ImportStep(text: "Saving", fraction: nil), title: url.lastPathComponent)
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {

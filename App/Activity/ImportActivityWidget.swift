@@ -8,22 +8,34 @@ struct ImportActivityWidget: Widget {
             VStack(alignment: .leading) {
                 Text(context.attributes.title)
                 Text(context.state.status)
-                ProgressView(value: context.state.fraction)
+                ImportProgress(fraction: context.state.fraction)
             }
             .padding()
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(context.state.status)
-                    ProgressView(value: context.state.fraction)
+                    ImportProgress(fraction: context.state.fraction)
                 }
             } compactLeading: {
                 Image(systemName: "arrow.down.doc")
             } compactTrailing: {
-                ProgressView(value: context.state.fraction)
+                ImportProgress(fraction: context.state.fraction)
             } minimal: {
-                ProgressView(value: context.state.fraction)
+                ImportProgress(fraction: context.state.fraction)
             }
+        }
+    }
+}
+
+private struct ImportProgress: View {
+    let fraction: Double?
+
+    var body: some View {
+        if let fraction {
+            ProgressView(value: fraction)
+        } else {
+            ProgressView()
         }
     }
 }

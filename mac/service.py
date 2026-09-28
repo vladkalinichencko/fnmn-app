@@ -3,7 +3,6 @@
     POST /jobs            {"url", "folders"} -> {"id", ...status}
     GET  /jobs/{id}       phase queued | running | done | failed, stage, done, total, error
     GET  /jobs/{id}/package   the delivery once the job is done
-    POST /articles        the same import, answered when it finishes; for short links
 """
 
 from __future__ import annotations
@@ -53,15 +52,6 @@ def job_package(job_id: str) -> dict:
     if job.phase != "done":
         raise HTTPException(409, f"job is {job.phase}")
     return job.package
-
-
-@app.post("/articles")
-def article(request: ImportRequest) -> dict:
-    job = jobs.submit(request.url, request.folders)
-    try:
-        return job.future.result()
-    except Exception as error:
-        raise HTTPException(422, str(error)) from error
 
 
 def _job(job_id: str) -> jobs.Job:
