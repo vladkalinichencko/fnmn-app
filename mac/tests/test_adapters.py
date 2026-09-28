@@ -306,6 +306,12 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(core, HASHES["yt.solver.core.min.js"])
         self.assertEqual(lib, HASHES["yt.solver.lib.min.js"])
 
+    def test_notebook_links_stop_instead_of_saving_the_github_page(self):
+        url = "https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/11_qwen3/standalone-qwen3-moe-plus-kvcache.ipynb"
+        with self.assertRaises(ImportFailure) as caught:
+            import_link(url, lambda page: "", lambda page: b"", [])
+        self.assertIn("Jupyter notebook", str(caught.exception))
+
     def test_pdf_links_still_stop(self):
         with self.assertRaises(ImportFailure) as caught:
             import_link("https://example.com/paper.pdf", lambda page: "", lambda page: b"", [])

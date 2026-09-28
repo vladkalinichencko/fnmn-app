@@ -10,6 +10,7 @@ NAMES = {
     "substack": "Substack",
     "chatgpt": "ChatGPT",
     "pdf": "PDF",
+    "notebook": "Jupyter notebook",
 }
 
 
@@ -32,4 +33,6 @@ def source_kind(url: str) -> str | None:
         return "chatgpt"
     if parsed.path.lower().endswith(".pdf"):
         return "pdf"
+    if parsed.path.lower().endswith(".ipynb"):
+        return "notebook"
     return "web"
