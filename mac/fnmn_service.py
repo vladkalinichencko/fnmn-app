@@ -16,7 +16,8 @@ from adapter_arxiv import arxiv_markdown
 from adapter_chatgpt import chatgpt_markdown
 from adapter_x import x_markdown
 from adapter_youtube import youtube_package_live
-from html_markdown import article_markdown
+from html_markdown import article_markdown, with_base
+from page_browser import rendered_page
 from sources import NAMES, source_kind
 
 import httpx
@@ -45,17 +46,12 @@ def import_web_article(
     fetch_text: Callable[[str], str],
     fetch_bytes: Callable[[str], bytes],
     folders: list[str] | None = None,
+    render_text: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ImportFailure("fetchingPage", "article URL must be absolute HTTP or HTTPS")
-    try:
-        source = fetch_text(url)
-        markdown, assets = article_markdown(source, url)
-    except ImportFailure:
-        raise
-    except Exception as error:
-        raise ImportFailure("fetchingPage", str(error)) from error
+    source, markdown, assets = _read_article(url, fetch_text, render_text)
     files: dict[str, str] = {}
     try:
         for path, asset_url in assets.items():
@@ -63,9 +59,13 @@ def import_web_article(
                 files[path] = base64.b64encode(fetch_bytes(asset_url)).decode("ascii")
             except Exception:
                 image = rf"!\[[^\]]*\]\({re.escape(path)}\)"
-                if f"```fnmn-video\n{path}" in markdown or not re.search(image, markdown):
+                video = f"```fnmn-video\n{path}\n```"
+                if video in markdown:
+                    markdown = markdown.replace(video, "")
+                elif re.search(image, markdown):
+                    markdown = re.sub(image, "", markdown)
+                else:
                     raise
-                markdown = re.sub(image, "", markdown)
     except Exception as error:
         raise ImportFailure("fetchingAssets", str(error)) from error
     try:
@@ -76,17 +76,46 @@ def import_web_article(
     return package
 
 
+def _read_article(
+    url: str,
+    fetch_text: Callable[[str], str],
+    render_text: Callable[[str], str] | None,
+) -> tuple[str, str, dict[str, str]]:
+    try:
+        source = fetch_text(url)
+        markdown, assets = article_markdown(source, url)
+        if _has_prose(markdown) or render_text is None:
+            return source, markdown, assets
+        refusal = "page has no readable text before its scripts run"
+    except Exception as error:
+        if render_text is None:
+            raise ImportFailure("fetchingPage", str(error)) from error
+        refusal = str(error)
+    try:
+        source = render_text(url)
+        markdown, assets = article_markdown(source, url)
+    except Exception as error:
+        raise ImportFailure("fetchingPage", f"{refusal}; Chrome: {error}") from error
+    return source, markdown, assets
+
+
+def _has_prose(markdown: str) -> bool:
+    text = re.sub(r"```.*?```", "", markdown, flags=re.S)
+    return any(line.strip() and not line.startswith("#") for line in text.splitlines())
+
+
 def import_link(
     url: str,
     fetch_text: Callable[[str], str],
     fetch_bytes: Callable[[str], bytes],
     folders: list[str] | None = None,
+    render_text: Callable[[str], str] | None = None,
 ) -> dict[str, Any]:
     kind = source_kind(url)
     if kind is None:
         raise ImportFailure("fetchingPage", "article URL must be absolute HTTP or HTTPS")
     if kind in {"web", "substack"}:
-        return import_web_article(url, fetch_text, fetch_bytes, folders)
+        return import_web_article(url, fetch_text, fetch_bytes, folders, render_text)
     if kind == "youtube":
         try:
             return youtube_package_live(url, folders or [])
@@ -158,10 +187,18 @@ def _markdown_package(url: str, source: str, markdown: str, folders: list[str]) 
     }
 
 
+_USER_AGENT = "FNMN/1.0 (https://github.com/vladkalinichencko/fnmn-app) article reader"
+
+
 def _http_get(url: str) -> httpx.Response:
-    response = httpx.get(url, follow_redirects=True, timeout=30, headers={"User-Agent": "FNMN/1.0 article reader"})
+    response = httpx.get(url, follow_redirects=True, timeout=30, headers={"User-Agent": _USER_AGENT})
     response.raise_for_status()
     return response
+
+
+def _page_source(url: str) -> str:
+    response = _http_get(url)
+    return with_base(response.text, str(response.url))
 
 
 def require_token(authorization: str | None = Header(default=None)) -> None:
@@ -183,7 +220,7 @@ def health() -> dict[str, str]:
 @app.post("/articles", dependencies=[Depends(require_token)])
 def article(request: ArticleRequest) -> dict[str, Any]:
     try:
-        return import_link(request.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, request.folders)
+        return import_link(request.url, _page_source, lambda page: _http_get(page).content, request.folders, rendered_page)
     except ImportFailure as error:
         raise HTTPException(422, str(error)) from error
 
@@ -194,7 +231,7 @@ def main() -> None:
     parser.add_argument("--folder", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    package = import_link(args.url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, args.folder)
+    package = import_link(args.url, _page_source, lambda page: _http_get(page).content, args.folder, rendered_page)
     args.output.write_text(json.dumps(package, ensure_ascii=False, indent=2))
 
 

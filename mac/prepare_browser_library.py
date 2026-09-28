@@ -15,7 +15,8 @@ from pathlib import Path
 
 from adapter_youtube import _package as video_package
 from adapter_youtube import video_id_from_url, youtube_package_live
-from fnmn_service import _http_get, import_link
+from fnmn_service import _http_get, _page_source, import_link
+from page_browser import rendered_page
 
 
 def material_rows(library: dict) -> list[dict]:
@@ -45,7 +46,7 @@ def prepare(row: dict, output: Path, enrich_videos: bool = False) -> tuple[str, 
         if video_id_from_url(url):
             delivery = youtube_package_live(url, row["folders"], strict_captions=True)
         else:
-            delivery = import_link(url, lambda page: _http_get(page).text, lambda page: _http_get(page).content, row["folders"])
+            delivery = import_link(url, _page_source, lambda page: _http_get(page).content, row["folders"], rendered_page)
         temporary = destination.with_suffix(".incoming")
         temporary.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")
         temporary.replace(destination)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from html import escape
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -18,6 +19,7 @@ _TEX = './/*[local-name()="annotation"][@encoding="application/x-tex"]'
 
 def article_markdown(source: str, page_url: str) -> tuple[str, dict[str, str]]:
     document = html.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", source, count=1))
+    document.make_links_absolute(page_url, resolve_base_href=True, handle_failures="ignore")
     root = _article_root(document)
     downloads: dict[str, str] = {}
     blocks = [_render(child, page_url, downloads) for child in root]
@@ -29,6 +31,19 @@ def article_markdown(source: str, page_url: str) -> tuple[str, dict[str, str]]:
         if title and heading not in text:
             text = f"{heading}\n\n{text}" if text else heading
     return text, downloads
+
+
+def with_base(source: str, url: str) -> str:
+    """Pin relative addresses to the address the page was finally served from."""
+    if re.search(r"<base\s[^>]*href", source, re.I):
+        return source
+    tag = f'<base href="{escape(url, quote=True)}">'
+    head = re.search(r"<head(?:\s[^>]*)?>", source, re.I)
+    if head:
+        return source[:head.end()] + tag + source[head.end():]
+    declaration = re.match(r"\s*<\?xml[^>]*\?>", source)
+    at = declaration.end() if declaration else 0
+    return source[:at] + tag + source[at:]
 
 
 def _render(node, page_url: str, downloads: dict[str, str]) -> str:

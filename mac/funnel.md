@@ -32,7 +32,7 @@ tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel --bg 8765
 tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel status
 ```
 
-Первое включение Funnel может открыть страницу Tailscale для разрешения публичного доступа. Каталог состояния хранит вход и TLS-сертификат между запусками `tailscaled`. Остановить публикацию: `tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel --https=443 off`. Не публиковать каталог файлов или другие локальные порты.
+Первое включение Funnel может открыть страницу Tailscale для разрешения публичного доступа. Сразу после включения TLS несколько минут обрывается, пока Tailscale выписывает сертификат; проверять `/health` лучше после этого. Каталог состояния хранит вход и TLS-сертификат между запусками `tailscaled`. Остановить публикацию: `tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel --https=443 off`. Не публиковать каталог файлов или другие локальные порты.
 
 ## iPhone/iPad
 

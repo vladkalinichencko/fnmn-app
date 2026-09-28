@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from fnmn_service import ImportFailure, app, import_web_article
+from html_markdown import with_base
 
 
 class ArticleTests(unittest.TestCase):
@@ -79,6 +80,65 @@ class ArticleTests(unittest.TestCase):
         self.assertIn("Hi", package["body"])
         self.assertNotIn("assets/", package["body"])
         self.assertEqual(package["files"], {})
+
+    def test_missing_video_keeps_article_without_video_block(self):
+        source = "<html><body><article><p>Hi</p><video src='clip.mp4'></video></article></body></html>"
+
+        def fetch_bytes(url):
+            raise OSError("404")
+
+        package = import_web_article("https://example.com/notes", lambda url: source, fetch_bytes, [])
+        self.assertIn("Hi", package["body"])
+        self.assertNotIn("fnmn-video", package["body"])
+        self.assertEqual(package["files"], {})
+
+    def test_refused_page_is_read_from_the_rendered_browser_page(self):
+        def fetch_text(url):
+            raise OSError("403 Forbidden")
+
+        rendered = "<html><body><article><h1>Notes</h1><p>Body from the browser.</p></article></body></html>"
+        package = import_web_article("https://example.com/notes", fetch_text, lambda url: b"", [], lambda url: rendered)
+        self.assertIn("Body from the browser.", package["body"])
+
+    def test_script_shell_is_read_from_the_rendered_browser_page(self):
+        shell = "<html><body><div id='root'></div><script>boot()</script></body></html>"
+        rendered = "<html><body><article><p>Filled by the page script.</p></article></body></html>"
+        package = import_web_article("https://example.com/app", lambda url: shell, lambda url: b"", [], lambda url: rendered)
+        self.assertIn("Filled by the page script.", package["body"])
+
+    def test_redirected_page_resolves_pictures_from_its_final_address(self):
+        source = with_base(
+            "<html><head><title>Q</title></head><body><article><p>Text.</p><img src='assets/a.png'></article></body></html>",
+            "https://example.com/quanta/",
+        )
+        seen = []
+
+        def fetch_bytes(url):
+            seen.append(url)
+            return b"png"
+
+        import_web_article("https://example.com/quanta", lambda url: source, fetch_bytes, [])
+        self.assertEqual(seen, ["https://example.com/quanta/assets/a.png"])
+
+    def test_readable_page_does_not_open_the_browser(self):
+        source = "<html><body><article><p>Plain page.</p></article></body></html>"
+
+        def render_text(url):
+            raise AssertionError("browser opened for a readable page")
+
+        package = import_web_article("https://example.com/notes", lambda url: source, lambda url: b"", [], render_text)
+        self.assertIn("Plain page.", package["body"])
+
+    def test_page_refused_by_browser_too_reports_both_reasons(self):
+        def fail(reason):
+            def fetch(url):
+                raise OSError(reason)
+            return fetch
+
+        with self.assertRaises(ImportFailure) as caught:
+            import_web_article("https://example.com/notes", fail("403 Forbidden"), lambda url: b"", [], fail("HTTP 403"))
+        self.assertEqual(caught.exception.phase, "fetchingPage")
+        self.assertIn("403 Forbidden; Chrome: HTTP 403", str(caught.exception))
 
     def test_heading_with_math_stays_one_section(self):
         source = """
