@@ -1,22 +1,44 @@
 import SwiftUI
+import Observation
 
 @main
 struct FNMNApp: App {
     @State private var library = LibraryModel()
-    @State private var pendingContinue = false
 
     var body: some Scene {
         WindowGroup {
-            AppShell()
+            SceneRoot()
                 .environment(library)
-                .task { await library.load() }
-                .onOpenURL(perform: handleOpenURL)
-                .onChange(of: library.loadState) { _, state in
-                    guard state == .ready, pendingContinue else { return }
-                    pendingContinue = false
-                    openContinued()
-                }
         }
+    }
+}
+
+@MainActor @Observable
+final class WindowNavigation {
+    var openMaterialID: String?
+    var pendingShare: URL?
+    var ownsPreparation = false
+
+    func open(_ materialID: String) {
+        openMaterialID = materialID
+    }
+}
+
+private struct SceneRoot: View {
+    @Environment(LibraryModel.self) private var library
+    @State private var navigation = WindowNavigation()
+    @State private var pendingContinue = false
+
+    var body: some View {
+        AppShell()
+            .environment(navigation)
+            .task { if library.loadState == .loading { await library.load() } }
+            .onOpenURL(perform: handleOpenURL)
+            .onChange(of: library.loadState) { _, state in
+                guard state == .ready, pendingContinue else { return }
+                pendingContinue = false
+                openContinued()
+            }
     }
 
     private func handleOpenURL(_ url: URL) {
@@ -29,11 +51,11 @@ struct FNMNApp: App {
             return
         }
         guard let shared = CaptureHandoff.sharedURL(from: url) else { return }
-        library.pendingShare = shared
+        navigation.pendingShare = shared
     }
 
     private func openContinued() {
         guard let id = library.snapshot.continuedID, !library.snapshot.isArchived(id) else { return }
-        library.open(id)
+        navigation.open(id)
     }
 }

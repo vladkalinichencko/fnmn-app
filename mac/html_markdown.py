@@ -17,7 +17,7 @@ _TEX = './/*[local-name()="annotation"][@encoding="application/x-tex"]'
 
 
 def article_markdown(source: str, page_url: str) -> tuple[str, dict[str, str]]:
-    document = html.fromstring(source)
+    document = html.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", source, count=1))
     root = _article_root(document)
     downloads: dict[str, str] = {}
     blocks = [_render(child, page_url, downloads) for child in root]

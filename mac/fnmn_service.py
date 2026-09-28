@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
@@ -58,7 +59,13 @@ def import_web_article(
     files: dict[str, str] = {}
     try:
         for path, asset_url in assets.items():
-            files[path] = base64.b64encode(fetch_bytes(asset_url)).decode("ascii")
+            try:
+                files[path] = base64.b64encode(fetch_bytes(asset_url)).decode("ascii")
+            except Exception:
+                image = rf"!\[[^\]]*\]\({re.escape(path)}\)"
+                if f"```fnmn-video\n{path}" in markdown or not re.search(image, markdown):
+                    raise
+                markdown = re.sub(image, "", markdown)
     except Exception as error:
         raise ImportFailure("fetchingAssets", str(error)) from error
     try:
@@ -130,7 +137,7 @@ def _text_package(
 def _markdown_package(url: str, source: str, markdown: str, folders: list[str]) -> dict[str, Any]:
     if not markdown.strip():
         raise ValueError("article markdown is empty")
-    document = html.fromstring(source)
+    document = html.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", source, count=1))
     heading = next((line[2:].strip() for line in markdown.splitlines() if line.startswith("# ")), "")
     title_values = document.xpath("string(//title)")
     title = heading or (title_values or "").strip() or urlparse(url).netloc
@@ -168,7 +175,7 @@ def require_token(authorization: str | None = Header(default=None)) -> None:
 app = FastAPI(title="FNMN article service")
 
 
-@app.get("/health")
+@app.get("/health", dependencies=[Depends(require_token)])
 def health() -> dict[str, str]:
     return {"status": "ok"}
 

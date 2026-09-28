@@ -21,7 +21,7 @@ def _stable_id(prefix: str, value: str) -> str:
     return f"{prefix}:{hashlib.sha256(value.encode()).hexdigest()[:24]}"
 
 
-def youtube_package_live(url: str, folders: list[str] | None = None, cookies_from_browser: str | None = None) -> dict:
+def youtube_package_live(url: str, folders: list[str] | None = None, cookies_from_browser: str | None = None, strict_captions: bool = False) -> dict:
     video_id = video_id_from_url(url)
     if video_id is None:
         raise ValueError("YouTube address has no video id")
@@ -35,6 +35,8 @@ def youtube_package_live(url: str, folders: list[str] | None = None, cookies_fro
         try:
             cues = _download_cues(source_url, language, cookies_from_browser)
         except Exception:
+            if strict_captions:
+                raise
             cues = []
     return _package(video_id, source_url, title, author, cues, folders or [])
 
@@ -100,6 +102,7 @@ def _ytdlp_info(url: str, download: bool, cookies_from_browser: str | None = Non
         "skip_download": True,
         "noplaylist": True,
         "quiet": True,
+        "noprogress": True,
         "js_runtimes": {"node": {"path": "node"}},
         **_browser_cookies(cookies_from_browser),
     }
@@ -151,6 +154,7 @@ def _ytdlp_download(url: str, language: str, directory, cookies_from_browser: st
         "skip_download": True,
         "noplaylist": True,
         "quiet": True,
+        "noprogress": True,
         "writesubtitles": True,
         "writeautomaticsub": True,
         "subtitleslangs": [language],

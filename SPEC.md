@@ -1,6 +1,6 @@
 # FNMN: учебная лента
 
-Статус: проект будущего этапа учебной ленты. Актуальный порядок разработки, архитектура читателя и открытые решения находятся в [едином плане](notes/plan.md), задачи — в [notes/tasks.md](notes/tasks.md). Описанные здесь модели и интерфейсы относятся к ленте и уточняются при её подключении к библиотеке. Исследования: [Apple](notes/research/apple-stack.md), [рендеринг](notes/research/rendering.md), [знания](notes/research/knowledge.md), [адаптация](notes/research/adaptation.md).
+Статус: отложенная будущая разработка. Лента, посты, закладки постов, генерация и переписывание учебных материалов, реакции и адаптация не входят в текущий этап. Сейчас проектируется и доводится библиотека и просмотрщик файлов: навигация, поиск, добавление, чтение и связь с Mac. Текущий интерфейс описан в [APP_SPEC.md](APP_SPEC.md), проект его экранов — в [notes/design/library-ui.md](notes/design/library-ui.md), порядок работ — в [notes/plan.md](notes/plan.md) и [notes/tasks.md](notes/tasks.md). Описанные ниже модели и интерфейсы относятся только к будущей ленте. Исследования: [Apple](notes/research/apple-stack.md), [рендеринг](notes/research/rendering.md), [знания](notes/research/knowledge.md), [адаптация](notes/research/adaptation.md).
 
 ## 1. Продукт
 

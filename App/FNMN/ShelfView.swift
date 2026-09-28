@@ -7,7 +7,7 @@ private enum ShellTab: Hashable {
 }
 
 struct AppShell: View {
-    @Environment(LibraryModel.self) private var library
+    @Environment(WindowNavigation.self) private var navigation
     @State private var tab = ShellTab.library
 
     var body: some View {
@@ -24,7 +24,7 @@ struct AppShell: View {
                 }
             }
         }
-        .onChange(of: library.openMaterialID) { _, id in
+        .onChange(of: navigation.openMaterialID) { _, id in
             guard id != nil else { return }
             tab = .library
         }
@@ -33,6 +33,7 @@ struct AppShell: View {
 
 private struct SearchView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(WindowNavigation.self) private var navigation
     @State private var query = ""
 
     var body: some View {
@@ -45,10 +46,10 @@ private struct SearchView: View {
                 ContentUnavailableView.search(text: query)
             } else {
                 ForEach(packages, id: \.material.id) { package in
-                    Button(package.material.title) { library.open(package.material.id) }
+                    Button(package.material.title) { navigation.open(package.material.id) }
                 }
                 ForEach(books) { book in
-                    Button(book.metadata.title) { library.open(book.id) }
+                    Button(book.metadata.title) { navigation.open(book.id) }
                 }
             }
         }
@@ -66,6 +67,7 @@ private struct ShelfNote: Identifiable {
 
 struct ShelfView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(WindowNavigation.self) private var navigation
 
     var body: some View {
         NavigationStack {
@@ -77,7 +79,7 @@ struct ShelfView: View {
                     }
                     ForEach(entries) { entry in
                         Button {
-                            library.open(entry.materialID)
+                            navigation.open(entry.materialID)
                         } label: {
                             VStack(alignment: .leading) {
                                 Text(entry.caption)
@@ -95,7 +97,7 @@ struct ShelfView: View {
                     }
                     ForEach(marked) { highlight in
                         Button {
-                            library.open(highlight.materialID)
+                            navigation.open(highlight.materialID)
                         } label: {
                             VStack(alignment: .leading) {
                                 Text(highlight.quote)
@@ -120,7 +122,7 @@ struct ShelfView: View {
                         Text("Nothing archived").foregroundStyle(.secondary)
                     }
                     ForEach(library.snapshot.archived, id: \.self) { id in
-                        Button(title(id)) { library.open(id) }
+                        Button(title(id)) { navigation.open(id) }
                             .swipeActions {
                                 Button("Unarchive") { Task { await library.setArchived(false, materialID: id) } }
                             }
@@ -143,7 +145,7 @@ struct ShelfView: View {
             Text("None").foregroundStyle(.secondary)
         }
         ForEach(ids, id: \.self) { id in
-            Button(title(id)) { library.open(id) }
+            Button(title(id)) { navigation.open(id) }
         }
     }
 

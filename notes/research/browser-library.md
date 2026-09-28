@@ -9,3 +9,17 @@
 Текущий экспорт охватывает 489 исходных записей и 476 уникальных URL. После объединения повторов и раскрытия плейлистов в нём 344 источника и 937 вложенных материалов; 68 сохранённых страниц сами являются источниками. В `review` и `errors` нет записей.
 
 Tab Groups Dia не входят в результат. [`dia-local-sources.md`](dia-local-sources.md) фиксирует, что их локальные базы не читаются как SQLite или JSON. Для добавления групп нужен экспорт URL из интерфейса Dia или отдельный доступ к живому внутреннему API.
+
+## Подготовка для локального импорта
+
+Команда ниже создаёт `prepared-browser-library/catalog.json` с исходной иерархией и по одному пакету в `deliveries/` для каждого подготовленного материала. Повторный запуск пропускает готовые пакеты. Видео можно сначала сохранить без подписей для проверки плеера, затем дополнить их через yt-dlp.
+
+```sh
+.venv/bin/python mac/prepare_browser_library.py browser-library.json prepared-browser-library --seed-videos
+.venv/bin/python mac/prepare_browser_library.py browser-library.json prepared-browser-library --kind web --workers 2
+.venv/bin/python mac/prepare_browser_library.py browser-library.json prepared-browser-library --kind video --enrich-videos --workers 1
+```
+
+В приложении выберите папку `prepared-browser-library` через **Add → Choose library or book folder**. FNMN сохранит каталог и готовые статьи и видео в локальной библиотеке. Ссылки без готового пакета остаются в **Sources** и открывают исходную страницу. Для короткой проверки используйте `prepared-browser-library/smoke/FNMN-Test-Import.zip`: распакуйте архив в Files и выберите папку `FNMN-Test-Import`.
+
+Пакет от 28 сентября содержит 344 источника и 880 готовых материалов: 310 веб-страниц и 570 видео. У 28 видео есть подписи; остальные видео открываются без транскрипта. Причины отказа для 52 веб-ссылок лежат в `prepared-browser-library/errors-web.json`. Готовая локальная база находится в `prepared-browser-library/local-library`, а архив для импорта через Files — в `prepared-browser-library/FNMN-Library-Import.zip`.

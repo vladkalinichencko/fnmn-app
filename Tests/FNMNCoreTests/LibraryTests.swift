@@ -18,6 +18,25 @@ private let article = ImportPackage(
     #expect(library.placements[article.material.id] == ["Inbox", "Papers"])
 }
 
+@Test func browserImportKeepsSourceOnlySitesAndPreparedMaterials() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let prepared = root.appending(path: "prepared")
+    try FileManager.default.createDirectory(at: prepared.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let catalog = #"{"collections":[{"id":"reading","name":"Reading"}],"sources":[{"name":"Example","url":"https://example.com","kind":"site","saved_in":["reading"],"found_in":["reading"],"materials":[]},{"name":"Author","url":"https://example.org","kind":"author","saved_in":["reading"],"found_in":["reading"],"materials":[{"title":"A","url":"https://example.com/a","saved_in":["reading"],"found_in":["reading"]}]}]}"#
+    try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
+    var delivery = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(article)) as? [String: Any])
+    delivery["files"] = [String: String]()
+    try JSONSerialization.data(withJSONObject: delivery).write(to: prepared.appending(path: "deliveries/a.json"))
+
+    let file = LibraryFile(url: root.appending(path: "library"))
+    let imported = try await file.storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
+    #expect(imported.browserCatalog?.sources.first?.materials.isEmpty == true)
+    #expect(imported.browserCatalog?.sources.last?.materials.first?.savedURLs == [])
+    #expect(imported.packages.map(\.material.id) == [article.material.id])
+    let reloaded = try await file.load()
+    #expect(reloaded.browserCatalog == imported.browserCatalog)
+}
+
 @Test func importKeepsTheMarkdownBody() throws {
     var library = LibrarySnapshot()
     let packaged = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: article.folders, body: "A $x$ line.")

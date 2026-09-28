@@ -53,7 +53,7 @@ struct AskAboutSelectionIntent: AppIntent {
             ChatGPTHandoff.copyAndOpen(title: parts.title, passage: parts.passage)
         } else {
             UIPasteboard.general.string = stored
-            if let url = ChatGPTHandoff.destination(for: stored), UIApplication.shared.canOpenURL(url) {
+            if let url = ChatGPTHandoff.destination(for: stored) {
                 await UIApplication.shared.open(url)
             }
         }

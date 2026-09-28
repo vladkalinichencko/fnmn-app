@@ -19,7 +19,7 @@ enum ChatGPTHandoff {
     @MainActor
     static func copyAndOpen(title: String, passage: String) {
         let text = remember(title: title, passage: passage)
-        guard let url = destination(for: text), UIApplication.shared.canOpenURL(url) else { return }
+        guard let url = destination(for: text) else { return }
         UIApplication.shared.open(url)
     }
 

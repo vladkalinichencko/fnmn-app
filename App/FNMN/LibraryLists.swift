@@ -34,6 +34,9 @@ struct LibraryReadyList: View {
                     }
                     SwiftUI.Section("Library") {
                         NavigationLink("Folders") { FoldersView(selection: $selection) }
+                        if library.snapshot.browserCatalog != nil {
+                            NavigationLink("Sources") { BrowserSourcesView(selection: $selection) }
+                        }
                     }
                     SwiftUI.Section("Materials") {
                         ForEach(library.snapshot.packages.filter { !library.snapshot.isArchived($0.material.id) }, id: \.material.id) { package in
@@ -74,6 +77,53 @@ struct LibraryReadyList: View {
             Task { await library.setArchived(true, materialID: book.id) }
         }
         .tag(book.id)
+    }
+}
+
+private struct BrowserSourcesView: View {
+    @Environment(LibraryModel.self) private var library
+    @Binding var selection: String?
+
+    var body: some View {
+        List {
+            if let catalog = library.snapshot.browserCatalog {
+                ForEach(catalog.collections, id: \.id) { collection in
+                    NavigationLink(collection.name) {
+                        List(catalog.sources.filter { $0.savedIn.contains(collection.id) }, id: \.url) { source in
+                            NavigationLink(source.name) {
+                                List {
+                                    if let url = URL(string: source.url) {
+                                        Link("Open source", destination: url)
+                                    }
+                                    ForEach(source.materials, id: \.url) { material in
+                                        if let package = preparedPackage(for: material.url) {
+                                            Button {
+                                                selection = package.material.id
+                                            } label: {
+                                                Label(material.title, systemImage: package.material.kind == .video ? "play.rectangle" : "doc.text")
+                                            }
+                                        } else if let url = URL(string: material.url) {
+                                            Link(material.title, destination: url)
+                                        }
+                                    }
+                                }
+                                .navigationTitle(source.name)
+                            }
+                        }
+                        .navigationTitle(collection.name)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Sources")
+    }
+
+    private func preparedPackage(for savedURL: String) -> ImportPackage? {
+        let savedVideo = URL(string: savedURL).flatMap(YouTube.videoID(in:))
+        return library.snapshot.packages.first { package in
+            package.material.sourceURL.absoluteString == savedURL ||
+            (savedVideo != nil && YouTube.videoID(in: package.material.sourceURL) == savedVideo)
+        }
     }
 }
 

@@ -2,8 +2,10 @@ import SwiftUI
 
 struct LibraryView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(WindowNavigation.self) private var navigation
     @State private var selection: String?
     @State private var showingAdd = false
+    @State private var showingMacConnection = false
     @State private var query = ""
 
     var body: some View {
@@ -31,6 +33,7 @@ struct LibraryView: View {
                     ToolbarItemGroup {
                         Button("Add", systemImage: "plus") { showingAdd = true }
                             .disabled(library.loadState != .ready)
+                        Button("Mac connection", systemImage: "desktopcomputer") { showingMacConnection = true }
                     }
                 }
             }
@@ -48,24 +51,27 @@ struct LibraryView: View {
             }
         }
         .sheet(isPresented: $showingAdd) {
-            AddArticleView(initialURL: library.pendingShare?.absoluteString ?? "")
+            AddArticleView(initialURL: navigation.pendingShare?.absoluteString ?? "")
         }
-        .onChange(of: library.pendingShare) { _, shared in
+        .sheet(isPresented: $showingMacConnection) {
+            MacConnectionView()
+        }
+        .onChange(of: navigation.pendingShare) { _, shared in
             guard shared != nil, library.loadState == .ready else { return }
             showingAdd = true
         }
         .onChange(of: library.loadState) { _, loadState in
-            guard loadState == .ready, library.pendingShare != nil else { return }
+            guard loadState == .ready, navigation.pendingShare != nil else { return }
             showingAdd = true
         }
-        .onChange(of: library.openMaterialID) { _, id in
+        .onChange(of: navigation.openMaterialID) { _, id in
             guard let id else { return }
             selection = id
-            library.openMaterialID = nil
+            navigation.openMaterialID = nil
             Task { await library.recordOpening(materialID: id) }
         }
         .onChange(of: library.preparation) { _, phase in
-            if case .choosing = phase, !showingAdd {
+            if case .choosing = phase, navigation.ownsPreparation, !showingAdd {
                 showingAdd = true
             }
         }

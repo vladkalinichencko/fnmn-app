@@ -1,5 +1,54 @@
 import Foundation
 
+public struct BrowserCatalog: Codable, Equatable, Sendable {
+    public let collections: [Collection]
+    public let sources: [Source]
+
+    public struct Collection: Codable, Equatable, Sendable {
+        public let id: String
+        public let name: String
+    }
+
+    public struct Source: Codable, Equatable, Sendable {
+        public let name: String
+        public let url: String
+        public let kind: String
+        public let savedIn: [String]
+        public let foundIn: [String]
+        public let materials: [SavedMaterial]
+
+        enum CodingKeys: String, CodingKey {
+            case name, url, kind, materials
+            case savedIn = "saved_in"
+            case foundIn = "found_in"
+        }
+    }
+
+    public struct SavedMaterial: Codable, Equatable, Sendable {
+        public let title: String
+        public let url: String
+        public let savedURLs: [String]
+        public let savedIn: [String]
+        public let foundIn: [String]
+
+        enum CodingKeys: String, CodingKey {
+            case title, url
+            case savedURLs = "saved_urls"
+            case savedIn = "saved_in"
+            case foundIn = "found_in"
+        }
+
+        public init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            title = try values.decode(String.self, forKey: .title)
+            url = try values.decode(String.self, forKey: .url)
+            savedURLs = try values.decodeIfPresent([String].self, forKey: .savedURLs) ?? []
+            savedIn = try values.decode([String].self, forKey: .savedIn)
+            foundIn = try values.decode([String].self, forKey: .foundIn)
+        }
+    }
+}
+
 public struct ImportPackage: Codable, Equatable, Sendable {
     public let version: Int
     public let material: Material

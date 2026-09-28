@@ -2,11 +2,10 @@ import SwiftUI
 
 struct AddArticleView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(WindowNavigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @State private var articleURL = ""
-    @State private var endpoint = "http://127.0.0.1:8765"
-    @State private var token = ""
-    @State private var allowsInsecureLAN = false
+    @State private var showingMacConnection = false
     @State private var pickingDocument = false
     @State private var pickingBookFolder = false
     @State private var pickedFolders = Set<String>()
@@ -42,6 +41,7 @@ struct AddArticleView: View {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Cancel") {
                                 library.finishPreparation()
+                                navigation.ownsPreparation = false
                                 dismiss()
                             }
                         }
@@ -57,16 +57,23 @@ struct AddArticleView: View {
                     Form {
                         TextField("Article URL", text: $articleURL).textContentType(.URL).keyboardType(.URL)
                         Button("Choose document") { pickingDocument = true }
-                        Button("Choose book folder") { pickingBookFolder = true }
+                        Button("Choose library or book folder") { pickingBookFolder = true }
                         SwiftUI.Section("Mac service") {
-                            TextField("Server URL", text: $endpoint).textContentType(.URL).keyboardType(.URL)
-                            SecureField("Bearer token", text: $token)
-                            Toggle("Allow HTTP on local network", isOn: $allowsInsecureLAN)
+                            Button {
+                                showingMacConnection = true
+                            } label: {
+                                Label(library.macConnection == nil ? "Set up Mac connection" : "Mac connection", systemImage: "desktopcomputer")
+                            }
                         }
                     }
                     .navigationTitle("Add")
                     .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                navigation.ownsPreparation = false
+                                dismiss()
+                            }
+                        }
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Add") { submitLink() }.disabled(URL(string: articleURL) == nil)
                         }
@@ -84,17 +91,25 @@ struct AddArticleView: View {
             .disabled(newFolder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("Cancel", role: .cancel) { newFolder = "" }
         }
-        .onAppear { library.pendingShare = nil }
-        .onChange(of: library.pendingShare) { _, shared in
+        .onAppear { navigation.pendingShare = nil }
+        .onChange(of: navigation.pendingShare) { _, shared in
             guard let shared else { return }
             articleURL = shared.absoluteString
-            library.pendingShare = nil
+            navigation.pendingShare = nil
         }
         .alert("Import failed", isPresented: .init(
             get: { if case .failed = library.preparation { true } else { false } },
-            set: { if !$0 { library.finishPreparation() } }
+            set: {
+                if !$0 {
+                    library.finishPreparation()
+                    navigation.ownsPreparation = false
+                }
+            }
         )) {
-            Button("OK") { library.finishPreparation() }
+            Button("OK") {
+                library.finishPreparation()
+                navigation.ownsPreparation = false
+            }
         } message: {
             Text(library.preparation.failure ?? "")
         }
@@ -105,6 +120,9 @@ struct AddArticleView: View {
         .fileImporter(isPresented: $pickingBookFolder, allowedContentTypes: [.folder]) { result in
             guard case let .success(url) = result else { return }
             beginSave(url)
+        }
+        .sheet(isPresented: $showingMacConnection) {
+            MacConnectionView()
         }
     }
 
@@ -121,16 +139,16 @@ struct AddArticleView: View {
             library.preparation = .failed(CaptureError.unprepared(source).localizedDescription)
             return
         }
-        guard let server = URL(string: endpoint), !token.isEmpty else {
-            library.preparation = .failed("The Mac service needs a server URL and token.")
+        guard library.macConnection != nil else {
+            showingMacConnection = true
             return
         }
-        let token = token
-        let allowsInsecureLAN = allowsInsecureLAN
-        Task { await library.prepareLink(url: url, endpoint: server, token: token, allowsInsecureLAN: allowsInsecureLAN) }
+        navigation.ownsPreparation = true
+        Task { await library.prepareLink(url: url) }
     }
 
     private func beginSave(_ url: URL) {
+        navigation.ownsPreparation = true
         Task { await library.prepareFile(at: url) }
     }
 
@@ -140,6 +158,7 @@ struct AddArticleView: View {
             await library.assign(materialID: materialID, to: names)
             if library.operationError == nil {
                 library.finishPreparation()
+                navigation.ownsPreparation = false
                 dismiss()
             }
         }

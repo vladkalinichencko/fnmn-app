@@ -10,6 +10,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var highlights: [Highlight] = []
     public var archived: [String] = []
     public var articleRevisions: [String: String] = [:]
+    public var browserCatalog: BrowserCatalog?
 
     public init() {}
 
@@ -197,10 +198,11 @@ public actor LibraryFile {
         var archived: [String]
         var packages: [ImportPackage]?
         var articleRevisions: [String: String]
+        var browserCatalog: BrowserCatalog?
         var readPackageFiles = false
 
         enum CodingKeys: String, CodingKey {
-            case positions, notes, folders, readings, books, placements, highlights, archived, packages, articleRevisions
+            case positions, notes, folders, readings, books, placements, highlights, archived, packages, articleRevisions, browserCatalog
         }
 
         init(
@@ -212,7 +214,8 @@ public actor LibraryFile {
             highlights: [Highlight],
             archived: [String],
             packages: [ImportPackage],
-            articleRevisions: [String: String]
+            articleRevisions: [String: String],
+            browserCatalog: BrowserCatalog?
         ) {
             self.positions = positions
             self.notes = []
@@ -224,6 +227,7 @@ public actor LibraryFile {
             self.archived = archived
             self.packages = packages
             self.articleRevisions = articleRevisions
+            self.browserCatalog = browserCatalog
         }
 
         init(from decoder: Decoder) throws {
@@ -238,6 +242,7 @@ public actor LibraryFile {
             archived = try container.decodeIfPresent([String].self, forKey: .archived) ?? []
             packages = try container.decodeIfPresent([ImportPackage].self, forKey: .packages)
             articleRevisions = try container.decodeIfPresent([String: String].self, forKey: .articleRevisions) ?? [:]
+            browserCatalog = try container.decodeIfPresent(BrowserCatalog.self, forKey: .browserCatalog)
             readPackageFiles = !container.contains(.packages)
         }
 
@@ -252,6 +257,7 @@ public actor LibraryFile {
             try container.encode(archived, forKey: .archived)
             try container.encode(packages ?? [], forKey: .packages)
             try container.encode(articleRevisions, forKey: .articleRevisions)
+            try container.encodeIfPresent(browserCatalog, forKey: .browserCatalog)
         }
     }
 
@@ -282,6 +288,7 @@ public actor LibraryFile {
             snapshot.highlights = state.highlights
             snapshot.archived = state.archived
             snapshot.articleRevisions = state.articleRevisions
+            snapshot.browserCatalog = state.browserCatalog
             legacyNotes = state.notes
             stateIncludesPackages = !state.readPackageFiles
             if stateIncludesPackages {
@@ -326,6 +333,39 @@ public actor LibraryFile {
             try? removeArticleRevision(materialID: package.material.id, revision: revision)
             throw error
         }
+    }
+
+    public func storeBrowserLibrary(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
+        let deliveries = try FileManager.default.contentsOfDirectory(
+            at: source.appending(path: "deliveries"), includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var next = snapshot
+        next.browserCatalog = catalog
+        for url in deliveries {
+            let delivery = try decoder.decode(BrowserDelivery.self, from: Data(contentsOf: url))
+            try next.importPackage(delivery.package)
+            if !delivery.files.isEmpty {
+                let revision = UUID().uuidString
+                try writeArticleRevision(delivery.files, materialID: delivery.package.material.id, revision: revision)
+                next.articleRevisions[delivery.package.material.id] = revision
+            }
+        }
+        try saveState(next)
+        try sweepArticleRevisions(next)
+        return next
+    }
+
+    private struct BrowserDelivery: Decodable {
+        let package: ImportPackage
+        let files: [String: Data]
+
+        init(from decoder: Decoder) throws {
+            package = try ImportPackage(from: decoder)
+            files = try decoder.container(keyedBy: CodingKeys.self).decode([String: Data].self, forKey: .files)
+        }
+
+        private enum CodingKeys: String, CodingKey { case files }
     }
 
     public func storeBook(_ record: BookRecord, from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
@@ -408,7 +448,8 @@ public actor LibraryFile {
             highlights: snapshot.highlights,
             archived: snapshot.archived,
             packages: snapshot.packages,
-            articleRevisions: snapshot.articleRevisions
+            articleRevisions: snapshot.articleRevisions,
+            browserCatalog: snapshot.browserCatalog
         )
         try encoder.encode(state).write(to: directory.appending(path: "state.json"), options: .atomic)
     }

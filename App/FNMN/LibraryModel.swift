@@ -19,18 +19,31 @@ final class LibraryModel {
     var snapshot = LibrarySnapshot()
     var loadState: LibraryLoadState = .loading
     var operationError: String?
-    var pendingShare: URL?
     var preparation: Preparation = .idle
-    var openMaterialID: String?
+    var macConnection: MacConnection?
     var storageURL: URL { file.root }
     private let file: LibraryFile
+    private let connectionStore: any MacConnectionStorage
+    private let macService: any MacServicePort
+    private var isLoading = false
+    private var lastMutation: Task<Void, Never>?
 
-    init(file: LibraryFile? = nil) {
+    init(
+        file: LibraryFile? = nil,
+        connectionStore: any MacConnectionStorage = KeychainMacConnectionStore(),
+        macService: any MacServicePort = ArticleClient()
+    ) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.file = file ?? LibraryFile(url: base.appending(path: "FNMN"))
+        self.connectionStore = connectionStore
+        self.macService = macService
+        self.macConnection = connectionStore.load()
     }
 
     func load() async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
         loadState = .loading
         do {
             snapshot = try await file.load()
@@ -46,13 +59,17 @@ final class LibraryModel {
 
     func importData(_ data: Data) async throws -> String {
         let package = try JSONDecoder().decode(ImportPackage.self, from: data)
-        snapshot = try await file.storeArticle(package, files: [:], into: snapshot)
-        return package.material.id
+        return try await serializedMutation {
+            self.snapshot = try await self.file.storeArticle(package, files: [:], into: self.snapshot)
+            return package.material.id
+        }
     }
 
     func storeArticle(_ package: ImportPackage, files: [String: Data]) async throws -> String {
-        snapshot = try await file.storeArticle(package, files: files, into: snapshot)
-        return package.material.id
+        try await serializedMutation {
+            self.snapshot = try await self.file.storeArticle(package, files: files, into: self.snapshot)
+            return package.material.id
+        }
     }
 
     func importPickedDocument(from url: URL) async throws -> String {
@@ -71,17 +88,38 @@ final class LibraryModel {
 
     func importBook(from directory: URL) async throws -> String {
         let imported = try BookCatalog.inspect(from: directory)
-        snapshot = try await file.storeBook(imported.record, from: directory, into: snapshot)
-        return imported.record.id
+        return try await serializedMutation {
+            self.snapshot = try await self.file.storeBook(imported.record, from: directory, into: self.snapshot)
+            return imported.record.id
+        }
     }
 
-    func prepareLink(url: URL, endpoint: URL, token: String, allowsInsecureLAN: Bool) async {
+    func importBrowserLibrary(from directory: URL) async throws {
+        try await serializedMutation {
+            self.snapshot = try await self.file.storeBrowserLibrary(from: directory, into: self.snapshot)
+        }
+    }
+
+    func saveMacConnection(_ connection: MacConnection) throws {
+        try connectionStore.save(connection)
+        macConnection = connection
+    }
+
+    func checkMacConnection() async throws {
+        guard let macConnection else { throw MacConnectionError.notConfigured }
+        try await macService.check(connection: macConnection)
+    }
+
+    func prepareLink(url: URL) async {
         guard acceptsPreparation else { return }
+        guard let macConnection else {
+            preparation = .failed(MacConnectionError.notConfigured.localizedDescription)
+            return
+        }
         preparation = .working("Fetching the page")
         ImportActivity.start(title: url.host ?? "Article", status: "Fetching the page")
         do {
-            let (package, files) = try await ArticleClient(endpoint: endpoint, token: token, allowsInsecureLAN: allowsInsecureLAN)
-                .prepare(url: url, folder: nil)
+            let (package, files) = try await macService.prepare(url: url, folder: nil, connection: macConnection)
             preparation = .working("Saving")
             await ImportActivity.update(status: "Saving", fraction: 0.8)
             let materialID = try await storeArticle(package, files: files)
@@ -100,6 +138,12 @@ final class LibraryModel {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
+            if FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
+                try await importBrowserLibrary(from: url)
+                await ImportActivity.end(status: "Ready")
+                preparation = .idle
+                return
+            }
             let materialID = try await importPickedDocument(from: url)
             await ImportActivity.end(status: "Ready")
             preparation = .choosing(materialID)
@@ -156,10 +200,6 @@ final class LibraryModel {
         await commit { $0.setArchived(isArchived, materialID: materialID) }
     }
 
-    func open(_ materialID: String) {
-        openMaterialID = materialID
-    }
-
     func saveVideoTime(_ seconds: Double, materialID: String, blockID: String) async {
         await commit { _ = $0.recordVideoTime(materialID: materialID, blockID: blockID, seconds: seconds) }
     }
@@ -170,14 +210,16 @@ final class LibraryModel {
     }
 
     func renameFolder(from name: String, to newName: String) async {
-        var next = snapshot
-        guard next.renameFolder(from: name, to: newName) else {
-            operationError = "Choose a new album name that is not already used."
-            return
-        }
         do {
-            try await file.saveState(next)
-            snapshot = next
+            try await serializedMutation {
+                var next = self.snapshot
+                guard next.renameFolder(from: name, to: newName) else {
+                    self.operationError = "Choose a new album name that is not already used."
+                    return
+                }
+                try await self.file.saveState(next)
+                self.snapshot = next
+            }
         } catch {
             operationError = error.localizedDescription
         }
@@ -187,73 +229,27 @@ final class LibraryModel {
         await commit { $0.place(materialID: materialID, in: folder) }
     }
 
-    private func commit(_ change: (inout LibrarySnapshot) -> Void) async {
-        var next = snapshot
-        change(&next)
-        guard next != snapshot else { return }
+    private func commit(_ change: @escaping (inout LibrarySnapshot) -> Void) async {
         do {
-            try await file.saveState(next)
-            snapshot = next
+            try await serializedMutation {
+                var next = self.snapshot
+                change(&next)
+                guard next != self.snapshot else { return }
+                try await self.file.saveState(next)
+                self.snapshot = next
+            }
         } catch {
             operationError = error.localizedDescription
         }
     }
-}
 
-struct ArticleClient {
-    let endpoint: URL
-    let token: String
-    let allowsInsecureLAN: Bool
-
-    func prepare(url: URL, folder: String?) async throws -> (ImportPackage, [String: Data]) {
-        guard CaptureRoute.acceptsService(endpoint, insecureLAN: allowsInsecureLAN) else {
-            throw URLError(.secureConnectionFailed)
+    private func serializedMutation<T: Sendable>(_ operation: @escaping @MainActor () async throws -> T) async throws -> T {
+        let previous = lastMutation
+        let task = Task { @MainActor in
+            await previous?.value
+            return try await operation()
         }
-        var request = URLRequest(url: endpoint.appending(path: "articles"))
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONEncoder().encode(ArticleRequest(url: url, folders: folder.map { [$0] } ?? []))
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        guard 200 ..< 300 ~= http.statusCode else {
-            let detail = (try? JSONDecoder().decode(FailureBody.self, from: data))?.detail
-            throw ArticleServiceError.rejected(detail ?? String(decoding: data, as: UTF8.self))
-        }
-        let delivery = try JSONDecoder().decode(ArticleDelivery.self, from: data)
-        return (delivery.package, delivery.files)
+        lastMutation = Task { @MainActor in _ = try? await task.value }
+        return try await task.value
     }
-
-    private struct ArticleRequest: Encodable { let url: URL; let folders: [String] }
-    private struct FailureBody: Decodable { let detail: String }
-}
-
-private enum ArticleServiceError: Error, LocalizedError {
-    case rejected(String)
-
-    var errorDescription: String? {
-        guard case let .rejected(message) = self else { return nil }
-        return message
-    }
-}
-
-private struct ArticleDelivery: Decodable {
-    let package: ImportPackage
-    let files: [String: Data]
-
-    init(from decoder: Decoder) throws {
-        package = try ImportPackage(from: decoder)
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let encoded = try container.decodeIfPresent([String: String].self, forKey: .files) ?? [:]
-        var files: [String: Data] = [:]
-        for (path, value) in encoded {
-            guard let data = Data(base64Encoded: value) else {
-                throw DecodingError.dataCorruptedError(forKey: .files, in: container, debugDescription: path)
-            }
-            files[path] = data
-        }
-        self.files = files
-    }
-
-    private enum CodingKeys: String, CodingKey { case files }
 }

@@ -15,6 +15,7 @@ private enum EmbedPhase: Equatable {
 
 struct VideoReaderView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let package: ImportPackage
     @State private var seconds = 0.0
     @State private var savedSecond = -1
@@ -48,9 +49,9 @@ struct VideoReaderView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let landscape = geometry.size.width > geometry.size.height
+            let sideBySide = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
             Group {
-                if landscape {
+                if sideBySide {
                     HStack(alignment: .top, spacing: 0) {
                         player.frame(maxWidth: showCaptions ? geometry.size.width * 0.58 : .infinity, maxHeight: .infinity)
                         if showCaptions {
