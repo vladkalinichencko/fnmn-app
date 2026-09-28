@@ -1,6 +1,6 @@
 import unittest
 
-from html_markdown import article_markdown
+from adapters.html_markdown import article_markdown
 
 
 PAGE = "https://example.com/post/"

@@ -72,7 +72,7 @@ case "${1:-}" in
     ;;
   serve)
     cd "$MAC"
-    FNMN_TOKEN="$(token)" exec "$ROOT/.venv/bin/python" -m uvicorn fnmn_service:app --host 127.0.0.1 --port $PORT
+    FNMN_TOKEN="$(token)" exec "$ROOT/.venv/bin/python" -m uvicorn service:app --host 127.0.0.1 --port $PORT
     ;;
   *)
     echo "usage: $0 on | off | status" >&2

@@ -9,6 +9,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
+from adapters import pdf
+from package import Document, Report
+from web import Web
+
 _PAPER = re.compile(
     r"/(?:abs|pdf|html|src|e-print)/"
     r"((?:[a-zA-Z\-]+(?:\.[A-Za-z]+)?)?/?)"
@@ -20,18 +24,19 @@ _INPUT = re.compile(r"\\(?:input|include)\{([^{}]+)\}")
 _HEADING = re.compile(r"\\(section|subsection|subsubsection)\*?\{([^{}]*)\}")
 _GRAPHICS = re.compile(r"\\includegraphics(?:\[[^]]*\])?\{([^{}]+)\}")
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-_NO_SOURCE = "arXiv has no LaTeX source; the PDF has to go through the book pipeline"
+_NO_SOURCE = "arXiv has no LaTeX source; the PDF has to go through the PDF pipeline"
 
 
-def arxiv_markdown(url: str, fetch_text, fetch_bytes) -> tuple[str, str | None, dict[str, bytes]]:
+def read(url: str, web: Web, report: Report) -> Document:
+    """LaTeX source when arXiv has it; otherwise the paper PDF goes through the PDF pipeline."""
     paper = paper_id(url)
     if paper is None:
         raise ValueError("arXiv address has no paper id")
-    title, authors = _metadata(fetch_text, paper)
-    source = fetch_bytes(f"https://export.arxiv.org/e-print/{quote(paper, safe='/')}")
+    report("fetchingPage", None, None)
+    title, authors = _metadata(web.text, paper)
+    source = web.bytes(f"https://export.arxiv.org/e-print/{quote(paper, safe='/')}")
     if source.startswith(b"%PDF"):
-        from pdf_book_import import book_markdown
-        return book_markdown(source, title, authors)
+        return pdf.transcribe(source, title, authors, report)
     texts, images = unpack_source(source)
     return render_tex(texts, images, title, authors)
 
@@ -64,7 +69,7 @@ def render_tex(
     images: dict[str, bytes],
     title: str | None,
     authors: str | None,
-) -> tuple[str, str | None, dict[str, bytes]]:
+) -> Document:
     main = _main_tex(texts)
     expanded = _expand(main, texts, set(), 0)
     body = _document_body(expanded)
@@ -79,7 +84,7 @@ def render_tex(
     if authors:
         text += authors.strip() + "\n\n"
     text += markdown.strip() + "\n"
-    return text, authors, files
+    return Document(text, heading, authors, files)
 
 
 def _metadata(fetch_text, paper: str) -> tuple[str | None, str | None]:

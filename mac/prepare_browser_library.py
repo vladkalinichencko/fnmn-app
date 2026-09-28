@@ -13,10 +13,10 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from adapter_youtube import _package as video_package
-from adapter_youtube import video_id_from_url, youtube_package_live
-from fnmn_service import _http_get, _page_source, import_link
-from page_browser import rendered_page
+from adapters.youtube import video_id_from_url
+from importer import import_link
+from package import Video, package
+from web import LIVE
 
 
 def material_rows(library: dict) -> list[dict]:
@@ -43,10 +43,7 @@ def prepare(row: dict, output: Path, enrich_videos: bool = False) -> tuple[str, 
     ):
         return url, None
     try:
-        if video_id_from_url(url):
-            delivery = youtube_package_live(url, row["folders"], strict_captions=True)
-        else:
-            delivery = import_link(url, _page_source, lambda page: _http_get(page).content, row["folders"], rendered_page)
+        delivery = import_link(url, row["folders"], LIVE)
         temporary = destination.with_suffix(".incoming")
         temporary.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")
         temporary.replace(destination)
@@ -66,7 +63,7 @@ def seed_videos(library: dict, rows: list[dict], output: Path) -> int:
         destination = output / "deliveries" / (hashlib.sha256(url.encode()).hexdigest() + ".json")
         if destination.exists():
             continue
-        delivery = video_package(video_id, f"https://www.youtube.com/watch?v={video_id}", titles[url], None, [], row["folders"])
+        delivery = package(url, Video(video_id, titles[url]), row["folders"])
         destination.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")
         count += 1
     return count

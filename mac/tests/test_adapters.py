@@ -7,9 +7,11 @@ from pathlib import Path
 
 import pymupdf
 
-from adapter_arxiv import paper_id
-from adapter_youtube import _package, cues_from_timedtext
-from fnmn_service import ImportFailure, import_link
+from adapters.arxiv import paper_id
+from adapters.youtube import cues_from_timedtext
+from importer import import_link
+from package import Document, ImportFailure, Video, package
+from tests import fakes
 from sources import source_kind
 
 
@@ -98,7 +100,7 @@ class AdapterTests(unittest.TestCase):
             seen.append(url)
             return blob
 
-        package = import_link("https://arxiv.org/abs/1706.03762v2", fetch_text, fetch_bytes, [])
+        package = import_link("https://arxiv.org/abs/1706.03762v2", [], fakes.web(fetch_text, fetch_bytes))
         body = package["body"]
         self.assertEqual(package["material"]["sourceURL"], "https://arxiv.org/abs/1706.03762v2")
         self.assertEqual(package["material"]["title"], "Attention Is All You Need")
@@ -118,19 +120,13 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(package["sections"], [])
         self.assertEqual(package["blocks"], [])
 
-    def test_arxiv_pdf_goes_through_the_book_pipeline(self):
+    def test_arxiv_pdf_goes_through_the_pdf_pipeline(self):
         pdf = _one_page_pdf("Introduction", "The transformer uses attention.")
-        package = import_link(
-            "https://arxiv.org/abs/1706.03762",
-            lambda url: ATOM,
-            lambda url: pdf,
-            [],
-        )
-        body = package["body"]
-        self.assertIn("Introduction", body)
-        self.assertIn("The transformer uses attention.", body)
-        self.assertNotIn("<!-- PDF page", body)
-        self.assertEqual(package["material"]["title"], "Attention Is All You Need")
+        transcribed = Document("# Introduction\n\nThe transformer uses attention.\n", "Attention Is All You Need")
+        with patch("adapters.pdf.transcribe", return_value=transcribed) as transcribe:
+            package = import_link("https://arxiv.org/abs/1706.03762", [], fakes.web(lambda url: ATOM, lambda url: pdf))
+        self.assertEqual(transcribe.call_args.args[:3], (pdf, "Attention Is All You Need", "Ashish Vaswani, Noam Shazeer"))
+        self.assertIn("The transformer uses attention.", package["body"])
 
     def test_x_post_uses_oembed_text(self):
         payload = {
@@ -143,7 +139,7 @@ class AdapterTests(unittest.TestCase):
             self.assertIn("x.com", url)
             return json.dumps(payload)
 
-        package = import_link("https://x.com/ada/status/20", fetch_text, lambda url: b"", [])
+        package = import_link("https://x.com/ada/status/20", [], fakes.web(fetch_text, lambda url: b""))
         self.assertEqual(package["material"]["title"], "Ada")
         self.assertEqual(package["material"]["byline"], "Ada")
         self.assertIn("Hello\nthere", package["body"])
@@ -151,12 +147,12 @@ class AdapterTests(unittest.TestCase):
 
     def test_x_without_a_status_stops(self):
         with self.assertRaises(ImportFailure) as caught:
-            import_link("https://x.com/ada", lambda url: "", lambda url: b"", [])
+            import_link("https://x.com/ada", [], fakes.web(lambda url: "", lambda url: b""))
         self.assertIn("not a single post", str(caught.exception))
 
     def test_x_article_url_stops_until_the_body_is_public(self):
         with self.assertRaises(ImportFailure) as caught:
-            import_link("https://x.com/i/article/2076946210397552640", lambda url: "", lambda url: b"", [])
+            import_link("https://x.com/i/article/2076946210397552640", [], fakes.web(lambda url: "", lambda url: b""))
         self.assertIn("article", str(caught.exception).lower())
 
     def test_chatgpt_share_walks_the_visible_branch(self):
@@ -192,7 +188,7 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(url, "https://chatgpt.com/share/abc-1")
             return json.dumps(payload)
 
-        package = import_link("https://chatgpt.com/share/abc-1", fetch_text, lambda url: b"", [])
+        package = import_link("https://chatgpt.com/share/abc-1", [], fakes.web(fetch_text, lambda url: b""))
         body = package["body"]
         self.assertEqual(package["material"]["title"], "A proof")
         self.assertLess(body.index("## User"), body.index("## Assistant"))
@@ -242,12 +238,7 @@ class AdapterTests(unittest.TestCase):
         ]
         page = 'window.__reactRouterContext.streamController.enqueue(' + json.dumps(json.dumps(values)) + ")"
 
-        package = import_link(
-            "https://chatgpt.com/share/6ab2ce2c-5570-83e9-a018-e33a58793703",
-            lambda url: page,
-            lambda url: b"",
-            [],
-        )
+        package = import_link("https://chatgpt.com/share/6ab2ce2c-5570-83e9-a018-e33a58793703", [], fakes.web(lambda url: page, lambda url: b""))
         body = package["body"]
         self.assertEqual(package["material"]["title"], "Состояние моделирования мира")
         self.assertIn("$\\|w_t\\|/\\|z_t\\|$", body)
@@ -268,31 +259,27 @@ class AdapterTests(unittest.TestCase):
         00:00:01.500 --> 00:00:02.000
         world
         """
-        package = _package(
-            "abcdefghijk",
-            "https://www.youtube.com/watch?v=abcdefghijk",
-            "Fixture talk",
-            "Channel",
-            cues_from_timedtext(payload),
+        delivered = package(
+            "https://youtu.be/abcdefghijk",
+            Video("abcdefghijk", "Fixture talk", "Channel", cues_from_timedtext(payload)),
             [],
         )
-        self.assertEqual(package["material"]["kind"], "video")
-        self.assertEqual(package["material"]["id"], "youtube:abcdefghijk")
-        self.assertEqual(package["material"]["title"], "Fixture talk")
-        self.assertEqual(package["material"]["byline"], "Channel")
-        self.assertEqual(package["folders"], [])
-        self.assertEqual(package["body"], "Hello\n\nworld")
-        transcripts = [block for block in package["blocks"] if block["kind"] == "transcript"]
+        self.assertEqual(delivered["material"]["kind"], "video")
+        self.assertEqual(delivered["material"]["id"], "youtube:abcdefghijk")
+        self.assertEqual(delivered["material"]["title"], "Fixture talk")
+        self.assertEqual(delivered["material"]["byline"], "Channel")
+        self.assertEqual(delivered["folders"], [])
+        self.assertEqual(delivered["body"], "Hello\n\nworld")
+        transcripts = [block for block in delivered["blocks"] if block["kind"] == "transcript"]
         self.assertEqual([(block["startSeconds"], block["html"]) for block in transcripts], [(0.0, "Hello"), (1.5, "world")])
-        video = next(block for block in package["blocks"] if block["kind"] == "video")
+        video = next(block for block in delivered["blocks"] if block["kind"] == "video")
         self.assertEqual(video["mediaURL"], "https://www.youtube.com/embed/abcdefghijk")
 
-    def test_youtube_import_asks_the_server_for_the_package(self):
-        sentinel = {"material": {"kind": "video", "id": "youtube:abcdefghijk"}}
-        with patch("fnmn_service.youtube_package_live", return_value=sentinel) as called:
-            package = import_link("https://youtu.be/abcdefghijk", lambda page: "", lambda page: b"", [])
-        called.assert_called_once_with("https://youtu.be/abcdefghijk", [])
-        self.assertEqual(package, sentinel)
+    def test_youtube_link_is_read_by_the_youtube_adapter(self):
+        video = Video("abcdefghijk", "Fixture talk")
+        with patch.dict("importer.ADAPTERS", {"youtube": lambda url, web, report: video}):
+            delivered = import_link("https://youtu.be/abcdefghijk", ["Videos"], fakes.web())
+        self.assertEqual(delivered, package("https://youtu.be/abcdefghijk", video, ["Videos"]))
 
     def test_youtube_solver_passes_yt_dlp_checks(self):
         import hashlib
@@ -309,23 +296,19 @@ class AdapterTests(unittest.TestCase):
     def test_notebook_links_stop_instead_of_saving_the_github_page(self):
         url = "https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/11_qwen3/standalone-qwen3-moe-plus-kvcache.ipynb"
         with self.assertRaises(ImportFailure) as caught:
-            import_link(url, lambda page: "", lambda page: b"", [])
+            import_link(url, [], fakes.web(lambda page: "", lambda page: b""))
         self.assertIn("Jupyter notebook", str(caught.exception))
 
-    def test_pdf_links_still_stop(self):
-        with self.assertRaises(ImportFailure) as caught:
-            import_link("https://example.com/paper.pdf", lambda page: "", lambda page: b"", [])
-        self.assertIn("PDF", str(caught.exception))
-        self.assertIn("does not prepare", str(caught.exception))
+    def test_pdf_link_goes_through_the_pdf_pipeline(self):
+        pdf = _one_page_pdf("Notes", "Plain text.")
+        with patch("adapters.pdf.transcribe", return_value=Document("# Notes\n\nPlain text.\n")) as transcribe:
+            delivered = import_link("https://example.com/paper.pdf", [], fakes.web(bytes=lambda url: pdf))
+        self.assertEqual(transcribe.call_args.args[0], pdf)
+        self.assertEqual(delivered["material"]["title"], "Notes")
 
     def test_substack_page_uses_the_web_article(self):
         source = Path(__file__).with_name("fixture.html").read_text()
-        package = import_link(
-            "https://name.substack.com/p/hello",
-            lambda url: source,
-            lambda url: b"image-bytes",
-            [],
-        )
+        package = import_link("https://name.substack.com/p/hello", [], fakes.web(lambda url: source, lambda url: b"image-bytes"))
         self.assertEqual(package["material"]["sourceURL"], "https://name.substack.com/p/hello")
         self.assertIn("body", package)
         self.assertTrue(package["body"].strip())

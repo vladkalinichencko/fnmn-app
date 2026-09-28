@@ -23,7 +23,7 @@ from mlx_vlm import generate, load  # noqa: E402
 from mlx_vlm.prompt_utils import apply_chat_template  # noqa: E402
 
 started = time.monotonic()
-model, processor = load(options.model)
+model, processor = load(options.model, trust_remote_code=False)
 print(f'Model loaded in {time.monotonic() - started:.2f}s', flush=True)
 prompt = apply_chat_template(
     processor, model.config,

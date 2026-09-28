@@ -45,7 +45,7 @@ if options.rebuild_only:
 from mlx_vlm import generate, load  # noqa: E402
 from mlx_vlm.prompt_utils import apply_chat_template  # noqa: E402
 
-model, processor = load(options.model)
+model, processor = load(options.model, trust_remote_code=False)
 prompt = apply_chat_template(
     processor, model.config, '<|grounding|>Convert the document to markdown.', num_images=1)
 

@@ -3,8 +3,8 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from browser_library import build_library, canonical_url, source_for
-from browser_links_export import safari_tab_groups
+from collect.browser_library import build_library, canonical_url, source_for
+from collect.browser_links_export import safari_tab_groups
 
 
 class BrowserLibraryTests(unittest.TestCase):

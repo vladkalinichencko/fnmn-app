@@ -4,6 +4,9 @@ import json
 import re
 from urllib.parse import urlparse
 
+from package import Document, Report
+from web import Web
+
 _SHARE = re.compile(r"/share/([A-Za-z0-9-]+)")
 _LABELS = {"user": "User", "assistant": "Assistant"}
 _CITE = re.compile("\ue200cite\ue202.*?\ue201")
@@ -13,20 +16,21 @@ _INLINE = re.compile(r"\\\((.+?)\\\)")
 _FENCE = re.compile(r"(```[\s\S]*?```)")
 
 
-def chatgpt_markdown(url: str, fetch_text) -> tuple[str, str | None, dict[str, bytes]]:
+def read(url: str, web: Web, report: Report) -> Document:
+    report("fetchingPage", None, None)
     match = _SHARE.search(urlparse(url).path)
     if match is None:
         raise ValueError("ChatGPT link is not a public share")
-    payload = _conversation(fetch_text(url))
+    payload = _conversation(web.text(url))
     if payload is None:
-        payload = _conversation(fetch_text(f"https://chatgpt.com/backend-api/share/{match.group(1)}"))
+        payload = _conversation(web.text(f"https://chatgpt.com/backend-api/share/{match.group(1)}"))
     if payload is None:
         raise ValueError("ChatGPT did not return the conversation")
     title = (payload.get("title") or "").strip() or "ChatGPT"
     parts = [text for message in _messages(payload) if (text := _visible(message))]
     if not parts:
         raise ValueError("ChatGPT share has no messages")
-    return f"# {title}\n\n" + "\n\n".join(parts) + "\n", "ChatGPT", {}
+    return Document(f"# {title}\n\n" + "\n\n".join(parts) + "\n", title, "ChatGPT")
 
 
 def normalize_copied_math(text: str) -> str:

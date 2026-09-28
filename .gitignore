@@ -7,7 +7,8 @@ __pycache__/
 cookies.txt
 watchlater.txt
 playlists.csv
-unavailable-titled-by-playlist.txt
-playlist-picker.html
 .swiftpm/
 prepared-browser-library/
+xcuserdata/
+App/FNMN.xcodeproj/project.xcworkspace/
+.venv-ocr/

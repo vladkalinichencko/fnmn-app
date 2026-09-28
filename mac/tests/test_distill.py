@@ -4,8 +4,8 @@ from urllib.parse import urljoin
 import httpx
 from lxml import html
 
-from fnmn_service import import_web_article
-from html_markdown import _picture, _selector, article_markdown
+from adapters.html_markdown import _picture, _selector, article_markdown
+from tests.test_article import imported_article
 
 
 PAGES = (
@@ -72,7 +72,7 @@ class DistillTests(unittest.TestCase):
             fetched.append(asset)
             return response.content
 
-        package = import_web_article(url, fetch_text, fetch_bytes, ["Web"])
+        package = imported_article(url, fetch_text, fetch_bytes, ["Web"])
         self.assertEqual(package["material"]["title"], title)
         self.assertEqual(package["material"]["sourceURL"], url)
         self.assertIn(f"# {title}", package["body"])

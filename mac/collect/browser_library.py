@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
-from browser_links_export import dia_bookmarks, safari_reading_list, safari_tab_groups
+from collect.browser_links_export import dia_bookmarks, safari_reading_list, safari_tab_groups
 
 
 DIA_FOLDERS = {

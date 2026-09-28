@@ -4,16 +4,13 @@
 
 ```mermaid
 flowchart TD
-    Web[Веб-статья или Substack] --> WebAdapter[import_web_article]
-    Arxiv[arXiv e-print] --> ArxivAdapter[adapter_arxiv]
+    Web[Веб-статья или Substack] --> WebAdapter[adapters/article]
+    Arxiv[arXiv e-print] --> ArxivAdapter[adapters/arxiv]
     Post[Пост X или share ChatGPT] --> TextAdapter[oEmbed и share JSON]
-    Pdf[PDF-книга] --> PdfAdapter[pdf-book]
+    Pdf[PDF по ссылке или arXiv без source] --> PdfAdapter[adapters/pdf: полный pdf-book]
     Tube[YouTube] --> TubeMac[yt-dlp на Mac: название и captions]
-    ArxivPdf[arXiv PDF без source] --> BookAsm[Сборщик книги по текстовому слою]
-    StopSource[Голый PDF] --> Stop[Ошибка, не пустая карточка]
     TubeMac --> Player[Плеер]
     WebAdapter --> Body[Markdown body]
-    BookAsm --> Body
     ArxivAdapter --> Body
     TextAdapter --> Body
     PdfAdapter --> Content[content.md того же Markdown]
