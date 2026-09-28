@@ -8,7 +8,8 @@ Funnel на бесплатном Tailscale Personal публикует лока�
 
 ```sh
 brew install tailscale
-tailscaled --tun=userspace-networking --state=mem: --socket=/private/tmp/fnmn-tailscaled.sock --no-logs-no-support
+install -d -m 700 "$HOME/Library/Application Support/FNMN/Tailscale"
+tailscaled --tun=userspace-networking --statedir="$HOME/Library/Application Support/FNMN/Tailscale" --socket=/private/tmp/fnmn-tailscaled.sock --no-logs-no-support
 ```
 
 Во втором терминале войти в Tailscale по ссылке, которую напечатает команда:
@@ -31,7 +32,7 @@ tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel --bg 8765
 tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel status
 ```
 
-Первое включение Funnel может открыть страницу Tailscale для разрешения публичного доступа. Команда `--state=mem:` хранит вход только до остановки `tailscaled`; это пробный режим. Остановить публикацию: `tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel --https=443 off`. Не публиковать каталог файлов или другие локальные порты.
+Первое включение Funnel может открыть страницу Tailscale для разрешения публичного доступа. Каталог состояния хранит вход и TLS-сертификат между запусками `tailscaled`. Остановить публикацию: `tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel --https=443 off`. Не публиковать каталог файлов или другие локальные порты.
 
 ## iPhone/iPad
 
