@@ -17,13 +17,11 @@ tailscaled --tun=userspace-networking --state=mem: --socket=/private/tmp/fnmn-ta
 tailscale --socket=/private/tmp/fnmn-tailscaled.sock up --accept-dns=false --accept-routes=false
 ```
 
-Создать длинный случайный токен командой `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`. В третьем терминале из каталога `mac/` ввести тот же токен без записи в историю команд и запустить сервис:
+Один раз сохранить случайный токен в Keychain. Из каталога `mac/` запустить сервис с этим токеном; команда не печатает его в терминале:
 
 ```sh
-read -rs 'FNMN_TOKEN?Mac service token: '
-echo
-export FNMN_TOKEN
-python3 -m uvicorn fnmn_service:app --host 127.0.0.1 --port 8765
+security add-generic-password -s local.fnmn.mac-service -a fnmn -w "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+FNMN_TOKEN="$(security find-generic-password -s local.fnmn.mac-service -a fnmn -w)" ../.venv/bin/python -m uvicorn fnmn_service:app --host 127.0.0.1 --port 8765
 ```
 
 После входа и запуска сервиса опубликовать только локальный HTTP-порт и прочитать выданный адрес:
@@ -37,4 +35,4 @@ tailscale --socket=/private/tmp/fnmn-tailscaled.sock funnel status
 
 ## iPhone/iPad
 
-В FNMN открыть `Library → Mac connection`, вставить полный HTTPS-адрес из `funnel status` и тот же токен. `Save and check connection` должен показать `Connected`; затем добавить обычную статью по ссылке. Повторить проверку с включённым и выключенным VPN на телефоне. Готовая библиотека остаётся доступной без Mac. Передача исходного PDF с телефона сейчас не реализована.
+В FNMN открыть `Library → Mac connection`, вставить полный HTTPS-адрес из `funnel status` и токен из Keychain. На Mac токен можно скопировать без вывода в терминал: `security find-generic-password -s local.fnmn.mac-service -a fnmn -w | pbcopy`. `Save and check connection` должен показать `Connected`; затем добавить обычную статью по ссылке. Повторить проверку с включённым и выключенным VPN на телефоне. Готовая библиотека остаётся доступной без Mac. Передача исходного PDF с телефона сейчас не реализована.
