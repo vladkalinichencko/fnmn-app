@@ -65,7 +65,6 @@ struct ReadingSession: View {
     @GestureState private var pinching = false
 
     var body: some View {
-        @Bindable var reader = reader
         let document = reader.document
         let visible = reader.visible
         let current = reader.current(in: visible)
@@ -83,12 +82,12 @@ struct ReadingSession: View {
                         block: document.blocks[index],
                         index: index,
                         baseURL: reader.baseURL,
-                        mode: reader.mode,
+                        mode: reader.state.mode,
                         read: progress.isPieceRead(index, of: reader.materialID, current: current),
                         markedReadThrough: progress.readThrough[reader.materialID] == index,
                         annotations: marks[index] ?? [],
-                        folded: reader.fold == .open ? nil : section?.size ?? 0,
-                        sectionRead: section.map { section in reader.place.map { section.end <= $0 } ?? false } ?? false
+                        folded: reader.state.fold == .open ? nil : section?.size ?? 0,
+                        sectionRead: section.map { section in reader.state.place.map { section.end <= $0 } ?? false } ?? false
                     )
                     .equatable()
                     .id(index)
@@ -100,13 +99,12 @@ struct ReadingSession: View {
             .padding(.bottom, 80)
         }
         .swipeActionsContainer()
-        .scrollPosition(id: $reader.scrollID, anchor: .top)
-        .onChange(of: reader.scrollID) { _, index in reader.scrolled(to: index) }
+        .scrollPosition(id: reader.scrollPosition, anchor: .top)
         .simultaneousGesture(
             MagnifyGesture()
                 .updating($pinching) { _, state, _ in state = true }
                 .onChanged { pinch.value = $0.magnification }
-                .onEnded { reader.pinched($0.magnification) }
+                .onEnded { reader.send(.pinched($0.magnification)) }
         )
         .onChange(of: pinching) { _, now in
             if !now { pinch.value = 1 }
@@ -118,30 +116,30 @@ struct ReadingSession: View {
 
     @ToolbarContentBuilder
     private var selectionToolbar: some ToolbarContent {
-        if case let .selectingParagraphs(picked) = reader.mode {
+        if case let .selectingParagraphs(picked) = reader.state.mode {
             ToolbarItemGroup(placement: .bottomBar) {
                 let texts = picked.sorted().compactMap(text(of:))
                 Button("Highlight", systemImage: "highlighter") {
                     for index in picked.sorted() {
                         guard let text = text(of: index) else { continue }
-                        reader.perform(.mark(.highlight), reader.target(index, text: text))
+                        reader.send(.mark(.mark(.highlight), reader.target(index, text: text)))
                     }
-                    reader.send(.done)
+                    reader.send(.plate(.done))
                 }
                 Button("Copy", systemImage: "doc.on.doc") {
                     UIPasteboard.general.string = texts.joined(separator: "\n\n")
-                    reader.send(.done)
+                    reader.send(.plate(.done))
                 }
                 Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") {
-                    reader.ask(texts.joined(separator: "\n\n"))
-                    reader.send(.done)
+                    reader.send(.ask(texts.joined(separator: "\n\n")))
+                    reader.send(.plate(.done))
                 }
                 Spacer()
-                Button("Done") { reader.send(.done) }
+                Button("Done") { reader.send(.plate(.done)) }
             }
-        } else if reader.mode != .reading {
+        } else if reader.state.mode != .reading {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { reader.send(.done) }
+                Button("Done") { reader.send(.plate(.done)) }
             }
         }
     }

@@ -88,7 +88,7 @@ private struct SectionHeading: View {
 
     var body: some View {
         HeadingView(level: level, title: title, folded: folded, read: read)
-            .onTapGesture { reader.openSection(index) }
+            .onTapGesture { reader.send(.openSection(index)) }
     }
 }
 
@@ -182,9 +182,9 @@ struct PlateView: View {
     private func released(_ translation: CGFloat, _ velocity: CGFloat) {
         withAnimation(.spring(duration: 0.35, bounce: 0.2)) { drag = 0 }
         if noting {
-            if translation > 60 || velocity > 500 { reader.send(.done) }
+            if translation > 60 || velocity > 500 { reader.send(.plate(.done)) }
         } else if translation < -60 || velocity < -500 {
-            reader.send(.note(index))
+            reader.send(.plate(.note(index)))
         }
     }
 
@@ -204,8 +204,8 @@ struct PlateView: View {
             }
             .opacity(read && mode == .reading ? 0.55 : 1)
             .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-            .modifier(TickOnTap(isOn: isTicking) { reader.send(.toggle(index)) })
-            .modifier(TickOnTap(isOn: noting) { reader.send(.done) })
+            .modifier(TickOnTap(isOn: isTicking) { reader.send(.plate(.toggle(index))) })
+            .modifier(TickOnTap(isOn: noting) { reader.send(.plate(.done)) })
             .contextMenu { if mode == .reading { menu } }
             // Inside the system's swipe, which places the row itself and would undo an offset put around it.
             .offset(x: offset)
@@ -214,7 +214,7 @@ struct PlateView: View {
             .swipeActions(edge: .leading) {
                 if mode == .reading {
                     Button(markedReadThrough ? "Unmark" : "Read to Here", systemImage: markedReadThrough ? "arrow.uturn.backward" : "checkmark") {
-                        reader.readThrough(markedReadThrough ? nil : index)
+                        reader.send(.readThrough(markedReadThrough ? nil : index))
                     }
                     .tint(.accentColor)
                 }
@@ -229,13 +229,13 @@ struct PlateView: View {
         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
         let target = reader.target(index, text: text)
         ForEach(annotationCommands(annotations, at: target), id: \.title) { command in
-            Button(command.title, systemImage: command.systemImage) { reader.perform(command, target) }
+            Button(command.title, systemImage: command.systemImage) { reader.send(.mark(command, target)) }
         }
-        Button("Select Text", systemImage: "character.cursor.ibeam") { reader.send(.selectText(index)) }
-        Button("Select Paragraphs", systemImage: "checklist") { reader.send(.selectParagraphs(from: index)) }
-        Button("Add Note", systemImage: "note.text") { reader.send(.note(index)) }
-        Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { reader.ask(text) }
-        Button("Copy as Prompt", systemImage: "text.quote") { reader.copyPrompt(text) }
+        Button("Select Text", systemImage: "character.cursor.ibeam") { reader.send(.plate(.selectText(index))) }
+        Button("Select Paragraphs", systemImage: "checklist") { reader.send(.plate(.selectParagraphs(from: index))) }
+        Button("Add Note", systemImage: "note.text") { reader.send(.plate(.note(index))) }
+        Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { reader.send(.ask(text)) }
+        Button("Copy as Prompt", systemImage: "text.quote") { reader.send(.copyPrompt(text)) }
         let pictures = ArticleBody.imagePaths(in: markdown).map { baseURL.appending(path: $0) }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         ForEach(Array(pictures.enumerated()), id: \.offset) { number, picture in
@@ -255,9 +255,9 @@ struct PlateView: View {
         return TextSelectionMenu(key: [AnyHashable(reader.materialID), AnyHashable(index), AnyHashable(annotations)]) { selected in
             let target = reader.target(index, text: text, quote: selected)
             let marks = annotationCommands(annotations, at: target).map { command in
-                UIAction(title: command.title, image: UIImage(systemName: command.systemImage)) { _ in reader.perform(command, target) }
+                UIAction(title: command.title, image: UIImage(systemName: command.systemImage)) { _ in reader.send(.mark(command, target)) }
             }
-            let ask = UIAction(title: "Ask ChatGPT", image: UIImage(systemName: "bubble.left.and.text.bubble.right")) { _ in reader.ask(selected) }
+            let ask = UIAction(title: "Ask ChatGPT", image: UIImage(systemName: "bubble.left.and.text.bubble.right")) { _ in reader.send(.ask(selected)) }
             return marks + [ask]
         }
     }
@@ -309,7 +309,7 @@ struct PlateView: View {
 
     private func saveNote(_ text: String) {
         let paragraph = plainText
-        reader.note(text, reader.target(index, text: paragraph, quote: paragraph))
+        reader.send(.note(text, reader.target(index, text: paragraph, quote: paragraph)))
     }
 }
 

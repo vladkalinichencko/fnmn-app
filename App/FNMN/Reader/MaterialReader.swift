@@ -12,7 +12,7 @@ struct MaterialReader: View {
             .modifier(ReaderAppearanceModifier())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ReaderMenu(sourceURL: sourceURL) }
-            .task { reader.restore() }
+            .task { reader.send(.restore) }
             .onDisappear { Task { await library.saveProgress() } }
     }
 }
