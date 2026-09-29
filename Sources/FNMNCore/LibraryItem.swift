@@ -19,6 +19,23 @@ public struct SourceRef: Hashable, Sendable {
     public let homepage: URL?
 }
 
+extension LibraryItem.Kind {
+    init(_ kind: Material.Kind) {
+        self = switch kind {
+        case .article: .article
+        case .video: .video
+        case .book: .book
+        }
+    }
+}
+
+extension Material {
+    /// A book has no site behind it, so its authors stand where an article's site does.
+    var authors: SourceRef? {
+        byline.map { SourceRef(name: $0, homepage: nil) }
+    }
+}
+
 public enum Cover: Codable, Hashable, Sendable {
     case articleFile(materialID: String, path: String)
     /// The small cover picture the app keeps for a material that lives in iCloud.
@@ -74,10 +91,8 @@ extension LibrarySnapshot {
 
     /// The source of one material without building every tile, for the reader's header.
     public func source(of itemID: String) -> SourceRef? {
-        if let book = books.first(where: { $0.id == itemID }) {
-            return book.metadata.authors.first.map { SourceRef(name: $0, homepage: nil) }
-        }
         guard let article = articles.first(where: { $0.material.id == itemID }) else { return nil }
+        if article.material.kind == .book { return article.material.authors }
         let key = SourceIndex.key(article.material.sourceURL)
         let saved = browserCatalog?.sources.first { source in
             source.materials.contains { ([$0.url] + $0.savedURLs).map(SourceIndex.key).contains(key) }
@@ -105,12 +120,11 @@ extension LibrarySnapshot {
         let folded = ArticleEntry.folded(needle)
         func hit(_ text: String) -> Bool { ArticleEntry.folded(text).contains(folded) }
         let articleHits = Set(articles.filter { $0.searchText.contains(folded) }.map(\.material.id))
-        let bookHits = Set(books.filter { $0.matches(needle) }.map(\.id))
         // Albums and sources repeat across tiles, so each name is tested once.
         let albumHits = Set(albums.filter(hit))
         var sourceHits: [String: Bool] = [:]
         return items.filter { item in
-            if articleHits.contains(item.id) || bookHits.contains(item.id) { return true }
+            if articleHits.contains(item.id) { return true }
             if item.kind == .link, hit(item.title) { return true }
             if albums(of: item.id).contains(where: albumHits.contains) { return true }
             guard let source = item.source?.name else { return false }
@@ -138,27 +152,17 @@ extension LibrarySnapshot {
     private var allItems: [LibraryItem] {
         var sources = SourceIndex(catalog: browserCatalog)
         let prepared = articles.map { article in
-            LibraryItem(
-                id: article.material.id,
-                kind: article.material.kind == .video ? .video : .article,
-                title: article.material.title,
-                source: sources.source(for: article.material.sourceURL),
-                originalURL: article.material.sourceURL,
-                addedAt: addedAt[article.material.id],
+            let material = article.material
+            let isBook = material.kind == .book
+            return LibraryItem(
+                id: material.id,
+                kind: LibraryItem.Kind(material.kind),
+                title: material.title,
+                source: isBook ? material.authors : sources.source(for: material.sourceURL),
+                originalURL: isBook ? nil : material.sourceURL,
+                addedAt: addedAt[material.id],
                 excerpt: article.excerpt,
                 cover: article.cover
-            )
-        }
-        let bookItems = books.map { book in
-            LibraryItem(
-                id: book.id,
-                kind: .book,
-                title: book.metadata.title,
-                source: book.metadata.authors.first.map { SourceRef(name: $0, homepage: nil) },
-                originalURL: nil,
-                addedAt: addedAt[book.id],
-                excerpt: book.metadata.subtitle,
-                cover: nil
             )
         }
         let preparedKeys = Set(articles.map { SourceIndex.key($0.material.sourceURL) })
@@ -179,7 +183,7 @@ extension LibrarySnapshot {
                 )
             }
         }
-        return (prepared + bookItems + links).sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+        return (prepared + links).sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
     }
 }
 

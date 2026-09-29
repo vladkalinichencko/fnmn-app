@@ -242,72 +242,36 @@ private let laterArticle = ImportPackage(
     #expect(loaded.catalog.continuedID(loaded.progress) == nil)
 }
 
-private var sampleBook: URL {
-    URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appending(path: "fixtures/books/principles-of-deep-learning-theory")
-}
-
-@Test func bookCatalogInspectsValidatedFixture() throws {
-    let imported = try BookCatalog.inspect(from: sampleBook)
-    #expect(imported.record.metadata.title == "The Principles of Deep Learning Theory")
-    #expect(imported.record.metadata.toc.count == 223)
-    #expect(imported.validation.headings == 223)
-    #expect(imported.validation.images == 10)
-    #expect(imported.validation.errors.isEmpty)
-    #expect(imported.imagePaths.count == 10)
-    #expect(imported.footnoteIDs.count == 313)
-}
-
-@Test func bookImportRejectsValidationErrors() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    try FileManager.default.copyItem(at: sampleBook, to: directory)
-    try Data(#"{"headings":0,"images":0,"errors":["missing_images"]}"#.utf8)
-        .write(to: directory.appending(path: "validation.json"))
-    #expect(throws: BookError.rejected(["missing_images"])) {
-        try BookCatalog.inspect(from: directory)
-    }
-}
-
-@Test func aPickedArchiveOrBookFolderGoesIntoTheFNMNFolderAndAPDFDoesNot() async throws {
+@Test func aPickedArchiveGoesIntoTheFNMNFolderAndAPDFDoesNot() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let file = await libraryFile(directory)
     let picked = directory.appending(path: "a.tar")
     try writeDelivery(article, to: picked)
-    var library = try await file.storePicked(picked, into: LibrarySnapshot())
-    library = try await file.storePicked(sampleBook, into: library)
+    let library = try await file.storePicked(picked, into: LibrarySnapshot())
     #expect(library.articles.map(\.material.id) == [article.material.id])
-    #expect(library.books.count == 1)
     let pdf = directory.appending(path: "b.pdf")
     try Data("%PDF".utf8).write(to: pdf)
     await #expect(throws: CaptureError.unprepared(.pdf)) { try await file.storePicked(pdf, into: library) }
 }
 
-@Test func aBookPickedElsewhereIsCopiedIntoTheFNMNFolder() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let file = await libraryFile(directory)
-    let imported = try BookCatalog.inspect(from: sampleBook)
-    _ = try await file.storeBook(from: sampleBook, into: LibrarySnapshot())
-    let loaded = try await file.load().catalog
-    #expect(loaded.books.count == 1)
-    #expect(loaded.books[0].metadata.toc.count == 223)
-    let copied = directory.appending(path: "FNMN/books").appending(path: imported.record.directoryName)
-    #expect(FileManager.default.fileExists(atPath: copied.appending(path: "content.md").path))
-    for image in imported.imagePaths {
-        #expect(FileManager.default.fileExists(atPath: copied.appending(path: image).path))
-    }
+@Test func aBookIsADeliveryWhoseAuthorsStandForItsSource() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(namedBook, at: .now)
+    let item = try #require(library.item(namedBook.material.id))
+    #expect(item.kind == .book)
+    #expect(item.source?.name == "Daniel A. Roberts")
+    #expect(item.originalURL == nil)
+    #expect(library.source(of: item.id)?.name == "Daniel A. Roberts")
 }
 
-@Test func oldStateWithoutBooksStillLoads() async throws {
+@Test func stateThatStillListsBooksLoads() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    try Data(#"{"positions":{},"notes":[],"folders":[]}"#.utf8)
+    try Data(#"{"books":[{"id":"book:a.pdf"}],"albums":["Later"]}"#.utf8)
         .write(to: directory.appending(path: "state.json"))
     let snapshot = try await LibraryFile(url: directory).load().catalog
-    #expect(snapshot.books.isEmpty)
+    #expect(snapshot.albums == ["Later"])
 }
 
 private let namedArticle = ImportPackage(
@@ -317,33 +281,31 @@ private let namedArticle = ImportPackage(
     folders: ["Papers"]
 )
 
-private let namedBook = BookRecord(
-    metadata: BookMetadata(
+private let namedBook = ImportPackage(
+    material: Material(
+        id: "book:principles-of-deep-learning-theory.pdf",
+        kind: .book,
         title: "The Principles of Deep Learning Theory",
-        subtitle: "An Effective Theory Approach",
-        authors: ["Daniel A. Roberts"],
-        contributors: nil,
-        language: "en",
-        sourceName: "principles-of-deep-learning-theory.pdf",
-        schemaVersion: 1,
-        contentFile: "content.md",
-        assetsDirectory: "assets",
-        toc: [BookTOCEntry(ordinal: 1, level: 1, title: "Effective Theory")]
-    )
+        sourceURL: URL(string: "book:principles-of-deep-learning-theory.pdf")!,
+        byline: "Daniel A. Roberts"
+    ),
+    sections: [],
+    blocks: [],
+    body: "# Effective Theory\n\nThe book's first paragraph."
 )
 
 @Test func librarySearchMatchesCatalogFieldsAndIgnoresBody() throws {
     var library = LibrarySnapshot()
     try library.importPackage(namedArticle, at: .now)
-    library.importBook(namedBook, at: .now)
+    try library.importPackage(namedBook, at: .now)
     func ids(_ query: String) -> Set<String> { Set(library.items(matching: query).map(\.id)) }
-    #expect(ids(" ") == [namedArticle.material.id, namedBook.id])
+    #expect(ids(" ") == [namedArticle.material.id, namedBook.material.id])
     #expect(ids("kernel") == [namedArticle.material.id])
     #expect(ids("Alice") == [namedArticle.material.id])
     #expect(ids("Papers") == [namedArticle.material.id])
     #expect(ids("NTK") == [namedArticle.material.id])
-    #expect(ids("roberts") == [namedBook.id])
-    #expect(ids("Effective Theory") == [namedBook.id])
+    #expect(ids("roberts") == [namedBook.material.id])
+    #expect(ids("Effective Theory") == [namedBook.material.id])
     #expect(ids("hidden body text").isEmpty)
     #expect(ids("xyzzy").isEmpty)
     let headed = ImportPackage(
@@ -437,10 +399,10 @@ private func span(_ quote: String) -> AnnotationTarget {
 @Test func albumsHoldAnItemInEveryAlbumItWasAddedTo() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
-    library.importBook(namedBook, at: .now)
-    #expect(library.unsortedItems.map(\.id) == [namedBook.id])
+    try library.importPackage(namedBook, at: .now)
+    #expect(library.unsortedItems.map(\.id) == [namedBook.material.id])
     library = try library.applying(.addToAlbum("Web", itemIDs: [article.material.id]))
-    library = try library.applying(.addToAlbum("Reading", itemIDs: [namedBook.id]))
+    library = try library.applying(.addToAlbum("Reading", itemIDs: [namedBook.material.id]))
     #expect(library.unsortedItems.isEmpty)
     #expect(library.items(inAlbum: "Inbox").map(\.id) == [article.material.id])
     #expect(library.items(inAlbum: "Web").map(\.id) == [article.material.id])
@@ -450,7 +412,7 @@ private func span(_ quote: String) -> AnnotationTarget {
         try library.applying(.renameAlbum("Papers", to: "Web"))
     }
     library = try library.applying(.deleteAlbum("Reading"))
-    #expect(library.unsortedItems.map(\.id) == [namedBook.id])
+    #expect(library.unsortedItems.map(\.id) == [namedBook.material.id])
     library = try library.applying(.removeFromAlbum("Web", itemID: article.material.id))
     #expect(library.albumSummaries.map(\.count) == [1, 0])
 }
@@ -535,28 +497,6 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(library.progressChanges(since: first) == [.restart(itemID: article.material.id)])
 }
 
-@Test func bookDirectoriesFollowTheBookIdentity() {
-    let slash = BookRecord(metadata: bookMetadata(sourceName: "foo/bar.pdf"))
-    let space = BookRecord(metadata: bookMetadata(sourceName: "foo bar.pdf"))
-    #expect(slash.id != space.id)
-    #expect(slash.directoryName != space.directoryName)
-    #expect(!slash.directoryName.contains("/"))
-    #expect(!space.directoryName.contains(" "))
-}
-
-@Test func aBookAddedAgainReplacesItsCopyInTheFNMNFolder() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let file = await libraryFile(directory)
-    let original = directory.appending(path: "original")
-    try makeBook(at: original, sourceName: "notes.pdf", content: "old")
-    let stored = try await file.storeBook(from: original, into: LibrarySnapshot())
-    let replacement = directory.appending(path: "replacement")
-    try makeBook(at: replacement, sourceName: "notes.pdf", content: "new")
-    let replaced = try await file.storeBook(from: replacement, into: stored)
-    #expect(replaced.books.count == 1)
-    #expect(try await file.bookText(directoryName: replaced.books[0].directoryName, contentFile: "content.md") == "new")
-}
-
 @Test func theOldPackagesFolderGoesOnceEveryPackageIsIn() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let packages = directory.appending(path: "packages")
@@ -599,36 +539,4 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(CaptureRoute.acceptsService(URL(string: "http://127.0.0.1:8787")!))
     #expect(!CaptureRoute.acceptsService(URL(string: "http://192.168.1.20:8787")!))
     #expect(!CaptureRoute.acceptsService(URL(string: "http://example.com")!))
-}
-
-private func bookMetadata(sourceName: String) -> BookMetadata {
-    BookMetadata(
-        title: "Notes",
-        subtitle: nil,
-        authors: ["Ada"],
-        contributors: nil,
-        language: "en",
-        sourceName: sourceName,
-        schemaVersion: 1,
-        contentFile: "content.md",
-        assetsDirectory: "assets",
-        toc: []
-    )
-}
-
-private func makeBook(at directory: URL, sourceName: String, content: String) throws {
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let metadata: [String: Any] = [
-        "title": "Notes",
-        "authors": ["Ada"],
-        "language": "en",
-        "source_name": sourceName,
-        "schema_version": 1,
-        "content_file": "content.md",
-        "assets_directory": "assets",
-        "toc": []
-    ]
-    try JSONSerialization.data(withJSONObject: metadata).write(to: directory.appending(path: "metadata.json"))
-    try Data(#"{"headings":0,"images":0,"errors":[]}"#.utf8).write(to: directory.appending(path: "validation.json"))
-    try Data(content.utf8).write(to: directory.appending(path: "content.md"))
 }

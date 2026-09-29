@@ -11,16 +11,15 @@ private struct Note: Codable, Equatable, Identifiable, Sendable {
 }
 
 /// The library's files. Materials live in the FNMN folder in iCloud Drive: `deliveries/` holds one archive
-/// per article or video, `books/` one folder per book, `state/` each device's journal. The app keeps what it
+/// per article, video or book, `state/` each device's journal. The app keeps what it
 /// needs to list and resume them: the catalog, small cover pictures, reading progress and its own state, and
 /// in the cache the unpacked copies of materials it has opened.
 public actor LibraryFile {
-    /// `state.json` holds the reader's albums, marks and books; the catalog's article entries live in
+    /// `state.json` holds the reader's albums and marks; the catalog's article entries live in
     /// `articles.json` and are written only when an import or a delete changes them; reading progress lives in
     /// `progress.json`.
     private struct UserState: Codable {
         var legacyProgress: ReadingProgress?
-        var books: [BookRecord] = []
         var albums: [String] = []
         var placements: [String: [String]] = [:]
         var annotations: [Annotation] = []
@@ -35,12 +34,11 @@ public actor LibraryFile {
         /// Older files called albums `folders` and annotations `highlights`, and kept packages, block notes
         /// and reading progress inline.
         enum CodingKeys: String, CodingKey {
-            case books, albums, placements, annotations, archived, addedAt, articleRevisions, videoFiles, browserCatalog
+            case albums, placements, annotations, archived, addedAt, articleRevisions, videoFiles, browserCatalog
             case folders, highlights, notes, packages, positions, readThrough, readings
         }
 
         init(_ snapshot: LibrarySnapshot) {
-            books = snapshot.books
             albums = snapshot.albums
             placements = snapshot.placements
             annotations = snapshot.annotations
@@ -60,7 +58,6 @@ public actor LibraryFile {
                 progress.readings = try container.decodeIfPresent([String: MaterialReading].self, forKey: .readings) ?? [:]
                 legacyProgress = progress
             }
-            books = try container.decodeIfPresent([BookRecord].self, forKey: .books) ?? []
             albums = try container.decodeIfPresent([String].self, forKey: .albums)
                 ?? container.decodeIfPresent([String].self, forKey: .folders) ?? []
             placements = try container.decodeIfPresent([String: [String]].self, forKey: .placements) ?? [:]
@@ -77,7 +74,6 @@ public actor LibraryFile {
 
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(books, forKey: .books)
             try container.encode(albums, forKey: .albums)
             try container.encode(placements, forKey: .placements)
             try container.encode(annotations, forKey: .annotations)
@@ -89,7 +85,6 @@ public actor LibraryFile {
         }
 
         func apply(to snapshot: inout LibrarySnapshot) {
-            snapshot.books = books
             snapshot.albums = albums
             snapshot.placements = placements
             snapshot.annotations = annotations
@@ -234,8 +229,8 @@ public actor LibraryFile {
 
     // MARK: Adding materials
 
-    /// Sorts out what was picked with `+` → File, anywhere: a delivery archive, a book folder, or a prepared
-    /// library (`catalog.json`, `deliveries/`, `books/`). Whatever is not in the FNMN folder yet is copied there.
+    /// Sorts out what was picked with `+` → File, anywhere: a delivery archive or a prepared library
+    /// (`catalog.json`, `deliveries/`). Whatever is not in the FNMN folder yet is copied there.
     /// A PDF is recognized only to say it has to be prepared on the Mac first.
     public func storePicked(_ url: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         var isDirectory: ObjCBool = false
@@ -243,10 +238,7 @@ public actor LibraryFile {
             throw CaptureError.unrecognizedDocument
         }
         if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
-            let next = try storeBrowserLibrary(from: url, into: snapshot)
-            return try storeBooks(in: url.appending(path: "books"), into: next)
-        } else if isDirectory.boolValue {
-            return try storeBook(from: url, into: snapshot)
+            return try storeBrowserLibrary(from: url, into: snapshot)
         } else if url.pathExtension.lowercased() == "tar" {
             return try storeArticle(archive: url, into: snapshot)
         } else if url.pathExtension.lowercased() == "pdf" {
@@ -329,49 +321,9 @@ public actor LibraryFile {
         return next
     }
 
-    /// Every book folder in the FNMN folder's `books/`, and those of another prepared library copied in.
-    public func storeBooks(in folder: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        guard FileManager.default.fileExists(atPath: folder.path) else { return snapshot }
-        let books = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        var next = snapshot
-        for book in books {
-            next = try storeBook(from: book, into: next)
-        }
-        return next
-    }
-
-    /// A book folder: one already in the FNMN folder's `books/` is read in place, one picked anywhere else is
-    /// copied there first.
-    public func storeBook(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let record = try BookCatalog.inspect(from: source).record
-        let destination = try bookFolder(record.directoryName)
-        if destination.standardizedFileURL != source.standardizedFileURL {
-            try placeInCloud(source, at: destination)
-        }
-        var next = snapshot
-        next.importBook(record, at: .now)
-        try save(next, previous: snapshot)
-        return next
-    }
-
-    /// The folder of a book in the FNMN folder.
-    public func bookFolder(_ directoryName: String) throws -> URL {
-        guard !directoryName.isEmpty, !directoryName.hasPrefix("/"), !directoryName.contains(".."), !directoryName.contains("/") else {
-            throw LibraryError.escapedPath
-        }
-        return try requireCloudFolder().appending(path: "books").appending(path: directoryName, directoryHint: .isDirectory)
-    }
-
-    /// A book's text; the caller brings its folder down from iCloud first.
-    public func bookText(directoryName: String, contentFile: String) throws -> String {
-        guard let url = Self.contained(contentFile, in: try bookFolder(directoryName)) else { throw LibraryError.escapedPath }
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
     /// The first time the FNMN folder is linked, what an older version kept inside the app moves there: each
-    /// article becomes an archive in `deliveries/`, each book a folder in `books/`. The app's copies then go.
+    /// article becomes an archive in `deliveries/`. The app's copies then go; books come from the Mac as
+    /// deliveries of their own.
     public func moveIntoCloud(_ snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let cloud = try requireCloudFolder()
         var next = snapshot
@@ -391,13 +343,6 @@ public actor LibraryFile {
             next = try addCloudDelivery(destination, into: next)
         }
         let appBooks = root.appending(path: "books")
-        for record in snapshot.books {
-            let local = appBooks.appending(path: record.directoryName)
-            let destination = try bookFolder(record.directoryName)
-            if FileManager.default.fileExists(atPath: local.path), !FileManager.default.fileExists(atPath: destination.path) {
-                try placeInCloud(local, at: destination)
-            }
-        }
         if FileManager.default.fileExists(atPath: appBooks.path) {
             try FileManager.default.removeItem(at: appBooks)
         }

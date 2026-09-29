@@ -205,7 +205,7 @@ final class LibraryModel {
     }
 
     /// Reads the FNMN folder: its catalog, then each delivery, which comes down from iCloud once to be read
-    /// and is let go again, so the phone never holds the whole folder; then its books, read in place.
+    /// and is let go again, so the phone never holds the whole folder.
     private func readLibraryFolder(onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
         guard let folder = cloudFolder else { throw LibraryError.cloudFolderMissing }
         onStep(.downloadingFromCloud)
@@ -226,12 +226,6 @@ final class LibraryModel {
                 try await file.save(next, previous: snapshot)
                 return next
             }
-        }
-        let books = folder.appending(path: "books")
-        if CloudFolder.contains(books) {
-            onStep(.downloadingFromCloud)
-            try await CloudFolder.download(books)
-            try await write(saving: false) { [file] snapshot in try await file.storeBooks(in: books, into: snapshot) }
         }
     }
 
@@ -255,10 +249,6 @@ final class LibraryModel {
     /// Where an article's pictures resolve: its unpacked copy.
     func articleFolder(_ materialID: String) -> URL? {
         entry(materialID).map(file.cachedFolder(of:))
-    }
-
-    func bookFolder(_ directoryName: String) -> URL? {
-        cloudFolder?.appending(path: "books").appending(path: directoryName, directoryHint: .isDirectory)
     }
 
     /// Whether opening the material has to bring its archive down from iCloud first.
@@ -301,13 +291,6 @@ final class LibraryModel {
         } catch {
             failure = error.localizedDescription
         }
-    }
-
-    /// A book's folder comes down from iCloud, so its pictures are there when the reader shows them.
-    func bookText(_ record: BookRecord) async throws -> String {
-        guard let folder = bookFolder(record.directoryName) else { throw LibraryError.cloudFolderMissing }
-        try await CloudFolder.download(folder, timeout: .seconds(120))
-        return try await file.bookText(directoryName: record.directoryName, contentFile: record.metadata.contentFile)
     }
 
     /// Writes run one after another, each on the snapshot the previous one produced.

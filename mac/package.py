@@ -17,7 +17,7 @@ import tarfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from markdown import first_heading, normalize, page_title
 
@@ -65,8 +65,45 @@ def package(url: str, content: Document | Video, folders: list[str]) -> Delivery
     return Delivery(_document_package(url, content, folders), content.files)
 
 
+def book_delivery(folder: Path) -> Delivery:
+    """A book the PDF pipeline exported (`content.md`, `metadata.json`, `assets/`) as a delivery like any other:
+    its text is the body, whose headings are its table of contents, and its authors the byline. The id stays
+    `book:<source name>`, as the app has always called the book."""
+    metadata = json.loads((folder / "metadata.json").read_text(encoding="utf-8"))
+    body = (folder / metadata["content_file"]).read_text(encoding="utf-8")
+    files = {
+        path.relative_to(folder).as_posix(): path.read_bytes()
+        for path in sorted((folder / metadata["assets_directory"]).rglob("*"))
+        if path.is_file() and not path.name.startswith(".")
+    }
+    return Delivery(
+        {
+            "version": 1,
+            "material": {
+                "id": f"book:{metadata['source_name']}",
+                "kind": "book",
+                "title": metadata["title"],
+                "sourceURL": f"book:{quote(metadata['source_name'])}",
+                "byline": ", ".join(metadata.get("authors", [])) or None,
+            },
+            "sections": [],
+            "blocks": [],
+            "folders": [],
+            "body": body,
+        },
+        files,
+    )
+
+
+def delivery_name(material_id: str) -> str:
+    """The archive's name in `deliveries/` for a material that has no link of its own; the app names the
+    materials it adds the same way."""
+    return hashlib.sha256(material_id.encode()).hexdigest() + ".tar"
+
+
 def write_delivery(path: Path, delivery: Delivery) -> None:
     """USTAR, so the app's reader needs no PAX headers; a path too long for it fails here."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     incoming = path.with_suffix(".incoming")
     with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
         _add(archive, PACKAGE_NAME, json.dumps(delivery.package, ensure_ascii=False).encode())

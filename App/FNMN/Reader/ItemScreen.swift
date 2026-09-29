@@ -11,8 +11,6 @@ struct ItemScreen: View {
         Group {
             if library.snapshot.articles.contains(where: { $0.material.id == itemID }) {
                 ArticleOpener(itemID: itemID, startPiece: startPiece)
-            } else if let book = library.snapshot.books.first(where: { $0.id == itemID }) {
-                BookReaderView(record: book, startPiece: startPiece)
             } else {
                 ContentUnavailableView("This material is no longer in the library", systemImage: "questionmark.folder")
             }
@@ -26,7 +24,7 @@ private enum ArticleText {
     case loading
     /// The phone had let the archive go, so it comes down from iCloud before it can open.
     case downloading
-    case article(ReaderCoordinator, sourceURL: URL)
+    case article(ReaderCoordinator, sourceURL: URL?)
     case video(VideoCoordinator)
     case failed(String)
 }
@@ -79,7 +77,7 @@ private struct ArticleOpener: View {
             start: startPiece ?? library.position(of: itemID)?.pieceIndex,
             library: library
         )
-        return .article(reader, sourceURL: package.material.sourceURL)
+        return .article(reader, sourceURL: package.material.kind == .book ? nil : package.material.sourceURL)
     }
 
     @concurrent

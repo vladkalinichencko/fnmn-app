@@ -57,7 +57,6 @@ extension LibrarySnapshot {
     /// is forgotten, and one whose text was replaced starts over.
     public func progressChanges(since previous: LibrarySnapshot) -> [ProgressChange] {
         let digests = Dictionary(articles.map { ($0.material.id, $0.textDigest) }, uniquingKeysWith: { $1 })
-        let books = Dictionary(self.books.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
         var changes: [ProgressChange] = []
         for article in previous.articles {
             let id = article.material.id
@@ -65,13 +64,6 @@ extension LibrarySnapshot {
                 if digest != article.textDigest { changes.append(.restart(itemID: id)) }
             } else {
                 changes.append(.forget(itemID: id))
-            }
-        }
-        for book in previous.books {
-            if let current = books[book.id] {
-                if current != book { changes.append(.restart(itemID: book.id)) }
-            } else {
-                changes.append(.forget(itemID: book.id))
             }
         }
         for id in previous.linkIDs.subtracting(linkIDs) {
@@ -82,16 +74,13 @@ extension LibrarySnapshot {
 
     /// The material the reader opened last, or else the first one with a saved place.
     public func continuedID(_ progress: ReadingProgress) -> String? {
-        let known = Set(articles.map(\.material.id) + books.map(\.id))
+        let known = Set(articles.map(\.material.id))
         let opened = progress.readings.compactMap { materialID, reading -> (String, Date)? in
             guard let openedAt = reading.openedAt, known.contains(materialID), !isArchived(materialID) else { return nil }
             return (materialID, openedAt)
         }
         if let materialID = opened.max(by: { $0.1 < $1.1 })?.0 { return materialID }
-        if let article = articles.first(where: { progress.positions[$0.material.id] != nil }) {
-            return article.material.id
-        }
-        return books.first(where: { progress.positions[$0.id] != nil })?.id
+        return articles.first(where: { progress.positions[$0.material.id] != nil })?.material.id
     }
 
     private var linkIDs: Set<String> {

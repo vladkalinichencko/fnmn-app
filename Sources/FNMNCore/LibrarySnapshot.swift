@@ -4,7 +4,6 @@ import Foundation
 /// Only `applying(_:)` and the importers change it.
 public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var articles: [ArticleEntry] = []
-    public var books: [BookRecord] = []
     public var browserCatalog: BrowserCatalog?
     public var albums: [String] = []
     public var placements: [String: [String]] = [:]
@@ -44,16 +43,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         }
         if albums(of: id).isEmpty {
             place(id, in: package.folders)
-        }
-    }
-
-    public mutating func importBook(_ record: BookRecord, at date: Date) {
-        if let index = books.firstIndex(where: { $0.id == record.id }) {
-            if books[index] != record { forgetMarks(of: record.id) }
-            books[index] = record
-        } else {
-            books.append(record)
-            addedAt[record.id] = date
         }
     }
 
@@ -115,21 +104,3 @@ extension LibraryError: LocalizedError {
     }
 }
 
-extension BookError: LocalizedError {
-    public var errorDescription: String? {
-        switch self {
-        case let .missing(name): "Missing \(name)"
-        case let .rejected(errors): errors.joined(separator: ", ")
-        case let .unsupportedSchema(version): "Unsupported book schema \(version)"
-        }
-    }
-}
-
-extension BookRecord {
-    func matches(_ query: String) -> Bool {
-        var fields = [metadata.title, metadata.sourceName] + metadata.authors + metadata.toc.map(\.title)
-        if let subtitle = metadata.subtitle { fields.append(subtitle) }
-        if let contributors = metadata.contributors { fields.append(contentsOf: contributors) }
-        return fields.contains { $0.localizedStandardContains(query) }
-    }
-}

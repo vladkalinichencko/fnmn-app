@@ -80,7 +80,7 @@ public struct ImportPackage: Codable, Equatable, Sendable {
 }
 
 public struct Material: Codable, Equatable, Identifiable, Sendable {
-    public enum Kind: String, Codable, Sendable { case article, video }
+    public enum Kind: String, Codable, Sendable { case article, video, book }
     public let id: String
     public let kind: Kind
     public let title: String

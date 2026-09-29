@@ -47,7 +47,7 @@ extension CaptureError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case let .unprepared(source): "\(source.folderName) is recognized, but the Mac service does not prepare it yet."
-        case .unrecognizedDocument: "Choose a prepared article (.tar), a book folder, or the FNMN folder."
+        case .unrecognizedDocument: "Choose a prepared material (.tar) or the FNMN folder."
         }
     }
 }
