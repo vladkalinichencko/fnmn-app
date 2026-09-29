@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from package import Delivery, read_delivery, write_delivery
-from prepare_browser_library import repackage
+from collect.prepare_browser_library import repackage
 
 
 class DeliveryTests(unittest.TestCase):

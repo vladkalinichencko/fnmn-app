@@ -1,7 +1,7 @@
 """Lay out the folder the phone imports in one pass: the prepared browser library and the books.
 
-    .venv/bin/python mac/publish_library.py prepared-browser-library fixtures/books/principles-of-deep-learning-theory \
-        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
+    cd mac && ../.venv/bin/python -m collect.publish_library ../prepared-browser-library \
+        ../fixtures/books/principles-of-deep-learning-theory ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
 
 The destination gets `catalog.json`, `index.json` (every material with its reviewed albums, so a link the Mac
 could not prepare still lands in its album), `deliveries/` and `books/<name>/`. Book text goes through the same

@@ -15,11 +15,12 @@ Tab Groups Dia не входят в результат. [`dia-local-sources.md`]
 Команда ниже создаёт `prepared-browser-library/catalog.json` с исходной иерархией и по одному пакету в `deliveries/` для каждого подготовленного материала. Повторный запуск пропускает готовые пакеты. Видео можно сначала сохранить без подписей для проверки плеера, затем дополнить их через yt-dlp.
 
 ```sh
-.venv/bin/python mac/prepare_browser_library.py browser-library.json prepared-browser-library --seed-videos
-.venv/bin/python mac/prepare_browser_library.py browser-library.json prepared-browser-library --kind web --workers 2
-.venv/bin/python mac/prepare_browser_library.py browser-library.json prepared-browser-library --kind video --enrich-videos --workers 1
+cd mac
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library --seed-videos
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library --kind web --workers 2
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library --kind video --enrich-videos --workers 1
 ```
 
 В приложении выберите папку `prepared-browser-library` через **Add → Choose library or book folder**. FNMN сохранит каталог и готовые статьи и видео в локальной библиотеке. Ссылки без готового пакета остаются в **Sources** и открывают исходную страницу. Для короткой проверки используйте `prepared-browser-library/smoke/FNMN-Test-Import.zip`: распакуйте архив в Files и выберите папку `FNMN-Test-Import`.
 
-Пакет от 28 сентября содержит 344 источника и 899 готовых материалов: 329 веб-страниц и 570 видео. У 28 видео есть подписи; остальные видео открываются без транскрипта. 33 веб-ссылки остаются ссылками на оригинал: интерактивная проверка Cloudflare (ACM), отказ по IP выхода VPN (Хабр и ещё три сайта), пейвол NYT и WSJ, удалённые страницы, сетевые сбои с этого Mac, голые PDF, ноутбуки Jupyter, X Articles за логином и ссылка на YouTube-канал. В приложении они лежат плитками-ссылками в своих альбомах из `index.json`. Поставки — tar в `prepared-browser-library/deliveries`, телефон берёт их из папки FNMN в iCloud Drive, которую собирает `mac/publish_library.py`.
+Пакет от 28 сентября содержит 344 источника и 899 готовых материалов: 329 веб-страниц и 570 видео. У 28 видео есть подписи; остальные видео открываются без транскрипта. 33 веб-ссылки остаются ссылками на оригинал: интерактивная проверка Cloudflare (ACM), отказ по IP выхода VPN (Хабр и ещё три сайта), пейвол NYT и WSJ, удалённые страницы, сетевые сбои с этого Mac, голые PDF, ноутбуки Jupyter, X Articles за логином и ссылка на YouTube-канал. В приложении они лежат плитками-ссылками в своих альбомах из `index.json`. Поставки — tar в `prepared-browser-library/deliveries`, телефон берёт их из папки FNMN в iCloud Drive, которую собирает `mac/collect/publish_library.py`.

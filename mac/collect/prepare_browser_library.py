@@ -1,9 +1,10 @@
-"""Prepare the materials in browser-library.json as FNMN deliveries.
+"""Prepare the materials in browser-library.json as FNMN deliveries: the one-time start of the library,
+kept here with the rest of the collection, away from the service the app talks to.
 
-    .venv/bin/python mac/prepare_browser_library.py browser-library.json prepared-browser-library
+    cd mac && ../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library
 
 The command resumes from completed deliveries. Failed URLs remain in errors.json. Albums come from
-mac/collect/browser_albums.tsv; `--repackage` applies them and the current Markdown rules to the
+browser_albums.tsv beside this file; `--repackage` applies them and the current Markdown rules to the
 deliveries already prepared, without fetching anything again, and turns a delivery still in the old
 one-JSON form, with its files in base64, into an archive.
 """
@@ -23,7 +24,7 @@ from markdown import first_heading, had_site_header, normalize, page_title, plai
 from package import Delivery, Video, package, read_delivery, write_delivery
 from web import LIVE
 
-ALBUMS = Path(__file__).parent / "collect" / "browser_albums.tsv"
+ALBUMS = Path(__file__).parent / "browser_albums.tsv"
 COLLECTION_ALBUMS = {"UX/UI": "Design"}
 
 
