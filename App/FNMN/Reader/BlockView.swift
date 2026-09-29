@@ -115,12 +115,8 @@ struct LeadImage: View {
     let url: URL
 
     var body: some View {
-        Group {
-            if let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image).resizable().scaledToFill()
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 260)
+        FileImage(url: url, contentMode: .fill)
+            .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 260)
         .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
@@ -221,10 +217,12 @@ struct PlateView: View {
         Button("Add Note", systemImage: "note.text") { send(.note(index)) }
         Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { actions.ask(text) }
         Button("Copy as Prompt", systemImage: "text.quote") { actions.copyPrompt(text) }
-        let pictures = ArticleBody.imagePaths(in: markdown).compactMap { UIImage(contentsOfFile: baseURL.appending(path: $0).path) }
+        let pictures = ArticleBody.imagePaths(in: markdown).map { baseURL.appending(path: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
         ForEach(Array(pictures.enumerated()), id: \.offset) { number, picture in
             Button(pictures.count == 1 ? "Save Picture to Photos" : "Save Picture \(number + 1) to Photos", systemImage: "square.and.arrow.down") {
-                UIImageWriteToSavedPhotosAlbum(picture, nil, nil, nil)
+                guard let image = UIImage(contentsOfFile: picture.path) else { return }
+                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
             }
         }
     }
@@ -400,14 +398,19 @@ private struct TickOnTap: ViewModifier {
 private struct StandaloneImage: View {
     let url: URL
     let alt: String
+    /// The picture's own size, read from its file header when the block appears.
+    @State private var natural: CGSize?
 
     var body: some View {
         Group {
-            if url.isFileURL, let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: image.size.width)
+            if url.isFileURL {
+                if let natural {
+                    FileImage(url: url, contentMode: .fit)
+                        .aspectRatio(natural, contentMode: .fit)
+                        .frame(maxWidth: natural.width)
+                } else {
+                    Text(alt).foregroundStyle(.secondary)
+                }
             } else {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFit()
@@ -418,6 +421,9 @@ private struct StandaloneImage: View {
         }
         .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .frame(maxWidth: .infinity)
+        .task(id: url) {
+            if url.isFileURL { natural = await ImageFiles.pixelSize(of: url) }
+        }
         .contextMenu {
             Button("Save to Photos", systemImage: "square.and.arrow.down") {
                 guard let image = UIImage(contentsOfFile: url.path) else { return }

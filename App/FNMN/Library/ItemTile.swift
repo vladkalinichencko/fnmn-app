@@ -239,21 +239,22 @@ struct CoverImage: View {
     var body: some View {
         Color.clear
             .frame(maxWidth: .infinity, minHeight: 80, maxHeight: .infinity)
+            .background(Color.secondary.opacity(0.1))
             .overlay {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Color.secondary.opacity(0.1)
+                switch cover {
+                case let .articleFile(materialID, path):
+                    if let url = library.articleFile(materialID, path: path) {
+                        FileImage(url: url, contentMode: .fill)
+                    }
+                case let .remote(url):
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.clear
+                    }
                 }
             }
             .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
-    }
-
-    private var url: URL? {
-        switch cover {
-        case let .articleFile(materialID, path): library.articleFile(materialID, path: path)
-        case let .remote(url): url
-        }
     }
 }
 
