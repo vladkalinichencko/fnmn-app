@@ -57,6 +57,9 @@ final class LibraryModel {
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
             throw CaptureError.unrecognizedDocument
         }
+        if isDirectory.boolValue {
+            try await CloudFolder.download(url)
+        }
         if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
             try await write(saving: false) { [file] snapshot in try await file.storeBrowserLibrary(from: url, into: snapshot) }
             for book in try bookFolders(in: url.appending(path: "books")) {

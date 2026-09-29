@@ -19,7 +19,9 @@ from markdown import normalize
 def publish(prepared: Path, books: list[Path], destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copy2(prepared / "catalog.json", destination / "catalog.json")
-    shutil.copytree(prepared / "deliveries", destination / "deliveries", dirs_exist_ok=True)
+    # Replaced whole: copying over the old files makes iCloud keep both as "name 2.json".
+    shutil.rmtree(destination / "deliveries", ignore_errors=True)
+    shutil.copytree(prepared / "deliveries", destination / "deliveries")
     for book in books:
         target = destination / "books" / book.name
         shutil.copytree(book, target, dirs_exist_ok=True)
