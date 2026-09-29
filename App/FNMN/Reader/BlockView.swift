@@ -178,6 +178,7 @@ struct PlateView: View {
             // StructuredText parses again only when the Markdown changes; new marks need a new parse.
             .id(marks)
             .textual.overflowMode(.wrap)
+            .plateMarkdownStyles()
             .modifier(TextSelection(isOn: mode == .selectingText(index)))
             .environment(\.textualSelectionMenu, mode == .selectingText(index) ? selectionMenu : nil)
             .padding(Tokens.tilePadding)
