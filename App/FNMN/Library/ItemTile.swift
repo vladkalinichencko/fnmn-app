@@ -175,11 +175,16 @@ struct PreparingTile: View {
 
 /// The rounded glass card every tile without a picture is drawn on.
 struct TileCard<Content: View>: View {
-    var progress: Double?
-    @ViewBuilder let content: () -> Content
+    let progress: Double?
+    let content: Content
+
+    init(progress: Double? = nil, @ViewBuilder content: () -> Content) {
+        self.progress = progress
+        self.content = content()
+    }
 
     var body: some View {
-        content()
+        content
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)

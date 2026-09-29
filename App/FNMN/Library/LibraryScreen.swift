@@ -52,17 +52,17 @@ struct LibraryScreen: View {
 /// A titled part of a screen with a large header, used by Library, Shelf and search.
 struct LibrarySection<Content: View>: View {
     let title: String
-    @ViewBuilder let content: () -> Content
+    let content: Content
 
-    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
+    init(_ title: String, @ViewBuilder content: () -> Content) {
         self.title = title
-        self.content = content
+        self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
             Text(title).font(Tokens.sectionTitle)
-            content()
+            content
         }
     }
 }

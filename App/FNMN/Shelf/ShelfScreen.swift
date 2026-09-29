@@ -49,15 +49,15 @@ private struct ShelfSection<Content: View>: View {
     let count: Int
     let route: Route
     let preview: Int
-    @ViewBuilder let content: () -> Content
+    let content: Content
     @Environment(WindowNavigation.self) private var navigation
 
-    init(_ title: String, count: Int, route: Route, preview: Int, @ViewBuilder content: @escaping () -> Content) {
+    init(_ title: String, count: Int, route: Route, preview: Int, @ViewBuilder content: () -> Content) {
         self.title = title
         self.count = count
         self.route = route
         self.preview = preview
-        self.content = content
+        self.content = content()
     }
 
     var body: some View {
@@ -70,7 +70,7 @@ private struct ShelfSection<Content: View>: View {
             }
             .buttonStyle(.plain)
             .disabled(count <= preview)
-            content()
+            content
         }
     }
 }
