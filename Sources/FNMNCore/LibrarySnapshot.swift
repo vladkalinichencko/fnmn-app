@@ -1,8 +1,9 @@
 import Foundation
 
-/// Everything the library knows. Only `applying(_:)` and the importers change it.
+/// Everything the library knows except reading progress and the texts of articles, which stay on disk.
+/// Only `applying(_:)` and the importers change it.
 public struct LibrarySnapshot: Codable, Equatable, Sendable {
-    public var packages: [ImportPackage] = []
+    public var articles: [ArticleEntry] = []
     public var books: [BookRecord] = []
     public var browserCatalog: BrowserCatalog?
     public var albums: [String] = []
@@ -31,14 +32,14 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         let hasBody = !(package.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasBody || !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
         let id = package.material.id
-        if let index = packages.firstIndex(where: { $0.material.id == id }) {
-            let existing = packages[index]
-            if existing.body != package.body || existing.blocks != package.blocks {
+        let entry = ArticleEntry(package)
+        if let index = articles.firstIndex(where: { $0.material.id == id }) {
+            if articles[index].textDigest != entry.textDigest {
                 forgetMarks(of: id)
             }
-            packages[index] = package
+            articles[index] = entry
         } else {
-            packages.append(package)
+            articles.append(entry)
             addedAt[id] = date
         }
         if albums(of: id).isEmpty {
@@ -109,16 +110,6 @@ extension BookError: LocalizedError {
         case let .rejected(errors): errors.joined(separator: ", ")
         case let .unsupportedSchema(version): "Unsupported book schema \(version)"
         }
-    }
-}
-
-extension ImportPackage {
-    func matches(_ query: String) -> Bool {
-        let markdown = ArticleBody.readingMarkdown(body: body, blocks: blocks)
-        var fields = [material.title, material.sourceURL.absoluteString] + sections.map(\.title)
-        fields.append(contentsOf: ArticleBody.headings(in: markdown).map(\.title))
-        if let byline = material.byline { fields.append(byline) }
-        return fields.contains { $0.localizedStandardContains(query) }
     }
 }
 

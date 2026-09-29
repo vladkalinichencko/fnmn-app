@@ -54,7 +54,7 @@ extension LibrarySnapshot {
         case let .removeVideoFile(itemID):
             next.videoFiles[itemID] = nil
         case let .delete(itemID):
-            next.packages.removeAll { $0.material.id == itemID }
+            next.articles.removeAll { $0.material.id == itemID }
             next.books.removeAll { $0.id == itemID }
             next.forgetMarks(of: itemID)
             next.placements[itemID] = nil

@@ -9,12 +9,8 @@ struct ItemScreen: View {
 
     var body: some View {
         Group {
-            if let package = library.snapshot.packages.first(where: { $0.material.id == itemID }) {
-                if package.material.kind == .video {
-                    VideoReaderView(package: package)
-                } else {
-                    ArticleFlowView(package: package, startPiece: startPiece)
-                }
+            if library.snapshot.articles.contains(where: { $0.material.id == itemID }) {
+                ArticleOpener(itemID: itemID, startPiece: startPiece)
             } else if let book = library.snapshot.books.first(where: { $0.id == itemID }) {
                 BookReaderView(record: book, startPiece: startPiece)
             } else {
@@ -23,6 +19,44 @@ struct ItemScreen: View {
         }
         .toolbar(.hidden, for: .tabBar)
         .task { library.apply(.open(itemID: itemID)) }
+    }
+}
+
+private enum ArticleText: Equatable {
+    case loading
+    case ready(ImportPackage)
+    case failed(String)
+}
+
+/// Reads an article's or video's package from disk when it opens; a new revision reads it again.
+private struct ArticleOpener: View {
+    let itemID: String
+    let startPiece: Int?
+    @Environment(LibraryModel.self) private var library
+    @State private var text = ArticleText.loading
+
+    var body: some View {
+        Group {
+            switch text {
+            case .loading:
+                ProgressView()
+            case let .failed(message):
+                ContentUnavailableView("Couldn’t open this material", systemImage: "doc", description: Text(message))
+            case let .ready(package):
+                if package.material.kind == .video {
+                    VideoReaderView(package: package)
+                } else {
+                    ArticleFlowView(package: package, startPiece: startPiece)
+                }
+            }
+        }
+        .task(id: library.snapshot.articleRevisions[itemID]) {
+            do {
+                text = .ready(try await library.article(itemID))
+            } catch {
+                text = .failed(error.localizedDescription)
+            }
+        }
     }
 }
 

@@ -103,8 +103,11 @@ public actor LibraryFile {
     }
 
     private var stateURL: URL { root.appending(path: "state.json") }
+    private var articlesURL: URL { root.appending(path: "articles.json") }
+    /// Older libraries kept every article with its text in one file.
     private var packagesURL: URL { root.appending(path: "packages.json") }
     private var progressURL: URL { root.appending(path: "progress.json") }
+    private static let textName = "text.json"
 
     public func load() throws -> (catalog: LibrarySnapshot, progress: ReadingProgress) {
         try recoverReplacedDirectories(in: root.appending(path: "books"))
@@ -119,18 +122,22 @@ public actor LibraryFile {
             legacyPackages = state.legacyPackages
             legacyProgress = state.legacyProgress
         }
-        var migrated = false
-        if FileManager.default.fileExists(atPath: packagesURL.path) {
-            snapshot.packages = try decoder.decode([ImportPackage].self, from: Data(contentsOf: packagesURL))
-            corruptPackageNames = []
+        corruptPackageNames = []
+        var packages: [ImportPackage] = []
+        if FileManager.default.fileExists(atPath: articlesURL.path) {
+            snapshot.articles = try decoder.decode([ArticleEntry].self, from: Data(contentsOf: articlesURL))
+        } else if FileManager.default.fileExists(atPath: packagesURL.path) {
+            packages = try decoder.decode([ImportPackage].self, from: Data(contentsOf: packagesURL))
         } else if let legacyPackages {
-            snapshot.packages = legacyPackages
-            corruptPackageNames = []
-            migrated = true
+            packages = legacyPackages
         } else {
-            snapshot.packages = readLegacyPackages()
-            migrated = !snapshot.packages.isEmpty
+            packages = readLegacyPackages()
         }
+        // Texts move to their article folders before the entries replace `packages.json`.
+        for package in packages {
+            try writeText(package, revision: snapshot.articleRevisions[package.material.id])
+        }
+        snapshot.articles.append(contentsOf: packages.map(ArticleEntry.init))
         try sweepUnreferencedBooks(snapshot)
         try sweepArticleRevisions(snapshot)
         let foldedNotes = absorbLegacyNotes(legacyNotes, into: &snapshot)
@@ -139,14 +146,33 @@ public actor LibraryFile {
         var progress = storedProgress
             ? try decoder.decode(ReadingProgress.self, from: Data(contentsOf: progressURL))
             : legacyProgress ?? ReadingProgress()
-        let foldedPlaces = absorbLegacyArticlePositions(into: &progress, packages: snapshot.packages)
+        let foldedPlaces = absorbLegacyArticlePositions(into: &progress, packages: packages)
         if foldedPlaces || (!storedProgress && legacyProgress != nil) {
             try saveProgress(progress)
         }
-        if migrated || foldedNotes || legacyProgress != nil {
+        if !packages.isEmpty || foldedNotes || legacyProgress != nil {
             try save(snapshot)
         }
+        if FileManager.default.fileExists(atPath: packagesURL.path) {
+            try FileManager.default.removeItem(at: packagesURL)
+        }
         return (snapshot, progress)
+    }
+
+    /// The whole package of an article or video, read when the reader opens it.
+    public func article(_ materialID: String, revision: String?) throws -> ImportPackage {
+        guard let url = Self.articleFile(root: root, materialID: materialID, path: Self.textName, revision: revision) else {
+            throw LibraryError.escapedPath
+        }
+        return try decoder.decode(ImportPackage.self, from: Data(contentsOf: url))
+    }
+
+    private func writeText(_ package: ImportPackage, revision: String?) throws {
+        guard let url = Self.articleFile(root: root, materialID: package.material.id, path: Self.textName, revision: revision) else {
+            throw LibraryError.escapedPath
+        }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try encoder.encode(package).write(to: url, options: .atomic)
     }
 
     public func saveProgress(_ progress: ReadingProgress) throws {
@@ -154,17 +180,19 @@ public actor LibraryFile {
         try encoder.encode(progress).write(to: progressURL, options: .atomic)
     }
 
-    /// Writes the reader's state, and the packages only when they differ from `previous`;
+    /// Writes the reader's state, and the article entries only when they differ from `previous`;
     /// then removes files of books and articles the snapshot no longer holds.
     public func save(_ snapshot: LibrarySnapshot, previous: LibrarySnapshot? = nil) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        if previous?.packages != snapshot.packages {
-            try encoder.encode(snapshot.packages).write(to: packagesURL, options: .atomic)
+        if previous?.articles != snapshot.articles {
+            try encoder.encode(snapshot.articles).write(to: articlesURL, options: .atomic)
         }
         try encoder.encode(UserState(snapshot)).write(to: stateURL, options: .atomic)
         guard let previous else { return }
         if previous.books != snapshot.books { try sweepUnreferencedBooks(snapshot) }
-        if previous.articleRevisions != snapshot.articleRevisions { try sweepArticleRevisions(snapshot) }
+        if previous.articles != snapshot.articles || previous.articleRevisions != snapshot.articleRevisions {
+            try sweepArticleRevisions(snapshot)
+        }
         if previous.videoFiles != snapshot.videoFiles { try sweepVideoFiles(snapshot) }
     }
 
@@ -196,13 +224,9 @@ public actor LibraryFile {
     public func storeArticle(_ package: ImportPackage, files: [String: Data], into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         var next = snapshot
         try next.importPackage(package, at: .now)
-        guard !files.isEmpty else {
-            try save(next)
-            return next
-        }
         let revision = UUID().uuidString
         do {
-            try writeArticleRevision(files, materialID: package.material.id, revision: revision)
+            try writeArticleRevision(package, files: files, revision: revision)
             next.articleRevisions[package.material.id] = revision
             try save(next)
             try sweepArticleRevisions(next)
@@ -224,11 +248,9 @@ public actor LibraryFile {
         for url in deliveries {
             let delivery = try decoder.decode(BrowserDelivery.self, from: Data(contentsOf: url))
             try next.importPackage(delivery.package, at: .now)
-            if !delivery.files.isEmpty {
-                let revision = UUID().uuidString
-                try writeArticleRevision(delivery.files, materialID: delivery.package.material.id, revision: revision)
-                next.articleRevisions[delivery.package.material.id] = revision
-            }
+            let revision = UUID().uuidString
+            try writeArticleRevision(delivery.package, files: delivery.files, revision: revision)
+            next.articleRevisions[delivery.package.material.id] = revision
         }
         try save(next)
         try sweepArticleRevisions(next)
@@ -332,14 +354,16 @@ public actor LibraryFile {
         return destination
     }
 
-    private func writeArticleRevision(_ files: [String: Data], materialID: String, revision: String) throws {
+    /// A revision folder is new and is removed whole if any write fails, so its files need no atomic writes.
+    private func writeArticleRevision(_ package: ImportPackage, files: [String: Data], revision: String) throws {
         for (path, data) in files {
-            guard let destination = Self.articleFile(root: root, materialID: materialID, path: path, revision: revision) else {
+            guard let destination = Self.articleFile(root: root, materialID: package.material.id, path: path, revision: revision) else {
                 throw LibraryError.escapedPath
             }
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: destination, options: .atomic)
+            try data.write(to: destination)
         }
+        try writeText(package, revision: revision)
     }
 
     private func removeArticleRevision(materialID: String, revision: String) throws {
@@ -413,7 +437,12 @@ public actor LibraryFile {
         let live = Dictionary(uniqueKeysWithValues: snapshot.articleRevisions.map {
             (Self.articleDirectory(root: root, materialID: $0.key).lastPathComponent, $0.value)
         })
+        let known = Set(snapshot.articles.map { Self.articleDirectory(root: root, materialID: $0.material.id).lastPathComponent })
         for keyURL in keys {
+            guard known.contains(keyURL.lastPathComponent) else {
+                try FileManager.default.removeItem(at: keyURL)
+                continue
+            }
             let revision = live[keyURL.lastPathComponent]
             guard let children = try? FileManager.default.contentsOfDirectory(at: keyURL, includingPropertiesForKeys: nil) else { continue }
             for child in children {

@@ -19,7 +19,7 @@ public struct SourceRef: Hashable, Sendable {
     public let homepage: URL?
 }
 
-public enum Cover: Hashable, Sendable {
+public enum Cover: Codable, Hashable, Sendable {
     case articleFile(materialID: String, path: String)
     case remote(URL)
 }
@@ -75,13 +75,13 @@ extension LibrarySnapshot {
         if let book = books.first(where: { $0.id == itemID }) {
             return book.metadata.authors.first.map { SourceRef(name: $0, homepage: nil) }
         }
-        guard let package = packages.first(where: { $0.material.id == itemID }) else { return nil }
-        let key = SourceIndex.key(package.material.sourceURL.absoluteString)
+        guard let article = articles.first(where: { $0.material.id == itemID }) else { return nil }
+        let key = SourceIndex.key(article.material.sourceURL.absoluteString)
         let saved = browserCatalog?.sources.first { source in
             source.materials.contains { ([$0.url] + $0.savedURLs).map(SourceIndex.key).contains(key) }
         }
         return saved.map { SourceRef(name: $0.name, homepage: URL(string: $0.url)) }
-            ?? SourceIndex(catalog: nil).source(for: package.material.sourceURL.absoluteString)
+            ?? SourceIndex(catalog: nil).source(for: article.material.sourceURL.absoluteString)
     }
 
     public func items(inAlbum name: String) -> [LibraryItem] {
@@ -100,10 +100,10 @@ extension LibrarySnapshot {
     public func items(matching query: String) -> [LibraryItem] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return items }
-        let packageHits = Set(packages.filter { $0.matches(needle) }.map(\.material.id))
+        let articleHits = Set(articles.filter { $0.matches(needle) }.map(\.material.id))
         let bookHits = Set(books.filter { $0.matches(needle) }.map(\.id))
         return items.filter { item in
-            packageHits.contains(item.id) || bookHits.contains(item.id)
+            articleHits.contains(item.id) || bookHits.contains(item.id)
                 || item.title.localizedStandardContains(needle)
                 || item.source?.name.localizedStandardContains(needle) == true
                 || albums(of: item.id).contains { $0.localizedStandardContains(needle) }
@@ -113,8 +113,9 @@ extension LibrarySnapshot {
     /// Highlights and notes grouped by material; the most recently touched material and annotation come first.
     public var annotationGroups: [AnnotationGroup] {
         let byItem = Dictionary(grouping: annotations, by: \.materialID)
+        let known = Dictionary(allItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let groups = byItem.compactMap { itemID, annotations -> AnnotationGroup? in
-            guard let item = item(itemID) else { return nil }
+            guard let item = known[itemID] else { return nil }
             let sorted = annotations.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
             return AnnotationGroup(item: item, annotations: sorted)
         }
@@ -125,16 +126,16 @@ extension LibrarySnapshot {
 
     private var allItems: [LibraryItem] {
         let sources = SourceIndex(catalog: browserCatalog)
-        let prepared = packages.map { package in
+        let prepared = articles.map { article in
             LibraryItem(
-                id: package.material.id,
-                kind: package.material.kind == .video ? .video : .article,
-                title: package.material.title,
-                source: sources.source(for: package.material.sourceURL.absoluteString),
-                originalURL: package.material.sourceURL,
-                addedAt: addedAt[package.material.id],
-                excerpt: package.material.kind == .video ? package.material.byline : ArticleBody.excerpt(package.body),
-                cover: package.cover
+                id: article.material.id,
+                kind: article.material.kind == .video ? .video : .article,
+                title: article.material.title,
+                source: sources.source(for: article.material.sourceURL.absoluteString),
+                originalURL: article.material.sourceURL,
+                addedAt: addedAt[article.material.id],
+                excerpt: article.excerpt,
+                cover: article.cover
             )
         }
         let bookItems = books.map { book in
@@ -149,7 +150,7 @@ extension LibrarySnapshot {
                 cover: nil
             )
         }
-        let preparedKeys = Set(packages.map { SourceIndex.key($0.material.sourceURL.absoluteString) })
+        let preparedKeys = Set(articles.map { SourceIndex.key($0.material.sourceURL.absoluteString) })
         let links = (browserCatalog?.sources ?? []).flatMap { source in
             source.materials.compactMap { material -> LibraryItem? in
                 let keys = ([material.url] + material.savedURLs).map(SourceIndex.key)
@@ -206,17 +207,5 @@ private struct SourceIndex {
     static func key(_ url: String) -> String {
         if let parsed = URL(string: url), let video = YouTube.videoID(in: parsed) { return "youtube:\(video)" }
         return url
-    }
-}
-
-extension ImportPackage {
-    var cover: Cover? {
-        if material.kind == .video {
-            return YouTube.videoID(in: material.sourceURL)
-                .flatMap { URL(string: "https://i.ytimg.com/vi/\($0)/hqdefault.jpg") }
-                .map(Cover.remote)
-        }
-        guard let body, let path = ArticleBody.firstImagePath(body) else { return nil }
-        return .articleFile(materialID: material.id, path: path)
     }
 }

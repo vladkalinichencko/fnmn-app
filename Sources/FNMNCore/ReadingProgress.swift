@@ -56,13 +56,13 @@ extension LibrarySnapshot {
     /// What reading progress loses when the catalog goes from `previous` to this one: a material that is gone
     /// is forgotten, and one whose text was replaced starts over.
     public func progressChanges(since previous: LibrarySnapshot) -> [ProgressChange] {
-        let packages = Dictionary(self.packages.map { ($0.material.id, $0) }, uniquingKeysWith: { $1 })
+        let digests = Dictionary(articles.map { ($0.material.id, $0.textDigest) }, uniquingKeysWith: { $1 })
         let books = Dictionary(self.books.map { ($0.id, $0) }, uniquingKeysWith: { $1 })
         var changes: [ProgressChange] = []
-        for package in previous.packages {
-            let id = package.material.id
-            if let current = packages[id] {
-                if current.body != package.body || current.blocks != package.blocks { changes.append(.restart(itemID: id)) }
+        for article in previous.articles {
+            let id = article.material.id
+            if let digest = digests[id] {
+                if digest != article.textDigest { changes.append(.restart(itemID: id)) }
             } else {
                 changes.append(.forget(itemID: id))
             }
@@ -82,13 +82,13 @@ extension LibrarySnapshot {
 
     /// The material the reader opened last, or else the first one with a saved place.
     public func continuedID(_ progress: ReadingProgress) -> String? {
-        let known = Set(packages.map(\.material.id) + books.map(\.id))
+        let known = Set(articles.map(\.material.id) + books.map(\.id))
         let opened = progress.readings.compactMap { materialID, reading -> (String, Date)? in
             guard let openedAt = reading.openedAt, known.contains(materialID), !isArchived(materialID) else { return nil }
             return (materialID, openedAt)
         }
         if let materialID = opened.max(by: { $0.1 < $1.1 })?.0 { return materialID }
-        if let article = packages.first(where: { progress.positions[$0.material.id] != nil }) {
+        if let article = articles.first(where: { progress.positions[$0.material.id] != nil }) {
             return article.material.id
         }
         return books.first(where: { progress.positions[$0.id] != nil })?.id

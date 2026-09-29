@@ -159,6 +159,10 @@ final class LibraryModel {
         LibraryFile.bookFolder(root: storageURL, directoryName: directoryName)
     }
 
+    func article(_ materialID: String) async throws -> ImportPackage {
+        try await file.article(materialID, revision: snapshot.articleRevisions[materialID])
+    }
+
     func bookText(_ record: BookRecord) async throws -> String {
         try await file.bookText(directoryName: record.directoryName, contentFile: record.metadata.contentFile)
     }
