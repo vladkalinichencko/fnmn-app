@@ -64,7 +64,7 @@ private struct PinchFade: ViewModifier {
 struct HeadingView: View {
     let level: Int
     let title: String
-    /// Open text gives a large heading room above it; a folded heading sits in its own card.
+    /// Open text gives a large heading room above it; folded headings sit close together as an outline.
     var spaced = true
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
@@ -87,7 +87,7 @@ struct HeadingView: View {
     }
 }
 
-/// A heading of the folded document: its paragraphs lie under it as a small stack of plates.
+/// A heading of the folded document, on the page like any heading, with how many blocks it holds.
 struct FoldedHeading: View {
     let level: Int
     let title: String
@@ -102,23 +102,7 @@ struct FoldedHeading: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(Tokens.tilePadding)
-        .plate(cornerRadius: Tokens.plateRadius)
-        .background(alignment: .bottom) {
-            if count > 0 {
-                ZStack(alignment: .bottom) {
-                    sliver.scaleEffect(x: 0.88).offset(y: 14).opacity(0.5)
-                    sliver.scaleEffect(x: 0.94).offset(y: 7).opacity(0.8)
-                }
-            }
-        }
-        .padding(.bottom, count > 0 ? 14 : 0)
-    }
-
-    private var sliver: some View {
-        Color.clear
-            .frame(height: 24)
-            .plate(cornerRadius: Tokens.plateRadius)
+        .padding(.vertical, 4)
     }
 }
 
@@ -138,9 +122,9 @@ struct LeadImage: View {
 }
 
 /// A paragraph, list, quote, table or code block on its own rounded plate.
+/// Dragging it left keeps it there and opens its margin note on the right; dragging it right marks "read to here".
 struct PlateView: View {
     @Environment(LibraryModel.self) private var library
-    @Environment(\.horizontalSizeClass) private var sizeClass
     let markdown: String
     let index: Int
     let baseURL: URL
@@ -148,18 +132,54 @@ struct PlateView: View {
     let mode: PlateMode
     let actions: ParagraphActions
     let send: (PlateAction) -> Void
+    @State private var drag: CGFloat = 0
+    @State private var width: CGFloat = 0
+
+    private var noting: Bool { mode == .noting(index) }
+    /// How far the plate moves aside for its note: a little over half its width.
+    private var noteWidth: CGFloat { width * 0.58 }
+    private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
 
     var body: some View {
-        let note = paragraphNote
-        let layout = sizeClass == .regular
-            ? AnyLayout(HStackLayout(alignment: .top, spacing: Tokens.gap))
-            : AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
-        layout {
-            plate
-            if mode == .noting(index) || !note.isEmpty {
-                MarginNote(saved: note, editing: mode == .noting(index), save: saveNote, edit: { send(.note(index)) })
-                    .frame(width: sizeClass == .regular ? 220 : nil, alignment: .leading)
+        ZStack(alignment: .topTrailing) {
+            if noting {
+                MarginNote(saved: paragraphNote, save: saveNote)
+                    .frame(width: noteWidth - Tokens.gap, alignment: .topLeading)
+                    .padding(.top, Tokens.tilePadding)
+                    .transition(.opacity)
             }
+            readMark
+            plate.offset(x: offset)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .gesture(HorizontalPan(changed: dragged, ended: released))
+        .animation(.spring(duration: 0.35, bounce: 0.2), value: noting)
+    }
+
+    /// The check that shows on the left while the plate is pulled right.
+    private var readMark: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .font(.title2)
+            .foregroundStyle(.tint)
+            .opacity(min(max(drag / 80, 0), 1))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(.leading, 4)
+    }
+
+    private func dragged(_ translation: CGFloat) {
+        guard mode == .reading || noting else { return }
+        drag = noting ? max(translation, 0) : max(min(translation, 110), -noteWidth - 20)
+    }
+
+    private func released(_ translation: CGFloat, _ velocity: CGFloat) {
+        withAnimation(.spring(duration: 0.35, bounce: 0.2)) { drag = 0 }
+        if noting {
+            if translation > 60 || velocity > 500 { send(.done) }
+        } else if translation < -60 || velocity < -500 {
+            send(.note(index))
+        } else if translation > 80 {
+            let marked = library.snapshot.readThrough[actions.materialID] == index
+            Task { await library.apply(.readThrough(piece: marked ? nil : index, itemID: actions.materialID)) }
         }
     }
 
@@ -173,21 +193,14 @@ struct PlateView: View {
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .plate(cornerRadius: Tokens.plateRadius)
-            .overlay(alignment: .topTrailing) { tick }
+            .overlay(alignment: .topTrailing) {
+                if let tick { tick } else { noteMark }
+            }
             .opacity(isRead && mode == .reading ? 0.55 : 1)
             .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .modifier(TickOnTap(isOn: isTicking) { send(.toggle(index)) })
+            .modifier(TickOnTap(isOn: noting) { send(.done) })
             .contextMenu { if mode == .reading { menu } }
-            .swipeActions(edge: .leading) {
-                let marked = library.snapshot.readThrough[actions.materialID] == index
-                Button(marked ? "Unmark" : "Read to Here", systemImage: marked ? "arrow.uturn.backward" : "checkmark") {
-                    Task { await library.apply(.readThrough(piece: marked ? nil : index, itemID: actions.materialID)) }
-                }
-                .tint(.accentColor)
-            }
-            .swipeActions(edge: .trailing) {
-                Button("Note", systemImage: "note.text") { send(.note(index)) }
-            }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
             .sensoryFeedback(.selection, trigger: library.snapshot.readThrough[actions.materialID] == index)
     }
@@ -221,13 +234,25 @@ struct PlateView: View {
         }
     }
 
-    @ViewBuilder
-    private var tick: some View {
-        if case let .selectingParagraphs(picked) = mode {
+    private var tick: AnyView? {
+        guard case let .selectingParagraphs(picked) = mode else { return nil }
+        return AnyView(
             Image(systemName: picked.contains(index) ? "checkmark.circle.fill" : "circle")
                 .font(.title3)
                 .foregroundStyle(picked.contains(index) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .padding(10)
+        )
+    }
+
+    /// A small tab on the right edge of a plate that has a note; the note itself shows when the plate is pulled aside.
+    @ViewBuilder
+    private var noteMark: some View {
+        if !paragraphNote.isEmpty, !noting {
+            Capsule()
+                .fill(.tint)
+                .frame(width: 4, height: 22)
+                .padding(.top, Tokens.tilePadding + 2)
+                .offset(x: 2)
         }
     }
 
@@ -259,30 +284,21 @@ struct PlateView: View {
     }
 }
 
-/// A note in the margin: no background, a thin rule, top-aligned with its paragraph.
+/// A note in the margin beside its paragraph: plain text on the page, no frame, saved when it closes.
 private struct MarginNote: View {
     let saved: String
-    let editing: Bool
     let save: (String) -> Void
-    let edit: () -> Void
     @State private var draft = ""
     @FocusState private var focused: Bool
+    @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Capsule().fill(.tertiary).frame(width: 2)
-            if editing {
-                TextField("Note", text: $draft, axis: .vertical)
-                    .focused($focused)
-                    .onAppear { draft = saved; focused = true }
-                    .onDisappear { if draft != saved { save(draft) } }
-            } else {
-                Text(saved).onTapGesture(perform: edit)
-            }
-        }
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
+        TextField("Note", text: $draft, axis: .vertical)
+            .font(.system(.callout, design: readerFont.design))
+            .focused($focused)
+            .onAppear { draft = saved; focused = saved.isEmpty }
+            .onDisappear { if draft != saved { save(draft) } }
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
