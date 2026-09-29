@@ -112,8 +112,16 @@ final class ImportJobs {
             throw MacServiceError.rejected(job.error ?? "The Mac could not prepare this link.")
         }
         send(.progressed(jobID, .saving))
-        let (package, files) = try await mac.port.package(of: job.id, connection: connection)
-        try await library.store(package, files: files)
+        let archive = try await mac.port.delivery(of: job.id, connection: connection)
+        defer { try? FileManager.default.removeItem(at: archive) }
+        try await library.store(archive: archive)
+        await confirmStored(job.id, connection: connection)
+    }
+
+    /// The material is in the library whether or not the Mac hears this; a Mac that does not keeps the
+    /// job's file until the service restarts, so a lost confirmation does not fail the import.
+    private func confirmStored(_ id: String, connection: MacConnection) async {
+        try? await mac.port.forget(id, connection: connection)
     }
 
     private func downloadVideo(_ url: URL, itemID: String, jobID: UUID) async throws {
@@ -125,6 +133,7 @@ final class ImportJobs {
         }
         send(.progressed(jobID, .saving))
         try await library.storeVideoFile(itemID, from: try await mac.port.videoFile(of: job.id, connection: connection))
+        await confirmStored(job.id, connection: connection)
     }
 
     private func importFile(_ url: URL) async throws {

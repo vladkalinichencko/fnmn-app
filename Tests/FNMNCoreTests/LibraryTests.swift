@@ -35,9 +35,7 @@ private let article = ImportPackage(
     try FileManager.default.createDirectory(at: prepared.appending(path: "deliveries"), withIntermediateDirectories: true)
     let catalog = #"{"collections":[{"id":"reading","name":"Reading"}],"sources":[{"name":"Example","url":"https://example.com","kind":"site","saved_in":["reading"],"found_in":["reading"],"materials":[]},{"name":"Author","url":"https://example.org","kind":"author","saved_in":["reading"],"found_in":["reading"],"materials":[{"title":"A","url":"https://example.com/a","saved_in":["reading"],"found_in":["reading"]}]}]}"#
     try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
-    var delivery = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(article)) as? [String: Any])
-    delivery["files"] = [String: String]()
-    try JSONSerialization.data(withJSONObject: delivery).write(to: prepared.appending(path: "deliveries/a.json"))
+    try writeDelivery(article, files: [("assets/p.png", Data("png".utf8))], to: prepared.appending(path: "deliveries/a.tar"))
 
     let file = LibraryFile(url: root.appending(path: "library"))
     let imported = try await file.storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
@@ -46,13 +44,16 @@ private let article = ImportPackage(
     #expect(imported.articles.map(\.material.id) == [article.material.id])
     let reloaded = try await file.load()
     #expect(reloaded.catalog.browserCatalog == imported.browserCatalog)
-    #expect(try await file.article(article.material.id, revision: imported.articleRevisions[article.material.id]) == article)
+    let revision = imported.articleRevisions[article.material.id]
+    #expect(try await file.article(article.material.id, revision: revision) == article)
+    let picture = try #require(LibraryFile.articleFile(root: root.appending(path: "library"), materialID: article.material.id, path: "assets/p.png", revision: revision))
+    #expect(try Data(contentsOf: picture) == Data("png".utf8))
 }
 
 @Test func importKeepsTheMarkdownBody() async throws {
     let file = LibraryFile(url: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
     let packaged = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: article.folders, body: "A $x$ line.")
-    var library = try await file.storeArticle(packaged, files: [:], into: LibrarySnapshot())
+    var library = try await file.storeArticle(packaged, into: LibrarySnapshot())
     library = try library.applying(.renameAlbum("Inbox", to: "Later"))
     #expect(try await file.article(article.material.id, revision: library.articleRevisions[article.material.id]).body == "A $x$ line.")
     #expect(library.albums(of: article.material.id) == ["Later"])
@@ -61,7 +62,9 @@ private let article = ImportPackage(
 @Test func deletingAnArticleRemovesItsFolder() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory)
-    let stored = try await file.storeArticle(article, files: ["assets/pic.txt": Data("pic".utf8)], into: LibrarySnapshot())
+    let delivery = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
+    try writeDelivery(article, files: [("assets/pic.txt", Data("pic".utf8))], to: delivery)
+    let stored = try await file.storeArticle(archive: delivery, into: LibrarySnapshot())
     let revision = stored.articleRevisions[article.material.id]
     let text = try #require(LibraryFile.articleFile(root: directory, materialID: article.material.id, path: "text.json", revision: revision))
     #expect(FileManager.default.fileExists(atPath: text.path))
@@ -520,14 +523,19 @@ private func span(_ quote: String) -> AnnotationTarget {
 @Test func failedArticleReplacementKeepsThePreviousFiles() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory)
-    let stored = try await file.storeArticle(article, files: ["note.txt": Data("old".utf8)], into: LibrarySnapshot())
+    let old = directory.appending(path: "old.tar")
+    let new = directory.appending(path: "new.tar")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try writeDelivery(article, files: [("note.txt", Data("old".utf8))], to: old)
+    let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "new")
+    try writeDelivery(changed, files: [("note.txt", Data("new".utf8))], to: new)
+    let stored = try await file.storeArticle(archive: old, into: LibrarySnapshot())
     let revision = try #require(stored.articleRevisions[article.material.id])
     let note = try #require(LibraryFile.articleFile(root: directory, materialID: article.material.id, path: "note.txt", revision: revision))
     try FileManager.default.removeItem(at: directory.appending(path: "state.json"))
     try FileManager.default.createDirectory(at: directory.appending(path: "state.json"), withIntermediateDirectories: true)
-    let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "new")
     await #expect(throws: (any Error).self) {
-        try await file.storeArticle(changed, files: ["note.txt": Data("new".utf8)], into: stored)
+        try await file.storeArticle(archive: new, into: stored)
     }
     #expect(try String(contentsOf: note, encoding: .utf8) == "old")
 }

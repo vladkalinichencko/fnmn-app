@@ -221,18 +221,51 @@ public actor LibraryFile {
         }
     }
 
-    public func storeArticle(_ package: ImportPackage, files: [String: Data], into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+    /// Stores a package that carries no files, such as a picked `.json`.
+    public func storeArticle(_ package: ImportPackage, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         var next = snapshot
         try next.importPackage(package, at: .now)
         let revision = UUID().uuidString
         do {
-            try writeArticleRevision(package, files: files, revision: revision)
+            try writeText(package, revision: revision)
             next.articleRevisions[package.material.id] = revision
             try save(next)
             try sweepArticleRevisions(next)
             return next
         } catch {
             try? removeArticleRevision(materialID: package.material.id, revision: revision)
+            throw error
+        }
+    }
+
+    /// Stores a delivery archive from the Mac: its files and `text.json` go into a new revision.
+    public func storeArticle(archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        var next = snapshot
+        try unpackDelivery(archive, into: &next)
+        try save(next)
+        try sweepArticleRevisions(next)
+        return next
+    }
+
+    /// Unpacks one delivery into a new revision of its article and enters the package in the catalog;
+    /// a delivery that fails halfway leaves no revision behind.
+    private func unpackDelivery(_ archive: URL, into snapshot: inout LibrarySnapshot) throws {
+        let revision = UUID().uuidString
+        var materialID: String?
+        do {
+            let package = try DeliveryArchive(url: archive).unpack { package, path in
+                materialID = package.material.id
+                guard let file = Self.articleFile(root: root, materialID: package.material.id, path: path, revision: revision) else {
+                    throw LibraryError.escapedPath
+                }
+                return file
+            }
+            materialID = package.material.id
+            try snapshot.importPackage(package, at: .now)
+            try writeText(package, revision: revision)
+            snapshot.articleRevisions[package.material.id] = revision
+        } catch {
+            if let materialID { try? removeArticleRevision(materialID: materialID, revision: revision) }
             throw error
         }
     }
@@ -252,9 +285,11 @@ public actor LibraryFile {
             return next
         } else if isDirectory.boolValue {
             return try storeBook(try BookCatalog.inspect(from: url).record, from: url, into: snapshot)
+        } else if url.pathExtension.lowercased() == "tar" {
+            return try storeArticle(archive: url, into: snapshot)
         } else if url.pathExtension.lowercased() == "json" {
             let package = try decoder.decode(ImportPackage.self, from: Data(contentsOf: url))
-            return try storeArticle(package, files: [:], into: snapshot)
+            return try storeArticle(package, into: snapshot)
         } else if url.pathExtension.lowercased() == "pdf" {
             throw CaptureError.unprepared(.pdf)
         } else {
@@ -273,32 +308,16 @@ public actor LibraryFile {
         let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
         let deliveries = try FileManager.default.contentsOfDirectory(
             at: source.appending(path: "deliveries"), includingPropertiesForKeys: nil
-        ).filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        ).filter { $0.pathExtension == "tar" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
         var next = snapshot
         next.retireAlbums(catalog.collections.map(\.name))
         next.browserCatalog = catalog
         for url in deliveries {
-            let delivery = try decoder.decode(BrowserDelivery.self, from: Data(contentsOf: url))
-            try next.importPackage(delivery.package, at: .now)
-            let revision = UUID().uuidString
-            try writeArticleRevision(delivery.package, files: delivery.files, revision: revision)
-            next.articleRevisions[delivery.package.material.id] = revision
+            try unpackDelivery(url, into: &next)
         }
         try save(next)
         try sweepArticleRevisions(next)
         return next
-    }
-
-    private struct BrowserDelivery: Decodable {
-        let package: ImportPackage
-        let files: [String: Data]
-
-        init(from decoder: Decoder) throws {
-            package = try ImportPackage(from: decoder)
-            files = try decoder.container(keyedBy: CodingKeys.self).decode([String: Data].self, forKey: .files)
-        }
-
-        private enum CodingKeys: String, CodingKey { case files }
     }
 
     public func storeBook(_ record: BookRecord, from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
@@ -384,18 +403,6 @@ public actor LibraryFile {
         let destination = folder.appending(path: path).standardizedFileURL
         guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
         return destination
-    }
-
-    /// A revision folder is new and is removed whole if any write fails, so its files need no atomic writes.
-    private func writeArticleRevision(_ package: ImportPackage, files: [String: Data], revision: String) throws {
-        for (path, data) in files {
-            guard let destination = Self.articleFile(root: root, materialID: package.material.id, path: path, revision: revision) else {
-                throw LibraryError.escapedPath
-            }
-            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: destination)
-        }
-        try writeText(package, revision: revision)
     }
 
     private func removeArticleRevision(materialID: String, revision: String) throws {

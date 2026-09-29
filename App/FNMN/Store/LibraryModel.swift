@@ -107,9 +107,9 @@ final class LibraryModel {
         return progress.positions[itemID]
     }
 
-    /// Stores a package the Mac prepared, with its pictures and videos.
-    func store(_ package: ImportPackage, files: [String: Data]) async throws {
-        try await write(saving: false) { [file] snapshot in try await file.storeArticle(package, files: files, into: snapshot) }
+    /// Stores a delivery archive the Mac prepared, with its pictures and videos, reading it off the main thread.
+    func store(archive: URL) async throws {
+        try await write(saving: false) { [file] snapshot in try await file.storeArticle(archive: archive, into: snapshot) }
     }
 
     /// Stores a picked prepared package, book folder, or the FNMN folder. Reading it happens in `LibraryFile`,

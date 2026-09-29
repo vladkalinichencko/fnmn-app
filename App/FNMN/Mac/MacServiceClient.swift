@@ -6,10 +6,13 @@ protocol MacServicePort {
     func check(connection: MacConnection) async throws
     func startJob(url: URL, connection: MacConnection) async throws -> MacJob
     func job(_ id: String, connection: MacConnection) async throws -> MacJob
-    func package(of id: String, connection: MacConnection) async throws -> (ImportPackage, [String: Data])
+    /// Downloads the finished delivery archive to a temporary file.
+    func delivery(of id: String, connection: MacConnection) async throws -> URL
     func startVideoDownload(url: URL, connection: MacConnection) async throws -> MacJob
     /// Downloads the finished video file to a temporary location.
     func videoFile(of id: String, connection: MacConnection) async throws -> URL
+    /// Tells the Mac the result is stored, so it removes the file and forgets the job.
+    func forget(_ id: String, connection: MacConnection) async throws
 }
 
 extension MacServicePort {
@@ -91,9 +94,19 @@ struct MacServiceClient: MacServicePort {
         try await decoded(MacJob.self, for: authorizedRequest(path: "jobs/\(id)", connection: connection))
     }
 
-    func package(of id: String, connection: MacConnection) async throws -> (ImportPackage, [String: Data]) {
-        let delivery = try await decoded(ArticleDelivery.self, for: authorizedRequest(path: "jobs/\(id)/package", connection: connection))
-        return (delivery.package, delivery.files)
+    func delivery(of id: String, connection: MacConnection) async throws -> URL {
+        var request = authorizedRequest(path: "jobs/\(id)/package", connection: connection)
+        request.timeoutInterval = 600
+        let (file, response) = try await URLSession.shared.download(for: request)
+        try accept(response, data: Data())
+        return file
+    }
+
+    func forget(_ id: String, connection: MacConnection) async throws {
+        var request = authorizedRequest(path: "jobs/\(id)", connection: connection)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try accept(response, data: data)
     }
 
     func startVideoDownload(url: URL, connection: MacConnection) async throws -> MacJob {
@@ -145,25 +158,4 @@ enum MacServiceError: Error, LocalizedError {
         guard case let .rejected(message) = self else { return nil }
         return message
     }
-}
-
-private struct ArticleDelivery: Decodable {
-    let package: ImportPackage
-    let files: [String: Data]
-
-    init(from decoder: Decoder) throws {
-        package = try ImportPackage(from: decoder)
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let encoded = try container.decodeIfPresent([String: String].self, forKey: .files) ?? [:]
-        var files: [String: Data] = [:]
-        for (path, value) in encoded {
-            guard let data = Data(base64Encoded: value) else {
-                throw DecodingError.dataCorruptedError(forKey: .files, in: container, debugDescription: path)
-            }
-            files[path] = data
-        }
-        self.files = files
-    }
-
-    private enum CodingKeys: String, CodingKey { case files }
 }
