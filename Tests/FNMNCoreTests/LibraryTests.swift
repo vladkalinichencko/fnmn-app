@@ -38,17 +38,24 @@ private let article = ImportPackage(
     try writeDelivery(article, files: [("assets/p.png", Data("png".utf8))], to: prepared.appending(path: "deliveries/a.tar"))
     try Data(#"[{"url":"https://example.com/a","folders":["Web"]}]"#.utf8).write(to: prepared.appending(path: "index.json"))
 
-    let file = LibraryFile(url: root.appending(path: "library"))
+    let file = await libraryFile(root)
     let imported = try await file.storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
     #expect(imported.browserCatalog?.sources.first?.materials.isEmpty == true)
     #expect(imported.browserCatalog?.sources.last?.materials.first?.savedURLs == [])
     #expect(imported.articles.map(\.material.id) == [article.material.id])
+    #expect(FileManager.default.fileExists(atPath: root.appending(path: "FNMN/deliveries/a.tar").path))
     let reloaded = try await file.load()
     #expect(reloaded.catalog.browserCatalog == imported.browserCatalog)
-    let revision = imported.articleRevisions[article.material.id]
-    #expect(try await file.article(article.material.id, revision: revision) == article)
-    let picture = try #require(LibraryFile.articleFile(root: root.appending(path: "library"), materialID: article.material.id, path: "assets/p.png", revision: revision))
-    #expect(try Data(contentsOf: picture) == Data("png".utf8))
+    let entry = try #require(imported.articles.first)
+    #expect(try await file.openCloudArticle(entry) == article)
+    #expect(try Data(contentsOf: file.cachedFolder(of: entry).appending(path: "assets/p.png")) == Data("png".utf8))
+}
+
+/// A library whose FNMN folder is a folder beside it, as in the app.
+func libraryFile(_ root: URL) async -> LibraryFile {
+    let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
+    await file.useCloudFolder(root.appending(path: "FNMN"))
+    return file
 }
 
 @Test func aLinkTheMacCouldNotPrepareLandsInItsAlbum() async throws {
@@ -58,32 +65,37 @@ private let article = ImportPackage(
     let catalog = #"{"collections":[],"sources":[{"name":"ACM","url":"https://dl.acm.org","kind":"site","saved_in":[],"found_in":[],"materials":[{"title":"Paper","url":"https://dl.acm.org/doi/1","saved_in":[],"found_in":[]}]}]}"#
     try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
     try Data(#"[{"url":"https://dl.acm.org/doi/1","folders":["HCI"]}]"#.utf8).write(to: prepared.appending(path: "index.json"))
-    let imported = try await LibraryFile(url: root.appending(path: "library")).storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
+    let imported = try await libraryFile(root).storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
     #expect(imported.items(inAlbum: "HCI").map(\.id) == ["link:https://dl.acm.org/doi/1"])
     #expect(imported.items(inAlbum: "HCI").first?.kind == .link)
 }
 
 @Test func importKeepsTheMarkdownBody() async throws {
-    let file = LibraryFile(url: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = await libraryFile(root)
     let packaged = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: article.folders, body: "A $x$ line.")
-    var library = try await file.storeArticle(packaged, into: LibrarySnapshot())
+    let delivery = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
+    try writeDelivery(packaged, to: delivery)
+    var library = try await file.storeArticle(archive: delivery, into: LibrarySnapshot())
     library = try library.applying(.renameAlbum("Inbox", to: "Later"))
-    #expect(try await file.article(article.material.id, revision: library.articleRevisions[article.material.id]).body == "A $x$ line.")
+    #expect(try await file.openCloudArticle(try #require(library.articles.first)).body == "A $x$ line.")
     #expect(library.albums(of: article.material.id) == ["Later"])
 }
 
-@Test func deletingAnArticleRemovesItsFolder() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let file = LibraryFile(url: directory)
-    let delivery = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
-    try writeDelivery(article, files: [("assets/pic.txt", Data("pic".utf8))], to: delivery)
-    let stored = try await file.storeArticle(archive: delivery, into: LibrarySnapshot())
-    let revision = stored.articleRevisions[article.material.id]
-    let text = try #require(LibraryFile.articleFile(root: directory, materialID: article.material.id, path: "text.json", revision: revision))
-    #expect(FileManager.default.fileExists(atPath: text.path))
-    let deleted = try stored.applying(.delete(itemID: article.material.id))
-    try await file.save(deleted, previous: stored)
-    #expect(!FileManager.default.fileExists(atPath: LibraryFile.articleFolder(root: directory, materialID: article.material.id, revision: nil).path))
+@Test func whatAnOlderVersionKeptInTheAppMovesIntoTheFNMNFolder() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let appFolder = root.appending(path: "library")
+    try FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
+    try JSONEncoder().encode([article]).write(to: appFolder.appending(path: "packages.json"))
+    let file = await libraryFile(root)
+    let loaded = try await file.load().catalog
+    #expect(await file.holdsMaterialsInApp(loaded))
+    let moved = try await file.moveIntoCloud(loaded)
+    let entry = try #require(moved.articles.first)
+    #expect(entry.delivery != nil)
+    #expect(await !file.holdsMaterialsInApp(moved))
+    #expect(!FileManager.default.fileExists(atPath: appFolder.appending(path: "articles").path))
+    #expect(try await file.openCloudArticle(entry) == article)
 }
 
 @Test func articlesInsideOnePackagesFileMoveToTheirFolders() async throws {
@@ -259,12 +271,12 @@ private var sampleBook: URL {
     }
 }
 
-@Test func aPickedPackageOrBookFolderIsStoredAndAPDFIsNot() async throws {
+@Test func aPickedArchiveOrBookFolderGoesIntoTheFNMNFolderAndAPDFDoesNot() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let file = LibraryFile(url: directory.appending(path: "library"))
-    let picked = directory.appending(path: "a.json")
-    try JSONEncoder().encode(article).write(to: picked)
+    let file = await libraryFile(directory)
+    let picked = directory.appending(path: "a.tar")
+    try writeDelivery(article, to: picked)
     var library = try await file.storePicked(picked, into: LibrarySnapshot())
     library = try await file.storePicked(sampleBook, into: library)
     #expect(library.articles.map(\.material.id) == [article.material.id])
@@ -274,16 +286,15 @@ private var sampleBook: URL {
     await #expect(throws: CaptureError.unprepared(.pdf)) { try await file.storePicked(pdf, into: library) }
 }
 
-@Test func bookImportCopiesCatalogIntoLibrary() async throws {
+@Test func aBookPickedElsewhereIsCopiedIntoTheFNMNFolder() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let file = LibraryFile(url: directory)
+    let file = await libraryFile(directory)
     let imported = try BookCatalog.inspect(from: sampleBook)
-    let library = try await file.storeBook(imported.record, from: sampleBook, into: LibrarySnapshot())
-    try await file.save(library)
+    _ = try await file.storeBook(from: sampleBook, into: LibrarySnapshot())
     let loaded = try await file.load().catalog
     #expect(loaded.books.count == 1)
     #expect(loaded.books[0].metadata.toc.count == 223)
-    let copied = directory.appending(path: "books").appending(path: imported.record.directoryName)
+    let copied = directory.appending(path: "FNMN/books").appending(path: imported.record.directoryName)
     #expect(FileManager.default.fileExists(atPath: copied.appending(path: "content.md").path))
     for image in imported.imagePaths {
         #expect(FileManager.default.fileExists(atPath: copied.appending(path: image).path))
@@ -533,41 +544,17 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(!space.directoryName.contains(" "))
 }
 
-@Test func failedArticleReplacementKeepsThePreviousFiles() async throws {
+@Test func aBookAddedAgainReplacesItsCopyInTheFNMNFolder() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let file = LibraryFile(url: directory)
-    let old = directory.appending(path: "old.tar")
-    let new = directory.appending(path: "new.tar")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    try writeDelivery(article, files: [("note.txt", Data("old".utf8))], to: old)
-    let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "new")
-    try writeDelivery(changed, files: [("note.txt", Data("new".utf8))], to: new)
-    let stored = try await file.storeArticle(archive: old, into: LibrarySnapshot())
-    let revision = try #require(stored.articleRevisions[article.material.id])
-    let note = try #require(LibraryFile.articleFile(root: directory, materialID: article.material.id, path: "note.txt", revision: revision))
-    try FileManager.default.removeItem(at: directory.appending(path: "state.json"))
-    try FileManager.default.createDirectory(at: directory.appending(path: "state.json"), withIntermediateDirectories: true)
-    await #expect(throws: (any Error).self) {
-        try await file.storeArticle(archive: new, into: stored)
-    }
-    #expect(try String(contentsOf: note, encoding: .utf8) == "old")
-}
-
-@Test func failedBookReplacementKeepsThePreviousBook() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let file = LibraryFile(url: directory)
+    let file = await libraryFile(directory)
     let original = directory.appending(path: "original")
     try makeBook(at: original, sourceName: "notes.pdf", content: "old")
-    let stored = try await file.storeBook(try BookCatalog.inspect(from: original).record, from: original, into: LibrarySnapshot())
-    let content = directory.appending(path: "books").appending(path: stored.books[0].directoryName).appending(path: "content.md")
-    try FileManager.default.removeItem(at: directory.appending(path: "state.json"))
-    try FileManager.default.createDirectory(at: directory.appending(path: "state.json"), withIntermediateDirectories: true)
+    let stored = try await file.storeBook(from: original, into: LibrarySnapshot())
     let replacement = directory.appending(path: "replacement")
     try makeBook(at: replacement, sourceName: "notes.pdf", content: "new")
-    await #expect(throws: (any Error).self) {
-        try await file.storeBook(try BookCatalog.inspect(from: replacement).record, from: replacement, into: stored)
-    }
-    #expect(try String(contentsOf: content, encoding: .utf8) == "old")
+    let replaced = try await file.storeBook(from: replacement, into: stored)
+    #expect(replaced.books.count == 1)
+    #expect(try await file.bookText(directoryName: replaced.books[0].directoryName, contentFile: "content.md") == "new")
 }
 
 @Test func theOldPackagesFolderGoesOnceEveryPackageIsIn() async throws {

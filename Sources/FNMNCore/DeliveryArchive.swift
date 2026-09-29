@@ -31,6 +31,64 @@ public struct DeliveryArchive: Sendable {
         return package
     }
 
+    /// Writes a delivery the way the Mac does: `package.json` first, then each file, copied from disk in
+    /// chunks. A path USTAR cannot hold is refused rather than written in a form the reader cannot read.
+    public static func write(_ package: ImportPackage, files: [(path: String, source: URL)], to url: URL) throws {
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        let archive = try FileHandle(forWritingTo: url)
+        defer { try? archive.close() }
+        let text = try JSONEncoder().encode(package)
+        try archive.write(contentsOf: try header(name: "package.json", size: text.count))
+        try archive.write(contentsOf: text)
+        try archive.write(contentsOf: Data(count: (block - text.count % block) % block))
+        for (path, source) in files {
+            let size = try source.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            try archive.write(contentsOf: try header(name: path, size: size))
+            let file = try FileHandle(forReadingFrom: source)
+            defer { try? file.close() }
+            while let part = try file.read(upToCount: chunk), !part.isEmpty {
+                try archive.write(contentsOf: part)
+            }
+            try archive.write(contentsOf: Data(count: (block - size % block) % block))
+        }
+        try archive.write(contentsOf: Data(count: 2 * block))
+    }
+
+    private static func header(name: String, size: Int) throws -> Data {
+        let (prefix, short) = try split(name)
+        var bytes = [UInt8](repeating: 0, count: block)
+        func put(_ text: String, at offset: Int) {
+            for (index, byte) in text.utf8.enumerated() { bytes[offset + index] = byte }
+        }
+        put(short, at: 0)
+        put("0000644", at: 100)
+        put("0000000", at: 108)
+        put("0000000", at: 116)
+        put(String(size, radix: 8).leftPadded(to: 11), at: 124)
+        put("00000000000", at: 136)
+        put("        ", at: 148)
+        put("0", at: 156)
+        put("ustar", at: 257)
+        put("00", at: 263)
+        put(prefix, at: 345)
+        put(String(bytes.reduce(0) { $0 + Int($1) }, radix: 8).leftPadded(to: 6), at: 148)
+        bytes[154] = 0
+        return Data(bytes)
+    }
+
+    /// USTAR keeps a name of up to 100 bytes, and a longer path splits at a slash into a prefix of up to 155.
+    private static func split(_ path: String) throws -> (prefix: String, name: String) {
+        if path.utf8.count <= 100 { return ("", path) }
+        for slash in path.indices where path[slash] == "/" {
+            let prefix = String(path[..<slash])
+            let name = String(path[path.index(after: slash)...])
+            if prefix.utf8.count <= 155, name.utf8.count <= 100 { return (prefix, name) }
+        }
+        throw DeliveryArchiveError.pathTooLong(path)
+    }
+
     private struct Entry {
         let name: String
         let size: Int
@@ -101,6 +159,13 @@ public enum DeliveryArchiveError: Error, Equatable {
     case missingPackage
     case damaged
     case unsupportedEntry(String)
+    case pathTooLong(String)
+}
+
+private extension String {
+    func leftPadded(to width: Int) -> String {
+        String(repeating: "0", count: max(width - count, 0)) + self
+    }
 }
 
 extension DeliveryArchiveError: LocalizedError {
@@ -109,6 +174,7 @@ extension DeliveryArchiveError: LocalizedError {
         case .missingPackage: "The delivery does not start with its package."
         case .damaged: "The delivery file is cut short or damaged."
         case let .unsupportedEntry(kind): "The delivery holds an entry of an unsupported kind (\(kind))."
+        case let .pathTooLong(path): "The file path \(path) is too long for a delivery."
         }
     }
 }

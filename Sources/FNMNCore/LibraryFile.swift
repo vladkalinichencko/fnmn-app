@@ -10,9 +10,14 @@ private struct Note: Codable, Equatable, Identifiable, Sendable {
     var text: String
 }
 
+/// The library's files. Materials live in the FNMN folder in iCloud Drive: `deliveries/` holds one archive
+/// per article or video, `books/` one folder per book, `state/` each device's journal. The app keeps what it
+/// needs to list and resume them: the catalog, small cover pictures, reading progress and its own state, and
+/// in the cache the unpacked copies of materials it has opened.
 public actor LibraryFile {
-    /// `state.json` holds the reader's albums, marks and books; prepared articles live in `packages.json`
-    /// and are written only when an import or a delete changes them; reading progress lives in `progress.json`.
+    /// `state.json` holds the reader's albums, marks and books; the catalog's article entries live in
+    /// `articles.json` and are written only when an import or a delete changes them; reading progress lives in
+    /// `progress.json`.
     private struct UserState: Codable {
         var legacyProgress: ReadingProgress?
         var books: [BookRecord] = []
@@ -97,9 +102,9 @@ public actor LibraryFile {
     }
 
     public nonisolated let root: URL
-    /// Unpacked copies of materials that live in iCloud, in a folder the system may empty when space runs low.
+    /// Unpacked copies of materials, in a folder the system may empty when space runs low.
     public nonisolated let cache: URL
-    /// The FNMN folder in iCloud Drive, once the app has access to it; materials imported from it live there.
+    /// The FNMN folder in iCloud Drive, once the app has access to it.
     public private(set) var cloudFolder: URL?
     public private(set) var corruptPackageNames: [String] = []
     private let encoder = JSONEncoder()
@@ -114,6 +119,11 @@ public actor LibraryFile {
         cloudFolder = folder
     }
 
+    private func requireCloudFolder() throws -> URL {
+        guard let cloudFolder else { throw LibraryError.cloudFolderMissing }
+        return cloudFolder
+    }
+
     private var stateURL: URL { root.appending(path: "state.json") }
     private var articlesURL: URL { root.appending(path: "articles.json") }
     /// Older libraries kept every article with its text in one file.
@@ -122,7 +132,6 @@ public actor LibraryFile {
     private static let textName = "text.json"
 
     public func load() throws -> (catalog: LibrarySnapshot, progress: ReadingProgress) {
-        try recoverReplacedDirectories(in: root.appending(path: "books"))
         var snapshot = LibrarySnapshot()
         var legacyNotes: [Note] = []
         var legacyPackages: [ImportPackage]?
@@ -145,12 +154,11 @@ public actor LibraryFile {
         } else {
             packages = readLegacyPackages()
         }
-        // Texts move to their article folders before the entries replace `packages.json`.
+        // Texts from the older layouts go to their article folders in the app, until `moveIntoCloud` takes them.
         for package in packages {
             try writeText(package, revision: snapshot.articleRevisions[package.material.id])
         }
         snapshot.articles.append(contentsOf: packages.map { ArticleEntry($0) })
-        try sweepUnreferencedBooks(snapshot)
         try sweepArticleRevisions(snapshot)
         let foldedNotes = absorbLegacyNotes(legacyNotes, into: &snapshot)
         // Progress moves out of `state.json` first, so a crash in between never loses it.
@@ -177,29 +185,13 @@ public actor LibraryFile {
         return (snapshot, progress)
     }
 
-    /// The whole package of an article or video, read when the reader opens it.
-    public func article(_ materialID: String, revision: String?) throws -> ImportPackage {
-        guard let url = Self.articleFile(root: root, materialID: materialID, path: Self.textName, revision: revision) else {
-            throw LibraryError.escapedPath
-        }
-        return try decoder.decode(ImportPackage.self, from: Data(contentsOf: url))
-    }
-
-    private func writeText(_ package: ImportPackage, revision: String?) throws {
-        guard let url = Self.articleFile(root: root, materialID: package.material.id, path: Self.textName, revision: revision) else {
-            throw LibraryError.escapedPath
-        }
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try encoder.encode(package).write(to: url, options: .atomic)
-    }
-
     public func saveProgress(_ progress: ReadingProgress) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try encoder.encode(progress).write(to: progressURL, options: .atomic)
     }
 
     /// Writes the reader's state, and the article entries only when they differ from `previous`;
-    /// then removes files of books and articles the snapshot no longer holds.
+    /// then removes the app's copies of materials the catalog no longer holds.
     public func save(_ snapshot: LibrarySnapshot, previous: LibrarySnapshot? = nil) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         if previous?.articles != snapshot.articles {
@@ -207,12 +199,13 @@ public actor LibraryFile {
         }
         try encoder.encode(UserState(snapshot)).write(to: stateURL, options: .atomic)
         guard let previous else { return }
-        if previous.books != snapshot.books { try sweepUnreferencedBooks(snapshot) }
         if previous.articles != snapshot.articles || previous.articleRevisions != snapshot.articleRevisions {
             try sweepArticleRevisions(snapshot)
         }
         if previous.videoFiles != snapshot.videoFiles { try sweepVideoFiles(snapshot) }
     }
+
+    // MARK: Videos downloaded for this device
 
     /// Moves a downloaded video into the library and records it for the item.
     public func storeVideoFile(_ itemID: String, from download: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
@@ -239,43 +232,85 @@ public actor LibraryFile {
         }
     }
 
-    /// Stores a package that carries no files, such as a picked `.json`.
-    public func storeArticle(_ package: ImportPackage, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        var next = snapshot
-        try next.importPackage(package, at: .now)
-        let revision = UUID().uuidString
-        do {
-            try writeText(package, revision: revision)
-            next.articleRevisions[package.material.id] = revision
-            try save(next)
-            try sweepArticleRevisions(next)
-            return next
-        } catch {
-            try? removeArticleRevision(materialID: package.material.id, revision: revision)
-            throw error
+    // MARK: Adding materials
+
+    /// Sorts out what was picked with `+` → File, anywhere: a delivery archive, a book folder, or a prepared
+    /// library (`catalog.json`, `deliveries/`, `books/`). Whatever is not in the FNMN folder yet is copied there.
+    /// A PDF is recognized only to say it has to be prepared on the Mac first.
+    public func storePicked(_ url: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            throw CaptureError.unrecognizedDocument
+        }
+        if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
+            let next = try storeBrowserLibrary(from: url, into: snapshot)
+            return try storeBooks(in: url.appending(path: "books"), into: next)
+        } else if isDirectory.boolValue {
+            return try storeBook(from: url, into: snapshot)
+        } else if url.pathExtension.lowercased() == "tar" {
+            return try storeArticle(archive: url, into: snapshot)
+        } else if url.pathExtension.lowercased() == "pdf" {
+            throw CaptureError.unprepared(.pdf)
+        } else {
+            throw CaptureError.unrecognizedDocument
         }
     }
 
-    /// Stores a delivery archive from the Mac. With the FNMN folder linked, the archive joins the others in
-    /// iCloud and the material lives there; without one, its files and `text.json` go into a revision in the app.
+    /// A delivery archive, picked anywhere or prepared by the Mac for this phone, joins the others in the FNMN folder.
     public func storeArticle(archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        var next = snapshot
-        if let cloudFolder {
-            let package = try DeliveryArchive(url: archive).unpack { _, _ in nil }
-            let name = SHA256.hash(data: Data(package.material.id.utf8)).map { String(format: "%02x", $0) }.joined() + ".tar"
-            let destination = cloudFolder.appending(path: "deliveries").appending(path: name)
-            try placeInCloud(archive, at: destination)
-            next = try addCloudDelivery(destination, into: next)
-        } else {
-            try unpackDelivery(archive, into: &next)
-        }
-        try save(next)
-        try sweepArticleRevisions(next)
+        let package = try DeliveryArchive(url: archive).unpack { _, _ in nil }
+        let destination = try requireCloudFolder().appending(path: "deliveries").appending(path: Self.deliveryName(package.material.id))
+        try placeInCloud(archive, at: destination)
+        let next = try addCloudDelivery(destination, into: snapshot)
+        try save(next, previous: snapshot)
         return next
     }
 
-    /// One delivery of the FNMN folder in iCloud: the package enters the catalog, and of its files only the
-    /// cover is kept, as a small picture; the archive stays in iCloud and is unpacked when the reader opens it.
+    /// A prepared library: the FNMN folder itself, read in place, or another one, whose deliveries are copied in.
+    public func storeBrowserLibrary(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let deliveries = try requireCloudFolder().appending(path: "deliveries")
+        let archives = try FileManager.default.contentsOfDirectory(
+            at: source.appending(path: "deliveries"), includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "tar" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var next = try applyBrowserCatalog(from: source, into: snapshot)
+        for archive in archives {
+            let destination = deliveries.appending(path: archive.lastPathComponent)
+            if destination.standardizedFileURL != archive.standardizedFileURL {
+                try placeInCloud(archive, at: destination)
+            }
+            next = try addCloudDelivery(destination, into: next)
+        }
+        next = try placeLinks(from: source, into: next)
+        try save(next, previous: snapshot)
+        return next
+    }
+
+    /// The first step of a browser library import: its catalog of sources, whose reviewed albums replace
+    /// the browser's collections.
+    public func applyBrowserCatalog(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
+        var next = snapshot
+        next.retireAlbums(catalog.collections.map(\.name))
+        next.browserCatalog = catalog
+        return next
+    }
+
+    /// The last step of a browser library import: links the Mac could not prepare join the albums the
+    /// reviewed table gives them, from `index.json`, like prepared materials do from their packages.
+    public func placeLinks(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let rows = try decoder.decode([IndexRow].self, from: Data(contentsOf: source.appending(path: "index.json")))
+        var next = snapshot
+        next.placeLinks(Dictionary(rows.map { ($0.url, $0.folders) }, uniquingKeysWith: { first, _ in first }))
+        return next
+    }
+
+    private struct IndexRow: Decodable {
+        let url: String
+        let folders: [String]
+    }
+
+    /// One delivery in the FNMN folder: the package enters the catalog, and of its files only the cover is
+    /// kept, as a small picture; the archive stays in iCloud and is unpacked when the reader opens it.
     public func addCloudDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let cover = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: cover) }
@@ -294,7 +329,99 @@ public actor LibraryFile {
         return next
     }
 
-    /// Where a material that lives in iCloud is unpacked; a new text gets a new folder.
+    /// Every book folder in the FNMN folder's `books/`, and those of another prepared library copied in.
+    public func storeBooks(in folder: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        guard FileManager.default.fileExists(atPath: folder.path) else { return snapshot }
+        let books = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var next = snapshot
+        for book in books {
+            next = try storeBook(from: book, into: next)
+        }
+        return next
+    }
+
+    /// A book folder: one already in the FNMN folder's `books/` is read in place, one picked anywhere else is
+    /// copied there first.
+    public func storeBook(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let record = try BookCatalog.inspect(from: source).record
+        let destination = try bookFolder(record.directoryName)
+        if destination.standardizedFileURL != source.standardizedFileURL {
+            try placeInCloud(source, at: destination)
+        }
+        var next = snapshot
+        next.importBook(record, at: .now)
+        try save(next, previous: snapshot)
+        return next
+    }
+
+    /// The folder of a book in the FNMN folder.
+    public func bookFolder(_ directoryName: String) throws -> URL {
+        guard !directoryName.isEmpty, !directoryName.hasPrefix("/"), !directoryName.contains(".."), !directoryName.contains("/") else {
+            throw LibraryError.escapedPath
+        }
+        return try requireCloudFolder().appending(path: "books").appending(path: directoryName, directoryHint: .isDirectory)
+    }
+
+    /// A book's text; the caller brings its folder down from iCloud first.
+    public func bookText(directoryName: String, contentFile: String) throws -> String {
+        guard let url = Self.contained(contentFile, in: try bookFolder(directoryName)) else { throw LibraryError.escapedPath }
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The first time the FNMN folder is linked, what an older version kept inside the app moves there: each
+    /// article becomes an archive in `deliveries/`, each book a folder in `books/`. The app's copies then go.
+    public func moveIntoCloud(_ snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let cloud = try requireCloudFolder()
+        var next = snapshot
+        for entry in snapshot.articles where entry.delivery == nil {
+            let id = entry.material.id
+            let folder = Self.articleFolder(root: root, materialID: id, revision: snapshot.articleRevisions[id])
+            let package = try decoder.decode(ImportPackage.self, from: Data(contentsOf: folder.appending(path: Self.textName)))
+            let files = try (FileManager.default.subpathsOfDirectory(atPath: folder.path))
+                .filter { $0 != Self.textName && !$0.hasPrefix(".") }
+                .map { (path: $0, source: folder.appending(path: $0)) }
+                .filter { (try? $0.source.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+            let archive = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
+            defer { try? FileManager.default.removeItem(at: archive) }
+            try DeliveryArchive.write(package, files: files, to: archive)
+            let destination = cloud.appending(path: "deliveries").appending(path: Self.deliveryName(id))
+            try placeInCloud(archive, at: destination)
+            next = try addCloudDelivery(destination, into: next)
+        }
+        let appBooks = root.appending(path: "books")
+        for record in snapshot.books {
+            let local = appBooks.appending(path: record.directoryName)
+            let destination = try bookFolder(record.directoryName)
+            if FileManager.default.fileExists(atPath: local.path), !FileManager.default.fileExists(atPath: destination.path) {
+                try placeInCloud(local, at: destination)
+            }
+        }
+        if FileManager.default.fileExists(atPath: appBooks.path) {
+            try FileManager.default.removeItem(at: appBooks)
+        }
+        try save(next, previous: snapshot)
+        let appArticles = root.appending(path: "articles")
+        if FileManager.default.fileExists(atPath: appArticles.path) {
+            try FileManager.default.removeItem(at: appArticles)
+        }
+        return next
+    }
+
+    /// Whether anything still waits inside the app for `moveIntoCloud`.
+    public func holdsMaterialsInApp(_ snapshot: LibrarySnapshot) -> Bool {
+        snapshot.articles.contains { $0.delivery == nil }
+            || FileManager.default.fileExists(atPath: root.appending(path: "books").path)
+    }
+
+    private static func deliveryName(_ materialID: String) -> String {
+        SHA256.hash(data: Data(materialID.utf8)).map { String(format: "%02x", $0) }.joined() + ".tar"
+    }
+
+    // MARK: Opening materials
+
+    /// Where a material is unpacked; a new text gets a new folder.
     public nonisolated func cachedFolder(of entry: ArticleEntry) -> URL {
         cache.appending(path: "articles")
             .appending(path: Self.articleDirectory(root: root, materialID: entry.material.id).lastPathComponent)
@@ -311,8 +438,8 @@ public actor LibraryFile {
         return cloudFolder.appending(path: "deliveries").appending(path: name)
     }
 
-    /// Opens a material that lives in iCloud from its unpacked copy, unpacking the archive first when the
-    /// system has emptied the cache; the caller brings the archive down from iCloud before that.
+    /// Opens a material from its unpacked copy, unpacking the archive first when the system has emptied the
+    /// cache; the caller brings the archive down from iCloud before that.
     public func openCloudArticle(_ entry: ArticleEntry) throws -> ImportPackage {
         let folder = cachedFolder(of: entry)
         let text = folder.appending(path: Self.textName)
@@ -332,6 +459,8 @@ public actor LibraryFile {
         return try decoder.decode(ImportPackage.self, from: Data(contentsOf: text))
     }
 
+    // MARK: Journals
+
     /// Where each device's journal lives, once the FNMN folder is linked.
     public func journalFolder() -> URL? {
         cloudFolder?.appending(path: "state", directoryHint: .isDirectory)
@@ -349,7 +478,6 @@ public actor LibraryFile {
     }
 
     /// Appends this device's changes to its own journal, one JSON line each, under file coordination.
-    /// Without the FNMN folder linked there is nothing to share them with.
     public func appendJournal(_ events: [JournalEvent], device: String) throws {
         guard let folder = journalFolder(), !events.isEmpty else { return }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -402,15 +530,17 @@ public actor LibraryFile {
         return (events, applied)
     }
 
-    /// The small cover picture kept in the app for a material that lives in iCloud.
+    // MARK: Files in iCloud and in the app
+
+    /// The small cover picture kept in the app for a material.
     public static func coverFile(root: URL, materialID: String) -> URL {
         root.appending(path: "covers").appending(path: articleDirectory(root: root, materialID: materialID).lastPathComponent)
     }
 
     /// A copy placed beside and renamed over, under file coordination, is a new version to iCloud, not a conflict.
-    private func placeInCloud(_ archive: URL, at destination: URL) throws {
+    private func placeInCloud(_ item: URL, at destination: URL) throws {
         let incoming = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-        try FileManager.default.copyItem(at: archive, to: incoming)
+        try FileManager.default.copyItem(at: item, to: incoming)
         defer { try? FileManager.default.removeItem(at: incoming) }
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         var coordination: NSError?
@@ -454,182 +584,29 @@ public actor LibraryFile {
         }
     }
 
-    /// Unpacks one delivery into a new revision of its article and enters the package in the catalog;
-    /// a delivery that fails halfway leaves no revision behind.
-    private func unpackDelivery(_ archive: URL, into snapshot: inout LibrarySnapshot) throws {
-        let revision = UUID().uuidString
-        var materialID: String?
-        do {
-            let package = try DeliveryArchive(url: archive).unpack { package, path in
-                materialID = package.material.id
-                guard let file = Self.articleFile(root: root, materialID: package.material.id, path: path, revision: revision) else {
-                    throw LibraryError.escapedPath
-                }
-                return file
-            }
-            materialID = package.material.id
-            try snapshot.importPackage(package, at: .now)
-            try writeText(package, revision: revision)
-            snapshot.articleRevisions[package.material.id] = revision
-        } catch {
-            if let materialID { try? removeArticleRevision(materialID: materialID, revision: revision) }
-            throw error
-        }
-    }
+    // MARK: Older layouts
 
-    /// Stores a picked prepared package, book folder, or the FNMN folder: a prepared browser library
-    /// (`catalog.json`, `deliveries/`) with its books in `books/`.
-    public func storePicked(_ url: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
-            throw CaptureError.unrecognizedDocument
-        }
-        if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
-            let next = try storeBrowserLibrary(from: url, into: snapshot)
-            return try storeBooks(in: url.appending(path: "books"), into: next)
-        } else if isDirectory.boolValue {
-            return try storeBook(try BookCatalog.inspect(from: url).record, from: url, into: snapshot)
-        } else if url.pathExtension.lowercased() == "tar" {
-            return try storeArticle(archive: url, into: snapshot)
-        } else if url.pathExtension.lowercased() == "json" {
-            let package = try decoder.decode(ImportPackage.self, from: Data(contentsOf: url))
-            return try storeArticle(package, into: snapshot)
-        } else if url.pathExtension.lowercased() == "pdf" {
-            throw CaptureError.unprepared(.pdf)
-        } else {
-            throw CaptureError.unrecognizedDocument
-        }
-    }
-
-    /// Every book folder under `books/` of the FNMN folder, each copied in and saved.
-    public func storeBooks(in folder: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        guard FileManager.default.fileExists(atPath: folder.path) else { return snapshot }
-        let books = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        var next = snapshot
-        for book in books {
-            next = try storeBook(try BookCatalog.inspect(from: book).record, from: book, into: next)
-        }
-        return next
-    }
-
-    /// The whole prepared browser library at once, from a folder already on the device.
-    public func storeBrowserLibrary(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let deliveries = try FileManager.default.contentsOfDirectory(
-            at: source.appending(path: "deliveries"), includingPropertiesForKeys: nil
-        ).filter { $0.pathExtension == "tar" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
-        var next = try applyBrowserCatalog(from: source, into: snapshot)
-        for url in deliveries {
-            next = try addDelivery(url, into: next)
-        }
-        next = try placeLinks(from: source, into: next)
-        try save(next, previous: snapshot)
-        return next
-    }
-
-    /// The first step of a browser library import: its catalog of sources, whose reviewed albums replace
-    /// the browser's collections.
-    public func applyBrowserCatalog(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
-        var next = snapshot
-        next.retireAlbums(catalog.collections.map(\.name))
-        next.browserCatalog = catalog
-        return next
-    }
-
-    /// The last step of a browser library import: links the Mac could not prepare join the albums the
-    /// reviewed table gives them, from `index.json`, like prepared materials do from their packages.
-    public func placeLinks(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let rows = try decoder.decode([IndexRow].self, from: Data(contentsOf: source.appending(path: "index.json")))
-        var next = snapshot
-        next.placeLinks(Dictionary(rows.map { ($0.url, $0.folders) }, uniquingKeysWith: { first, _ in first }))
-        return next
-    }
-
-    private struct IndexRow: Decodable {
-        let url: String
-        let folders: [String]
-    }
-
-    /// One delivery of a browser library into a new revision, without saving: the caller saves once
-    /// every delivery is in, and a revision left by an import that stopped halfway is swept at the next load.
-    public func addDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        var next = snapshot
-        try unpackDelivery(archive, into: &next)
-        return next
-    }
-
-    public func storeBook(_ record: BookRecord, from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let previousName = snapshot.books.first { $0.id == record.id }?.directoryName
-        var next = snapshot
-        next.importBook(record, at: .now)
-        let books = root.appending(path: "books")
-        try FileManager.default.createDirectory(at: books, withIntermediateDirectories: true)
-        let destination = books.appending(path: record.directoryName)
-        let incoming = destination.appendingPathExtension("incoming")
-        if FileManager.default.fileExists(atPath: incoming.path) {
-            try FileManager.default.removeItem(at: incoming)
-        }
-        do {
-            try FileManager.default.copyItem(at: source, to: incoming)
-        } catch {
-            try? FileManager.default.removeItem(at: incoming)
-            throw error
-        }
-        let hadLive = FileManager.default.fileExists(atPath: destination.path)
-        do {
-            try replaceDirectory(at: destination, with: incoming)
-            try save(next, previous: snapshot)
-            try discardRetired(destination)
-            if let previousName, previousName != record.directoryName {
-                try removeBook(named: previousName)
-            }
-            return next
-        } catch {
-            if hadLive {
-                try? restoreRetired(destination)
-            } else if FileManager.default.fileExists(atPath: destination.path) {
-                try? FileManager.default.removeItem(at: destination)
-            }
-            if FileManager.default.fileExists(atPath: incoming.path) {
-                try? FileManager.default.removeItem(at: incoming)
-            }
-            throw error
-        }
-    }
-
-    public func removeBook(named directoryName: String) throws {
-        let destination = root.appending(path: "books").appending(path: directoryName)
-        guard FileManager.default.fileExists(atPath: destination.path) else { return }
-        try FileManager.default.removeItem(at: destination)
-    }
-
-    public func bookText(directoryName: String, contentFile: String) throws -> String {
-        guard let url = Self.bookFile(root: root, directoryName: directoryName, path: contentFile) else {
+    /// The whole package of an article an older version kept inside the app.
+    public func article(_ materialID: String, revision: String?) throws -> ImportPackage {
+        guard let url = Self.articleFile(root: root, materialID: materialID, path: Self.textName, revision: revision) else {
             throw LibraryError.escapedPath
         }
-        return try String(contentsOf: url, encoding: .utf8)
+        return try decoder.decode(ImportPackage.self, from: Data(contentsOf: url))
     }
 
-    /// The folder a material's relative picture and video paths resolve against.
+    private func writeText(_ package: ImportPackage, revision: String?) throws {
+        guard let url = Self.articleFile(root: root, materialID: package.material.id, path: Self.textName, revision: revision) else {
+            throw LibraryError.escapedPath
+        }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try encoder.encode(package).write(to: url, options: .atomic)
+    }
+
+    /// The folder in the app where an older version kept an article's text and pictures.
     public static func articleFolder(root: URL, materialID: String, revision: String?) -> URL {
         let folder = articleDirectory(root: root, materialID: materialID)
         guard let revision, !revision.isEmpty else { return folder }
         return folder.appending(path: revision, directoryHint: .isDirectory)
-    }
-
-    public static func bookFolder(root: URL, directoryName: String) -> URL {
-        root.appending(path: "books").appending(path: directoryName, directoryHint: .isDirectory)
-    }
-
-    public static func bookFile(root: URL, directoryName: String, path: String) -> URL? {
-        guard !directoryName.isEmpty, !directoryName.hasPrefix("/"), !directoryName.contains(".."), !directoryName.contains("/") else { return nil }
-        let folder = root.appending(path: "books").appending(path: directoryName).standardizedFileURL
-        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return nil }
-        let destination = folder.appending(path: path).standardizedFileURL
-        guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
-        return destination
     }
 
     public static func articleFile(root: URL, materialID: String, path: String, revision: String? = nil) -> URL? {
@@ -648,12 +625,6 @@ public actor LibraryFile {
         let destination = folder.appending(path: path).standardizedFileURL
         guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
         return destination
-    }
-
-    private func removeArticleRevision(materialID: String, revision: String) throws {
-        let folder = Self.articleDirectory(root: root, materialID: materialID).appending(path: revision)
-        guard FileManager.default.fileExists(atPath: folder.path) else { return }
-        try FileManager.default.removeItem(at: folder)
     }
 
     private func absorbLegacyNotes(_ notes: [Note], into snapshot: inout LibrarySnapshot) -> Bool {
@@ -702,21 +673,11 @@ public actor LibraryFile {
         return packages
     }
 
-    private func sweepUnreferencedBooks(_ snapshot: LibrarySnapshot) throws {
-        let books = root.appending(path: "books")
-        guard let children = try? FileManager.default.contentsOfDirectory(at: books, includingPropertiesForKeys: nil) else { return }
-        let referenced = Set(snapshot.books.map(\.directoryName))
-        for child in children {
-            let name = child.lastPathComponent
-            if name.hasSuffix(".incoming") || name.hasSuffix(".retired") { continue }
-            if !referenced.contains(name) {
-                try FileManager.default.removeItem(at: child)
-            }
-        }
-    }
+    // MARK: Sweeping
 
-    /// Files of materials kept in the app go with their material or an older revision; for a material that
-    /// lives in iCloud, its cover picture and unpacked copy go with it, and a copy of an older text goes too.
+    /// An article an older version kept in the app keeps only its current revision until it moves into the
+    /// FNMN folder; for a material there, its cover picture and unpacked copy go with it, and so does a copy of
+    /// an older text.
     private func sweepArticleRevisions(_ snapshot: LibrarySnapshot) throws {
         try sweepCloudCopies(snapshot)
         let articles = root.appending(path: "articles")
@@ -767,59 +728,6 @@ public actor LibraryFile {
         where !covered.contains(cover.lastPathComponent) {
             try FileManager.default.removeItem(at: cover)
         }
-    }
-
-    private func recoverReplacedDirectories(in folder: URL) throws {
-        guard let children = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
-        for item in children where item.pathExtension == "retired" {
-            try finishReplacement(of: item.deletingPathExtension())
-        }
-        for item in children where item.pathExtension == "incoming" {
-            try FileManager.default.removeItem(at: item)
-        }
-    }
-
-    private func finishReplacement(of destination: URL) throws {
-        let retired = destination.appendingPathExtension("retired")
-        guard FileManager.default.fileExists(atPath: retired.path) else { return }
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: retired)
-        } else {
-            try FileManager.default.moveItem(at: retired, to: destination)
-        }
-    }
-
-    private func replaceDirectory(at destination: URL, with incoming: URL) throws {
-        let retired = destination.appendingPathExtension("retired")
-        if FileManager.default.fileExists(atPath: retired.path) {
-            try FileManager.default.removeItem(at: retired)
-        }
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.moveItem(at: destination, to: retired)
-        }
-        do {
-            try FileManager.default.moveItem(at: incoming, to: destination)
-        } catch {
-            if FileManager.default.fileExists(atPath: retired.path), !FileManager.default.fileExists(atPath: destination.path) {
-                try? FileManager.default.moveItem(at: retired, to: destination)
-            }
-            throw error
-        }
-    }
-
-    private func discardRetired(_ destination: URL) throws {
-        let retired = destination.appendingPathExtension("retired")
-        guard FileManager.default.fileExists(atPath: retired.path) else { return }
-        try FileManager.default.removeItem(at: retired)
-    }
-
-    private func restoreRetired(_ destination: URL) throws {
-        let retired = destination.appendingPathExtension("retired")
-        guard FileManager.default.fileExists(atPath: retired.path) else { return }
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
-        try FileManager.default.moveItem(at: retired, to: destination)
     }
 
     private static func articleDirectory(root: URL, materialID: String) -> URL {
