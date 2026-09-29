@@ -7,7 +7,7 @@ public enum TextMark: String, Codable, CaseIterable, Sendable {
 /// A highlight, a strikethrough or a margin note inside one paragraph.
 /// The quote anchors it: character offsets move whenever the renderer changes, the paragraph text does not.
 /// An empty quote belongs to the whole paragraph.
-public struct Annotation: Equatable, Identifiable, Sendable {
+public struct Annotation: Hashable, Identifiable, Sendable {
     public var id: UUID
     public var materialID: String
     public var piece: Int

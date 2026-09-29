@@ -17,7 +17,7 @@ struct WithAttachments<Content: View>: View {
   @Environment(\.emojiAttachmentLoader) private var emojiAttachmentLoader
   @Environment(\.colorEnvironment) private var colorEnvironment
 
-  @State private var model = Model()
+  @State private var model = AttachmentsModel()
 
   private let attributedString: AttributedString
   private let content: (AttributedString) -> Content
@@ -43,8 +43,8 @@ struct WithAttachments<Content: View>: View {
   }
 }
 
-extension WithAttachments {
-  @MainActor @Observable final class Model {
+// Outside the generic view, so the model does not depend on its `Content` and its isolation.
+@MainActor @Observable final class AttachmentsModel {
     var resolvedAttributedString: AttributedString?
 
     func resolveAttachments(
@@ -111,5 +111,4 @@ extension WithAttachments {
 
       self.resolvedAttributedString = attributedString
     }
-  }
 }

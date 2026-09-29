@@ -246,12 +246,13 @@ struct PlateView: View {
         }
     }
 
-    private var selectionMenu: @MainActor (String) -> [UIMenuElement] {
+    /// Keyed by the paragraph and its marks: the menu changes only when they do.
+    private var selectionMenu: TextSelectionMenu {
         let text = plainText
         let reader = reader
         let annotations = annotations
         let index = index
-        return { selected in
+        return TextSelectionMenu(key: [AnyHashable(reader.materialID), AnyHashable(index), AnyHashable(annotations)]) { selected in
             let target = reader.target(index, text: text, quote: selected)
             let marks = annotationCommands(annotations, at: target).map { command in
                 UIAction(title: command.title, image: UIImage(systemName: command.systemImage)) { _ in reader.perform(command, target) }

@@ -327,8 +327,8 @@ private struct SystemPlayer: UIViewControllerRepresentable {
     let url: URL
     let start: Double
     @Binding var seekTo: Double?
-    let onSeconds: (Double) -> Void
-    let onPause: () -> Void
+    let onSeconds: @MainActor (Double) -> Void
+    let onPause: @MainActor () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -357,13 +357,14 @@ private struct SystemPlayer: UIViewControllerRepresentable {
         private var timeObserver: Any?
         private var statusObserver: NSKeyValueObservation?
 
-        func observe(_ player: AVPlayer, seconds: @escaping (Double) -> Void, paused: @escaping () -> Void) {
+        /// Both observers are called on the main queue, where the reader's state lives.
+        func observe(_ player: AVPlayer, seconds: @escaping @MainActor (Double) -> Void, paused: @escaping @MainActor () -> Void) {
             timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { time in
-                seconds(time.seconds)
+                MainActor.assumeIsolated { seconds(time.seconds) }
             }
             statusObserver = player.observe(\.timeControlStatus) { player, _ in
                 guard player.timeControlStatus == .paused else { return }
-                DispatchQueue.main.async(execute: paused)
+                Task { @MainActor in paused() }
             }
         }
 

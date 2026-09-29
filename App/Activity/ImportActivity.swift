@@ -54,7 +54,8 @@ enum ImportActivity {
         guard registered else { return }
         let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: title, subtitle: step.text)
         request.strategy = .fail
-        try? BGTaskScheduler.shared.submit(request)
+        // The Mac job runs whether or not iOS grants the time, so a refused request only loses the background progress.
+        Task { try? await BGTaskScheduler.shared.submitTaskRequest(request) }
     }
 
     private static func adopt(_ task: BGTask, identifier: String) {

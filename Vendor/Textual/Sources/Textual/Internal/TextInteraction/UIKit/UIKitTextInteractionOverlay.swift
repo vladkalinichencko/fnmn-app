@@ -25,7 +25,7 @@
         exclusionRects: overflowFrames,
         openURL: context.environment.openURL
       )
-      view.selectionMenu = context.environment.textualSelectionMenu
+      view.selectionMenu = context.environment.textualSelectionMenu?.items
       return view
     }
 
@@ -33,7 +33,7 @@
       uiView.model = model
       uiView.exclusionRects = overflowFrames
       uiView.openURL = context.environment.openURL
-      uiView.selectionMenu = context.environment.textualSelectionMenu
+      uiView.selectionMenu = context.environment.textualSelectionMenu?.items
     }
   }
 #endif
