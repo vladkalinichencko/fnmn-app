@@ -277,8 +277,10 @@ struct PlateView: View {
         }
     }
 
+    /// The note on the whole paragraph. It is stored with the paragraph's text as its quote, so the shelf can show both.
     private var paragraphNote: String {
-        actions.annotations.first { $0.piece == index && $0.quote.isEmpty }?.note ?? ""
+        let text = plainText
+        return actions.annotations.first { $0.piece == index && !$0.note.isEmpty && ($0.quote.isEmpty || $0.quote == text) }?.note ?? ""
     }
 
     private var plainText: String {
@@ -286,7 +288,8 @@ struct PlateView: View {
     }
 
     private func saveNote(_ text: String) {
-        Task { await library.apply(.note(text, actions.target(index, text: ""))) }
+        let paragraph = plainText
+        Task { await library.apply(.note(text, actions.target(index, text: paragraph, quote: paragraph))) }
     }
 }
 

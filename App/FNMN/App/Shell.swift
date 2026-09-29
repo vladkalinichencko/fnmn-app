@@ -13,6 +13,8 @@ enum Route: Hashable {
     case item(String, piece: Int? = nil)
     case album(String)
     case source(String)
+    case annotations
+    case archive
 }
 
 /// The window's own place in the app: its tab, the stack of each tab and the search text.
@@ -90,6 +92,10 @@ private struct RouteScreen: View {
             AlbumScreen(name: name)
         case let .source(name):
             SourceScreen(name: name)
+        case .annotations:
+            AnnotationsScreen()
+        case .archive:
+            ArchiveScreen()
         }
     }
 }
