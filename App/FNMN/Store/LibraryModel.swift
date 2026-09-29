@@ -31,9 +31,12 @@ final class LibraryModel {
     @ObservationIgnored private var progressWrite: Task<Void, Never>?
     @ObservationIgnored private var progressUnsaved = false
 
-    init(storageURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "FNMN")) {
+    init(
+        storageURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "FNMN"),
+        cacheURL: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "FNMN")
+    ) {
         self.storageURL = storageURL
-        file = LibraryFile(url: storageURL)
+        file = LibraryFile(url: storageURL, cache: cacheURL)
     }
 
     /// Every window asks for the library; only the first ask, or a retry after a failure, reads it.
@@ -47,6 +50,7 @@ final class LibraryModel {
         defer { Signposts.library.endInterval("Load library", interval) }
         do {
             (snapshot, progress) = try await file.load()
+            await relinkCloudFolder()
             loadState = .ready
             let corrupt = await file.corruptPackageNames
             if !corrupt.isEmpty {
@@ -113,8 +117,9 @@ final class LibraryModel {
     }
 
     /// Stores a picked prepared package, book folder, or the FNMN folder. Reading it happens in `LibraryFile`,
-    /// off the main thread. The FNMN folder comes down from iCloud one delivery at a time, and each delivery's
-    /// copy on the device is dropped once it is in the library, so the phone never holds the whole folder.
+    /// off the main thread. The FNMN folder becomes the library's home: materials stay there and the app keeps
+    /// only its catalog, covers and state. Each delivery comes down from iCloud once to be read, and its copy on
+    /// the device is dropped again, so the phone never holds the whole folder.
     func importFile(at url: URL, onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
         let catalog = url.appending(path: "catalog.json")
         guard CloudFolder.contains(catalog) else {
@@ -122,6 +127,7 @@ final class LibraryModel {
             try await write(saving: false) { [file] snapshot in try await file.storePicked(url, into: snapshot) }
             return
         }
+        try await link(url)
         onStep(.downloadingFromCloud)
         try await CloudFolder.download(catalog)
         try await CloudFolder.download(url.appending(path: "index.json"))
@@ -131,7 +137,7 @@ final class LibraryModel {
             for (index, delivery) in deliveries.enumerated() {
                 onStep(.importing(index, of: deliveries.count))
                 try await CloudFolder.download(delivery)
-                next = try await file.addDelivery(delivery, into: next)
+                next = try await file.addCloudDelivery(delivery, into: next)
                 CloudFolder.evict(delivery)
             }
             next = try await file.placeLinks(from: url, into: next)
@@ -156,16 +162,59 @@ final class LibraryModel {
         LibraryFile.articleFile(root: storageURL, materialID: materialID, path: path, revision: snapshot.articleRevisions[materialID])
     }
 
+    func coverFile(_ materialID: String) -> URL {
+        LibraryFile.coverFile(root: storageURL, materialID: materialID)
+    }
+
+    /// Where an article's pictures resolve: its unpacked copy for a material in iCloud, its revision otherwise.
     func articleFolder(_ materialID: String) -> URL {
-        LibraryFile.articleFolder(root: storageURL, materialID: materialID, revision: snapshot.articleRevisions[materialID])
+        if let entry = entry(materialID), entry.delivery != nil { return file.cachedFolder(of: entry) }
+        return LibraryFile.articleFolder(root: storageURL, materialID: materialID, revision: snapshot.articleRevisions[materialID])
     }
 
     func bookFolder(_ directoryName: String) -> URL {
         LibraryFile.bookFolder(root: storageURL, directoryName: directoryName)
     }
 
+    /// A material in iCloud is unpacked from its copy in the cache; when the system has emptied that, its
+    /// archive comes down from iCloud first, which needs a connection if the phone has dropped its copy.
     func article(_ materialID: String) async throws -> ImportPackage {
-        try await file.article(materialID, revision: snapshot.articleRevisions[materialID])
+        guard let entry = entry(materialID), entry.delivery != nil else {
+            return try await file.article(materialID, revision: snapshot.articleRevisions[materialID])
+        }
+        if await !file.isUnpacked(entry) {
+            guard let archive = await file.deliveryURL(of: entry) else { throw LibraryError.cloudFolderMissing }
+            try await CloudFolder.download(archive, timeout: .seconds(120))
+        }
+        return try await file.openCloudArticle(entry)
+    }
+
+    private func entry(_ materialID: String) -> ArticleEntry? {
+        snapshot.articles.first { $0.material.id == materialID }
+    }
+
+    /// The FNMN folder is outside the app, so access to it is kept as a security-scoped bookmark and taken
+    /// again at every launch; the app holds it for as long as it runs.
+    private static let cloudFolderKey = "cloudFolderBookmark"
+
+    private func link(_ folder: URL) async throws {
+        UserDefaults.standard.set(try folder.bookmarkData(), forKey: Self.cloudFolderKey)
+        _ = folder.startAccessingSecurityScopedResource()
+        await file.useCloudFolder(folder)
+    }
+
+    private func relinkCloudFolder() async {
+        guard let bookmark = UserDefaults.standard.data(forKey: Self.cloudFolderKey) else { return }
+        var isStale = false
+        guard let folder = try? URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale) else {
+            failure = LibraryError.cloudFolderMissing.localizedDescription
+            return
+        }
+        _ = folder.startAccessingSecurityScopedResource()
+        if isStale, let fresh = try? folder.bookmarkData() {
+            UserDefaults.standard.set(fresh, forKey: Self.cloudFolderKey)
+        }
+        await file.useCloudFolder(folder)
     }
 
     func bookText(_ record: BookRecord) async throws -> String {

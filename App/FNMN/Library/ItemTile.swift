@@ -246,6 +246,8 @@ struct CoverImage: View {
                     if let url = library.articleFile(materialID, path: path) {
                         FileImage(url: url, contentMode: .fill)
                     }
+                case let .stored(materialID):
+                    FileImage(url: library.coverFile(materialID), contentMode: .fill)
                 case let .remote(url):
                     AsyncImage(url: url) { image in
                         image.resizable().scaledToFill()

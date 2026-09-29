@@ -30,7 +30,7 @@ private enum ArticleText {
 }
 
 /// Reads an article's or video's package from disk when it opens, and lays an article out into blocks
-/// off the main thread; a new revision reads it again.
+/// off the main thread; a new text reads it again.
 private struct ArticleOpener: View {
     let itemID: String
     let startPiece: Int?
@@ -50,7 +50,7 @@ private struct ArticleOpener: View {
                 VideoReaderView(video: video)
             }
         }
-        .task(id: library.snapshot.articleRevisions[itemID]) {
+        .task(id: library.snapshot.articles.first { $0.material.id == itemID }?.textDigest) {
             let interval = Signposts.library.beginInterval("Open material")
             defer { Signposts.library.endInterval("Open material", interval) }
             do {
