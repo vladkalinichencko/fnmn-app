@@ -12,14 +12,38 @@ SENTENCE_END = re.compile(r"[.!?»\")\]]\s*$")
 CONTINUATION = re.compile(r"^(?:[a-zа-яё,;.)]|(?:where|which|with|and|or|so|then|for|in|is|are|since|because|that)\b)")
 
 
+SITE_HEADER = re.compile(r"\A\s*#{1,6} \[[^\]]+\]\([^)]*\)[ \t]*\n+")
+BYLINE = re.compile(r"\A((?:\s*#{1,6} .+\n+|\s*!\[[^\]]*\]\([^)]*\)\n+)*)\s*[*_]?By [^\n]{1,60}?[*_]?\n\n", re.I)
+
+
 def normalize(markdown: str) -> str:
-    return join_display_math(tex_delimiters(markdown))
+    return join_display_math(tex_delimiters(without_page_chrome(markdown)))
+
+
+def without_page_chrome(markdown: str) -> str:
+    """Drops what the page wraps around the article: a first heading that only links to the site's home,
+    and a short "By …" line before the text. Neither is part of what the reader came for."""
+    markdown = SITE_HEADER.sub("", markdown, count=1)
+    return BYLINE.sub(r"\1", markdown, count=1)
+
+
+def had_site_header(markdown: str) -> bool:
+    return SITE_HEADER.match(markdown) is not None
 
 
 def plain_title(heading: str) -> str:
     """A heading as a title: links keep their text, emphasis and code marks go."""
     text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", heading)
     return re.sub(r"[*_`]", "", text).strip()
+
+
+def page_title(title: str) -> str:
+    """A browser tab title without the site name it ends with: "Article – vfxblog" becomes "Article"."""
+    return re.sub(r"\s+[–—|·-]\s+[^–—|·]{1,30}$", "", title).strip() or title
+
+
+def first_heading(markdown: str) -> str | None:
+    return next((plain_title(line[2:]) for line in markdown.splitlines() if line.startswith("# ")), None)
 
 
 def tex_delimiters(markdown: str) -> str:

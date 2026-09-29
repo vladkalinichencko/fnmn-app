@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 from urllib.parse import urlparse
 
-from markdown import normalize, plain_title
+from markdown import first_heading, normalize, page_title
 
 
 Report = Callable[[str, int | None, int | None], None]
@@ -55,20 +55,21 @@ def stable_id(prefix: str, value: str) -> str:
 def _document_package(url: str, document: Document, folders: list[str]) -> dict:
     if not document.markdown.strip():
         raise ValueError("article markdown is empty")
-    heading = next((plain_title(line[2:]) for line in document.markdown.splitlines() if line.startswith("# ")), "")
+    body = normalize(document.markdown)
+    heading = first_heading(body) or (document.title and page_title(document.title))
     return {
         "version": 1,
         "material": {
             "id": stable_id("article", url),
             "kind": "article",
-            "title": heading or document.title or urlparse(url).netloc,
+            "title": heading or urlparse(url).netloc,
             "sourceURL": url,
             "byline": document.author,
         },
         "sections": [],
         "blocks": [],
         "folders": folders,
-        "body": normalize(document.markdown),
+        "body": body,
         "files": {path: base64.b64encode(blob).decode("ascii") for path, blob in document.files.items()},
     }
 

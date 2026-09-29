@@ -17,7 +17,7 @@ from pathlib import Path
 
 from adapters.youtube import video_id_from_url
 from importer import import_link
-from markdown import normalize, plain_title
+from markdown import first_heading, had_site_header, normalize, page_title, plain_title
 from package import Video, package
 from web import LIVE
 
@@ -37,13 +37,13 @@ def material_rows(library: dict, albums: dict[str, str]) -> list[dict]:
     for source in library["sources"]:
         for material in source["materials"]:
             url = material["url"]
-            row = rows.setdefault(url, {"url": url, "folders": set(), "sources": set()})
+            row = rows.setdefault(url, {"url": url, "title": material["title"], "folders": set(), "sources": set()})
             if url in albums:
                 row["folders"].add(albums[url])
             row["folders"].update(COLLECTION_ALBUMS[collections[name]] for name in material["saved_in"] if collections[name] in COLLECTION_ALBUMS)
             row["sources"].add(source["url"])
     return [
-        {"url": row["url"], "folders": sorted(row["folders"]), "sources": sorted(row["sources"])}
+        {"url": row["url"], "title": row["title"], "folders": sorted(row["folders"]), "sources": sorted(row["sources"])}
         for row in rows.values()
     ]
 
@@ -93,6 +93,11 @@ def repackage(rows: list[dict], output: Path) -> int:
         delivery = json.loads(destination.read_text(encoding="utf-8"))
         delivery["folders"] = row["folders"]
         if delivery.get("body"):
+            if had_site_header(delivery["body"]) or delivery["material"]["title"] == row["title"]:
+                # The old title came from the site's home link: take the article's own heading,
+                # or the title the browser saved without the site name.
+                body = normalize(delivery["body"])
+                delivery["material"]["title"] = first_heading(body) or page_title(row["title"])
             delivery["body"] = normalize(delivery["body"])
             delivery["material"]["title"] = plain_title(delivery["material"]["title"])
         destination.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")

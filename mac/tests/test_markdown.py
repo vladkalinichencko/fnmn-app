@@ -1,6 +1,6 @@
 import unittest
 
-from markdown import join_display_math, normalize, plain_title, tex_delimiters
+from markdown import had_site_header, join_display_math, normalize, plain_title, tex_delimiters, without_page_chrome
 
 
 class MarkdownTests(unittest.TestCase):
@@ -27,6 +27,12 @@ class MarkdownTests(unittest.TestCase):
 
     def test_title_keeps_link_text_only(self):
         self.assertEqual(plain_title("[vfxblog](https://vfxblog.com) **news**"), "vfxblog news")
+
+    def test_site_header_and_byline_are_not_the_article(self):
+        text = "# [vfxblog](https://vfxblog.com)\n\n# Heads up: the oral history\n\n*By Ian Failes*\n\nIt’s ten years since."
+        self.assertEqual(without_page_chrome(text), "# Heads up: the oral history\n\nIt’s ten years since.")
+        self.assertTrue(had_site_header(text))
+        self.assertFalse(had_site_header("# Heads up\n\nText"))
 
     def test_normalize_leaves_plain_prose_alone(self):
         text = "# Title\n\nOne paragraph.\n\nTwo paragraph."
