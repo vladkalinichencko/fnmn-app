@@ -54,7 +54,11 @@ private struct WindowRoot: View {
         .environment(dialogs)
         .task { await library.load() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { Task { await library.saveProgress() } }
+            switch phase {
+            case .background: Task { await library.saveProgress() }
+            case .active where library.loadState == .ready: Task { await library.syncWithOtherDevices() }
+            default: break
+            }
         }
         .onChange(of: library.loadState) { _, state in
             guard state == .ready, pendingContinue else { return }

@@ -30,6 +30,15 @@ final class LibraryModel {
     @ObservationIgnored private var places: [ProgressChange] = []
     @ObservationIgnored private var progressWrite: Task<Void, Never>?
     @ObservationIgnored private var progressUnsaved = false
+    /// This device's changes waiting to be appended to its journal, and what it knows of the other journals.
+    @ObservationIgnored private var journal: [JournalEvent] = []
+    @ObservationIgnored private var sync = JournalSync()
+    @ObservationIgnored private let device: String = {
+        if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: "deviceID")
+        return id
+    }()
 
     init(
         storageURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "FNMN"),
@@ -50,8 +59,10 @@ final class LibraryModel {
         defer { Signposts.library.endInterval("Load library", interval) }
         do {
             (snapshot, progress) = try await file.load()
+            sync = try await file.loadSync()
             await relinkCloudFolder()
             loadState = .ready
+            await syncWithOtherDevices()
             let corrupt = await file.corruptPackageNames
             if !corrupt.isEmpty {
                 failure = "Couldn’t read \(corrupt.joined(separator: ", ")). The rest of the library is open."
@@ -64,13 +75,16 @@ final class LibraryModel {
     func apply(_ change: LibraryChange) async {
         do {
             try await write(saving: true) { snapshot in try snapshot.applying(change) }
+            record(.library(change))
+            scheduleSave()
         } catch {
             failure = error.localizedDescription
         }
     }
 
     /// A saved place is published with the next other progress change or with the write; every other change
-    /// is published at once. The write follows two seconds after the last change.
+    /// is published at once. The write follows two seconds after the last change. A place starting over or
+    /// forgotten follows from this device's own catalog, so it stays out of the journal.
     func apply(_ change: ProgressChange) {
         if case .savePosition = change {
             places.append(change)
@@ -78,28 +92,75 @@ final class LibraryModel {
             progress = (places + [change]).reduce(progress) { $0.applying($1) }
             places = []
         }
+        switch change {
+        case .open, .setRead, .readThrough: record(.progress(change))
+        case .savePosition, .restart, .forget: break
+        }
+        scheduleSave()
+    }
+
+    /// Writes progress and this device's journal now: when the app leaves the foreground and when a reader closes.
+    /// Of the places saved since the last write, only the last one of each material goes into the journal.
+    func saveProgress() async {
+        progressWrite?.cancel()
+        guard progressUnsaved else { return }
+        if !places.isEmpty {
+            var latest: [String: ProgressChange] = [:]
+            for change in places {
+                if case let .savePosition(_, itemID, _) = change { latest[itemID] = change }
+            }
+            progress = places.reduce(progress) { $0.applying($1) }
+            places = []
+            for change in latest.values { record(.progress(change)) }
+        }
+        progressUnsaved = false
+        let events = journal
+        journal = []
+        do {
+            try await file.saveProgress(progress)
+            try await file.appendJournal(events, device: device)
+            try await file.saveSync(sync)
+        } catch {
+            failure = error.localizedDescription
+        }
+    }
+
+    /// Takes in the other devices' changes: at launch, when the app comes back, and when the FNMN folder is linked.
+    func syncWithOtherDevices() async {
+        guard let folder = await file.journalFolder(), FileManager.default.fileExists(atPath: folder.path) else { return }
+        do {
+            try await CloudFolder.download(folder, timeout: .seconds(60))
+            await saveProgress()
+            let unread = try await file.unreadJournalEvents(except: device, sync: sync)
+            guard unread.applied != sync.applied else { return }
+            sync.applied = unread.applied
+            try await write(saving: true) { [self] snapshot in
+                let merged = merge(unread.events, into: snapshot, progress, sync: sync)
+                progress = merged.progress
+                sync = merged.sync
+                return merged.catalog
+            }
+            try await file.saveProgress(progress)
+            try await file.saveSync(sync)
+        } catch {
+            failure = error.localizedDescription
+        }
+    }
+
+    private func record(_ change: JournalEvent.Change) {
+        for event in JournalEvent.events(for: change, at: .now) {
+            sync.record(event)
+            journal.append(event)
+        }
+    }
+
+    private func scheduleSave() {
         progressUnsaved = true
         progressWrite?.cancel()
         progressWrite = Task {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
             await saveProgress()
-        }
-    }
-
-    /// Writes progress now: when the app leaves the foreground and when a reader closes.
-    func saveProgress() async {
-        progressWrite?.cancel()
-        guard progressUnsaved else { return }
-        if !places.isEmpty {
-            progress = places.reduce(progress) { $0.applying($1) }
-            places = []
-        }
-        progressUnsaved = false
-        do {
-            try await file.saveProgress(progress)
-        } catch {
-            failure = error.localizedDescription
         }
     }
 
@@ -148,6 +209,7 @@ final class LibraryModel {
         onStep(.downloadingFromCloud)
         try await CloudFolder.download(books)
         try await write(saving: false) { [file] snapshot in try await file.storeBooks(in: books, into: snapshot) }
+        await syncWithOtherDevices()
     }
 
     func storeVideoFile(_ itemID: String, from download: URL) async throws {
