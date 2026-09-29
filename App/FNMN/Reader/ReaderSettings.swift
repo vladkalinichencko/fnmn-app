@@ -142,6 +142,9 @@ struct ReaderAppearanceModifier: ViewModifier {
             .background(background.canvas)
             .environment(\.plateTint, background.plate)
             .environment(\.colorScheme, background.scheme ?? colorScheme)
+            // The bar's glass follows the window, not the environment above; without this a dark page
+            // got light buttons, and a button's label and its glass disagreed on the scheme.
+            .toolbarColorScheme(background.scheme, for: .navigationBar)
     }
 
     @Environment(\.colorScheme) private var colorScheme

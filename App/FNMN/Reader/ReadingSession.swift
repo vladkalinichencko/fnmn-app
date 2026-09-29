@@ -191,8 +191,7 @@ struct ReadingSession: View {
                 Button("Done") { send(.done) }
             }
         } else if mode != .reading {
-            // A plain place: `.confirmationAction` draws a prominent button unlike the reader's other controls.
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { send(.done) }
             }
         }
