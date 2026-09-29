@@ -7,6 +7,8 @@ struct ImportJob: Identifiable, Equatable {
     enum Input: Equatable {
         case link(URL)
         case file(URL)
+        /// The FNMN folder in iCloud Drive, chosen as the library's home and read.
+        case libraryFolder(URL)
         /// A YouTube video the Mac downloads so the system player can play it offline.
         case videoFile(itemID: String, url: URL)
     }
@@ -23,7 +25,7 @@ struct ImportJob: Identifiable, Equatable {
     var title: String {
         switch input {
         case let .link(url): url.host() ?? url.absoluteString
-        case let .file(url): url.lastPathComponent
+        case let .file(url), let .libraryFolder(url): url.lastPathComponent
         case let .videoFile(_, url): url.absoluteString
         }
     }
@@ -95,6 +97,7 @@ final class ImportJobs {
             switch job.input {
             case let .link(url): try await prepare(url, jobID: job.id)
             case let .file(url): try await importFile(url, jobID: job.id)
+            case let .libraryFolder(folder): try await library.linkLibraryFolder(folder) { self.send(.progressed(job.id, $0)) }
             case let .videoFile(itemID, url): try await downloadVideo(url, itemID: itemID, jobID: job.id)
             }
             send(.finished(job.id))
@@ -176,6 +179,7 @@ extension ImportJob.Input {
         switch self {
         case .link, .videoFile: .sending
         case .file: .saving
+        case .libraryFolder: .downloadingFromCloud
         }
     }
 }

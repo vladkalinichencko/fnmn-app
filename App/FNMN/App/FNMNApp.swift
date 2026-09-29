@@ -46,6 +46,8 @@ private struct WindowRoot: View {
                 } actions: {
                     Button("Try Again") { Task { await library.load() } }
                 }
+            case .ready where library.cloudFolder == nil:
+                LibraryFolderScreen()
             case .ready:
                 AppShell()
             }

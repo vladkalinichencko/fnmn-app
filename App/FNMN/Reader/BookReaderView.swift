@@ -3,6 +3,8 @@ import SwiftUI
 
 private enum BookText {
     case loading
+    /// Some of the book's files are only in iCloud and come down before it opens.
+    case downloading
     case ready(ReaderCoordinator)
     case failed(String)
 }
@@ -18,6 +20,8 @@ struct BookReaderView: View {
             switch text {
             case .loading:
                 ProgressView()
+            case .downloading:
+                ProgressView("Downloading from iCloud")
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open the book", systemImage: "book.closed", description: Text(message))
             case let .ready(reader):
@@ -29,6 +33,8 @@ struct BookReaderView: View {
 
     private func open() async {
         do {
+            guard let folder = library.bookFolder(record.directoryName) else { throw LibraryError.cloudFolderMissing }
+            if await !CloudFolder.isOnDevice(folder) { text = .downloading }
             let markdown = try await library.bookText(record)
             let document = await Self.document(markdown, title: record.metadata.title)
             text = .ready(ReaderCoordinator(
@@ -36,7 +42,7 @@ struct BookReaderView: View {
                 materialID: record.id,
                 title: record.metadata.title,
                 source: library.snapshot.source(of: record.id),
-                baseURL: library.bookFolder(record.directoryName),
+                baseURL: folder,
                 start: startPiece ?? savedPiece(in: document),
                 library: library
             ))

@@ -7,8 +7,9 @@ enum ConnectionCheck: Equatable {
     case failed(String)
 }
 
-/// The Mac service address and token, saved once and checked with an authorized request.
+/// The library folder, and the Mac service address and token, saved once and checked with an authorized request.
 struct SettingsScreen: View {
+    @Environment(LibraryModel.self) private var library
     @Environment(MacLink.self) private var mac
     @Environment(LibraryDialogs.self) private var dialogs
     @State private var address = ""
@@ -18,6 +19,14 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    LabeledContent("Folder", value: library.cloudFolder?.lastPathComponent ?? "Not chosen")
+                    ChooseLibraryFolderButton(title: "Choose Another Folder")
+                } header: {
+                    Text("Library")
+                } footer: {
+                    Text("Every article, video and book lives in this folder in iCloud Drive, and so do the reading places and highlights shared between your devices.")
+                }
                 Section {
                     TextField("https://", text: $address)
                         .textContentType(.URL)

@@ -24,6 +24,8 @@ struct ItemScreen: View {
 
 private enum ArticleText {
     case loading
+    /// The phone had let the archive go, so it comes down from iCloud before it can open.
+    case downloading
     case article(ReaderCoordinator, sourceURL: URL)
     case video(VideoCoordinator)
     case failed(String)
@@ -42,6 +44,8 @@ private struct ArticleOpener: View {
             switch text {
             case .loading:
                 ProgressView()
+            case .downloading:
+                ProgressView("Downloading from iCloud")
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open this material", systemImage: "doc", description: Text(message))
             case let .article(reader, sourceURL):
@@ -53,6 +57,7 @@ private struct ArticleOpener: View {
         .task(id: library.snapshot.articles.first { $0.material.id == itemID }?.textDigest) {
             let interval = Signposts.library.beginInterval("Open material")
             defer { Signposts.library.endInterval("Open material", interval) }
+            if await library.needsDownload(itemID) { text = .downloading }
             do {
                 text = try await open()
             } catch {
@@ -64,12 +69,13 @@ private struct ArticleOpener: View {
     private func open() async throws -> ArticleText {
         let package = try await library.article(itemID)
         guard package.material.kind != .video else { return .video(VideoCoordinator(package: package, library: library)) }
+        guard let baseURL = library.articleFolder(itemID) else { throw LibraryError.cloudFolderMissing }
         let reader = ReaderCoordinator(
             document: await Self.document(of: package),
             materialID: itemID,
             title: package.material.title,
             source: library.snapshot.source(of: itemID),
-            baseURL: library.articleFolder(itemID),
+            baseURL: baseURL,
             start: startPiece ?? library.position(of: itemID)?.pieceIndex,
             library: library
         )

@@ -242,11 +242,7 @@ struct CoverImage: View {
             .background(Color.secondary.opacity(0.1))
             .overlay {
                 switch cover {
-                case let .articleFile(materialID, path):
-                    if let url = library.articleFile(materialID, path: path) {
-                        FileImage(url: url, contentMode: .fill)
-                    }
-                case let .stored(materialID):
+                case let .articleFile(materialID, _), let .stored(materialID):
                     FileImage(url: library.coverFile(materialID), contentMode: .fill)
                 case let .remote(url):
                     AsyncImage(url: url) { image in
