@@ -23,6 +23,7 @@ enum ImportActivity {
     }
 
     static func update(_ step: ImportStep) async {
+        guard step != self.step else { return }
         self.step = step
         report(step, to: background)
         await activity?.update(state(step))
@@ -62,7 +63,13 @@ enum ImportActivity {
             task.setTaskCompleted(success: true)
             return
         }
-        task.expirationHandler = { MainActor.assumeIsolated { background = nil } }
+        // The Mac job keeps running while the app is suspended.
+        task.expirationHandler = {
+            MainActor.assumeIsolated {
+                background?.setTaskCompleted(success: false)
+                background = nil
+            }
+        }
         task.progress.totalUnitCount = 100
         background = task
         report(step, to: task)

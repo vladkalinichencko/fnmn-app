@@ -68,6 +68,7 @@ final class ImportJobs {
     private let library: LibraryModel
     private let mac: MacLink
     private var shownJobID: UUID?
+    @ObservationIgnored private var running: [UUID: Task<Void, Never>] = [:]
 
     init(library: LibraryModel, mac: MacLink) {
         self.library = library
@@ -76,9 +77,15 @@ final class ImportJobs {
 
     func send(_ action: ImportAction) {
         let before = jobs
-        jobs = importReduce(jobs, action)
+        let next = importReduce(jobs, action)
+        guard next != before else { return }
+        jobs = next
+        for (id, task) in running where !jobs.contains(where: { $0.id == id && $0.isPreparing }) {
+            task.cancel()
+            running[id] = nil
+        }
         for job in jobs where job.isPreparing && !(before.first { $0.id == job.id }?.isPreparing ?? false) {
-            Task { await run(job) }
+            running[job.id] = Task { await run(job) }
         }
         showFirstPreparingJob(ending: action)
     }
@@ -99,12 +106,8 @@ final class ImportJobs {
     private func prepare(_ url: URL, jobID: UUID) async throws {
         guard CaptureRoute.source(for: url) != nil else { throw CaptureError.unrecognizedDocument }
         let connection = try mac.configured()
-        var job = try await mac.port.startJob(url: url, connection: connection)
-        while job.isWaiting {
-            send(.progressed(jobID, job.step))
-            try await Task.sleep(for: .seconds(1))
-            job = try await mac.port.job(job.id, connection: connection)
-        }
+        let started = try await mac.port.startJob(url: url, connection: connection)
+        let job = try await mac.port.finished(started, connection: connection) { send(.progressed(jobID, $0)) }
         guard job.phase == .done else {
             throw MacServiceError.rejected(job.error ?? "The Mac could not prepare this link.")
         }
@@ -115,12 +118,8 @@ final class ImportJobs {
 
     private func downloadVideo(_ url: URL, itemID: String, jobID: UUID) async throws {
         let connection = try mac.configured()
-        var job = try await mac.port.startVideoDownload(url: url, connection: connection)
-        while job.isWaiting {
-            send(.progressed(jobID, job.step))
-            try await Task.sleep(for: .seconds(1))
-            job = try await mac.port.job(job.id, connection: connection)
-        }
+        let started = try await mac.port.startVideoDownload(url: url, connection: connection)
+        let job = try await mac.port.finished(started, connection: connection) { send(.progressed(jobID, $0)) }
         guard job.phase == .done else {
             throw MacServiceError.rejected(job.error ?? "The Mac could not download this video.")
         }

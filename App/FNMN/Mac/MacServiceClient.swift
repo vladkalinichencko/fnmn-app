@@ -12,6 +12,23 @@ protocol MacServicePort {
     func videoFile(of id: String, connection: MacConnection) async throws -> URL
 }
 
+extension MacServicePort {
+    /// Polls a job until it stops waiting. The pause grows from one to five seconds while the step
+    /// stays the same and starts over when it changes.
+    func finished(_ job: MacJob, connection: MacConnection, onStep: (ImportStep) -> Void) async throws -> MacJob {
+        var job = job
+        var pause = 1
+        while job.isWaiting {
+            onStep(job.step)
+            try await Task.sleep(for: .seconds(pause))
+            let next = try await self.job(job.id, connection: connection)
+            pause = next.step == job.step ? min(pause + 1, 5) : 1
+            job = next
+        }
+        return job
+    }
+}
+
 struct MacJob: Decodable, Equatable {
     enum Phase: String, Decodable { case queued, running, done, failed }
 
