@@ -1227,12 +1227,19 @@ extension Math {
 
           let under = atom as! Underline?
           let display = self.makeUnderline(under)
-          displayAtoms.append(display!)
-          currentPosition.x += display!.width
-          // add super scripts || subscripts
-          if atom.`subscript` != nil || atom.superscript != nil {
-            self.makeScripts(
-              atom, display: display, index: UInt(atom.indexRange.location), delta: 0)
+          if under!.isBrace, atom.`subscript` != nil || atom.superscript != nil {
+            // KaTeX sets the label of \underbrace under the brace, like the limits of a large operator.
+            let stacked = self.makeBraceLabels(atom, display: display)
+            displayAtoms.append(stacked)
+            currentPosition.x += stacked.width
+          } else {
+            displayAtoms.append(display!)
+            currentPosition.x += display!.width
+            // add super scripts || subscripts
+            if atom.`subscript` != nil || atom.superscript != nil {
+              self.makeScripts(
+                atom, display: display, index: UInt(atom.indexRange.location), delta: 0)
+            }
           }
 
         case .overline:
@@ -2597,6 +2604,22 @@ extension Math {
       }
       underDisplay.width = innerListDisplay!.width
       return underDisplay
+    }
+
+    func makeBraceLabels(_ atom: Atom, display: DisplayNode?) -> DisplayNode {
+      let upper = atom.superscript.map {
+        Typesetter.createLineForMathList($0, font: font, style: self.scriptStyle(), cramped: self.superScriptCramped())
+      }
+      let lower = atom.`subscript`.map {
+        Typesetter.createLineForMathList($0, font: font, style: self.scriptStyle(), cramped: self.subscriptCramped())
+      }
+      let stacked = DisplayLargeOperator(
+        nucleus: display, upperLimit: upper ?? nil, lowerLimit: lower ?? nil, limitShift: 0, extraPadding: 0)
+      stacked.upperLimitGap = styleFont.metrics.upperLimitGapMin
+      stacked.lowerLimitGap = styleFont.metrics.lowerLimitGapMin
+      stacked.position = currentPosition
+      stacked.range = atom.indexRange
+      return stacked
     }
 
     func makeOverline(_ over: Overline?) -> DisplayNode? {

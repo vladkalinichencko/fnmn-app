@@ -181,24 +181,25 @@ extension CGContext {
     let width = line.inner?.width ?? 0
 
     if line.drawsBrace {
-      // KaTeX draws this as a 3-slice SVG (left hook, middle, right hook) stretched
-      // to the base width. Here the same three parts are one stroked curve; y grows
-      // upward, so the middle cusp is the lower point and the ends meet the base.
-      let top = lineStart.y - line.braceHeight / 2
-      let bottom = lineStart.y + line.braceHeight / 2
+      // A horizontal curly brace, the shape KaTeX draws for \underbrace: a hook at each end
+      // turning away from the base, straight arms, and a tip in the middle pointing down.
+      // y grows upward here, so the hooks sit at the upper edge and the tip at the lower one.
+      let hookY = lineStart.y + line.braceHeight / 2
+      let armY = lineStart.y
+      let tipY = lineStart.y - line.braceHeight / 2
       let x = lineStart.x
-      setLineWidth(max(line.lineThickness, 1))
+      let middle = x + width / 2
+      let radius = min(line.braceHeight / 2, width / 8)
+      setLineWidth(max(line.lineThickness * 1.3, 1))
       setLineCap(.round)
       setLineJoin(.round)
-      move(to: CGPoint(x: x, y: top))
-      addCurve(
-        to: CGPoint(x: x + width * 0.5, y: bottom),
-        control1: CGPoint(x: x + width * 0.18, y: top),
-        control2: CGPoint(x: x + width * 0.32, y: bottom))
-      addCurve(
-        to: CGPoint(x: x + width, y: top),
-        control1: CGPoint(x: x + width * 0.68, y: bottom),
-        control2: CGPoint(x: x + width * 0.82, y: top))
+      move(to: CGPoint(x: x, y: hookY))
+      addQuadCurve(to: CGPoint(x: x + radius, y: armY), control: CGPoint(x: x, y: armY))
+      addLine(to: CGPoint(x: middle - radius, y: armY))
+      addQuadCurve(to: CGPoint(x: middle, y: tipY), control: CGPoint(x: middle, y: armY))
+      addQuadCurve(to: CGPoint(x: middle + radius, y: armY), control: CGPoint(x: middle, y: armY))
+      addLine(to: CGPoint(x: x + width - radius, y: armY))
+      addQuadCurve(to: CGPoint(x: x + width, y: hookY), control: CGPoint(x: x + width, y: armY))
     } else {
       move(to: lineStart)
       addLine(to: CGPoint(x: lineStart.x + width, y: lineStart.y))
