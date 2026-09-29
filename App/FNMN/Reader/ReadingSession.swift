@@ -142,6 +142,7 @@ struct ReadingSession: View {
             .padding(.horizontal, Tokens.gutter)
             .padding(.bottom, 80)
         }
+        .swipeActionsContainer()
         .scrollPosition(id: $scrollID, anchor: .top)
         .onChange(of: piece, initial: true) { _, piece in
             guard let piece else { return }

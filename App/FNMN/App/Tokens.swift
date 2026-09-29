@@ -26,15 +26,20 @@ extension EnvironmentValues {
 extension View {
     /// The one surface of tiles, albums and text plates: Liquid Glass tinted toward the plate color.
     func plate(cornerRadius: CGFloat) -> some View {
-        modifier(Plate(cornerRadius: cornerRadius))
+        plate(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    /// A plate of any shape; a turned plate passes a turned shape, since glass under a rotation draws past its frame.
+    func plate(in shape: some Shape) -> some View {
+        modifier(Plate(shape: shape))
     }
 }
 
-private struct Plate: ViewModifier {
-    let cornerRadius: CGFloat
+private struct Plate<S: Shape>: ViewModifier {
+    let shape: S
     @Environment(\.plateTint) private var tint
 
     func body(content: Content) -> some View {
-        content.glassEffect(.regular.tint(tint.opacity(0.85)), in: .rect(cornerRadius: cornerRadius, style: .continuous))
+        content.glassEffect(.regular.tint(tint.opacity(0.85)), in: shape)
     }
 }

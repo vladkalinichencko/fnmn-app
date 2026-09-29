@@ -18,10 +18,11 @@ struct AlbumTile: View {
         if let pick { pick() } else { navigation.open(.album(album.name)) }
     }
 
-    /// The same outer size as a material's tile, so an album never looks smaller than what it holds.
+    /// The fan takes a whole tile's shape, so an album never looks smaller than what it holds; the name goes under it.
     private var label: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            AlbumFan(covers: album.covers)
+        VStack(alignment: .leading, spacing: 10) {
+            AlbumFan(front: album.front)
+                .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             HStack(alignment: .firstTextBaseline) {
                 Text(album.name).lineLimit(1)
                 Spacer(minLength: 4)
@@ -30,19 +31,18 @@ struct AlbumTile: View {
             .font(.title3.weight(.black))
             .padding(.horizontal, 4)
         }
-        .aspectRatio(Tokens.tileAspect, contentMode: .fit)
     }
 }
 
-/// Up to three covers fanned out like a stack of photos; an empty album is a glass plate with a symbol.
+/// Up to three materials fanned out like a stack of photos: a cover where there is one, the title on a plate where not.
 private struct AlbumFan: View {
-    let covers: [Cover]
+    let front: [LibraryItem]
 
     var body: some View {
         Color.clear
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
-                if covers.isEmpty {
+                if front.isEmpty {
                     Image(systemName: "rectangle.stack")
                         .font(.largeTitle)
                         .foregroundStyle(.tertiary)
@@ -50,29 +50,47 @@ private struct AlbumFan: View {
                         .plate(cornerRadius: Tokens.tileRadius)
                 } else {
                     ZStack {
-                        ForEach(Array(covers.enumerated().reversed()), id: \.offset) { index, cover in
-                            CoverImage(cover: cover, cornerRadius: Tokens.tileRadius)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
-                                        .strokeBorder(.white.opacity(0.8), lineWidth: 2)
-                                }
-                                .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+                        ForEach(Array(front.enumerated().reversed()), id: \.element.id) { index, item in
+                            card(item)
+                                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
                                 .scaleEffect(0.86)
                                 .rotationEffect(.degrees(angle(index)))
-                                .offset(x: Self.shifts[index], y: index == 0 ? 6 : -4)
+                                .offset(x: Self.shifts[index], y: index == 0 ? 4 : -4)
                         }
                     }
                 }
             }
     }
 
-    /// Even a single cover is turned a little, so an album never reads as a material's tile.
-    private func angle(_ index: Int) -> Double {
-        covers.count == 1 ? -5 : Self.angles[index]
+    @ViewBuilder
+    private func card(_ item: LibraryItem) -> some View {
+        if let cover = item.cover {
+            CoverImage(cover: cover, cornerRadius: Tokens.tileRadius)
+                .overlay {
+                    RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
+                        .strokeBorder(.white.opacity(0.8), lineWidth: 2)
+                }
+        } else {
+            Text(item.title)
+                .font(.headline.weight(.black))
+                .lineLimit(5)
+                .padding(Tokens.tilePadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .plate(cornerRadius: Tokens.tileRadius)
+                .overlay {
+                    RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
+                        .strokeBorder(.separator, lineWidth: 0.5)
+                }
+        }
     }
 
-    private static let angles: [Double] = [2, -9, 9]
-    private static let shifts: [CGFloat] = [0, -14, 14]
+    /// Even a single card is turned a little, so an album never reads as a material's tile.
+    private func angle(_ index: Int) -> Double {
+        front.count == 1 ? -4 : Self.angles[index]
+    }
+
+    private static let angles: [Double] = [2, -7, 7]
+    private static let shifts: [CGFloat] = [0, -10, 10]
 }
 
 /// Dropping a tile adds the material to the album; the context menu renames or deletes it.

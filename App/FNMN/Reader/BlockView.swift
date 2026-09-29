@@ -122,7 +122,7 @@ struct LeadImage: View {
 }
 
 /// A paragraph, list, quote, table or code block on its own rounded plate.
-/// Dragging it left keeps it there and opens its margin note on the right; dragging it right marks "read to here".
+/// Dragging it left uncovers its margin note, which lies under the plate all along; the system's leading swipe marks "read to here".
 struct PlateView: View {
     @Environment(LibraryModel.self) private var library
     let markdown: String
@@ -141,34 +141,22 @@ struct PlateView: View {
     private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            if noting {
-                MarginNote(saved: paragraphNote, save: saveNote)
-                    .frame(width: noteWidth - Tokens.gap, alignment: .topLeading)
-                    .padding(.top, Tokens.tilePadding)
-                    .transition(.opacity)
+        plate
+            .frame(maxWidth: .infinity)
+            .background(alignment: .trailing) {
+                MarginNote(saved: paragraphNote, active: noting, save: saveNote)
+                    .frame(width: noteWidth - Tokens.gap)
+                    // Only the strip the plate has moved off shows, so the note seems to have been under it all along.
+                    .mask(alignment: .trailing) { Rectangle().frame(width: max(-offset - Tokens.gap, 0)) }
+                    .allowsHitTesting(noting)
             }
-            readMark
-            plate.offset(x: offset)
-        }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        .gesture(HorizontalPan(changed: dragged, ended: released))
-        .animation(.spring(duration: 0.35, bounce: 0.2), value: noting)
-    }
-
-    /// The check that shows on the left while the plate is pulled right.
-    private var readMark: some View {
-        Image(systemName: "checkmark.circle.fill")
-            .font(.title2)
-            .foregroundStyle(.tint)
-            .opacity(min(max(drag / 80, 0), 1))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .padding(.leading, 4)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .animation(.spring(duration: 0.35, bounce: 0.2), value: noting)
     }
 
     private func dragged(_ translation: CGFloat) {
         guard mode == .reading || noting else { return }
-        drag = noting ? max(translation, 0) : max(min(translation, 110), -noteWidth - 20)
+        drag = noting ? max(translation, 0) : max(min(translation, 0), -noteWidth - 20)
     }
 
     private func released(_ translation: CGFloat, _ velocity: CGFloat) {
@@ -177,9 +165,6 @@ struct PlateView: View {
             if translation > 60 || velocity > 500 { send(.done) }
         } else if translation < -60 || velocity < -500 {
             send(.note(index))
-        } else if translation > 80 {
-            let marked = library.snapshot.readThrough[actions.materialID] == index
-            Task { await library.apply(.readThrough(piece: marked ? nil : index, itemID: actions.materialID)) }
         }
     }
 
@@ -201,6 +186,19 @@ struct PlateView: View {
             .modifier(TickOnTap(isOn: isTicking) { send(.toggle(index)) })
             .modifier(TickOnTap(isOn: noting) { send(.done) })
             .contextMenu { if mode == .reading { menu } }
+            // Inside the system's swipe, which places the row itself and would undo an offset put around it.
+            .offset(x: offset)
+            // Leftward belongs to the note; rightward to the system's swipe, or to closing an open note.
+            .gesture(HorizontalPan(starts: { noting ? $0 > 0 : $0 < 0 }, changed: dragged, ended: released))
+            .swipeActions(edge: .leading) {
+                if mode == .reading {
+                    let marked = library.snapshot.readThrough[actions.materialID] == index
+                    Button(marked ? "Unmark" : "Read to Here", systemImage: marked ? "arrow.uturn.backward" : "checkmark") {
+                        Task { await library.apply(.readThrough(piece: marked ? nil : index, itemID: actions.materialID)) }
+                    }
+                    .tint(.accentColor)
+                }
+            }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
             .sensoryFeedback(.selection, trigger: library.snapshot.readThrough[actions.materialID] == index)
     }
@@ -253,7 +251,7 @@ struct PlateView: View {
     /// A small tab on the right edge of a plate that has a note; the note itself shows when the plate is pulled aside.
     @ViewBuilder
     private var noteMark: some View {
-        if !paragraphNote.isEmpty, !noting {
+        if !paragraphNote.isEmpty, offset == 0 {
             Capsule()
                 .fill(.tint)
                 .frame(width: 4, height: 22)
@@ -294,20 +292,59 @@ struct PlateView: View {
 }
 
 /// A note in the margin beside its paragraph: plain text on the page, no frame, saved when it closes.
+/// It is as tall as its paragraph; a longer note scrolls, fading out at the edge it continues past.
 private struct MarginNote: View {
     let saved: String
+    let active: Bool
     let save: (String) -> Void
     @State private var draft = ""
+    @State private var overflow = Overflow()
     @FocusState private var focused: Bool
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
     var body: some View {
-        TextField("Note", text: $draft, axis: .vertical)
-            .font(.system(.callout, design: readerFont.design))
-            .focused($focused)
-            .onAppear { draft = saved; focused = saved.isEmpty }
-            .onDisappear { if draft != saved { save(draft) } }
-            .fixedSize(horizontal: false, vertical: true)
+        ScrollView {
+            TextField("Note", text: $draft, axis: .vertical)
+                .font(.system(.callout, design: readerFont.design))
+                .focused($focused)
+                .padding(.vertical, Tokens.tilePadding)
+        }
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+        .onScrollGeometryChange(for: Overflow.self) { geometry in
+            Overflow(
+                above: geometry.contentOffset.y > 1,
+                below: geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 1
+            )
+        } action: { _, new in
+            overflow = new
+        }
+        .mask(fade)
+        .onAppear { draft = saved }
+        .onChange(of: saved) { draft = saved }
+        .onChange(of: active) {
+            if active {
+                focused = saved.isEmpty
+            } else {
+                focused = false
+                if draft != saved { save(draft) }
+            }
+        }
+    }
+
+    private var fade: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: overflow.above ? 20 : 0)
+            Color.black
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: overflow.below ? 20 : 0)
+        }
+    }
+
+    private struct Overflow: Equatable {
+        var above = false
+        var below = false
     }
 }
 

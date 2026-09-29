@@ -62,13 +62,11 @@ private struct ShelfSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
+            // A symbol inside the text sits on the letters' middle, where a separate image would sink to the baseline.
             Button { navigation.open(route) } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(title).font(.largeTitle.weight(.black)).foregroundStyle(.primary)
-                    if count > preview {
-                        Image(systemName: "chevron.forward").font(.title2.weight(.bold)).foregroundStyle(.secondary)
-                    }
-                }
+                Text(count > preview ? "\(title) \(Image(systemName: "chevron.forward"))" : "\(title)")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.primary)
             }
             .buttonStyle(.plain)
             .disabled(count <= preview)
@@ -110,6 +108,23 @@ struct ArchiveScreen: View {
     }
 }
 
+/// A rounded rectangle turned about its center. Glass drawn in it stays inside the frame,
+/// where glass under `rotationEffect` spreads past it.
+private struct TurnedRectangle: Shape {
+    let cornerRadius: CGFloat
+    let degrees: Double
+
+    func path(in rect: CGRect) -> Path {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .path(in: rect)
+            .applying(
+                CGAffineTransform(translationX: rect.midX, y: rect.midY)
+                    .rotated(by: degrees * .pi / 180)
+                    .translatedBy(x: -rect.midX, y: -rect.midY)
+            )
+    }
+}
+
 /// A quote on a plate turned slightly left, and its note on blurred glass laid over its lower right corner.
 private struct AnnotationCard: View {
     let item: LibraryItem
@@ -123,7 +138,7 @@ private struct AnnotationCard: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 Text(item.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.headline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 composition
@@ -144,9 +159,9 @@ private struct AnnotationCard: View {
     private var composition: some View {
         VStack(alignment: .trailing, spacing: -18) {
             if !annotation.quote.isEmpty {
+                // Alone, the quote stands in the middle; with a note, it moves left to make room for it.
                 quote
-                    .padding(.trailing, 44)
-                    .rotationEffect(.degrees(-1.5), anchor: .topLeading)
+                    .padding(annotation.note.isEmpty ? .horizontal : .trailing, annotation.note.isEmpty ? 22 : 44)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !annotation.note.isEmpty {
@@ -163,12 +178,13 @@ private struct AnnotationCard: View {
         Text(Self.excerpt(annotation.quote))
             .font(.system(.callout, design: .serif))
             .strikethrough(annotation.mark == .strikethrough)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .plate(cornerRadius: Tokens.plateRadius)
+            .rotationEffect(.degrees(Self.quoteTurn))
+            .plate(in: TurnedRectangle(cornerRadius: Tokens.plateRadius, degrees: Self.quoteTurn))
     }
+
+    private static let quoteTurn = -1.5
 
     /// A long quote is cut at a word near 260 characters; a line limit would leave empty space under the text.
     private static func excerpt(_ quote: String) -> String {
@@ -178,12 +194,16 @@ private struct AnnotationCard: View {
         return String(cut[..<(cut.lastIndex(of: " ") ?? cut.endIndex)]) + "…"
     }
 
+    /// The note has no frame: a blur that fades out at its edges keeps it readable over the quote.
     private var note: some View {
         Text(annotation.note)
-            .font(.callout.weight(.medium))
+            .font(.callout.weight(.semibold))
             .padding(Tokens.tilePadding - 2)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(.regular, in: .rect(cornerRadius: Tokens.plateRadius - 6, style: .continuous))
-            .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+            .background {
+                Rectangle()
+                    .fill(.regularMaterial)
+                    .mask { RoundedRectangle(cornerRadius: Tokens.plateRadius, style: .continuous).padding(6).blur(radius: 10) }
+            }
     }
 }

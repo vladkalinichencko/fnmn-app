@@ -58,7 +58,6 @@ struct AppShell: View {
                 SearchScreen()
             }
         }
-        .searchable(text: $navigation.query)
         .tabViewSearchActivation(.searchTabSelection)
         .scrollEdgeEffectStyle(.soft, for: .all)
         .libraryDialogs()

@@ -20,5 +20,7 @@ struct SearchScreen: View {
             }
             .navigationTitle("Search")
         }
+        // On the search tab's own stack, so pulling down Library or Shelf does not bring out a field.
+        .searchable(text: $navigation.query)
     }
 }
