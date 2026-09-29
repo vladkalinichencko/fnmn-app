@@ -4,12 +4,14 @@
 
 The command resumes from completed deliveries. Failed URLs remain in errors.json. Albums come from
 mac/collect/browser_albums.tsv; `--repackage` applies them and the current Markdown rules to the
-deliveries already prepared, without fetching anything again.
+deliveries already prepared, without fetching anything again, and turns a delivery still in the old
+one-JSON form, with its files in base64, into an archive.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,7 +20,7 @@ from pathlib import Path
 from adapters.youtube import video_id_from_url
 from importer import import_link
 from markdown import first_heading, had_site_header, normalize, page_title, plain_title
-from package import Video, package
+from package import Delivery, Video, package, read_delivery, write_delivery
 from web import LIVE
 
 ALBUMS = Path(__file__).parent / "collect" / "browser_albums.tsv"
@@ -54,25 +56,30 @@ def prepare(row: dict, output: Path, enrich_videos: bool = False, refetch: bool 
     url = row["url"]
     destination = _delivery(output, row)
     if destination.exists() and not (
-        enrich_videos and video_id_from_url(url) and not json.loads(destination.read_text()).get("body")
+        enrich_videos and video_id_from_url(url) and not read_delivery(destination).package.get("body")
     ) and not (refetch and not video_id_from_url(url)):
         return url, None
     try:
         delivery = import_link(url, row["folders"], LIVE)
         if refetch:
-            before = len(json.loads(destination.read_text(encoding="utf-8")).get("body") or "")
-            if len(delivery.get("body") or "") < before * 0.8:
+            before = len(read_delivery(destination).package.get("body") or "")
+            if len(delivery.package.get("body") or "") < before * 0.8:
                 return url, "the page now gives less text; the prepared delivery stays"
-        temporary = destination.with_suffix(".incoming")
-        temporary.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")
-        temporary.replace(destination)
+        write_delivery(destination, delivery)
         return url, None
     except Exception as error:
         return url, str(error)
 
 
 def _delivery(output: Path, row: dict) -> Path:
-    return output / "deliveries" / (hashlib.sha256(row["url"].encode()).hexdigest() + ".json")
+    return output / "deliveries" / (hashlib.sha256(row["url"].encode()).hexdigest() + ".tar")
+
+
+def _old_delivery(path: Path) -> Delivery:
+    """A delivery from before archives: one JSON with its files in base64 under `files`."""
+    package = json.loads(path.read_text(encoding="utf-8"))
+    files = {name: base64.b64decode(value) for name, value in package.pop("files", {}).items()}
+    return Delivery(package, files)
 
 
 def seed_videos(library: dict, rows: list[dict], output: Path) -> int:
@@ -83,23 +90,28 @@ def seed_videos(library: dict, rows: list[dict], output: Path) -> int:
         video_id = video_id_from_url(url)
         if video_id is None:
             continue
-        destination = output / "deliveries" / (hashlib.sha256(url.encode()).hexdigest() + ".json")
+        destination = _delivery(output, row)
         if destination.exists():
             continue
-        delivery = package(url, Video(video_id, titles[url]), row["folders"])
-        destination.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")
+        write_delivery(destination, package(url, Video(video_id, titles[url]), row["folders"]))
         count += 1
     return count
 
 
 def repackage(rows: list[dict], output: Path) -> int:
-    """Rewrites prepared deliveries with the current albums and Markdown rules."""
+    """Rewrites prepared deliveries with the current albums and Markdown rules; an old JSON delivery
+    becomes an archive and the JSON goes."""
     count = 0
     for row in rows:
-        destination = output / "deliveries" / (hashlib.sha256(row["url"].encode()).hexdigest() + ".json")
-        if not destination.exists():
+        destination = _delivery(output, row)
+        old = destination.with_suffix(".json")
+        if old.exists():
+            prepared = _old_delivery(old)
+        elif destination.exists():
+            prepared = read_delivery(destination)
+        else:
             continue
-        delivery = json.loads(destination.read_text(encoding="utf-8"))
+        delivery = prepared.package
         delivery["folders"] = row["folders"]
         if delivery.get("body"):
             if had_site_header(delivery["body"]) or delivery["material"]["title"] == row["title"]:
@@ -109,7 +121,8 @@ def repackage(rows: list[dict], output: Path) -> int:
                 delivery["material"]["title"] = first_heading(body) or page_title(row["title"])
             delivery["body"] = normalize(delivery["body"])
             delivery["material"]["title"] = plain_title(delivery["material"]["title"])
-        destination.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")
+        write_delivery(destination, prepared)
+        old.unlink(missing_ok=True)
         count += 1
     return count
 
@@ -136,6 +149,8 @@ def main() -> None:
     if args.repackage:
         print(f"repackaged {repackage(rows, args.output)} deliveries")
         return
+    if any(args.output.joinpath("deliveries").glob("*.json")):
+        parser.error("deliveries are still one JSON each; run --repackage first, or they would be fetched again")
     if args.seed_videos:
         print(f"seeded {seed_videos(library, rows, args.output)} videos; existing deliveries kept")
         return
@@ -157,7 +172,7 @@ def main() -> None:
                 errors[url] = error
             errors_path.write_text(json.dumps(errors, ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"{count}/{len(selected)} {'failed' if error else 'ready'} {url}", flush=True)
-    ready = sum((args.output / "deliveries" / (hashlib.sha256(row["url"].encode()).hexdigest() + ".json")).exists() for row in selected)
+    ready = sum(_delivery(args.output, row).exists() for row in selected)
     print(f"{ready} ready, {len(selected) - ready} failed in selection, {len(rows)} unique materials", flush=True)
 
 

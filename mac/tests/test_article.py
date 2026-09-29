@@ -8,7 +8,9 @@ from web import with_base
 
 
 def imported_article(url, text, bytes, folders, rendered=None):
-    return package(url, article.read(url, fakes.web(text, bytes, rendered), lambda *_: None), folders)
+    """The package the app decodes, with its files under `files` as bytes, as a test reads it."""
+    delivery = package(url, article.read(url, fakes.web(text, bytes, rendered), lambda *_: None), folders)
+    return {**delivery.package, "files": delivery.files}
 
 
 class ArticleTests(unittest.TestCase):
@@ -61,7 +63,7 @@ class ArticleTests(unittest.TestCase):
         path, encoded = next(iter(package["files"].items()))
         self.assertEqual(len(package["files"]), 1)
         self.assertTrue(path.startswith("assets/") and path.endswith(".png"))
-        self.assertEqual(encoded, "cG5n")
+        self.assertEqual(encoded, b"png")
         self.assertIn(f"]({path})", package["body"])
         self.assertEqual(seen, [("text", "https://example.com/notes"), ("bytes", "https://example.com/pic.png")])
 

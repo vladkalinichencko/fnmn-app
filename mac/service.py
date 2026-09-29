@@ -2,9 +2,10 @@
 
     POST /jobs            {"url", "folders"} -> {"id", ...status}
     GET  /jobs/{id}       phase queued | running | done | failed, stage, done, total, error
-    GET  /jobs/{id}/package   the delivery once the job is done
+    GET  /jobs/{id}/package   the delivery archive (tar) once the job is done
     POST /videos          {"url"} -> a job that downloads the YouTube video as an mp4
     GET  /jobs/{id}/file  the mp4 once that job is done
+    DELETE /jobs/{id}     the phone stored the result: the file and the job go
 """
 
 from __future__ import annotations
@@ -54,11 +55,17 @@ def job_status(job_id: str) -> dict:
 
 
 @app.get("/jobs/{job_id}/package")
-def job_package(job_id: str) -> dict:
+def job_package(job_id: str) -> FileResponse:
     job = _job(job_id)
-    if job.phase != "done":
+    if job.phase != "done" or job.kind != "import" or job.file is None:
         raise HTTPException(409, f"job is {job.phase}")
-    return job.package
+    return FileResponse(job.file, media_type="application/x-tar", filename=job.file.name)
+
+
+@app.delete("/jobs/{job_id}", status_code=204)
+def forget_job(job_id: str) -> None:
+    if jobs.forget(job_id) is None:
+        raise HTTPException(404, "no such job")
 
 
 @app.post("/videos", status_code=202)

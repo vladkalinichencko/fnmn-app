@@ -100,7 +100,8 @@ class AdapterTests(unittest.TestCase):
             seen.append(url)
             return blob
 
-        package = import_link("https://arxiv.org/abs/1706.03762v2", [], fakes.web(fetch_text, fetch_bytes))
+        delivered = import_link("https://arxiv.org/abs/1706.03762v2", [], fakes.web(fetch_text, fetch_bytes))
+        package = delivered.package
         body = package["body"]
         self.assertEqual(package["material"]["sourceURL"], "https://arxiv.org/abs/1706.03762v2")
         self.assertEqual(package["material"]["title"], "Attention Is All You Need")
@@ -114,9 +115,9 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("[vaswani]", body)
         self.assertNotIn("HIDDEN", body)
         self.assertNotIn("\\input", body)
-        image = next(iter(package["files"]))
+        image = next(iter(delivered.files))
         self.assertIn(image, body)
-        self.assertEqual(package["files"][image], "cG5nLWJ5dGVz")
+        self.assertEqual(delivered.files[image], b"png-bytes")
         self.assertEqual(package["sections"], [])
         self.assertEqual(package["blocks"], [])
 
@@ -124,7 +125,7 @@ class AdapterTests(unittest.TestCase):
         pdf = _one_page_pdf("Introduction", "The transformer uses attention.")
         transcribed = Document("# Introduction\n\nThe transformer uses attention.\n", "Attention Is All You Need")
         with patch("adapters.pdf.transcribe", return_value=transcribed) as transcribe:
-            package = import_link("https://arxiv.org/abs/1706.03762", [], fakes.web(lambda url: ATOM, lambda url: pdf))
+            package = import_link("https://arxiv.org/abs/1706.03762", [], fakes.web(lambda url: ATOM, lambda url: pdf)).package
         self.assertEqual(transcribe.call_args.args[:3], (pdf, "Attention Is All You Need", "Ashish Vaswani, Noam Shazeer"))
         self.assertIn("The transformer uses attention.", package["body"])
 
@@ -139,7 +140,7 @@ class AdapterTests(unittest.TestCase):
             self.assertIn("x.com", url)
             return json.dumps(payload)
 
-        package = import_link("https://x.com/ada/status/20", [], fakes.web(fetch_text, lambda url: b""))
+        package = import_link("https://x.com/ada/status/20", [], fakes.web(fetch_text, lambda url: b"")).package
         self.assertEqual(package["material"]["title"], "Ada")
         self.assertEqual(package["material"]["byline"], "Ada")
         self.assertIn("Hello\nthere", package["body"])
@@ -188,7 +189,7 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(url, "https://chatgpt.com/share/abc-1")
             return json.dumps(payload)
 
-        package = import_link("https://chatgpt.com/share/abc-1", [], fakes.web(fetch_text, lambda url: b""))
+        package = import_link("https://chatgpt.com/share/abc-1", [], fakes.web(fetch_text, lambda url: b"")).package
         body = package["body"]
         self.assertEqual(package["material"]["title"], "A proof")
         self.assertLess(body.index("## User"), body.index("## Assistant"))
@@ -238,7 +239,7 @@ class AdapterTests(unittest.TestCase):
         ]
         page = 'window.__reactRouterContext.streamController.enqueue(' + json.dumps(json.dumps(values)) + ")"
 
-        package = import_link("https://chatgpt.com/share/6ab2ce2c-5570-83e9-a018-e33a58793703", [], fakes.web(lambda url: page, lambda url: b""))
+        package = import_link("https://chatgpt.com/share/6ab2ce2c-5570-83e9-a018-e33a58793703", [], fakes.web(lambda url: page, lambda url: b"")).package
         body = package["body"]
         self.assertEqual(package["material"]["title"], "Состояние моделирования мира")
         self.assertIn("$\\|w_t\\|/\\|z_t\\|$", body)
@@ -263,7 +264,7 @@ class AdapterTests(unittest.TestCase):
             "https://youtu.be/abcdefghijk",
             Video("abcdefghijk", "Fixture talk", "Channel", cues_from_timedtext(payload)),
             [],
-        )
+        ).package
         self.assertEqual(delivered["material"]["kind"], "video")
         self.assertEqual(delivered["material"]["id"], "youtube:abcdefghijk")
         self.assertEqual(delivered["material"]["title"], "Fixture talk")
@@ -304,11 +305,11 @@ class AdapterTests(unittest.TestCase):
         with patch("adapters.pdf.transcribe", return_value=Document("# Notes\n\nPlain text.\n")) as transcribe:
             delivered = import_link("https://example.com/paper.pdf", [], fakes.web(bytes=lambda url: pdf))
         self.assertEqual(transcribe.call_args.args[0], pdf)
-        self.assertEqual(delivered["material"]["title"], "Notes")
+        self.assertEqual(delivered.package["material"]["title"], "Notes")
 
     def test_substack_page_uses_the_web_article(self):
         source = Path(__file__).with_name("fixture.html").read_text()
-        package = import_link("https://name.substack.com/p/hello", [], fakes.web(lambda url: source, lambda url: b"image-bytes"))
+        package = import_link("https://name.substack.com/p/hello", [], fakes.web(lambda url: source, lambda url: b"image-bytes")).package
         self.assertEqual(package["material"]["sourceURL"], "https://name.substack.com/p/hello")
         self.assertIn("body", package)
         self.assertTrue(package["body"].strip())

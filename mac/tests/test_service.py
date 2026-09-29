@@ -1,10 +1,15 @@
+import io
+import json
 import os
+import tarfile
 import time
 import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+import jobs
+from package import Delivery
 from service import app
 
 
@@ -21,12 +26,12 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(anonymous.post("/jobs", json={"url": "https://example.com"}).status_code, 401)
         self.assertEqual(self.client.get("/health").json(), {"status": "ok"})
 
-    def test_job_reports_stages_and_hands_over_the_package(self):
+    def test_job_reports_stages_and_hands_over_the_delivery_until_the_phone_stores_it(self):
         def fake_import(url, folders, web, report):
             report("ocr", 1, 2)
             time.sleep(0.2)
             report("ocr", 2, 2)
-            return {"material": {"sourceURL": url}, "folders": folders}
+            return Delivery({"material": {"sourceURL": url}, "folders": folders}, {"assets/a.png": b"png"})
 
         with patch("jobs.import_link", fake_import):
             job = self.client.post("/jobs", json={"url": "https://example.com/a.pdf", "folders": ["Books"]}).json()
@@ -34,8 +39,18 @@ class ServiceTests(unittest.TestCase):
             while (status := self.client.get(f"/jobs/{job['id']}").json())["phase"] != "done":
                 time.sleep(0.05)
         self.assertEqual((status["stage"], status["done"], status["total"]), ("ocr", 2, 2))
-        delivered = self.client.get(f"/jobs/{job['id']}/package").json()
-        self.assertEqual(delivered, {"material": {"sourceURL": "https://example.com/a.pdf"}, "folders": ["Books"]})
+        response = self.client.get(f"/jobs/{job['id']}/package")
+        self.assertEqual(response.headers["content-type"], "application/x-tar")
+        with tarfile.open(fileobj=io.BytesIO(response.content)) as archive:
+            names = archive.getnames()
+            package = json.loads(archive.extractfile("package.json").read())
+        self.assertEqual(names, ["package.json", "assets/a.png"])
+        self.assertEqual(package, {"material": {"sourceURL": "https://example.com/a.pdf"}, "folders": ["Books"]})
+        self.assertEqual(self.client.get(f"/jobs/{job['id']}/package").status_code, 200)
+        file = jobs.find(job["id"]).file
+        self.assertEqual(self.client.delete(f"/jobs/{job['id']}").status_code, 204)
+        self.assertFalse(file.exists())
+        self.assertEqual(self.client.get(f"/jobs/{job['id']}").status_code, 404)
 
     def test_failed_job_keeps_its_reason(self):
         def fail(url, folders, web, report):

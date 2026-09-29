@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from adapters import article, arxiv, chatgpt, pdf, x, youtube
-from package import ImportFailure, Report, package
+from package import Delivery, ImportFailure, Report, package
 from sources import NAMES, source_kind
 from web import Web
 
@@ -18,7 +18,7 @@ ADAPTERS = {
 }
 
 
-def import_link(url: str, folders: list[str], web: Web, report: Report = lambda *_: None) -> dict:
+def import_link(url: str, folders: list[str], web: Web, report: Report = lambda *_: None) -> Delivery:
     kind = source_kind(url)
     if kind is None:
         raise ImportFailure("fetchingPage", "link must be an absolute HTTP or HTTPS address")

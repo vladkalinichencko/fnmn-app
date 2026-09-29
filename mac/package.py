@@ -2,14 +2,19 @@
 
 Every adapter is `read(url, web, report) -> Document | Video`. It reports its
 stage through `report` and stops with ImportFailure. `package` turns either
-content into the JSON the app decodes as `ImportPackage`.
+content into a Delivery: the JSON the app decodes as `ImportPackage` and the
+files its Markdown names. `write_delivery` lays a delivery out as one
+uncompressed tar, `package.json` first, which the app reads in one pass.
 """
 
 from __future__ import annotations
 
-import base64
 import hashlib
+import io
+import json
+import tarfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
@@ -42,10 +47,49 @@ class Video:
     cues: list[tuple[float, str]] = field(default_factory=list)
 
 
-def package(url: str, content: Document | Video, folders: list[str]) -> dict:
+@dataclass
+class Delivery:
+    package: dict
+    """The app's `ImportPackage`."""
+    files: dict[str, bytes] = field(default_factory=dict)
+    """Relative path in the Markdown -> the file's bytes."""
+
+
+PACKAGE_NAME = "package.json"
+
+
+def package(url: str, content: Document | Video, folders: list[str]) -> Delivery:
     if isinstance(content, Video):
-        return _video_package(content, folders)
-    return _document_package(url, content, folders)
+        return Delivery(_video_package(content, folders))
+    return Delivery(_document_package(url, content, folders), content.files)
+
+
+def write_delivery(path: Path, delivery: Delivery) -> None:
+    """USTAR, so the app's reader needs no PAX headers; a path too long for it fails here. The archive is
+    written beside its place and moved in, so a reader never sees half of it."""
+    incoming = path.with_suffix(".incoming")
+    with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
+        _add(archive, PACKAGE_NAME, json.dumps(delivery.package, ensure_ascii=False).encode())
+        for name, blob in delivery.files.items():
+            _add(archive, name, blob)
+    incoming.replace(path)
+
+
+def read_delivery(path: Path) -> Delivery:
+    with tarfile.open(path, "r:") as archive:
+        members = archive.getmembers()
+        if not members or members[0].name != PACKAGE_NAME:
+            raise ValueError(f"{path.name} does not start with {PACKAGE_NAME}")
+        package = json.loads(archive.extractfile(members[0]).read())
+        files = {member.name: archive.extractfile(member).read() for member in members[1:]}
+    return Delivery(package, files)
+
+
+def _add(archive: tarfile.TarFile, name: str, blob: bytes) -> None:
+    info = tarfile.TarInfo(name)
+    info.size = len(blob)
+    info.mode = 0o644
+    archive.addfile(info, io.BytesIO(blob))
 
 
 def stable_id(prefix: str, value: str) -> str:
@@ -70,7 +114,6 @@ def _document_package(url: str, document: Document, folders: list[str]) -> dict:
         "blocks": [],
         "folders": folders,
         "body": body,
-        "files": {path: base64.b64encode(blob).decode("ascii") for path, blob in document.files.items()},
     }
 
 
@@ -95,7 +138,6 @@ def _video_package(video: Video, folders: list[str]) -> dict:
         "blocks": blocks,
         "folders": folders,
         "body": "\n\n".join(text for _, text in video.cues),
-        "files": {},
     }
 
 
