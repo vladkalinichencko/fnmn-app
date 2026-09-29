@@ -69,6 +69,13 @@ extension AnnotationCommand {
     }
 }
 
+/// How far two fingers have pinched. Only the blocks' fold effect reads it, so a frame of the gesture
+/// redraws that effect and not the whole reader.
+@MainActor @Observable
+final class PinchScale {
+    var value: CGFloat = 1
+}
+
 /// One open document: the column of blocks, the place at the top, the plate mode and the pinch between sections.
 struct ReadingSession: View {
     @Environment(LibraryModel.self) private var library
@@ -84,7 +91,9 @@ struct ReadingSession: View {
     @State private var place: Int?
     @State private var scrollID: Int?
     @State private var holdingPlace = false
-    @GestureState private var pinch: CGFloat = 1
+    @State private var pinch = PinchScale()
+    /// Resets the pinch when the gesture ends or is cancelled.
+    @GestureState private var pinching = false
 
     private var blocks: [DocumentBlock] { document.blocks }
     private var sections: [Int: HeadingSection] { document.sections }
@@ -105,7 +114,6 @@ struct ReadingSession: View {
                         baseURL: baseURL,
                         current: current,
                         mode: mode,
-                        pinch: pinch,
                         folded: fold == .open ? nil : sections[index]?.size ?? 0,
                         sectionRead: (sections[index]?.end).map { end in (place ?? piece).map { end <= $0 } ?? false } ?? false,
                         actions: actions,
@@ -141,9 +149,14 @@ struct ReadingSession: View {
         }
         .simultaneousGesture(
             MagnifyGesture()
-                .updating($pinch) { value, state, _ in state = value.magnification }
+                .updating($pinching) { _, state, _ in state = true }
+                .onChanged { pinch.value = $0.magnification }
                 .onEnded { value in pinched(value.magnification, current: current) }
         )
+        .onChange(of: pinching) { _, now in
+            if !now { pinch.value = 1 }
+        }
+        .environment(pinch)
         .toolbar { selectionToolbar }
     }
 

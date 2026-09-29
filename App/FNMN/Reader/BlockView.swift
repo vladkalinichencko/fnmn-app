@@ -10,7 +10,6 @@ struct BlockView: View {
     let baseURL: URL
     let current: Int?
     let mode: PlateMode
-    let pinch: CGFloat
     /// The number of blocks under this heading when the document is folded; nil while it is open.
     let folded: Int?
     /// A folded heading whose whole section lies before the reading place.
@@ -26,16 +25,16 @@ struct BlockView: View {
                 .onTapGesture { openSection(index) }
         case let .text(markdown):
             PlateView(markdown: markdown, index: index, baseURL: baseURL, current: current, mode: mode, actions: actions, send: send)
-                .modifier(PinchFold(pinch: pinch))
+                .modifier(PinchFold())
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
-                .modifier(PinchFold(pinch: pinch))
+                .modifier(PinchFold())
         case let .video(path):
             ArticleVideo(url: resolve(path))
-                .modifier(PinchFold(pinch: pinch))
+                .modifier(PinchFold())
         case let .interactive(url, selector):
             LiveCropView(url: url, selector: selector)
-                .modifier(PinchFold(pinch: pinch))
+                .modifier(PinchFold())
         }
     }
 
@@ -47,10 +46,10 @@ struct BlockView: View {
 
 /// While fingers pinch in, the blocks begin to fold up into their heading, as far as the fingers have gone.
 private struct PinchFold: ViewModifier {
-    let pinch: CGFloat
+    @Environment(PinchScale.self) private var pinch
 
     func body(content: Content) -> some View {
-        content.modifier(FoldIntoHeading(amount: min(max(1 - pinch, 0), 0.6) / 0.6 * 0.5))
+        content.modifier(FoldIntoHeading(amount: min(max(1 - pinch.value, 0), 0.6) / 0.6 * 0.5))
     }
 }
 
