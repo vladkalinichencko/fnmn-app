@@ -1,9 +1,12 @@
 """Prepare the materials in browser-library.json as FNMN deliveries: the one-time start of the library,
 kept here with the rest of the collection, away from the service the app talks to.
 
-    cd mac && ../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library
+    cd mac && ../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json \
+        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
 
-The command resumes from completed deliveries. Failed URLs remain in errors.json. Albums come from
+The output is the FNMN folder in iCloud Drive itself, where the phone reads the library: `catalog.json`,
+`index.json` (every material with its reviewed albums) and `deliveries/`. Only files that changed are
+written, so iCloud uploads only those. The command resumes from completed deliveries. Failed URLs remain in errors.json. Albums come from
 browser_albums.tsv beside this file; `--repackage` applies them and the current Markdown rules to the
 deliveries already prepared, without fetching anything again, and turns a delivery still in the old
 one-JSON form, with its files in base64, into an archive.
@@ -21,7 +24,7 @@ from pathlib import Path
 from adapters.youtube import video_id_from_url
 from importer import import_link
 from markdown import first_heading, had_site_header, normalize, page_title, plain_title
-from package import Delivery, Video, package, read_delivery, write_delivery
+from package import Delivery, Video, package, read_delivery, write_delivery, write_if_changed
 from web import LIVE
 
 ALBUMS = Path(__file__).parent / "browser_albums.tsv"
@@ -145,8 +148,8 @@ def main() -> None:
         parser.error("resolve browser-library review and errors before preparation")
     rows = material_rows(library, read_albums())
     args.output.joinpath("deliveries").mkdir(parents=True, exist_ok=True)
-    args.output.joinpath("catalog.json").write_text(args.input.read_text(encoding="utf-8"), encoding="utf-8")
-    args.output.joinpath("index.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_if_changed(args.output / "catalog.json", args.input.read_bytes())
+    write_if_changed(args.output / "index.json", json.dumps(rows, ensure_ascii=False, indent=2).encode())
     if args.repackage:
         print(f"repackaged {repackage(rows, args.output)} deliveries")
         return

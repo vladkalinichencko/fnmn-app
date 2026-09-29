@@ -10,17 +10,18 @@
 
 Tab Groups Dia не входят в результат. [`dia-local-sources.md`](dia-local-sources.md) фиксирует, что их локальные базы не читаются как SQLite или JSON. Для добавления групп нужен экспорт URL из интерфейса Dia или отдельный доступ к живому внутреннему API.
 
-## Подготовка для локального импорта
+## Подготовка библиотеки в iCloud Drive
 
-Команда ниже создаёт `prepared-browser-library/catalog.json` с исходной иерархией и по одному пакету в `deliveries/` для каждого подготовленного материала. Повторный запуск пропускает готовые пакеты. Видео можно сначала сохранить без подписей для проверки плеера, затем дополнить их через yt-dlp.
+Команда пишет прямо в папку FNMN в iCloud Drive, откуда её читает телефон: `catalog.json` с исходной иерархией, `index.json` с альбомами каждого материала и по одной поставке в `deliveries/` для каждого подготовленного материала. Меняются только изменившиеся файлы, повторный запуск пропускает готовые поставки. Видео можно сначала сохранить без подписей для проверки плеера, затем дополнить их через yt-dlp. Книги кладёт `publish_books.py`.
 
 ```sh
 cd mac
-../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library --seed-videos
-../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library --kind web --workers 2
-../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ../prepared-browser-library --kind video --enrich-videos --workers 1
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN --seed-videos
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN --kind web --workers 2
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN --kind video --enrich-videos --workers 1
+../.venv/bin/python -m collect.publish_books ../fixtures/books/principles-of-deep-learning-theory ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN
 ```
 
-В приложении выберите папку `prepared-browser-library` через **Add → Choose library or book folder**. FNMN сохранит каталог и готовые статьи и видео в локальной библиотеке. Ссылки без готового пакета остаются в **Sources** и открывают исходную страницу. Для короткой проверки используйте `prepared-browser-library/smoke/FNMN-Test-Import.zip`: распакуйте архив в Files и выберите папку `FNMN-Test-Import`.
+В приложении выберите папку FNMN через `+` → File.
 
-Пакет от 28 сентября содержит 344 источника и 899 готовых материалов: 329 веб-страниц и 570 видео. У 28 видео есть подписи; остальные видео открываются без транскрипта. 33 веб-ссылки остаются ссылками на оригинал: интерактивная проверка Cloudflare (ACM), отказ по IP выхода VPN (Хабр и ещё три сайта), пейвол NYT и WSJ, удалённые страницы, сетевые сбои с этого Mac, голые PDF, ноутбуки Jupyter, X Articles за логином и ссылка на YouTube-канал. В приложении они лежат плитками-ссылками в своих альбомах из `index.json`. Поставки — tar в `prepared-browser-library/deliveries`, телефон берёт их из папки FNMN в iCloud Drive, которую собирает `mac/collect/publish_library.py`.
+Пакет от 28 сентября содержит 344 источника и 899 готовых материалов: 329 веб-страниц и 570 видео. У 28 видео есть подписи; остальные видео открываются без транскрипта. 33 веб-ссылки остаются ссылками на оригинал: интерактивная проверка Cloudflare (ACM), отказ по IP выхода VPN (Хабр и ещё три сайта), пейвол NYT и WSJ, удалённые страницы, сетевые сбои с этого Mac, голые PDF, ноутбуки Jupyter, X Articles за логином и ссылка на YouTube-канал. В приложении они лежат плитками-ссылками в своих альбомах из `index.json`.

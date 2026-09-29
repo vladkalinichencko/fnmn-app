@@ -9,6 +9,7 @@ uncompressed tar, `package.json` first, which the app reads in one pass.
 
 from __future__ import annotations
 
+import filecmp
 import hashlib
 import io
 import json
@@ -65,14 +66,30 @@ def package(url: str, content: Document | Video, folders: list[str]) -> Delivery
 
 
 def write_delivery(path: Path, delivery: Delivery) -> None:
-    """USTAR, so the app's reader needs no PAX headers; a path too long for it fails here. The archive is
-    written beside its place and moved in, so a reader never sees half of it."""
+    """USTAR, so the app's reader needs no PAX headers; a path too long for it fails here."""
     incoming = path.with_suffix(".incoming")
     with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
         _add(archive, PACKAGE_NAME, json.dumps(delivery.package, ensure_ascii=False).encode())
         for name, blob in delivery.files.items():
             _add(archive, name, blob)
-    incoming.replace(path)
+    replace_if_changed(incoming, path)
+
+
+def write_if_changed(path: Path, blob: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    incoming = path.with_name(path.name + ".incoming")
+    incoming.write_bytes(blob)
+    replace_if_changed(incoming, path)
+
+
+def replace_if_changed(incoming: Path, path: Path) -> None:
+    """The library lives in iCloud Drive: a file written beside its place and renamed over it is a new version
+    of the same file, where writing over a file iCloud is still syncing leaves a numbered copy. An unchanged
+    file is not touched at all, so iCloud uploads only what changed."""
+    if path.exists() and filecmp.cmp(incoming, path, shallow=False):
+        incoming.unlink()
+    else:
+        incoming.replace(path)
 
 
 def read_delivery(path: Path) -> Delivery:

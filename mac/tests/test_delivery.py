@@ -27,6 +27,17 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(read_delivery(path), delivery)
         self.assertFalse(path.with_suffix(".incoming").exists())
 
+    def test_an_unchanged_delivery_is_not_written_again(self):
+        path = self.folder / "a.tar"
+        delivery = Delivery({"material": {"title": "A"}}, {"assets/a.png": b"png"})
+        write_delivery(path, delivery)
+        written = path.stat().st_mtime_ns
+        write_delivery(path, delivery)
+        self.assertEqual(path.stat().st_mtime_ns, written)
+        write_delivery(path, Delivery({"material": {"title": "B"}}))
+        self.assertEqual(read_delivery(path).package["material"]["title"], "B")
+        self.assertEqual([file.name for file in self.folder.iterdir()], ["a.tar"])
+
     def test_repackage_turns_an_old_json_delivery_into_an_archive(self):
         url = "https://example.com/a"
         deliveries = self.folder / "deliveries"
