@@ -49,6 +49,18 @@ public struct BrowserCatalog: Codable, Equatable, Sendable {
     }
 }
 
+extension BrowserCatalog {
+    func removing(url: String) -> BrowserCatalog {
+        BrowserCatalog(collections: collections, sources: sources.map { source in
+            BrowserCatalog.Source(
+                name: source.name, url: source.url, kind: source.kind,
+                savedIn: source.savedIn, foundIn: source.foundIn,
+                materials: source.materials.filter { $0.url != url }
+            )
+        })
+    }
+}
+
 public struct ImportPackage: Codable, Equatable, Sendable {
     public let version: Int
     public let material: Material
@@ -142,100 +154,6 @@ public struct MaterialReading: Codable, Equatable, Sendable {
         self.openedAt = openedAt
         self.isRead = isRead
         self.progress = progress
-    }
-}
-
-public enum TextMark: String, Codable, Sendable {
-    case highlight, strikethrough
-}
-
-public func applyingAnnotation(
-    to highlights: [Highlight],
-    materialID: String,
-    piece: Int,
-    quote: String,
-    caption: String?,
-    mark: TextMark?
-) -> [Highlight] {
-    var highlights = highlights
-    let trimmedQuote = quote.trimmingCharacters(in: .whitespacesAndNewlines)
-    let trimmedCaption = caption?.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedQuote.isEmpty || !(trimmedCaption ?? "").isEmpty else { return highlights }
-    if let index = highlights.firstIndex(where: {
-        $0.materialID == materialID && $0.piece == piece && $0.quote == trimmedQuote
-    }) {
-        if let trimmedCaption, !trimmedCaption.isEmpty {
-            highlights[index].caption = trimmedCaption
-        }
-        if let mark {
-            highlights[index].mark = mark
-        }
-        return highlights
-    }
-    highlights.append(
-        Highlight(
-            materialID: materialID,
-            piece: piece,
-            quote: trimmedQuote,
-            caption: trimmedCaption ?? "",
-            mark: mark
-        )
-    )
-    return highlights
-}
-
-public struct Highlight: Equatable, Identifiable, Sendable {
-    public var id: UUID
-    public var materialID: String
-    public var piece: Int
-    public var quote: String
-    public var caption: String
-    public var mark: TextMark?
-
-    public init(
-        id: UUID = UUID(),
-        materialID: String,
-        piece: Int,
-        quote: String,
-        caption: String,
-        mark: TextMark? = nil
-    ) {
-        self.id = id
-        self.materialID = materialID
-        self.piece = piece
-        self.quote = quote
-        self.caption = caption
-        self.mark = mark
-    }
-}
-
-extension Highlight: Codable {
-    enum CodingKeys: String, CodingKey {
-        case id, materialID, piece, quote, caption, mark
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        materialID = try container.decode(String.self, forKey: .materialID)
-        piece = try container.decode(Int.self, forKey: .piece)
-        quote = try container.decode(String.self, forKey: .quote)
-        caption = try container.decode(String.self, forKey: .caption)
-        if container.contains(.mark) {
-            mark = try container.decodeIfPresent(TextMark.self, forKey: .mark)
-        } else {
-            mark = quote.isEmpty ? nil : .highlight
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(materialID, forKey: .materialID)
-        try container.encode(piece, forKey: .piece)
-        try container.encode(quote, forKey: .quote)
-        try container.encode(caption, forKey: .caption)
-        try container.encode(mark, forKey: .mark)
     }
 }
 

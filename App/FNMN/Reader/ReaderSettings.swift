@@ -31,9 +31,33 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
     }
 }
 
+enum ReaderFont: String, CaseIterable, Identifiable {
+    case system, serif, rounded, monospaced
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .system: "San Francisco"
+        case .serif: "New York"
+        case .rounded: "Rounded"
+        case .monospaced: "Monospaced"
+        }
+    }
+
+    var design: Font.Design {
+        switch self {
+        case .system: .default
+        case .serif: .serif
+        case .rounded: .rounded
+        case .monospaced: .monospaced
+        }
+    }
+}
+
 enum ReaderAppearance {
     static let typeSizeKey = "readerTypeSize"
     static let backgroundKey = "readerBackground"
+    static let fontKey = "readerFont"
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
 }
@@ -43,6 +67,7 @@ struct ReaderMenu: View {
     let sourceURL: URL?
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.system
+    @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
 
     var body: some View {
         Menu("Reading Options", systemImage: "ellipsis") {
@@ -60,6 +85,15 @@ struct ReaderMenu: View {
                 }
             }
             .pickerStyle(.palette)
+            Picker(selection: $font) {
+                ForEach(ReaderFont.allCases) { option in
+                    Text(option.name).tag(option)
+                }
+            } label: {
+                Label("Font", systemImage: "textformat")
+                Text(font.name)
+            }
+            .pickerStyle(.menu)
             if let sourceURL {
                 Link(destination: sourceURL) { Label("Open Original", systemImage: "arrow.up.right") }
             }
@@ -71,11 +105,14 @@ struct ReaderMenu: View {
 struct ReaderAppearanceModifier: ViewModifier {
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.system
+    @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
 
     func body(content: Content) -> some View {
         content
             .dynamicTypeSize(ReaderAppearance.sizes[min(max(size, 0), ReaderAppearance.sizes.count - 1)])
-            .background(background.color ?? .clear)
+            // A font, not a font design: Textual derives code from the environment font with `.monospaced()`.
+            .font(.system(.body, design: font.design))
+            .background(background.color ?? Tokens.canvas)
             .environment(\.colorScheme, background.scheme ?? colorScheme)
     }
 

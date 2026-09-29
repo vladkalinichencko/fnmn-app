@@ -5,8 +5,8 @@ public enum ReadingFold: Equatable, Sendable {
     case headings(through: Int)
 }
 
-public func readingFoldPinchIn(_ fold: ReadingFold, pieces: [ArticlePiece]) -> ReadingFold {
-    let levels = pieces.compactMap(headingLevel)
+public func readingFoldPinchIn(_ fold: ReadingFold, blocks: [DocumentBlock]) -> ReadingFold {
+    let levels = blocks.compactMap(headingLevel)
     guard let deepest = levels.max(), let shallowest = levels.min() else { return .open }
     switch fold {
     case .open:
@@ -16,8 +16,8 @@ public func readingFoldPinchIn(_ fold: ReadingFold, pieces: [ArticlePiece]) -> R
     }
 }
 
-public func readingFoldPinchOut(_ fold: ReadingFold, pieces: [ArticlePiece]) -> ReadingFold {
-    guard let deepest = pieces.compactMap(headingLevel).max() else { return .open }
+public func readingFoldPinchOut(_ fold: ReadingFold, blocks: [DocumentBlock]) -> ReadingFold {
+    guard let deepest = blocks.compactMap(headingLevel).max() else { return .open }
     switch fold {
     case .open:
         return .open
@@ -28,13 +28,13 @@ public func readingFoldPinchOut(_ fold: ReadingFold, pieces: [ArticlePiece]) -> 
     }
 }
 
-public func visiblePieceIndexes(in pieces: [ArticlePiece], fold: ReadingFold) -> [Int] {
+public func visiblePieceIndexes(in blocks: [DocumentBlock], fold: ReadingFold) -> [Int] {
     switch fold {
     case .open:
-        return Array(pieces.indices)
+        return Array(blocks.indices)
     case let .headings(through):
-        return pieces.indices.filter { index in
-            guard let level = headingLevel(pieces[index]) else { return false }
+        return blocks.indices.filter { index in
+            guard let level = headingLevel(blocks[index]) else { return false }
             return level <= through
         }
     }
@@ -46,7 +46,7 @@ public func readingPlaceTarget(place: Int?, visible: [Int]) -> Int? {
     return visible.last(where: { $0 <= place }) ?? visible.first
 }
 
-private func headingLevel(_ piece: ArticlePiece) -> Int? {
-    guard case let .paragraph(runs) = piece else { return nil }
-    return ArticleBody.heading(runs)?.level
+private func headingLevel(_ block: DocumentBlock) -> Int? {
+    guard case let .heading(level, _) = block else { return nil }
+    return level
 }

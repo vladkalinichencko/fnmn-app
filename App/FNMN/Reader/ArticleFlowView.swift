@@ -31,7 +31,7 @@ private func reduce(_ state: ReaderState, _ action: ReaderAction) -> ReaderState
 struct MaterialReader: View {
     @Environment(LibraryModel.self) private var library
     let markdown: String
-    let file: (String) -> URL?
+    let baseURL: URL
     let materialID: String
     let header: MaterialHeader
     var sourceURL: URL?
@@ -41,9 +41,9 @@ struct MaterialReader: View {
     var body: some View {
         ReadingSession(
             markdown: markdown,
-            file: file,
             materialID: materialID,
             header: header,
+            baseURL: baseURL,
             piece: state.scrollPiece,
             onVisiblePiece: { index, count in send(.visible(index), count: count) }
         )
@@ -61,7 +61,7 @@ struct MaterialReader: View {
         let previous = state.trackedPiece
         state = reduce(state, action)
         guard case let .visible(index) = action, index != previous else { return }
-        let total = count ?? ArticleBody.pieces(in: markdown).count
+        let total = count ?? ArticleBody.blocks(in: markdown).count
         let progress = total == 0 ? 0 : Double(index + 1) / Double(total)
         Task { await library.apply(.savePosition(.piece(index), itemID: materialID, progress: progress)) }
     }
@@ -76,7 +76,7 @@ struct ArticleFlowView: View {
         let id = package.material.id
         MaterialReader(
             markdown: ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks),
-            file: { library.articleFile(id, path: $0) },
+            baseURL: library.articleFolder(id),
             materialID: id,
             header: MaterialHeader(title: package.material.title, source: library.snapshot.source(of: id)),
             sourceURL: package.material.sourceURL,

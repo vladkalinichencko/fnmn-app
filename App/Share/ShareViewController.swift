@@ -1,3 +1,4 @@
+import FNMNCore
 import UIKit
 
 @objc(ShareViewController)

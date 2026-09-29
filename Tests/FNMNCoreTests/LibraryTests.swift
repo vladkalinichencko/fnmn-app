@@ -9,13 +9,24 @@ private let article = ImportPackage(
     folders: ["Inbox"]
 )
 
-@Test func repeatedImportUpdatesOneMaterialAndMergesFolders() throws {
+@Test func repeatedImportKeepsTheReadersAlbums() throws {
     var library = LibrarySnapshot()
-    try library.importPackage(article)
+    try library.importPackage(article, at: .now)
     let second = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: ["Papers"])
-    try library.importPackage(second)
+    try library.importPackage(second, at: .now)
     #expect(library.packages.count == 1)
-    #expect(library.placements[article.material.id] == ["Inbox", "Papers"])
+    #expect(library.albums(of: article.material.id) == ["Inbox"])
+}
+
+@Test func browserImportReplacesCollectionAlbumsWithReviewedOnes() throws {
+    var library = LibrarySnapshot()
+    let old = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: ["Reading"])
+    try library.importPackage(old, at: .now)
+    library.retireAlbums(["Reading"])
+    let reviewed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: ["ML Theory"])
+    try library.importPackage(reviewed, at: .now)
+    #expect(library.albums == ["ML Theory"])
+    #expect(library.albums(of: article.material.id) == ["ML Theory"])
 }
 
 @Test func browserImportKeepsSourceOnlySitesAndPreparedMaterials() async throws {
@@ -40,17 +51,17 @@ private let article = ImportPackage(
 @Test func importKeepsTheMarkdownBody() throws {
     var library = LibrarySnapshot()
     let packaged = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, folders: article.folders, body: "A $x$ line.")
-    try library.importPackage(packaged)
-    let renamed = library.renameFolder(from: "Inbox", to: "Later")
-    #expect(renamed)
+    try library.importPackage(packaged, at: .now)
+    library = try library.applying(.renameAlbum("Inbox", to: "Later"))
     #expect(library.packages[0].body == "A $x$ line.")
+    #expect(library.albums(of: article.material.id) == ["Later"])
 }
 
 @Test func positionAndNoteSurviveDiskRoundTrip() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory.appending(path: "library.json"))
     var library = LibrarySnapshot()
-    try library.importPackage(article)
+    try library.importPackage(article, at: .now)
     library.positions[article.material.id] = ReadingPosition(blockID: "b1", textOffset: 12)
     try await file.save(library)
     let stateURL = directory.appending(path: "library.json").appending(path: "state.json")
@@ -62,7 +73,7 @@ private let article = ImportPackage(
     try Data(text.utf8).write(to: stateURL)
     let loaded = try await file.load()
     #expect(loaded.positions[article.material.id]?.blockID == "b1")
-    #expect(loaded.highlights.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.caption == "Remember this" && $0.piece == 4 && $0.mark == nil })
+    #expect(loaded.annotations.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.note == "Remember this" && $0.piece == 4 && $0.mark == nil })
     let saved = try String(contentsOf: stateURL, encoding: .utf8)
     #expect(!saved.contains("\"notes\""))
 }
@@ -77,7 +88,7 @@ private let article = ImportPackage(
         body: "# Hello\n\nAfter"
     )
     var library = LibrarySnapshot()
-    try library.importPackage(placed)
+    try library.importPackage(placed, at: .now)
     library.positions[placed.material.id] = ReadingPosition(blockID: "b1")
     try await file.save(library)
     let loaded = try await file.load()
@@ -92,10 +103,10 @@ private let article = ImportPackage(
         blocks: [],
         body: "# Hello\n\nText"
     )
-    try library.importPackage(packaged)
+    try library.importPackage(packaged, at: .now)
     #expect(library.packages[0].body == "# Hello\n\nText")
     #expect(throws: LibraryError.emptyDocument) {
-        try library.importPackage(ImportPackage(material: laterArticle.material, sections: [], blocks: []))
+        try library.importPackage(ImportPackage(material: laterArticle.material, sections: [], blocks: []), at: .now)
     }
 }
 
@@ -107,19 +118,19 @@ private let laterArticle = ImportPackage(
 
 @Test func continueChoosesMostRecentlyOpenedMaterial() throws {
     var library = LibrarySnapshot()
-    try library.importPackage(article)
-    try library.importPackage(laterArticle)
+    try library.importPackage(article, at: .now)
+    try library.importPackage(laterArticle, at: .now)
     library.positions[article.material.id] = ReadingPosition(blockID: "b1")
     library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
-    library.recordOpening(materialID: article.material.id, at: Date(timeIntervalSinceReferenceDate: 1))
-    library.recordOpening(materialID: laterArticle.material.id, at: Date(timeIntervalSinceReferenceDate: 2))
+    library = try library.applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 1))
+    library = try library.applying(.open(itemID: laterArticle.material.id), at: Date(timeIntervalSinceReferenceDate: 2))
     #expect(library.continuedID == laterArticle.material.id)
 }
 
 @Test func continueFallsBackToSavedPositionWhenNothingWasOpened() throws {
     var library = LibrarySnapshot()
-    try library.importPackage(article)
-    try library.importPackage(laterArticle)
+    try library.importPackage(article, at: .now)
+    try library.importPackage(laterArticle, at: .now)
     library.positions[article.material.id] = ReadingPosition(blockID: "b1")
     library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
     #expect(library.continuedID == article.material.id)
@@ -127,8 +138,8 @@ private let laterArticle = ImportPackage(
 
 @Test func openingDoesNotMarkMaterialRead() throws {
     var library = LibrarySnapshot()
-    try library.importPackage(article)
-    library.recordOpening(materialID: article.material.id, at: Date(timeIntervalSinceReferenceDate: 1))
+    try library.importPackage(article, at: .now)
+    library = try library.applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 1))
     #expect(library.readings[article.material.id]?.isRead == false)
 }
 
@@ -136,9 +147,9 @@ private let laterArticle = ImportPackage(
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory.appending(path: "library.json"))
     var library = LibrarySnapshot()
-    try library.importPackage(article)
-    library.recordOpening(materialID: article.material.id, at: Date(timeIntervalSinceReferenceDate: 10))
-    library.setRead(true, materialID: article.material.id)
+    try library.importPackage(article, at: .now)
+    library = try library.applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 10))
+    library = try library.applying(.setRead(true, itemID: article.material.id))
     try await file.save(library)
     #expect(try await file.load() == library)
 }
@@ -187,7 +198,7 @@ private var sampleBook: URL {
     let file = LibraryFile(url: directory)
     let imported = try BookCatalog.inspect(from: sampleBook)
     let library = try await file.storeBook(imported.record, from: sampleBook, into: LibrarySnapshot())
-    try await file.saveState(library)
+    try await file.save(library)
     let loaded = try await file.load()
     #expect(loaded.books.count == 1)
     #expect(loaded.books[0].metadata.toc.count == 223)
@@ -231,28 +242,27 @@ private let namedBook = BookRecord(
 
 @Test func librarySearchMatchesCatalogFieldsAndIgnoresBody() throws {
     var library = LibrarySnapshot()
-    try library.importPackage(namedArticle)
-    library.importBook(namedBook)
-    #expect(library.matchingPackages("").map(\.material.id) == [namedArticle.material.id])
-    #expect(library.matchingBooks(" ").map(\.id) == [namedBook.id])
-    #expect(library.matchingPackages("kernel").map(\.material.id) == [namedArticle.material.id])
-    #expect(library.matchingPackages("Alice").map(\.material.id) == [namedArticle.material.id])
-    #expect(library.matchingPackages("Papers").map(\.material.id) == [namedArticle.material.id])
-    #expect(library.matchingPackages("NTK").map(\.material.id) == [namedArticle.material.id])
-    #expect(library.matchingPackages("hidden body text").isEmpty)
-    #expect(library.matchingBooks("roberts").map(\.id) == [namedBook.id])
-    #expect(library.matchingBooks("Effective Theory").map(\.id) == [namedBook.id])
-    #expect(library.matchingPackages("xyzzy").isEmpty)
-    #expect(library.matchingBooks("xyzzy").isEmpty)
+    try library.importPackage(namedArticle, at: .now)
+    library.importBook(namedBook, at: .now)
+    func ids(_ query: String) -> Set<String> { Set(library.items(matching: query).map(\.id)) }
+    #expect(ids(" ") == [namedArticle.material.id, namedBook.id])
+    #expect(ids("kernel") == [namedArticle.material.id])
+    #expect(ids("Alice") == [namedArticle.material.id])
+    #expect(ids("Papers") == [namedArticle.material.id])
+    #expect(ids("NTK") == [namedArticle.material.id])
+    #expect(ids("roberts") == [namedBook.id])
+    #expect(ids("Effective Theory") == [namedBook.id])
+    #expect(ids("hidden body text").isEmpty)
+    #expect(ids("xyzzy").isEmpty)
     let headed = ImportPackage(
         material: Material(id: "article:headed", kind: .article, title: "Plain", sourceURL: URL(string: "https://example.com/headed")!),
         sections: [],
         blocks: [],
         body: "# Kernel Trick\n\nhidden body text"
     )
-    try library.importPackage(headed)
-    #expect(library.matchingPackages("Kernel Trick").map(\.material.id) == ["article:headed"])
-    #expect(library.matchingPackages("hidden body text").isEmpty)
+    try library.importPackage(headed, at: .now)
+    #expect(ids("Kernel Trick") == ["article:headed"])
+    #expect(ids("hidden body text").isEmpty)
 }
 
 @Test func captureRouteNamesSourceFromLinkOrPDF() throws {
@@ -283,63 +293,148 @@ private struct CaptureSourceRow: Decodable {
 
 @Test func oldHighlightWithoutMarkDecodesAsHighlight() throws {
     let data = Data(#"{"id":"00000000-0000-0000-0000-000000000001","materialID":"article:1","piece":2,"quote":"old quote","caption":"kept"}"#.utf8)
-    let highlight = try JSONDecoder().decode(Highlight.self, from: data)
-    #expect(highlight.mark == .highlight)
-    #expect(highlight.quote == "old quote")
-    #expect(highlight.caption == "kept")
+    let annotation = try JSONDecoder().decode(Annotation.self, from: data)
+    #expect(annotation.mark == .highlight)
+    #expect(annotation.quote == "old quote")
+    #expect(annotation.note == "kept")
 }
 
-@Test func aSecondQuoteOnTheSameParagraphStays() {
-    let first = applyingAnnotation(to: [], materialID: "article:1", piece: 2, quote: "one phrase", caption: nil, mark: .highlight)
-    let second = applyingAnnotation(to: first, materialID: "article:1", piece: 2, quote: "another phrase", caption: nil, mark: .strikethrough)
-    #expect(second.map(\.quote) == ["one phrase", "another phrase"])
-    let noted = applyingAnnotation(to: second, materialID: "article:1", piece: 2, quote: "one phrase", caption: "a thought", mark: nil)
-    #expect(noted.count == 2)
-    #expect(noted[0].caption == "a thought")
-    #expect(noted[0].mark == .highlight)
+private let paragraph = AnnotationTarget(materialID: "article:1", piece: 2, text: "one phrase and another phrase end here")
+
+private func span(_ quote: String) -> AnnotationTarget {
+    let range = (paragraph.text as NSString).range(of: quote)
+    return AnnotationTarget(materialID: paragraph.materialID, piece: paragraph.piece, text: paragraph.text, span: TextSpan(start: range.location, length: range.length))
 }
 
-@Test func noteOnlyHighlightRoundTripsWithNilMark() throws {
-    let note = Highlight(materialID: "article:1", piece: 0, quote: "paragraph text", caption: "my note", mark: nil)
-    let data = try JSONEncoder().encode(note)
-    let decoded = try JSONDecoder().decode(Highlight.self, from: data)
-    #expect(decoded.mark == nil)
-    #expect(decoded.caption == "my note")
-    #expect(decoded.quote == "paragraph text")
-}
-
-@Test func albumKeepsACardInEveryFolderItWasDroppedInto() throws {
+@Test func touchingHighlightsBecomeOneRecord() throws {
     var library = LibrarySnapshot()
-    try library.importPackage(article)
-    library.place(materialID: namedBook.id, in: "PDF")
-    library.importBook(namedBook)
-    library.place(materialID: article.material.id, in: "Web")
-    library.place(materialID: namedBook.id, in: "Reading")
-    #expect(library.packages(in: "Inbox").map(\.material.id) == [article.material.id])
-    #expect(library.packages(in: "Web").map(\.material.id) == [article.material.id])
-    #expect(library.books(in: "PDF").map(\.id) == [namedBook.id])
-    #expect(library.books(in: "Reading").map(\.id) == [namedBook.id])
-    let renamed = library.renameFolder(from: "Inbox", to: "Papers")
-    #expect(renamed)
-    #expect(library.packages(in: "Inbox").isEmpty)
-    #expect(library.packages(in: "Papers").map(\.material.id) == [article.material.id])
-    #expect(library.packages(in: "Web").map(\.material.id) == [article.material.id])
-    let collided = library.renameFolder(from: "Papers", to: "Web")
-    #expect(!collided)
-    #expect(library.packages(in: "Papers").map(\.material.id) == [article.material.id])
+    library = try library.applying(.mark(.highlight, span("one phrase")))
+    library = try library.applying(.mark(.highlight, span("phrase and another")))
+    #expect(library.annotations.map(\.quote) == ["one phrase and another"])
+    library = try library.applying(.mark(.strikethrough, span("end")))
+    #expect(library.annotations.count == 2)
+}
+
+@Test func theMenuOffersRemovalOnlyWhereAMarkIs() throws {
+    var library = LibrarySnapshot()
+    library = try library.applying(.mark(.highlight, span("another phrase")))
+    #expect(annotationCommands(library.annotations, at: span("another")) == [.unmark(.highlight), .mark(.strikethrough)])
+    #expect(annotationCommands(library.annotations, at: span("one")) == [.mark(.highlight), .mark(.strikethrough)])
+    library = try library.applying(.unmark(.highlight, span("another")))
+    #expect(library.annotations.isEmpty)
+}
+
+@Test func aNoteOutlivesItsRemovedHighlight() throws {
+    var library = LibrarySnapshot()
+    library = try library.applying(.mark(.highlight, span("one phrase")))
+    library = try library.applying(.note("a thought", span("one phrase")))
+    #expect(library.annotations.count == 1)
+    library = try library.applying(.unmark(.highlight, span("one phrase")))
+    #expect(library.annotations.map(\.note) == ["a thought"])
+    #expect(library.annotations[0].mark == nil)
+    library = try library.applying(.note("", span("one phrase")))
+    #expect(library.annotations.isEmpty)
+}
+
+@Test func noteOnlyAnnotationRoundTripsWithNilMark() throws {
+    let note = Annotation(materialID: "article:1", piece: 0, quote: "", note: "my note")
+    let decoded = try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(note))
+    #expect(decoded == note)
+}
+
+@Test func albumsHoldAnItemInEveryAlbumItWasAddedTo() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article, at: .now)
+    library.importBook(namedBook, at: .now)
+    #expect(library.unsortedItems.map(\.id) == [namedBook.id])
+    library = try library.applying(.addToAlbum("Web", itemID: article.material.id))
+    library = try library.applying(.addToAlbum("Reading", itemID: namedBook.id))
+    #expect(library.unsortedItems.isEmpty)
+    #expect(library.items(inAlbum: "Inbox").map(\.id) == [article.material.id])
+    #expect(library.items(inAlbum: "Web").map(\.id) == [article.material.id])
+    library = try library.applying(.renameAlbum("Inbox", to: "Papers"))
+    #expect(library.items(inAlbum: "Papers").map(\.id) == [article.material.id])
+    #expect(throws: LibraryError.albumNameTaken("Web")) {
+        try library.applying(.renameAlbum("Papers", to: "Web"))
+    }
+    library = try library.applying(.deleteAlbum("Reading"))
+    #expect(library.unsortedItems.map(\.id) == [namedBook.id])
+    library = try library.applying(.removeFromAlbum("Web", itemID: article.material.id))
+    #expect(library.albumSummaries.map(\.count) == [1, 0])
+}
+
+@Test func readThroughKeepsEarlierParagraphsRead() throws {
+    var library = LibrarySnapshot()
+    library = try library.applying(.readThrough(piece: 5, itemID: "a"))
+    #expect(library.isPieceRead(5, of: "a", current: 0))
+    #expect(!library.isPieceRead(6, of: "a", current: 3))
+    #expect(library.isPieceRead(7, of: "a", current: 8))
+}
+
+@Test func deletingAnItemForgetsEverythingAboutIt() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article, at: .now)
+    library = try library.applying(.savePosition(.piece(3), itemID: article.material.id, progress: 0.5))
+    library = try library.applying(.delete(itemID: article.material.id))
+    #expect(library.packages.isEmpty && library.positions.isEmpty && library.placements.isEmpty && library.readings.isEmpty)
+}
+
+@Test func readerStateSavesWithoutRewritingPackages() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory)
+    var library = LibrarySnapshot()
+    try library.importPackage(article, at: .now)
+    try await file.save(library)
+    let packages = directory.appending(path: "packages.json")
+    let written = try FileManager.default.attributesOfItem(atPath: packages.path)[.modificationDate] as? Date
+    try await Task.sleep(for: .milliseconds(20))
+    let moved = try library.applying(.savePosition(.piece(1), itemID: article.material.id, progress: 0.1))
+    try await file.save(moved, previous: library)
+    #expect(try FileManager.default.attributesOfItem(atPath: packages.path)[.modificationDate] as? Date == written)
+    #expect(try await file.load() == moved)
+}
+
+@Test func aDownloadedVideoLeavesWithItsMaterial() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let file = LibraryFile(url: directory)
+    let download = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".mp4")
+    try Data("mp4".utf8).write(to: download)
+    var library = LibrarySnapshot()
+    try library.importPackage(article, at: .now)
+    try await file.save(library)
+    let stored = try await file.storeVideoFile(article.material.id, from: download, into: library)
+    let saved = LibraryFile.videoFile(root: directory, name: try #require(stored.videoFiles[article.material.id]))
+    #expect(FileManager.default.fileExists(atPath: saved.path))
+    let deleted = try stored.applying(.delete(itemID: article.material.id))
+    try await file.save(deleted, previous: stored)
+    #expect(!FileManager.default.fileExists(atPath: saved.path))
+}
+
+@Test func stateWithInlinePackagesMovesThemToTheirOwnFile() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let inline = String(decoding: try JSONEncoder().encode([article]), as: UTF8.self)
+    try Data(#"{"positions":{},"folders":["Inbox"],"placements":{"\#(article.material.id)":["Inbox"]},"packages":\#(inline)}"#.utf8)
+        .write(to: directory.appending(path: "state.json"))
+    let loaded = try await LibraryFile(url: directory).load()
+    #expect(loaded.packages.map(\.material.id) == [article.material.id])
+    #expect(loaded.albums == ["Inbox"])
+    #expect(FileManager.default.fileExists(atPath: directory.appending(path: "packages.json").path))
+    let state = try String(contentsOf: directory.appending(path: "state.json"), encoding: .utf8)
+    #expect(!state.contains("\"packages\""))
 }
 
 @Test func reimportKeepsMarksUntilTheBodyChanges() throws {
     var library = LibrarySnapshot()
-    try library.importPackage(article)
+    try library.importPackage(article, at: .now)
     library.positions[article.material.id] = ReadingPosition(blockID: "b1")
-    library.highlights.append(Highlight(materialID: article.material.id, piece: 0, quote: "Text", caption: "", mark: .highlight))
-    try library.importPackage(article)
-    #expect(library.highlights.count == 1)
+    library.annotations.append(Annotation(materialID: article.material.id, piece: 0, quote: "Text", mark: .highlight))
+    try library.importPackage(article, at: .now)
+    #expect(library.annotations.count == 1)
     #expect(library.positions[article.material.id]?.blockID == "b1")
     let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "A different page.")
-    try library.importPackage(changed)
-    #expect(library.highlights.isEmpty)
+    try library.importPackage(changed, at: .now)
+    #expect(library.annotations.isEmpty)
     #expect(library.positions[article.material.id] == nil)
 }
 
@@ -401,7 +496,7 @@ private struct CaptureSourceRow: Decodable {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory)
     var library = LibrarySnapshot()
-    try library.importPackage(article)
+    try library.importPackage(article, at: .now)
     try await file.save(library)
     let picture = try #require(LibraryFile.articleFile(root: directory, materialID: article.material.id, path: "assets/pic.txt"))
     try FileManager.default.createDirectory(at: picture.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -410,12 +505,11 @@ private struct CaptureSourceRow: Decodable {
     #expect(try String(contentsOf: picture, encoding: .utf8) == "pic")
 }
 
-@Test func cleartextServiceStaysOnTheLocalNetwork() {
-    #expect(CaptureRoute.acceptsService(URL(string: "https://example.com")!, insecureLAN: false))
-    #expect(CaptureRoute.acceptsService(URL(string: "http://127.0.0.1:8787")!, insecureLAN: false))
-    #expect(CaptureRoute.acceptsService(URL(string: "http://192.168.1.20:8787")!, insecureLAN: true))
-    #expect(!CaptureRoute.acceptsService(URL(string: "http://192.168.1.20:8787")!, insecureLAN: false))
-    #expect(!CaptureRoute.acceptsService(URL(string: "http://example.com")!, insecureLAN: true))
+@Test func cleartextServiceStaysOnThisDevice() {
+    #expect(CaptureRoute.acceptsService(URL(string: "https://example.com")!))
+    #expect(CaptureRoute.acceptsService(URL(string: "http://127.0.0.1:8787")!))
+    #expect(!CaptureRoute.acceptsService(URL(string: "http://192.168.1.20:8787")!))
+    #expect(!CaptureRoute.acceptsService(URL(string: "http://example.com")!))
 }
 
 private func bookMetadata(sourceName: String) -> BookMetadata {

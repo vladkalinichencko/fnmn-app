@@ -1,13 +1,10 @@
 import Foundation
 
-public enum ArticleRun: Equatable, Sendable {
+/// One unit of the reading column. A text block is drawn on its own plate; headings sit on the background.
+public enum DocumentBlock: Equatable, Sendable {
+    case heading(level: Int, title: String)
+    /// A paragraph, list, quote, table or code block, with any formula or picture that stands inside it.
     case text(String)
-    case math(String)
-}
-
-public enum ArticlePiece: Equatable, Sendable {
-    case paragraph([ArticleRun])
-    case displayMath(String)
     case image(alt: String, path: String)
     case video(path: String)
     case interactive(url: URL, selector: String?)
@@ -21,20 +18,63 @@ public struct ArticleHeading: Equatable, Identifiable, Sendable {
 }
 
 public enum ArticleBody {
-    public static func headings(in markdown: String) -> [ArticleHeading] {
-        pieces(in: markdown).enumerated().compactMap { index, piece in
-            guard case let .paragraph(runs) = piece, let heading = heading(runs) else { return nil }
-            return ArticleHeading(level: heading.level, title: heading.title, piece: index)
+    /// Splits Markdown into reading blocks. A blank line ends a block, except inside a code fence or a `$$` formula;
+    /// a heading line is always its own block.
+    public static func blocks(in markdown: String) -> [DocumentBlock] {
+        var blocks: [DocumentBlock] = []
+        var lines: [Substring] = []
+        var fence: Substring?
+        var inMath = false
+
+        func flush() {
+            let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            lines = []
+            guard !text.isEmpty else { return }
+            blocks.append(block(text, fence: fence))
         }
+
+        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if fence != nil {
+                lines.append(line)
+                if trimmed.hasPrefix("```"), lines.count > 1 {
+                    flush()
+                    fence = nil
+                }
+                continue
+            }
+            if inMath {
+                lines.append(line)
+                if trimmed.components(separatedBy: "$$").count.isMultiple(of: 2) { inMath = false }
+                continue
+            }
+            if trimmed.hasPrefix("```") {
+                flush()
+                fence = line
+                lines = [line]
+                continue
+            }
+            if trimmed.isEmpty {
+                flush()
+                continue
+            }
+            if let heading = heading(trimmed) {
+                flush()
+                blocks.append(heading)
+                continue
+            }
+            lines.append(line)
+            if trimmed.components(separatedBy: "$$").count.isMultiple(of: 2) { inMath = true }
+        }
+        flush()
+        return blocks
     }
 
-    public static func legacyPiece(for position: ReadingPosition, in package: ImportPackage) -> Int? {
-        guard position.pieceIndex == nil, package.material.kind == .article else { return nil }
-        guard let block = package.blocks.first(where: { $0.id == position.blockID }),
-              let index = package.sections.firstIndex(where: { $0.id == block.sectionID }) else { return nil }
-        let headings = headings(in: readingMarkdown(body: package.body, blocks: package.blocks))
-        guard headings.indices.contains(index) else { return nil }
-        return headings[index].piece
+    public static func headings(in markdown: String) -> [ArticleHeading] {
+        blocks(in: markdown).enumerated().compactMap { index, block in
+            guard case let .heading(level, title) = block else { return nil }
+            return ArticleHeading(level: level, title: title, piece: index)
+        }
     }
 
     public static func readingMarkdown(body: String?, blocks: [Block]) -> String {
@@ -55,180 +95,64 @@ public enum ArticleBody {
         }.joined(separator: "\n\n")
     }
 
-    public static func pieces(in markdown: String) -> [ArticlePiece] {
-        var pieces: [ArticlePiece] = []
-        var rest = markdown[...]
-        while let open = rest.range(of: "```") {
-            appendProse(String(rest[..<open.lowerBound]), to: &pieces)
-            rest = rest[open.upperBound...]
-            guard let close = rest.range(of: "```") else {
-                appendProse("```" + rest, to: &pieces)
-                return pieces
-            }
-            appendFence(String(rest[..<close.lowerBound]), to: &pieces)
-            rest = rest[close.upperBound...]
-        }
-        appendProse(String(rest), to: &pieces)
-        return pieces
+    public static func legacyPiece(for position: ReadingPosition, in package: ImportPackage) -> Int? {
+        guard position.pieceIndex == nil, package.material.kind == .article else { return nil }
+        guard let block = package.blocks.first(where: { $0.id == position.blockID }),
+              let index = package.sections.firstIndex(where: { $0.id == block.sectionID }) else { return nil }
+        let headings = headings(in: readingMarkdown(body: package.body, blocks: package.blocks))
+        guard headings.indices.contains(index) else { return nil }
+        return headings[index].piece
     }
 
-    public static func heading(_ runs: [ArticleRun]) -> (level: Int, title: String)? {
-        guard case let .text(source) = runs.first else { return nil }
-        let start = source.drop(while: { $0 == " " || $0 == "\t" })
-        guard let match = start.prefixMatch(of: /(#{1,6})[ \t]+/) else { return nil }
-        let remainder = start[match.range.upperBound...]
-        guard !remainder.contains("\n"), !runs.dropFirst().contains(where: containsBreak) else { return nil }
-        let title = ([String(remainder)] + runs.dropFirst().map(plainRun)).joined()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return nil }
-        return (match.1.count, title)
-    }
-
-    public static func headingBody(_ runs: [ArticleRun]) -> [ArticleRun]? {
-        guard heading(runs) != nil, case let .text(source) = runs.first else { return nil }
-        let start = source.drop(while: { $0 == " " || $0 == "\t" })
-        guard let match = start.prefixMatch(of: /(#{1,6})[ \t]+/) else { return nil }
-        return [.text(String(start[match.range.upperBound...]))] + runs.dropFirst()
-    }
-
-    private static func containsBreak(_ run: ArticleRun) -> Bool {
-        guard case let .text(text) = run else { return false }
-        return text.contains("\n")
-    }
-
-    public static func plainRun(_ run: ArticleRun) -> String {
-        switch run {
-        case let .text(text): text
-        case let .math(latex): "$\(latex)$"
-        }
-    }
-
-    private static func appendFence(_ raw: String, to pieces: inout [ArticlePiece]) {
-        let lines = raw.split(separator: "\n", omittingEmptySubsequences: false).map {
-            $0.trimmingCharacters(in: .whitespaces)
-        }
-        let kind = lines.first ?? ""
-        let body = lines.dropFirst().filter { !$0.isEmpty }
-        if kind == "fnmn-interactive", let address = body.first, let url = URL(string: address), url.scheme == "http" || url.scheme == "https" {
-            pieces.append(.interactive(url: url, selector: body.dropFirst().first))
-            return
-        }
-        if kind == "fnmn-video", let path = body.first {
-            pieces.append(.video(path: path))
-            return
-        }
-        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty {
-            pieces.append(.paragraph([.text("```\n\(text)\n```")]))
-        }
-    }
-
-    private static func appendProse(_ raw: String, to pieces: inout [ArticlePiece]) {
-        var rest = raw[...]
-        while let open = rest.range(of: "$$") {
-            appendPlain(String(rest[..<open.lowerBound]), to: &pieces)
-            rest = rest[open.upperBound...]
-            guard let close = rest.range(of: "$$") else {
-                appendPlain("$$" + rest, to: &pieces)
-                return
-            }
-            let latex = rest[..<close.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
-            if !latex.isEmpty {
-                pieces.append(.displayMath(latex))
-            }
-            rest = rest[close.upperBound...]
-        }
-        appendPlain(String(rest), to: &pieces)
-    }
-
-    private static func appendPlain(_ raw: String, to pieces: inout [ArticlePiece]) {
-        for paragraph in raw.components(separatedBy: "\n\n") {
-            appendParagraph(paragraph[...], to: &pieces)
-        }
-    }
-
-    private static func appendParagraph(_ raw: Substring, to pieces: inout [ArticlePiece]) {
-        var runs: [ArticleRun] = []
-        var cursor = raw[...]
-        func flush() {
-            let kept = runs.filter { run in
-                guard case let .text(text) = run else { return true }
-                return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            }
-            if !kept.isEmpty {
-                pieces.append(.paragraph(kept))
-            }
-            runs = []
-        }
-        while !cursor.isEmpty {
-            if cursor.hasPrefix("![") {
-                flush()
-                cursor = cursor.dropFirst(2)
-                guard let altEnd = cursor.firstIndex(of: "]") else {
-                    pieces.append(.paragraph([.text("![" + cursor)]))
-                    return
-                }
-                let paren = cursor.index(after: altEnd)
-                guard paren < cursor.endIndex, cursor[paren] == "(", let pathEnd = cursor[cursor.index(after: paren)...].firstIndex(of: ")") else {
-                    pieces.append(.paragraph([.text("![" + cursor)]))
-                    return
-                }
-                let alt = String(cursor[..<altEnd])
-                let path = String(cursor[cursor.index(after: paren)..<pathEnd])
-                pieces.append(.image(alt: alt, path: path))
-                cursor = cursor[cursor.index(after: pathEnd)...]
-                continue
-            }
-            if cursor.first == "`" {
-                let after = cursor.index(after: cursor.startIndex)
-                if let end = cursor[after...].firstIndex(of: "`") {
-                    appendText(String(cursor[...end]), to: &runs)
-                    cursor = cursor[cursor.index(after: end)...]
-                    continue
-                }
-            }
-            if let latex = inlineMath(at: &cursor) {
-                runs.append(.math(latex))
-                continue
-            }
-            let next = cursor.firstIndex { $0 == "$" || $0 == "`" } ?? cursor.endIndex
-            let image = cursor.range(of: "![")?.lowerBound ?? cursor.endIndex
-            let stop = min(next, image)
-            if stop == cursor.startIndex {
-                appendText(String(cursor.prefix(1)), to: &runs)
-                cursor = cursor.dropFirst()
-            } else {
-                appendText(String(cursor[..<stop]), to: &runs)
-                cursor = cursor[stop...]
-            }
-        }
-        flush()
-    }
-
-    private static func appendText(_ text: String, to runs: inout [ArticleRun]) {
-        if case let .text(existing) = runs.last {
-            runs[runs.count - 1] = .text(existing + text)
-        } else {
-            runs.append(.text(text))
-        }
-    }
-
-    private static func inlineMath(at cursor: inout Substring) -> String? {
-        guard cursor.first == "$" else { return nil }
-        let after = cursor.index(after: cursor.startIndex)
-        guard after < cursor.endIndex, cursor[after] != "$", cursor[after] != " ", cursor[after] != "\n" else { return nil }
-        var index = after
-        while index < cursor.endIndex, cursor[index] != "\n" {
-            if cursor[index] == "$" {
-                let previous = cursor.index(before: index)
-                guard cursor[previous] != " ", cursor[previous] != "\n" else { return nil }
-                let latex = String(cursor[after..<index])
-                cursor = cursor[cursor.index(after: index)...]
-                return latex
-            }
-            index = cursor.index(after: index)
+    /// The opening prose of an article for its tile: the first paragraph that is not a heading, picture, formula, code or table.
+    public static func excerpt(_ body: String?, limit: Int = 220) -> String? {
+        guard let body else { return nil }
+        for block in body.prefix(20_000).components(separatedBy: "\n\n") {
+            let text = block.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let first = text.first, !"#!`$|<>".contains(first) else { continue }
+            let prose = text.components(separatedBy: "$").first ?? text
+            let plain = prose
+                .replacing(/!?\[([^\]]*)\]\([^)]*\)/) { $0.1 }
+                .replacing(/[*_`$]/, with: "")
+                .replacing(/\s+/, with: " ")
+            guard plain.count > 40 else { continue }
+            return String(plain.prefix(limit))
         }
         return nil
+    }
+
+    /// The first local raster picture of an article, the one its tile shows; tiles cannot draw SVG.
+    public static func firstImagePath(_ body: String) -> String? {
+        for match in body.prefix(40_000).matches(of: /!\[[^\]]*\]\(([^)\s]+)\)/) {
+            let path = String(match.1)
+            let kind = (path as NSString).pathExtension.lowercased()
+            if !path.hasPrefix("http"), ["png", "jpg", "jpeg", "gif", "webp", "heic"].contains(kind) { return path }
+        }
+        return nil
+    }
+
+    private static func heading(_ line: String) -> DocumentBlock? {
+        guard let match = line.prefixMatch(of: /(#{1,6})[ \t]+(.+)/) else { return nil }
+        let title = String(match.2).trimmingCharacters(in: .whitespaces)
+        return title.isEmpty ? nil : .heading(level: match.1.count, title: title)
+    }
+
+    private static func block(_ text: String, fence: Substring?) -> DocumentBlock {
+        if let fence {
+            let kind = fence.trimmingCharacters(in: .whitespaces).dropFirst(3)
+            let body = text.split(separator: "\n").dropFirst().dropLast().map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            if kind == "fnmn-interactive", let address = body.first, let url = URL(string: address), url.scheme == "http" || url.scheme == "https" {
+                return .interactive(url: url, selector: body.dropFirst().first)
+            }
+            if kind == "fnmn-video", let path = body.first {
+                return .video(path: path)
+            }
+            return .text(text)
+        }
+        if let match = text.wholeMatch(of: /!\[([^\]]*)\]\(([^)\s]+)\)/) {
+            return .image(alt: String(match.1), path: String(match.2))
+        }
+        return .text(text)
     }
 
     private static func plain(_ html: String) -> String {

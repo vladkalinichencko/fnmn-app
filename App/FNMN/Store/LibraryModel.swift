@@ -50,7 +50,8 @@ final class LibraryModel {
         try await write(saving: false) { [file] snapshot in try await file.storeArticle(package, files: files, into: snapshot) }
     }
 
-    /// Stores a picked prepared package, book folder or prepared browser library.
+    /// Stores a picked prepared package, book folder, or the FNMN folder: a prepared browser library
+    /// (`catalog.json`, `deliveries/`) with its books in `books/`.
     func importFile(at url: URL) async throws {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
@@ -58,6 +59,9 @@ final class LibraryModel {
         }
         if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
             try await write(saving: false) { [file] snapshot in try await file.storeBrowserLibrary(from: url, into: snapshot) }
+            for book in try bookFolders(in: url.appending(path: "books")) {
+                try await importFile(at: book)
+            }
         } else if isDirectory.boolValue {
             let record = try BookCatalog.inspect(from: url).record
             try await write(saving: false) { [file] snapshot in try await file.storeBook(record, from: url, into: snapshot) }
@@ -71,12 +75,31 @@ final class LibraryModel {
         }
     }
 
+    private func bookFolders(in folder: URL) throws -> [URL] {
+        guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    func storeVideoFile(_ itemID: String, from download: URL) async throws {
+        try await write(saving: false) { [file] snapshot in try await file.storeVideoFile(itemID, from: download, into: snapshot) }
+    }
+
+    func videoFile(_ itemID: String) -> URL? {
+        snapshot.videoFiles[itemID].map { LibraryFile.videoFile(root: storageURL, name: $0) }
+    }
+
     func articleFile(_ materialID: String, path: String) -> URL? {
         LibraryFile.articleFile(root: storageURL, materialID: materialID, path: path, revision: snapshot.articleRevisions[materialID])
     }
 
-    func bookFile(_ directoryName: String, path: String) -> URL? {
-        LibraryFile.bookFile(root: storageURL, directoryName: directoryName, path: path)
+    func articleFolder(_ materialID: String) -> URL {
+        LibraryFile.articleFolder(root: storageURL, materialID: materialID, revision: snapshot.articleRevisions[materialID])
+    }
+
+    func bookFolder(_ directoryName: String) -> URL {
+        LibraryFile.bookFolder(root: storageURL, directoryName: directoryName)
     }
 
     func bookText(_ record: BookRecord) async throws -> String {

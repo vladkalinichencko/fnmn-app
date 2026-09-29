@@ -7,6 +7,9 @@ protocol MacServicePort {
     func startJob(url: URL, connection: MacConnection) async throws -> MacJob
     func job(_ id: String, connection: MacConnection) async throws -> MacJob
     func package(of id: String, connection: MacConnection) async throws -> (ImportPackage, [String: Data])
+    func startVideoDownload(url: URL, connection: MacConnection) async throws -> MacJob
+    /// Downloads the finished video file to a temporary location.
+    func videoFile(of id: String, connection: MacConnection) async throws -> URL
 }
 
 struct MacJob: Decodable, Equatable {
@@ -38,6 +41,7 @@ struct MacJob: Decodable, Equatable {
         case "footnotes": return "Re-reading footnotes" + count
         case "formulas": return "Re-reading formulas" + count
         case "export": return "Checking the result"
+        case "downloadingVideo": return "Downloading the video" + (total.map { " \(done ?? 0) of \($0) MB" } ?? "")
         case let other: return other
         }
     }
@@ -75,6 +79,22 @@ struct MacServiceClient: MacServicePort {
         return (delivery.package, delivery.files)
     }
 
+    func startVideoDownload(url: URL, connection: MacConnection) async throws -> MacJob {
+        var request = authorizedRequest(path: "videos", connection: connection)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(VideoRequest(url: url))
+        return try await decoded(MacJob.self, for: request)
+    }
+
+    func videoFile(of id: String, connection: MacConnection) async throws -> URL {
+        var request = authorizedRequest(path: "jobs/\(id)/file", connection: connection)
+        request.timeoutInterval = 600
+        let (file, response) = try await URLSession.shared.download(for: request)
+        try accept(response, data: Data())
+        return file
+    }
+
     private func decoded<Value: Decodable>(_ type: Value.Type, for request: URLRequest) async throws -> Value {
         let (data, response) = try await URLSession.shared.data(for: request)
         try accept(response, data: data)
@@ -97,6 +117,7 @@ struct MacServiceClient: MacServicePort {
 
     private struct Health: Decodable { let status: String }
     private struct JobRequest: Encodable { let url: URL; let folders: [String] }
+    private struct VideoRequest: Encodable { let url: URL }
     private struct FailureBody: Decodable { let detail: String }
 }
 

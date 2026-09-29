@@ -10,7 +10,7 @@ import Testing
 }
 
 @Test func pinchClosesOneHeadingLayerAtATime() {
-    let pieces = ArticleBody.pieces(in: """
+    let pieces = ArticleBody.blocks(in: """
     # Chapter
 
     A paragraph.
@@ -19,20 +19,20 @@ import Testing
 
     Another paragraph.
     """)
-    let once = readingFoldPinchIn(.open, pieces: pieces)
+    let once = readingFoldPinchIn(.open, blocks: pieces)
     #expect(visiblePieceIndexes(in: pieces, fold: once).count == 2)
-    let twice = readingFoldPinchIn(once, pieces: pieces)
+    let twice = readingFoldPinchIn(once, blocks: pieces)
     #expect(visiblePieceIndexes(in: pieces, fold: twice).count == 1)
-    let again = readingFoldPinchIn(twice, pieces: pieces)
+    let again = readingFoldPinchIn(twice, blocks: pieces)
     #expect(again == twice)
-    let opened = readingFoldPinchOut(readingFoldPinchOut(twice, pieces: pieces), pieces: pieces)
+    let opened = readingFoldPinchOut(readingFoldPinchOut(twice, blocks: pieces), blocks: pieces)
     #expect(opened == .open)
     #expect(visiblePieceIndexes(in: pieces, fold: opened).count == pieces.count)
 }
 
 @Test func pinchOnAPageWithoutHeadingsStaysOpen() {
-    let pieces = ArticleBody.pieces(in: "Only a paragraph.")
-    #expect(readingFoldPinchIn(.open, pieces: pieces) == .open)
+    let pieces = ArticleBody.blocks(in: "Only a paragraph.")
+    #expect(readingFoldPinchIn(.open, blocks: pieces) == .open)
     #expect(visiblePieceIndexes(in: pieces, fold: .open) == Array(pieces.indices))
 }
 

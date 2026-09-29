@@ -1,18 +1,49 @@
 import FNMNCore
 import SwiftUI
 
-/// What a paragraph can do with itself or with text selected in it. The same actions back the
-/// paragraph's context menu and the system edit menu, so both always offer the same items.
+/// What the reader is doing with its plates: just reading, selecting text in one plate,
+/// ticking several plates, or writing a margin note.
+enum PlateMode: Equatable {
+    case reading
+    case selectingText(Int)
+    case selectingParagraphs(Set<Int>)
+    case noting(Int)
+}
+
+enum PlateAction {
+    case selectText(Int)
+    case selectParagraphs(from: Int)
+    case toggle(Int)
+    case note(Int)
+    case done
+}
+
+func plateReduce(_ mode: PlateMode, _ action: PlateAction) -> PlateMode {
+    switch (mode, action) {
+    case let (_, .selectText(index)): .selectingText(index)
+    case let (_, .selectParagraphs(index)): .selectingParagraphs([index])
+    case let (.selectingParagraphs(picked), .toggle(index)): .selectingParagraphs(picked.symmetricDifference([index]))
+    case (_, .toggle): mode
+    case let (_, .note(index)): .noting(index)
+    case (_, .done): .reading
+    }
+}
+
+/// What a plate can do with itself or with text selected in it. The same actions back the
+/// plate's context menu, the edit menu of selected text and the toolbar of ticked plates.
 struct ParagraphActions {
     let materialID: String
     let annotations: [Annotation]
     let perform: (AnnotationCommand, AnnotationTarget) -> Void
-    let note: (Int) -> Void
     let ask: (String) -> Void
     let copyPrompt: (String) -> Void
 
-    func target(_ piece: Int, text: String, span: TextSpan? = nil) -> AnnotationTarget {
-        AnnotationTarget(materialID: materialID, piece: piece, text: text, span: span)
+    func target(_ piece: Int, text: String, quote: String? = nil) -> AnnotationTarget {
+        let span = quote.flatMap { quote -> TextSpan? in
+            let found = (text as NSString).range(of: quote)
+            return found.location == NSNotFound ? nil : TextSpan(start: found.location, length: found.length)
+        }
+        return AnnotationTarget(materialID: materialID, piece: piece, text: text, span: span)
     }
 
     func commands(_ target: AnnotationTarget) -> [AnnotationCommand] {
@@ -38,35 +69,65 @@ extension AnnotationCommand {
     }
 }
 
+/// One open document: the column of blocks, the place at the top, the plate mode and the pinch between sections.
 struct ReadingSession: View {
     @Environment(LibraryModel.self) private var library
-    let markdown: String
-    let file: (String) -> URL?
     let materialID: String
     let header: MaterialHeader
+    let baseURL: URL
     let piece: Int?
     var onVisiblePiece: (Int, Int) -> Void = { _, _ in }
 
+    @State private var blocks: [DocumentBlock]
+    /// The document's own first heading when it repeats the title already shown in the header.
+    @State private var repeatedTitle: Int?
     @State private var fold = ReadingFold.open
-    @State private var notePiece: Int?
-    @State private var noteDraft = ""
+    @State private var mode = PlateMode.reading
     @State private var place: Int?
     @State private var scrollID: Int?
     @State private var holdingPlace = false
+    @GestureState private var pinch: CGFloat = 1
+
+    init(markdown: String, materialID: String, header: MaterialHeader, baseURL: URL, piece: Int?, onVisiblePiece: @escaping (Int, Int) -> Void) {
+        _blocks = State(initialValue: ArticleBody.blocks(in: markdown))
+        _repeatedTitle = State(initialValue: ArticleBody.blocks(in: markdown).firstIndex { block in
+            if case let .heading(_, title) = block { title == header.title } else { false }
+        })
+        self.materialID = materialID
+        self.header = header
+        self.baseURL = baseURL
+        self.piece = piece
+        self.onVisiblePiece = onVisiblePiece
+    }
 
     var body: some View {
-        let pieces = ArticleBody.pieces(in: markdown)
-        let visible = visiblePieceIndexes(in: pieces, fold: fold)
-        DocumentColumn(
-            pieces: pieces,
-            visible: visible,
-            file: file,
-            header: header,
-            marks: { quoteMarks(for: $0) },
-            tint: readingPlaceTarget(place: place ?? piece, visible: visible),
-            scrollID: $scrollID,
-            actions: actions
-        )
+        let visible = visiblePieceIndexes(in: blocks, fold: fold).filter { $0 != repeatedTitle }
+        let current = readingPlaceTarget(place: place ?? piece, visible: visible)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Tokens.gap) {
+                header.padding(.bottom, Tokens.gap)
+                ForEach(visible, id: \.self) { index in
+                    BlockView(
+                        block: blocks[index],
+                        index: index,
+                        baseURL: baseURL,
+                        current: current,
+                        mode: mode,
+                        pinch: pinch,
+                        actions: actions,
+                        send: send,
+                        openSection: openSection
+                    )
+                    .id(index)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                }
+            }
+            .scrollTargetLayout()
+            .padding(.horizontal, Tokens.gutter)
+            .padding(.bottom, 80)
+        }
+        .swipeActionsContainer()
+        .scrollPosition(id: $scrollID, anchor: .top)
         .onChange(of: piece, initial: true) { _, piece in
             guard let piece else { return }
             place = piece
@@ -75,44 +136,49 @@ struct ReadingSession: View {
             scrollID = piece
         }
         .onChange(of: scrollID) { _, index in
-            guard let index, pieces.indices.contains(index) else { return }
+            guard let index, blocks.indices.contains(index) else { return }
             if holdingPlace {
                 holdingPlace = false
                 return
             }
             place = index
-            onVisiblePiece(index, pieces.count)
+            onVisiblePiece(index, blocks.count)
         }
         .simultaneousGesture(
-            MagnificationGesture().onEnded { scale in
-                let next: ReadingFold
-                if scale < 1 {
-                    next = readingFoldPinchIn(fold, pieces: pieces)
-                } else if scale > 1 {
-                    next = readingFoldPinchOut(fold, pieces: pieces)
-                } else {
-                    return
-                }
-                guard next != fold else { return }
-                fold = next
-                let shown = visiblePieceIndexes(in: pieces, fold: next)
-                guard let target = readingPlaceTarget(place: place ?? piece, visible: shown), scrollID != target else { return }
-                holdingPlace = true
-                scrollID = target
-            }
+            MagnifyGesture()
+                .updating($pinch) { value, state, _ in state = value.magnification }
+                .onEnded { value in pinched(value.magnification, current: current) }
         )
-        .alert("Note", isPresented: Binding(
-            get: { notePiece != nil },
-            set: { if !$0 { notePiece = nil } }
-        )) {
-            TextField("Note", text: $noteDraft)
-            Button("Save") {
-                guard let index = notePiece else { return }
-                let text = noteDraft
-                notePiece = nil
-                Task { await library.apply(.note(text, actions.target(index, text: ""))) }
+        .toolbar { selectionToolbar }
+    }
+
+    @ToolbarContentBuilder
+    private var selectionToolbar: some ToolbarContent {
+        if case let .selectingParagraphs(picked) = mode {
+            ToolbarItemGroup(placement: .bottomBar) {
+                let texts = picked.sorted().compactMap(text(of:))
+                Button("Highlight", systemImage: "highlighter") {
+                    for index in picked.sorted() {
+                        guard let text = text(of: index) else { continue }
+                        actions.perform(.mark(.highlight), actions.target(index, text: text))
+                    }
+                    send(.done)
+                }
+                Button("Copy", systemImage: "doc.on.doc") {
+                    UIPasteboard.general.string = texts.joined(separator: "\n\n")
+                    send(.done)
+                }
+                Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") {
+                    actions.ask(texts.joined(separator: "\n\n"))
+                    send(.done)
+                }
+                Spacer()
+                Button("Done") { send(.done) }
             }
-            Button("Cancel", role: .cancel) { notePiece = nil }
+        } else if mode != .reading {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { send(.done) }
+            }
         }
     }
 
@@ -127,40 +193,43 @@ struct ReadingSession: View {
                 }
                 Task { await library.apply(change) }
             },
-            note: beginNote,
             ask: { ChatGPTHandoff.copyAndOpen(title: header.title, passage: $0) },
             copyPrompt: { _ = ChatGPTHandoff.remember(title: header.title, passage: $0) }
         )
     }
 
-    private func beginNote(_ index: Int) {
-        noteDraft = library.snapshot.annotations
-            .first { $0.materialID == materialID && $0.piece == index && $0.quote.isEmpty }?
-            .note ?? ""
-        notePiece = index
+    private func send(_ action: PlateAction) {
+        withAnimation(.snappy) { mode = plateReduce(mode, action) }
     }
 
-    private func quoteMarks(for index: Int) -> [ParagraphQuoteMark] {
-        library.snapshot.annotations
-            .filter { $0.materialID == materialID && $0.piece == index }
-            .compactMap { annotation in
-                guard let mark = annotation.mark, !annotation.quote.isEmpty else { return nil }
-                return ParagraphQuoteMark(quote: annotation.quote, mark: mark)
-            }
+    private func text(of index: Int) -> String? {
+        guard case let .text(markdown) = blocks[index] else { return nil }
+        return MarkedMarkdown.plainText(markdown, baseURL: baseURL)
     }
-}
 
-func readableText(_ piece: ArticlePiece) -> String? {
-    switch piece {
-    case let .paragraph(runs):
-        if let heading = ArticleBody.heading(runs) {
-            return heading.title
+    /// Pinching in folds the document one heading level at a time; spreading unfolds it.
+    private func pinched(_ scale: CGFloat, current: Int?) {
+        let next: ReadingFold
+        if scale < 0.9 {
+            next = readingFoldPinchIn(fold, blocks: blocks)
+        } else if scale > 1.1 {
+            next = readingFoldPinchOut(fold, blocks: blocks)
+        } else {
+            return
         }
-        let text = runs.map(ArticleBody.plainRun).joined().trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-    case let .displayMath(latex):
-        return latex
-    case .image, .video, .interactive:
-        return nil
+        guard next != fold else { return }
+        withAnimation(.spring(duration: 0.45, bounce: 0.15)) { fold = next }
+        let shown = visiblePieceIndexes(in: blocks, fold: next)
+        guard let target = readingPlaceTarget(place: place ?? piece, visible: shown), scrollID != target else { return }
+        holdingPlace = true
+        scrollID = target
+    }
+
+    /// Tapping a heading in the folded document opens the whole text at that section.
+    private func openSection(_ index: Int) {
+        guard fold != .open else { return }
+        withAnimation(.spring(duration: 0.45, bounce: 0.15)) { fold = .open }
+        holdingPlace = true
+        scrollID = index
     }
 }

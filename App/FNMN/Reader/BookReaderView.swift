@@ -23,7 +23,7 @@ struct BookReaderView: View {
             case let .ready(markdown):
                 MaterialReader(
                     markdown: markdown,
-                    file: { library.bookFile(record.directoryName, path: $0) },
+                    baseURL: library.bookFolder(record.directoryName),
                     materialID: record.id,
                     header: MaterialHeader(title: record.metadata.title, source: library.snapshot.source(of: record.id)),
                     startPiece: startPiece ?? savedPiece(in: markdown)

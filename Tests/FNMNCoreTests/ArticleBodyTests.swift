@@ -2,13 +2,13 @@ import Foundation
 import Testing
 @testable import FNMNCore
 
-@Test func articlePiecesKeepTextImagesVideoAndLiveFigures() throws {
+@Test func blocksKeepTextImagesVideoAndLiveFigures() throws {
     let markdown = """
     # Momentum
 
     A **ball** on a hill.
 
-    See ![slope](assets/slope.gif).
+    ![slope](assets/slope.gif)
 
     ```fnmn-video
     assets/roll.mp4
@@ -19,39 +19,39 @@ import Testing
     #mount
     ```
 
-    ```fnmn-interactive
-    https://videos.example/embed/1
+    ```swift
+
+    let x = 1
     ```
     """
-    let pieces = ArticleBody.pieces(in: markdown)
-    #expect(pieces.contains(.paragraph([.text("# Momentum")])))
-    #expect(pieces.contains(.paragraph([.text("A **ball** on a hill.")])))
-    #expect(pieces.contains(.image(alt: "slope", path: "assets/slope.gif")))
-    #expect(pieces.contains(.video(path: "assets/roll.mp4")))
-    #expect(pieces.contains(.interactive(url: URL(string: "https://example.com/post/")!, selector: "#mount")))
-    #expect(pieces.contains(.interactive(url: URL(string: "https://videos.example/embed/1")!, selector: nil)))
+    #expect(ArticleBody.blocks(in: markdown) == [
+        .heading(level: 1, title: "Momentum"),
+        .text("A **ball** on a hill."),
+        .image(alt: "slope", path: "assets/slope.gif"),
+        .video(path: "assets/roll.mp4"),
+        .interactive(url: URL(string: "https://example.com/post/")!, selector: "#mount"),
+        .text("```swift\n\nlet x = 1\n```"),
+    ])
 }
 
-@Test func displayMathStaysAPieceAndInlineMathStaysInTheParagraph() {
-    let pieces = ArticleBody.pieces(in: """
-    A ball with $v^2$ rolls.
-
+@Test func aFormulaOrPictureOnItsOwnLineStaysInsideTheParagraph() {
+    let blocks = ArticleBody.blocks(in: """
+    A function
     $$
-    E = mc^2
-    $$
+    f(x)
 
-    Price is $5 and $6.
+    = 1
+    $$
+    where x is the input, drawn as
+    ![curve](assets/c.png)
+    ## Next
+    Text
     """)
-    #expect(pieces.contains(.paragraph([.text("A ball with "), .math("v^2"), .text(" rolls.")])))
-    #expect(pieces.contains(.displayMath("E = mc^2")))
-    #expect(pieces.contains(.paragraph([.text("Price is $5 and $6.")])))
-    let titled = ArticleBody.pieces(in: "## The $\\sigma$-algebra\n\nNext")
-    #expect(ArticleBody.heading(paragraphRuns(titled[0]))?.title == "The $\\sigma$-algebra")
-}
-
-private func paragraphRuns(_ piece: ArticlePiece) -> [ArticleRun] {
-    guard case let .paragraph(runs) = piece else { return [] }
-    return runs
+    #expect(blocks == [
+        .text("A function\n$$\nf(x)\n\n= 1\n$$\nwhere x is the input, drawn as\n![curve](assets/c.png)"),
+        .heading(level: 2, title: "Next"),
+        .text("Text"),
+    ])
 }
 
 @Test func missingBodyBecomesPlainMarkdown() {
