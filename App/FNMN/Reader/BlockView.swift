@@ -13,6 +13,8 @@ struct BlockView: View {
     let pinch: CGFloat
     /// The number of blocks under this heading when the document is folded; nil while it is open.
     let folded: Int?
+    /// A folded heading whose whole section lies before the reading place.
+    let sectionRead: Bool
     let actions: ParagraphActions
     let send: (PlateAction) -> Void
     let openSection: (Int) -> Void
@@ -20,26 +22,20 @@ struct BlockView: View {
     var body: some View {
         switch block {
         case let .heading(level, title):
-            Group {
-                if let folded {
-                    FoldedHeading(level: level, title: title, count: folded)
-                } else {
-                    HeadingView(level: level, title: title)
-                }
-            }
-            .onTapGesture { openSection(index) }
+            HeadingView(level: level, title: title, folded: folded, read: sectionRead)
+                .onTapGesture { openSection(index) }
         case let .text(markdown):
             PlateView(markdown: markdown, index: index, baseURL: baseURL, current: current, mode: mode, actions: actions, send: send)
-                .modifier(PinchFade(pinch: pinch))
+                .modifier(PinchFold(pinch: pinch))
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
-                .modifier(PinchFade(pinch: pinch))
+                .modifier(PinchFold(pinch: pinch))
         case let .video(path):
             ArticleVideo(url: resolve(path))
-                .modifier(PinchFade(pinch: pinch))
+                .modifier(PinchFold(pinch: pinch))
         case let .interactive(url, selector):
             LiveCropView(url: url, selector: selector)
-                .modifier(PinchFade(pinch: pinch))
+                .modifier(PinchFold(pinch: pinch))
         }
     }
 
@@ -49,31 +45,59 @@ struct BlockView: View {
     }
 }
 
-/// While fingers pinch in, everything but the headings shrinks and fades with them.
-private struct PinchFade: ViewModifier {
+/// While fingers pinch in, the blocks begin to fold up into their heading, as far as the fingers have gone.
+private struct PinchFold: ViewModifier {
     let pinch: CGFloat
 
     func body(content: Content) -> some View {
-        let progress = min(max(1 - pinch, 0), 0.6) / 0.6
-        content
-            .scaleEffect(1 - progress * 0.08, anchor: .top)
-            .opacity(1 - progress * 0.8)
+        content.modifier(FoldIntoHeading(amount: min(max(1 - pinch, 0), 0.6) / 0.6 * 0.5))
     }
 }
 
+/// A block folding up toward the heading above it: it tips back about its top edge and flattens there.
+/// At 1 it is folded away; the same effect carries the fold's transition and the pinch that leads to it.
+struct FoldIntoHeading: ViewModifier {
+    let amount: Double
+
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(.degrees(-35 * amount), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.25)
+            .scaleEffect(x: 1 - 0.06 * amount, y: 1 - 0.5 * amount, anchor: .top)
+            .opacity(1 - amount)
+    }
+}
+
+extension AnyTransition {
+    static var foldIntoHeading: AnyTransition {
+        AnyTransition.modifier(active: FoldIntoHeading(amount: 1), identity: FoldIntoHeading(amount: 0))
+    }
+}
+
+/// A heading on the page. Open and folded it is the same view, so it slides to its place in the outline
+/// instead of fading out and in; folded, it sits closer, shows how many blocks it holds and grays once read.
 struct HeadingView: View {
     let level: Int
     let title: String
-    /// Open text gives a large heading room above it; folded headings sit close together as an outline.
-    var spaced = true
+    var folded: Int?
+    var read = false
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
     var body: some View {
-        InlineText(markdown: title, syntaxExtensions: [.math])
-            .font(font)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, spaced ? (level <= 2 ? Tokens.gap : 4) : 0)
-            .contentShape(.rect)
+        HStack(alignment: .firstTextBaseline) {
+            InlineText(markdown: title, syntaxExtensions: [.math])
+                .font(font)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let folded, folded > 0 {
+                Text(folded, format: .number)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+        }
+        .foregroundStyle(read && folded != nil ? .secondary : .primary)
+        .padding(.top, folded == nil ? (level <= 2 ? Tokens.gap : 4) : 4)
+        .padding(.bottom, folded == nil ? 0 : 4)
+        .contentShape(.rect)
     }
 
     private var font: Font {
@@ -84,25 +108,6 @@ struct HeadingView: View {
         default: .headline
         }
         return .system(style, design: readerFont.design).bold()
-    }
-}
-
-/// A heading of the folded document, on the page like any heading, with how many blocks it holds.
-struct FoldedHeading: View {
-    let level: Int
-    let title: String
-    let count: Int
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            HeadingView(level: level, title: title, spaced: false)
-            if count > 0 {
-                Text(count, format: .number)
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 4)
     }
 }
 

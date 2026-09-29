@@ -83,8 +83,8 @@ struct ReadingSession: View {
     @State private var repeatedTitle: Int?
     /// A picture that opens the text before any paragraph: the article's cover, shown as the header.
     @State private var lead: Int?
-    /// How many blocks each heading holds, shown on the heading when the document is folded.
-    @State private var sectionSizes: [Int: Int]
+    /// What each heading holds: its block count, shown when the document is folded, and where it ends.
+    @State private var sections: [Int: Section]
     @State private var fold = ReadingFold.open
     @State private var mode = PlateMode.reading
     @State private var place: Int?
@@ -101,7 +101,7 @@ struct ReadingSession: View {
         _lead = State(initialValue: blocks.firstIndex { if case .heading = $0 { false } else { true } }.flatMap { index in
             if case .image = blocks[index] { index } else { nil }
         })
-        _sectionSizes = State(initialValue: Self.sectionSizes(blocks))
+        _sections = State(initialValue: Self.sections(blocks))
         self.materialID = materialID
         self.header = header
         self.baseURL = baseURL
@@ -126,16 +126,14 @@ struct ReadingSession: View {
                         current: current,
                         mode: mode,
                         pinch: pinch,
-                        folded: fold == .open ? nil : sectionSizes[index] ?? 0,
+                        folded: fold == .open ? nil : sections[index]?.size ?? 0,
+                        sectionRead: (sections[index]?.end).map { end in (place ?? piece).map { end <= $0 } ?? false } ?? false,
                         actions: actions,
                         send: send,
                         openSection: openSection
                     )
                     .id(index)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.94, anchor: .top)).combined(with: .offset(y: -18)),
-                        removal: .opacity.combined(with: .scale(scale: 0.9, anchor: .top)).combined(with: .offset(y: -28))
-                    ))
+                    .transition(.foldIntoHeading)
                 }
             }
             .scrollTargetLayout()
@@ -153,7 +151,8 @@ struct ReadingSession: View {
         }
         .onChange(of: scrollID) { _, index in
             guard let index, blocks.indices.contains(index) else { return }
-            if holdingPlace {
+            // Scrolling the outline moves between headings, not through the text: the place stays where reading stopped.
+            if holdingPlace || fold != .open {
                 holdingPlace = false
                 return
             }
@@ -241,16 +240,24 @@ struct ReadingSession: View {
         scrollID = target
     }
 
+    struct Section {
+        /// Blocks under the heading that are not headings themselves.
+        let size: Int
+        /// The index of the next heading of the same or a higher level, or the end of the document.
+        let end: Int
+    }
+
     /// For each heading, the blocks that follow it until a heading of the same or a higher level.
-    private static func sectionSizes(_ blocks: [DocumentBlock]) -> [Int: Int] {
-        var sizes: [Int: Int] = [:]
+    private static func sections(_ blocks: [DocumentBlock]) -> [Int: Section] {
+        var sections: [Int: Section] = [:]
         for (index, block) in blocks.enumerated() {
             guard case let .heading(level, _) = block else { continue }
             let rest = blocks[(index + 1)...]
             let end = rest.firstIndex { if case let .heading(other, _) = $0 { other <= level } else { false } } ?? blocks.endIndex
-            sizes[index] = blocks[(index + 1)..<end].filter { if case .heading = $0 { false } else { true } }.count
+            let size = blocks[(index + 1)..<end].filter { if case .heading = $0 { false } else { true } }.count
+            sections[index] = Section(size: size, end: end)
         }
-        return sizes
+        return sections
     }
 
     /// Tapping a heading in the folded document opens the whole text at that section.
