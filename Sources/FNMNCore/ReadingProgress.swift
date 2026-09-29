@@ -41,7 +41,7 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
 }
 
 /// Every change to reading progress. A new change is a new case here and one branch in `applying`.
-public enum ProgressChange: Equatable, Sendable {
+public enum ProgressChange: Codable, Equatable, Sendable {
     case open(itemID: String)
     case setRead(Bool, itemID: String)
     case savePosition(ReadingPosition, itemID: String, progress: Double)

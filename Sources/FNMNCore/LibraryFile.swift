@@ -332,6 +332,76 @@ public actor LibraryFile {
         return try decoder.decode(ImportPackage.self, from: Data(contentsOf: text))
     }
 
+    /// Where each device's journal lives, once the FNMN folder is linked.
+    public func journalFolder() -> URL? {
+        cloudFolder?.appending(path: "state", directoryHint: .isDirectory)
+    }
+
+    public func loadSync() throws -> JournalSync {
+        let url = root.appending(path: "sync.json")
+        guard FileManager.default.fileExists(atPath: url.path) else { return JournalSync() }
+        return try decoder.decode(JournalSync.self, from: Data(contentsOf: url))
+    }
+
+    public func saveSync(_ sync: JournalSync) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try encoder.encode(sync).write(to: root.appending(path: "sync.json"), options: .atomic)
+    }
+
+    /// Appends this device's changes to its own journal, one JSON line each, under file coordination.
+    /// Without the FNMN folder linked there is nothing to share them with.
+    public func appendJournal(_ events: [JournalEvent], device: String) throws {
+        guard let folder = journalFolder(), !events.isEmpty else { return }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let lines = try events.map { String(decoding: try encoder.encode($0), as: UTF8.self) + "\n" }.joined()
+        var coordination: NSError?
+        var failure: Error?
+        NSFileCoordinator().coordinate(writingItemAt: folder.appending(path: "\(device).jsonl"), options: .forMerging, error: &coordination) { url in
+            do {
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    try Data(lines.utf8).write(to: url)
+                    return
+                }
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                try handle.write(contentsOf: Data(lines.utf8))
+            } catch {
+                failure = error
+            }
+        }
+        if let error = coordination ?? failure { throw error }
+    }
+
+    /// The other devices' changes this device has not applied yet, and how many lines of each journal are
+    /// read after them. A line that does not decode stops that journal there, to be read again next time.
+    public func unreadJournalEvents(except device: String, sync: JournalSync) throws -> (events: [JournalEvent], applied: [String: Int]) {
+        var applied = sync.applied
+        guard let folder = journalFolder(),
+              let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
+            return ([], applied)
+        }
+        var events: [JournalEvent] = []
+        for file in files where file.pathExtension == "jsonl" && file.lastPathComponent != "\(device).jsonl" {
+            let name = file.lastPathComponent
+            var coordination: NSError?
+            var text = ""
+            NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &coordination) { url in
+                text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            }
+            if let coordination { throw coordination }
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+            var read = applied[name] ?? 0
+            for line in lines.dropFirst(read) {
+                guard let event = try? decoder.decode(JournalEvent.self, from: Data(line.utf8)) else { break }
+                events.append(event)
+                read += 1
+            }
+            applied[name] = read
+        }
+        return (events, applied)
+    }
+
     /// The small cover picture kept in the app for a material that lives in iCloud.
     public static func coverFile(root: URL, materialID: String) -> URL {
         root.appending(path: "covers").appending(path: articleDirectory(root: root, materialID: materialID).lastPathComponent)

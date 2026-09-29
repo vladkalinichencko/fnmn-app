@@ -28,7 +28,7 @@ public struct Annotation: Hashable, Identifiable, Sendable {
 }
 
 /// A run of a paragraph's text in UTF-16 offsets, the unit UIKit selection reports.
-public struct TextSpan: Equatable, Hashable, Sendable {
+public struct TextSpan: Codable, Equatable, Hashable, Sendable {
     public var start: Int
     public var length: Int
 
@@ -50,7 +50,7 @@ public struct TextSpan: Equatable, Hashable, Sendable {
 }
 
 /// The paragraph an edit applies to, as the reader shows it. A nil span is the whole paragraph.
-public struct AnnotationTarget: Equatable, Sendable {
+public struct AnnotationTarget: Codable, Equatable, Sendable {
     public let materialID: String
     public let piece: Int
     public let text: String

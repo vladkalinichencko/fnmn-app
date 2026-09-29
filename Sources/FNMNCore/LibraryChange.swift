@@ -2,7 +2,7 @@ import Foundation
 
 /// Every change a reader can make to the catalog; reading progress changes through `ProgressChange`.
 /// A new change is a new case here and one branch in `applying`.
-public enum LibraryChange: Equatable, Sendable {
+public enum LibraryChange: Codable, Equatable, Sendable {
     case setArchived(Bool, itemID: String)
     case createAlbum(String)
     case renameAlbum(String, to: String)
