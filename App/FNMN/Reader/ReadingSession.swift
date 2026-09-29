@@ -72,19 +72,13 @@ extension AnnotationCommand {
 /// One open document: the column of blocks, the place at the top, the plate mode and the pinch between sections.
 struct ReadingSession: View {
     @Environment(LibraryModel.self) private var library
+    let document: ReaderDocument
     let materialID: String
     let header: MaterialHeader
     let baseURL: URL
     let piece: Int?
-    var onVisiblePiece: (Int, Int) -> Void = { _, _ in }
+    var onVisiblePiece: (Int) -> Void = { _ in }
 
-    @State private var blocks: [DocumentBlock]
-    /// The document's own first heading when it repeats the title already shown in the header.
-    @State private var repeatedTitle: Int?
-    /// A picture that opens the text before any paragraph: the article's cover, shown as the header.
-    @State private var lead: Int?
-    /// What each heading holds: its block count, shown when the document is folded, and where it ends.
-    @State private var sections: [Int: Section]
     @State private var fold = ReadingFold.open
     @State private var mode = PlateMode.reading
     @State private var place: Int?
@@ -92,29 +86,15 @@ struct ReadingSession: View {
     @State private var holdingPlace = false
     @GestureState private var pinch: CGFloat = 1
 
-    init(markdown: String, materialID: String, header: MaterialHeader, baseURL: URL, piece: Int?, onVisiblePiece: @escaping (Int, Int) -> Void) {
-        _blocks = State(initialValue: ArticleBody.blocks(in: markdown))
-        let blocks = ArticleBody.blocks(in: markdown)
-        _repeatedTitle = State(initialValue: blocks.firstIndex { block in
-            if case let .heading(_, title) = block { title == header.title } else { false }
-        })
-        _lead = State(initialValue: blocks.firstIndex { if case .heading = $0 { false } else { true } }.flatMap { index in
-            if case .image = blocks[index] { index } else { nil }
-        })
-        _sections = State(initialValue: Self.sections(blocks))
-        self.materialID = materialID
-        self.header = header
-        self.baseURL = baseURL
-        self.piece = piece
-        self.onVisiblePiece = onVisiblePiece
-    }
+    private var blocks: [DocumentBlock] { document.blocks }
+    private var sections: [Int: HeadingSection] { document.sections }
 
     var body: some View {
-        let visible = visiblePieceIndexes(in: blocks, fold: fold).filter { $0 != repeatedTitle && $0 != lead }
+        let visible = visiblePieceIndexes(in: blocks, fold: fold).filter { $0 != document.repeatedTitle && $0 != document.lead }
         let current = readingPlaceTarget(place: place ?? piece, visible: visible)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Tokens.gap) {
-                if let lead, case let .image(_, path) = blocks[lead] {
+                if let lead = document.lead, case let .image(_, path) = blocks[lead] {
                     LeadImage(url: baseURL.appending(path: path))
                 }
                 header.padding(.bottom, Tokens.gap)
@@ -157,7 +137,7 @@ struct ReadingSession: View {
                 return
             }
             place = index
-            onVisiblePiece(index, blocks.count)
+            onVisiblePiece(index)
         }
         .simultaneousGesture(
             MagnifyGesture()
@@ -238,26 +218,6 @@ struct ReadingSession: View {
         guard let target = readingPlaceTarget(place: place ?? piece, visible: shown), scrollID != target else { return }
         holdingPlace = true
         scrollID = target
-    }
-
-    struct Section {
-        /// Blocks under the heading that are not headings themselves.
-        let size: Int
-        /// The index of the next heading of the same or a higher level, or the end of the document.
-        let end: Int
-    }
-
-    /// For each heading, the blocks that follow it until a heading of the same or a higher level.
-    private static func sections(_ blocks: [DocumentBlock]) -> [Int: Section] {
-        var sections: [Int: Section] = [:]
-        for (index, block) in blocks.enumerated() {
-            guard case let .heading(level, _) = block else { continue }
-            let rest = blocks[(index + 1)...]
-            let end = rest.firstIndex { if case let .heading(other, _) = $0 { other <= level } else { false } } ?? blocks.endIndex
-            let size = blocks[(index + 1)..<end].filter { if case .heading = $0 { false } else { true } }.count
-            sections[index] = Section(size: size, end: end)
-        }
-        return sections
     }
 
     /// Tapping a heading in the folded document opens the whole text at that section.

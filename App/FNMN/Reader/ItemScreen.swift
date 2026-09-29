@@ -24,11 +24,12 @@ struct ItemScreen: View {
 
 private enum ArticleText: Equatable {
     case loading
-    case ready(ImportPackage)
+    case ready(ImportPackage, ReaderDocument?)
     case failed(String)
 }
 
-/// Reads an article's or video's package from disk when it opens; a new revision reads it again.
+/// Reads an article's or video's package from disk when it opens, and lays an article out into blocks
+/// off the main thread; a new revision reads it again.
 private struct ArticleOpener: View {
     let itemID: String
     let startPiece: Int?
@@ -42,21 +43,27 @@ private struct ArticleOpener: View {
                 ProgressView()
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open this material", systemImage: "doc", description: Text(message))
-            case let .ready(package):
-                if package.material.kind == .video {
-                    VideoReaderView(package: package)
+            case let .ready(package, document):
+                if let document {
+                    ArticleFlowView(package: package, document: document, startPiece: startPiece)
                 } else {
-                    ArticleFlowView(package: package, startPiece: startPiece)
+                    VideoReaderView(package: package)
                 }
             }
         }
         .task(id: library.snapshot.articleRevisions[itemID]) {
             do {
-                text = .ready(try await library.article(itemID))
+                let package = try await library.article(itemID)
+                text = .ready(package, package.material.kind == .video ? nil : await Self.document(of: package))
             } catch {
                 text = .failed(error.localizedDescription)
             }
         }
+    }
+
+    @concurrent
+    private static func document(of package: ImportPackage) async -> ReaderDocument {
+        ReaderDocument(markdown: ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks), title: package.material.title)
     }
 }
 

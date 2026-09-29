@@ -30,7 +30,7 @@ private func reduce(_ state: ReaderState, _ action: ReaderAction) -> ReaderState
 /// Reads an article or a book as one column of paragraphs and keeps the place on the paragraph at the top.
 struct MaterialReader: View {
     @Environment(LibraryModel.self) private var library
-    let markdown: String
+    let document: ReaderDocument
     let baseURL: URL
     let materialID: String
     let header: MaterialHeader
@@ -40,12 +40,12 @@ struct MaterialReader: View {
 
     var body: some View {
         ReadingSession(
-            markdown: markdown,
+            document: document,
             materialID: materialID,
             header: header,
             baseURL: baseURL,
             piece: state.scrollPiece,
-            onVisiblePiece: { index, count in send(.visible(index), count: count) }
+            onVisiblePiece: { send(.visible($0)) }
         )
         .modifier(ReaderAppearanceModifier())
         .navigationBarTitleDisplayMode(.inline)
@@ -58,11 +58,11 @@ struct MaterialReader: View {
         .onDisappear { Task { await library.saveProgress() } }
     }
 
-    private func send(_ action: ReaderAction, count: Int? = nil) {
+    private func send(_ action: ReaderAction) {
         let previous = state.trackedPiece
         state = reduce(state, action)
         guard case let .visible(index) = action, index != previous else { return }
-        let total = count ?? ArticleBody.blocks(in: markdown).count
+        let total = document.blocks.count
         let progress = total == 0 ? 0 : Double(index + 1) / Double(total)
         library.apply(.savePosition(.piece(index), itemID: materialID, progress: progress))
     }
@@ -71,12 +71,13 @@ struct MaterialReader: View {
 struct ArticleFlowView: View {
     @Environment(LibraryModel.self) private var library
     let package: ImportPackage
+    let document: ReaderDocument
     let startPiece: Int?
 
     var body: some View {
         let id = package.material.id
         MaterialReader(
-            markdown: ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks),
+            document: document,
             baseURL: library.articleFolder(id),
             materialID: id,
             header: MaterialHeader(title: package.material.title, source: library.snapshot.source(of: id)),

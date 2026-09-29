@@ -93,6 +93,18 @@ import Testing
     #expect(LibraryFile.articleFile(root: root, materialID: "article:1", path: "../state.json") == nil)
 }
 
+@Test func readerDocumentFindsTheRepeatedTitleTheCoverAndWhatEachHeadingHolds() {
+    let document = ReaderDocument(
+        markdown: "# Paper\n\n![](assets/cover.png)\n\n## One\n\nFirst\n\n### Deeper\n\nSecond\n\n## Two\n\nThird",
+        title: "Paper"
+    )
+    #expect(document.repeatedTitle == 0)
+    #expect(document.lead == 1)
+    #expect(document.sections[2] == HeadingSection(size: 2, end: 6))
+    #expect(document.sections[4] == HeadingSection(size: 1, end: 6))
+    #expect(document.sections[6] == HeadingSection(size: 1, end: 8))
+}
+
 @Test func packageWithoutBodyStillDecodes() throws {
     let json = """
     {"version":1,"material":{"id":"a","kind":"article","title":"T","sourceURL":"https://example.com"},"sections":[],"blocks":[{"id":"b","sectionID":null,"kind":"paragraph","html":"x","sourceFragment":null,"mediaURL":null,"startSeconds":null}],"folders":[]}
