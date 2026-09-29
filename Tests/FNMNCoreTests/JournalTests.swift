@@ -46,6 +46,36 @@ private func library() throws -> LibrarySnapshot {
     #expect(try await phone.unreadJournalEvents(except: "phone", sync: JournalSync()).events.isEmpty)
 }
 
+@Test func aLongJournalFoldsIntoANewGenerationThatGivesTheSameState() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    let phone = LibraryFile(url: root.appending(path: "phone"))
+    let tablet = LibraryFile(url: root.appending(path: "tablet"))
+    await phone.useCloudFolder(cloud)
+    await tablet.useCloudFolder(cloud)
+    let target = AnnotationTarget(materialID: paper.material.id, piece: 0, text: "First paragraph.")
+    let places = (0..<5).map { JournalEvent(time: Date(timeIntervalSinceReferenceDate: Double($0)), change: .progress(.savePosition(.piece($0 % 2), itemID: paper.material.id, progress: 0.5))) }
+    let mark = JournalEvent(time: Date(timeIntervalSinceReferenceDate: 2.5), change: .library(.mark(.highlight, target)))
+
+    try await phone.appendJournal(Array(places.prefix(3)), device: "phone", compactingAfter: 4)
+    let early = try await tablet.unreadJournalEvents(except: "tablet", sync: JournalSync())
+    var sync = JournalSync()
+    sync.applied = early.applied
+    let first = merge(early.events, into: try library(), ReadingProgress(), sync: sync)
+
+    try await phone.appendJournal([mark] + Array(places.suffix(2)), device: "phone", compactingAfter: 4)
+    let files = try FileManager.default.contentsOfDirectory(atPath: cloud.appending(path: "state").path)
+    #expect(files.count == 1 && files[0].hasPrefix("phone.") && files[0] != "phone.jsonl")
+    let late = try await tablet.unreadJournalEvents(except: "tablet", sync: first.sync)
+    #expect(late.events.count == 2)
+    var lateSync = first.sync
+    lateSync.applied = late.applied
+    let caughtUp = merge(late.events, into: first.catalog, first.progress, sync: lateSync)
+    let whole = merge(places + [mark], into: try library(), ReadingProgress(), sync: JournalSync())
+    #expect(caughtUp.progress == whole.progress)
+    #expect(caughtUp.catalog.annotations.map(\.quote) == whole.catalog.annotations.map(\.quote))
+}
+
 @Test func theLatestPlaceWinsWhicheverDeviceItCameFrom() throws {
     var sync = JournalSync()
     let mine = JournalEvent(time: Date(timeIntervalSinceReferenceDate: 20), change: .progress(.savePosition(.piece(5), itemID: paper.material.id, progress: 0.5)))

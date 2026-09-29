@@ -46,6 +46,19 @@ public struct JournalEvent: Codable, Equatable, Sendable {
     }
 }
 
+/// A journal folded down: for each key only its latest change stays, and every change without a key stays,
+/// in time order. Applying it again from the start gives what applying the whole journal gave.
+public func compacted(_ events: [JournalEvent]) -> [JournalEvent] {
+    var latest: [String: Int] = [:]
+    for (index, event) in events.enumerated() {
+        if let key = event.key { latest[key] = index }
+    }
+    return events.enumerated()
+        .filter { index, event in event.key.map { latest[$0] == index } ?? true }
+        .map(\.element)
+        .sorted { $0.time < $1.time }
+}
+
 /// What a device knows of the other devices' journals: how many lines of each it has applied, and when each
 /// keyed value last changed, here or anywhere.
 public struct JournalSync: Codable, Equatable, Sendable {

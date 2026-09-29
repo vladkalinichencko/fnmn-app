@@ -477,47 +477,84 @@ public actor LibraryFile {
         try encoder.encode(sync).write(to: root.appending(path: "sync.json"), options: .atomic)
     }
 
-    /// Appends this device's changes to its own journal, one JSON line each, under file coordination.
-    public func appendJournal(_ events: [JournalEvent], device: String) throws {
+    /// Appends this device's changes to its own journal, one JSON line each, under file coordination. A journal
+    /// grown past `compactingAfter` lines is folded down into a file of the next generation, which the other
+    /// devices read from its start, and the old file goes.
+    public func appendJournal(_ events: [JournalEvent], device: String, compactingAfter limit: Int = 2000) throws {
         guard let folder = journalFolder(), !events.isEmpty else { return }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let lines = try events.map { String(decoding: try encoder.encode($0), as: UTF8.self) + "\n" }.joined()
+        let journal = ownJournal(of: device, in: folder)
+        try coordinatedWrite(at: journal, options: .forMerging) { url in
+            let lines = Data(try self.lines(of: events).utf8)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                try lines.write(to: url)
+                return
+            }
+            let handle = try FileHandle(forWritingTo: url)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: lines)
+        }
+        let written = try readJournal(journal)
+        guard written.count > limit else { return }
+        let generation = folder.appending(path: "\(device).\(Int(Date().timeIntervalSince1970 * 1000)).jsonl")
+        let folded = try lines(of: compacted(written))
+        try coordinatedWrite(at: generation, options: .forReplacing) { url in try Data(folded.utf8).write(to: url) }
+        try coordinatedWrite(at: journal, options: .forDeleting) { url in try FileManager.default.removeItem(at: url) }
+    }
+
+    /// This device's journal: `<device>.jsonl`, or `<device>.<generation>.jsonl` once it has been folded down.
+    private func ownJournal(of device: String, in folder: URL) -> URL {
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { Self.isJournal($0, of: device) }.max { $0.lastPathComponent < $1.lastPathComponent }
+            ?? folder.appending(path: "\(device).jsonl")
+    }
+
+    private static func isJournal(_ file: URL, of device: String) -> Bool {
+        file.pathExtension == "jsonl"
+            && (file.lastPathComponent == "\(device).jsonl" || file.lastPathComponent.hasPrefix("\(device)."))
+    }
+
+    private func lines(of events: [JournalEvent]) throws -> String {
+        try events.map { String(decoding: try encoder.encode($0), as: UTF8.self) + "\n" }.joined()
+    }
+
+    private func readJournal(_ file: URL) throws -> [JournalEvent] {
+        var text = ""
+        try coordinatedRead(at: file) { url in text = (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
+        return text.split(separator: "\n").compactMap { try? decoder.decode(JournalEvent.self, from: Data($0.utf8)) }
+    }
+
+    private func coordinatedWrite(at file: URL, options: NSFileCoordinator.WritingOptions, _ write: (URL) throws -> Void) throws {
         var coordination: NSError?
         var failure: Error?
-        NSFileCoordinator().coordinate(writingItemAt: folder.appending(path: "\(device).jsonl"), options: .forMerging, error: &coordination) { url in
-            do {
-                guard FileManager.default.fileExists(atPath: url.path) else {
-                    try Data(lines.utf8).write(to: url)
-                    return
-                }
-                let handle = try FileHandle(forWritingTo: url)
-                defer { try? handle.close() }
-                try handle.seekToEnd()
-                try handle.write(contentsOf: Data(lines.utf8))
-            } catch {
-                failure = error
-            }
+        NSFileCoordinator().coordinate(writingItemAt: file, options: options, error: &coordination) { url in
+            do { try write(url) } catch { failure = error }
         }
         if let error = coordination ?? failure { throw error }
     }
 
+    private func coordinatedRead(at file: URL, _ read: (URL) -> Void) throws {
+        var coordination: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &coordination, byAccessor: read)
+        if let coordination { throw coordination }
+    }
+
     /// The other devices' changes this device has not applied yet, and how many lines of each journal are
     /// read after them. A line that does not decode stops that journal there, to be read again next time.
+    /// A journal another device has folded into a new generation is gone, and so is what was known of it.
     public func unreadJournalEvents(except device: String, sync: JournalSync) throws -> (events: [JournalEvent], applied: [String: Int]) {
-        var applied = sync.applied
         guard let folder = journalFolder(),
               let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
-            return ([], applied)
+            return ([], sync.applied)
         }
+        let others = files.filter { $0.pathExtension == "jsonl" && !Self.isJournal($0, of: device) }
+        var applied = sync.applied.filter { name, _ in others.contains { $0.lastPathComponent == name } }
         var events: [JournalEvent] = []
-        for file in files where file.pathExtension == "jsonl" && file.lastPathComponent != "\(device).jsonl" {
+        for file in others {
             let name = file.lastPathComponent
-            var coordination: NSError?
             var text = ""
-            NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &coordination) { url in
-                text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-            }
-            if let coordination { throw coordination }
+            try coordinatedRead(at: file) { url in text = (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
             let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
             var read = applied[name] ?? 0
             for line in lines.dropFirst(read) {
