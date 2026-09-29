@@ -38,8 +38,12 @@ extension View {
 private struct Plate<S: Shape>: ViewModifier {
     let shape: S
     @Environment(\.plateTint) private var tint
+    @Environment(\.colorScheme) private var colorScheme
 
+    /// Dark glass over a black page hardly shows its tint, so in the dark the plate color also lies under the text.
     func body(content: Content) -> some View {
-        content.glassEffect(.regular.tint(tint.opacity(0.85)), in: shape)
+        content
+            .background { if colorScheme == .dark { shape.fill(tint.opacity(0.7)) } }
+            .glassEffect(.regular.tint(tint.opacity(0.85)), in: shape)
     }
 }
