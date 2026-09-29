@@ -48,22 +48,31 @@ def material_rows(library: dict, albums: dict[str, str]) -> list[dict]:
     ]
 
 
-def prepare(row: dict, output: Path, enrich_videos: bool = False) -> tuple[str, str | None]:
+def prepare(row: dict, output: Path, enrich_videos: bool = False, refetch: bool = False) -> tuple[str, str | None]:
+    """Fetches one material. `refetch` reads a prepared web page again under the current rules; if the site
+    no longer answers, or answers with less text than it gave before, the prepared delivery stays."""
     url = row["url"]
-    filename = hashlib.sha256(url.encode()).hexdigest() + ".json"
-    destination = output / "deliveries" / filename
+    destination = _delivery(output, row)
     if destination.exists() and not (
         enrich_videos and video_id_from_url(url) and not json.loads(destination.read_text()).get("body")
-    ):
+    ) and not (refetch and not video_id_from_url(url)):
         return url, None
     try:
         delivery = import_link(url, row["folders"], LIVE)
+        if refetch:
+            before = len(json.loads(destination.read_text(encoding="utf-8")).get("body") or "")
+            if len(delivery.get("body") or "") < before * 0.8:
+                return url, "the page now gives less text; the prepared delivery stays"
         temporary = destination.with_suffix(".incoming")
         temporary.write_text(json.dumps(delivery, ensure_ascii=False), encoding="utf-8")
         temporary.replace(destination)
         return url, None
     except Exception as error:
         return url, str(error)
+
+
+def _delivery(output: Path, row: dict) -> Path:
+    return output / "deliveries" / (hashlib.sha256(row["url"].encode()).hexdigest() + ".json")
 
 
 def seed_videos(library: dict, rows: list[dict], output: Path) -> int:
@@ -115,6 +124,7 @@ def main() -> None:
     parser.add_argument("--seed-videos", action="store_true", help="Create playable video records without fetching captions")
     parser.add_argument("--enrich-videos", action="store_true", help="Retry video records without captions")
     parser.add_argument("--repackage", action="store_true", help="Apply albums and Markdown rules to prepared deliveries")
+    parser.add_argument("--refetch", action="store_true", help="Read prepared web pages again; a page that fails keeps its delivery")
     args = parser.parse_args()
     library = json.loads(args.input.read_text(encoding="utf-8"))
     if library["review"] or library["errors"]:
@@ -130,18 +140,21 @@ def main() -> None:
         print(f"seeded {seed_videos(library, rows, args.output)} videos; existing deliveries kept")
         return
     selected = [row for row in rows if args.kind == "all" or ("video" if video_id_from_url(row["url"]) else "web") == args.kind]
+    if args.refetch:
+        # Only pages that were read before: a site that refused then is not asked again.
+        selected = [row for row in selected if not video_id_from_url(row["url"]) and _delivery(args.output, row).exists()]
     if args.limit is not None:
         selected = selected[:args.limit]
     errors_path = args.output / ("errors.json" if args.kind == "all" else f"errors-{args.kind}.json")
     errors: dict[str, str] = json.loads(errors_path.read_text()) if errors_path.exists() else {}
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        jobs = {pool.submit(prepare, row, args.output, args.enrich_videos): row["url"] for row in selected}
+        jobs = {pool.submit(prepare, row, args.output, args.enrich_videos, args.refetch): row["url"] for row in selected}
         for count, job in enumerate(as_completed(jobs), 1):
             url, error = job.result()
-            if error:
-                errors[url] = error
-            else:
+            if error is None:
                 errors.pop(url, None)
+            elif not args.refetch:
+                errors[url] = error
             errors_path.write_text(json.dumps(errors, ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"{count}/{len(selected)} {'failed' if error else 'ready'} {url}", flush=True)
     ready = sum((args.output / "deliveries" / (hashlib.sha256(row["url"].encode()).hexdigest() + ".json")).exists() for row in selected)

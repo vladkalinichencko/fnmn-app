@@ -26,7 +26,34 @@ SAMPLE = """
 """
 
 
+LOOSE_TEXT = """
+<html><body>
+<div class="article-body">
+  LSTM was proposed by <a href="https://example.com/juergen">Jürgen Schmidhuber</a> and colleagues.
+  <h3>Forget gates</h3>
+  The gate reads the state <em>C<sub>t-1</sub></em> and decides what to keep,
+  so the cell forgets <em>f<sub>t</sub></em> of it.
+  <ul><li>First</li></ul>
+  After the list the text goes on, long enough to count as the article's prose.
+</div>
+</body></html>
+"""
+
+
 class HtmlMarkdownTests(unittest.TestCase):
+    def test_text_directly_in_a_container_reads_as_paragraphs_between_its_blocks(self):
+        markdown, _ = article_markdown(LOOSE_TEXT, PAGE)
+        self.assertEqual(
+            markdown.split("\n\n"),
+            [
+                "LSTM was proposed by [Jürgen Schmidhuber](https://example.com/juergen) and colleagues.",
+                "### Forget gates",
+                "The gate reads the state *Ct-1* and decides what to keep,\n  so the cell forgets *ft* of it.",
+                "- First",
+                "After the list the text goes on, long enough to count as the article's prose.",
+            ],
+        )
+
     def test_text_stays_markdown_and_figures_point_at_the_live_page(self):
         markdown, downloads = article_markdown(SAMPLE, PAGE)
         self.assertIn("# Momentum", markdown)

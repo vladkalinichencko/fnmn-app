@@ -9,6 +9,7 @@ from lxml import html
 
 _PROSE = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "blockquote", "table", "pre"}
 _BLOCKS = _PROSE | {"figure", "div", "section", "img", "video", "iframe"}
+_SECTIONS = {"article", "main", "header", "footer", "aside", "nav"}
 _SCORE_TAGS = {"section", "h2", "h3", "h4", "h5", "h6", "p", "td", "pre"}
 _POSITIVE = re.compile(r"article|body|content|entry|main|page|post|text|blog|story", re.I)
 _NEGATIVE = re.compile(r"banner|comment|footer|header|menu|nav|related|sidebar|sponsor", re.I)
@@ -21,8 +22,7 @@ def article_markdown(source: str, page_url: str) -> tuple[str, dict[str, str]]:
     document.make_links_absolute(page_url, resolve_base_href=True, handle_failures="ignore")
     root = _article_root(document)
     downloads: dict[str, str] = {}
-    blocks = [_render(child, page_url, downloads) for child in root]
-    text = "\n\n".join(block for block in blocks if block.strip())
+    text = _flow(root, page_url, downloads)
     title_node = document.find(".//h1")
     if title_node is not None:
         title = " ".join(_inline(title_node, page_url, downloads).split())
@@ -69,9 +69,39 @@ def _render(node, page_url: str, downloads: dict[str, str]) -> str:
         return _image(node, page_url, downloads)
     if tag == "video":
         return _video(node, page_url, downloads)
-    if any(isinstance(child.tag, str) and child.tag in _BLOCKS for child in node):
-        return "\n\n".join(block for block in (_render(child, page_url, downloads) for child in node) if block.strip())
-    return _inline(node, page_url, downloads)
+    return _flow(node, page_url, downloads)
+
+
+def _flow(node, page_url: str, downloads: dict[str, str]) -> str:
+    """A container's content in document order. Its own text and inline children gather into paragraphs and
+    block children stand between them, so text a site puts straight into a div reads like any <p>."""
+    blocks: list[str] = []
+    run: list[str] = [node.text or ""]
+
+    def close_paragraph():
+        paragraph = "".join(run).strip()
+        if paragraph:
+            blocks.append(paragraph)
+        run.clear()
+
+    for child in node:
+        if _block(child):
+            close_paragraph()
+            blocks.append(_render(child, page_url, downloads))
+        else:
+            run.append(_piece(child, page_url, downloads))
+        run.append(child.tail or "")
+    close_paragraph()
+    return "\n\n".join(block for block in blocks if block.strip())
+
+
+def _block(node) -> bool:
+    """An element that stands on its own line, or any wrapper around one. A picture inside a span stays in its sentence."""
+    if not isinstance(node.tag, str):
+        return False
+    if node.tag in _BLOCKS or node.tag in _SECTIONS:
+        return True
+    return any(isinstance(inner.tag, str) and inner.tag in _BLOCKS - {"img"} for inner in node.iterdescendants())
 
 
 def _article_root(document):
@@ -231,39 +261,36 @@ def _absolute(page_url: str, src: str) -> str:
 
 
 def _inline(node, page_url: str, downloads: dict[str, str]) -> str:
-    parts: list[str] = []
-    if node.text:
-        parts.append(node.text)
+    parts = [node.text or ""]
     for child in node:
-        if not isinstance(child.tag, str):
-            if child.tail:
-                parts.append(child.tail)
-            continue
-        if child.tag in {"style", "script"} and _math_source(child) is None:
-            if child.tail:
-                parts.append(child.tail)
-            continue
-        if child.tag in {"em", "i"}:
-            parts.append(f"*{_inline(child, page_url, downloads)}*")
-        elif child.tag in {"strong", "b"}:
-            parts.append(f"**{_inline(child, page_url, downloads)}**")
-        elif child.tag == "code":
-            parts.append(f"`{_inline(child, page_url, downloads)}`")
-        elif child.tag == "a":
-            href = _absolute(page_url, child.get("href") or "")
-            parts.append(f"[{_inline(child, page_url, downloads)}]({href})")
-        elif child.tag == "img":
-            parts.append(_image(child, page_url, downloads))
-        elif child.tag == "br":
-            parts.append("\n")
-        elif _math_source(child) is not None:
-            source, display = _math_source(child)
-            parts.append(f"$$\n{source}\n$$" if display else f"${source}$")
-        else:
-            parts.append(_inline(child, page_url, downloads))
-        if child.tail:
-            parts.append(child.tail)
+        parts.append(_piece(child, page_url, downloads))
+        parts.append(child.tail or "")
     return "".join(parts).strip()
+
+
+def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
+    """One inline element as Markdown, without the text that follows it."""
+    if not isinstance(node.tag, str):
+        return ""
+    math = _math_source(node)
+    if math is not None:
+        source, display = math
+        return f"$$\n{source}\n$$" if display else f"${source}$"
+    if node.tag in {"style", "script"}:
+        return ""
+    if node.tag in {"em", "i"}:
+        return f"*{_inline(node, page_url, downloads)}*"
+    if node.tag in {"strong", "b"}:
+        return f"**{_inline(node, page_url, downloads)}**"
+    if node.tag == "code":
+        return f"`{_inline(node, page_url, downloads)}`"
+    if node.tag == "a":
+        return f"[{_inline(node, page_url, downloads)}]({_absolute(page_url, node.get('href') or '')})"
+    if node.tag == "img":
+        return _image(node, page_url, downloads)
+    if node.tag == "br":
+        return "\n"
+    return _inline(node, page_url, downloads)
 
 
 def _math_source(node) -> tuple[str, bool] | None:
