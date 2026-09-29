@@ -168,7 +168,7 @@ struct TileCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             .plate(cornerRadius: Tokens.tileRadius)
-            .contentShape(.rect(cornerRadius: Tokens.tileRadius))
+            .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
 
@@ -186,7 +186,7 @@ struct CoverImage: View {
                     Color.secondary.opacity(0.1)
                 }
             }
-            .clipShape(.rect(cornerRadius: Tokens.tileRadius - Tokens.tilePadding))
+            .clipShape(.rect(cornerRadius: Tokens.tileRadius - Tokens.tilePadding, style: .continuous))
     }
 
     private var url: URL? {

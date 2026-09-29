@@ -31,7 +31,7 @@ struct AlbumTile: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
-                .clipShape(.rect(cornerRadius: Tokens.tileRadius))
+                .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
                 .plate(cornerRadius: Tokens.tileRadius)
             Text(album.name).font(.headline).lineLimit(1)
             Text(album.count, format: .number).font(.subheadline).foregroundStyle(.secondary)
@@ -51,6 +51,7 @@ private struct AlbumTileBehavior: ViewModifier {
                 Task { for id in ids { await library.apply(.addToAlbum(album.name, itemID: id)) } }
                 return !ids.isEmpty
             }
+            .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
             .contextMenu {
                 Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(album.name)) }
                 Button("Delete Album", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(album.name)) }

@@ -32,15 +32,13 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
 }
 
 enum ReaderFont: String, CaseIterable, Identifiable {
-    case system, serif, rounded, monospaced
+    case system, serif
     var id: String { rawValue }
 
     var name: String {
         switch self {
         case .system: "San Francisco"
         case .serif: "New York"
-        case .rounded: "Rounded"
-        case .monospaced: "Monospaced"
         }
     }
 
@@ -48,8 +46,6 @@ enum ReaderFont: String, CaseIterable, Identifiable {
         switch self {
         case .system: .default
         case .serif: .serif
-        case .rounded: .rounded
-        case .monospaced: .monospaced
         }
     }
 }

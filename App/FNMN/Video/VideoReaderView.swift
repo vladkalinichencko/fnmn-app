@@ -186,7 +186,7 @@ struct VideoReaderView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.vertical, 6)
                                     .padding(.horizontal, 10)
-                                    .background(cue.id == activeCueID ? Color.accentColor.opacity(0.15) : .clear, in: .rect(cornerRadius: 10))
+                                    .background(cue.id == activeCueID ? Color.accentColor.opacity(0.15) : .clear, in: .rect(cornerRadius: 10, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .id(cue.id)

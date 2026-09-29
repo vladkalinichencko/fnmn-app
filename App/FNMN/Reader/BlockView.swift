@@ -115,7 +115,7 @@ struct PlateView: View {
             .plate(cornerRadius: Tokens.plateRadius)
             .overlay(alignment: .topTrailing) { tick }
             .opacity(isRead && mode == .reading ? 0.55 : 1)
-            .contentShape(.rect(cornerRadius: Tokens.plateRadius))
+            .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .modifier(TickOnTap(isOn: isTicking) { send(.toggle(index)) })
             .contextMenu { if mode == .reading { menu } }
             .swipeActions(edge: .leading) {
@@ -128,6 +128,8 @@ struct PlateView: View {
             .swipeActions(edge: .trailing) {
                 Button("Note", systemImage: "note.text") { send(.note(index)) }
             }
+            .sensoryFeedback(.impact(weight: .light), trigger: marks)
+            .sensoryFeedback(.selection, trigger: library.snapshot.readThrough[actions.materialID] == index)
     }
 
     @ViewBuilder
@@ -269,7 +271,7 @@ private struct StandaloneImage: View {
                 }
             }
         }
-        .clipShape(.rect(cornerRadius: Tokens.plateRadius))
+        .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .frame(maxWidth: .infinity)
         .contextMenu {
             Button("Save to Photos", systemImage: "square.and.arrow.down") {
@@ -291,7 +293,7 @@ struct ArticleVideo: View {
     var body: some View {
         VideoPlayer(player: player)
             .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(.rect(cornerRadius: Tokens.plateRadius))
+            .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .task { player = AVPlayer(url: url) }
             .contextMenu {
                 if url.isFileURL {
