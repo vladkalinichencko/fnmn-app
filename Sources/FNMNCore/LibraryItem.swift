@@ -29,7 +29,8 @@ public enum Cover: Hashable, Sendable {
 public struct AlbumSummary: Identifiable, Hashable, Sendable {
     public let name: String
     public let count: Int
-    public let cover: Cover?
+    /// Up to three covers, the newest first, fanned out on the album's tile.
+    public let covers: [Cover]
     public var id: String { name }
 }
 
@@ -67,7 +68,7 @@ extension LibrarySnapshot {
         let members = items
         return albums.map { name in
             let inside = members.filter { albums(of: $0.id).contains(name) }
-            return AlbumSummary(name: name, count: inside.count, cover: inside.lazy.compactMap(\.cover).first)
+            return AlbumSummary(name: name, count: inside.count, covers: Array(inside.lazy.compactMap(\.cover).prefix(3)))
         }
     }
 

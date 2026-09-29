@@ -67,37 +67,29 @@ struct AppShell: View {
 struct RouteStack<Root: View>: View {
     @Binding var path: [Route]
     @ViewBuilder let root: () -> Root
-    @Namespace private var tiles
 
     var body: some View {
         NavigationStack(path: $path) {
             root()
                 .navigationDestination(for: Route.self) { route in
-                    RouteScreen(route: route, tiles: tiles)
+                    RouteScreen(route: route)
                 }
         }
-        .environment(\.tileNamespace, tiles)
     }
 }
 
+/// A material opens with the standard push: a zoom transition would take the reader's pinch for closing it.
 private struct RouteScreen: View {
     let route: Route
-    let tiles: Namespace.ID
 
     var body: some View {
         switch route {
         case let .item(id, piece):
             ItemScreen(itemID: id, startPiece: piece)
-                .navigationTransition(.zoom(sourceID: id, in: tiles))
         case let .album(name):
             AlbumScreen(name: name)
         case let .source(name):
             SourceScreen(name: name)
         }
     }
-}
-
-extension EnvironmentValues {
-    /// The namespace tiles and the screens they open share for the zoom transition.
-    @Entry var tileNamespace: Namespace.ID?
 }

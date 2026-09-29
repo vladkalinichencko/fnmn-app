@@ -20,23 +20,48 @@ struct AlbumTile: View {
 
     private var label: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Color.clear
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    if let cover = album.cover {
-                        CoverImage(cover: cover)
-                    } else {
-                        Image(systemName: "rectangle.stack")
-                            .font(.largeTitle)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
-                .plate(cornerRadius: Tokens.tileRadius)
+            AlbumFan(covers: album.covers)
             Text(album.name).font(.headline).lineLimit(1)
             Text(album.count, format: .number).font(.subheadline).foregroundStyle(.secondary)
         }
     }
+}
+
+/// Up to three covers fanned out like a stack of photos; an empty album is a glass plate with a symbol.
+private struct AlbumFan: View {
+    let covers: [Cover]
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if covers.isEmpty {
+                    Image(systemName: "rectangle.stack")
+                        .font(.largeTitle)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .plate(cornerRadius: Tokens.tileRadius)
+                } else {
+                    ZStack {
+                        ForEach(Array(covers.enumerated().reversed()), id: \.offset) { index, cover in
+                            CoverImage(cover: cover, cornerRadius: Tokens.tileRadius)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
+                                        .strokeBorder(.white.opacity(0.8), lineWidth: 2)
+                                }
+                                .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+                                .scaleEffect(covers.count == 1 ? 1 : 0.84)
+                                .rotationEffect(.degrees(Self.angles[index]))
+                                .offset(x: Self.shifts[index], y: index == 0 ? 6 : -4)
+                        }
+                    }
+                    .padding(covers.count == 1 ? 0 : 4)
+                }
+            }
+    }
+
+    private static let angles: [Double] = [0, -9, 9]
+    private static let shifts: [CGFloat] = [0, -14, 14]
 }
 
 /// Dropping a tile adds the material to the album; the context menu renames or deletes it.

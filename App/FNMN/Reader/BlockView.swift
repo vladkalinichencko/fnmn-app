@@ -11,6 +11,8 @@ struct BlockView: View {
     let current: Int?
     let mode: PlateMode
     let pinch: CGFloat
+    /// The number of blocks under this heading when the document is folded; nil while it is open.
+    let folded: Int?
     let actions: ParagraphActions
     let send: (PlateAction) -> Void
     let openSection: (Int) -> Void
@@ -18,8 +20,14 @@ struct BlockView: View {
     var body: some View {
         switch block {
         case let .heading(level, title):
-            HeadingView(level: level, title: title)
-                .onTapGesture { openSection(index) }
+            Group {
+                if let folded {
+                    FoldedHeading(level: level, title: title, count: folded)
+                } else {
+                    HeadingView(level: level, title: title)
+                }
+            }
+            .onTapGesture { openSection(index) }
         case let .text(markdown):
             PlateView(markdown: markdown, index: index, baseURL: baseURL, current: current, mode: mode, actions: actions, send: send)
                 .modifier(PinchFade(pinch: pinch))
@@ -56,13 +64,15 @@ private struct PinchFade: ViewModifier {
 struct HeadingView: View {
     let level: Int
     let title: String
+    /// Open text gives a large heading room above it; a folded heading sits in its own card.
+    var spaced = true
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
     var body: some View {
         InlineText(markdown: title, syntaxExtensions: [.math])
             .font(font)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, level <= 2 ? Tokens.gap : 4)
+            .padding(.top, spaced ? (level <= 2 ? Tokens.gap : 4) : 0)
             .contentShape(.rect)
     }
 
@@ -74,6 +84,56 @@ struct HeadingView: View {
         default: .headline
         }
         return .system(style, design: readerFont.design).bold()
+    }
+}
+
+/// A heading of the folded document: its paragraphs lie under it as a small stack of plates.
+struct FoldedHeading: View {
+    let level: Int
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            HeadingView(level: level, title: title, spaced: false)
+            if count > 0 {
+                Text(count, format: .number)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(Tokens.tilePadding)
+        .plate(cornerRadius: Tokens.plateRadius)
+        .background(alignment: .bottom) {
+            if count > 0 {
+                ZStack(alignment: .bottom) {
+                    sliver.scaleEffect(x: 0.88).offset(y: 14).opacity(0.5)
+                    sliver.scaleEffect(x: 0.94).offset(y: 7).opacity(0.8)
+                }
+            }
+        }
+        .padding(.bottom, count > 0 ? 14 : 0)
+    }
+
+    private var sliver: some View {
+        Color.clear
+            .frame(height: 24)
+            .plate(cornerRadius: Tokens.plateRadius)
+    }
+}
+
+/// The cover an article opens with, full width above its title.
+struct LeadImage: View {
+    let url: URL
+
+    var body: some View {
+        Group {
+            if let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image).resizable().scaledToFill()
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 260)
+        .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
 

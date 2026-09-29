@@ -7,11 +7,9 @@ struct ItemGrid: View {
     var album: String?
 
     var body: some View {
-        GlassEffectContainer {
-            LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                ForEach(items) { item in
-                    ItemTile(item: item, album: album)
-                }
+        LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
+            ForEach(items) { item in
+                ItemTile(item: item, album: album)
             }
         }
     }
@@ -22,29 +20,59 @@ struct ItemTile: View {
     var album: String?
     @Environment(WindowNavigation.self) private var navigation
     @Environment(\.openURL) private var openURL
-    @Environment(\.tileNamespace) private var tiles
 
     var body: some View {
         Button(action: open) {
-            TileCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    header
-                    Text(item.title)
-                        .font(.title3.bold())
-                        .lineLimit(4)
-                        .multilineTextAlignment(.leading)
-                    content
-                    Spacer(minLength: 0)
-                    if let progress = item.progress, item.kind != .link {
-                        ProgressView(value: progress)
+            if let cover = item.cover {
+                coverTile(cover)
+            } else {
+                TileCard(progress: item.progress) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        header
+                        title
+                        if let excerpt = item.excerpt {
+                            Text(excerpt)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(6)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 0)
                     }
                 }
             }
         }
         .buttonStyle(.plain)
-        .modifier(ZoomSource(id: item.id, namespace: tiles))
         .draggable(item.id)
         .contextMenu { ItemActions(item: item, album: album) }
+    }
+
+    /// A tile with a picture has no frame: the picture fills it and the title sits on glass that bends it.
+    private func coverTile(_ cover: Cover) -> some View {
+        Color.clear
+            .aspectRatio(Tokens.tileAspect, contentMode: .fit)
+            .overlay { CoverImage(cover: cover, cornerRadius: 0) }
+            .overlay(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    header
+                    title.lineLimit(3)
+                }
+                .padding(Tokens.tilePadding - 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ProgressFill(progress: item.progress))
+                .clipShape(.rect(cornerRadius: Tokens.tileRadius - 8, style: .continuous))
+                .glassEffect(.regular, in: .rect(cornerRadius: Tokens.tileRadius - 8, style: .continuous))
+                .padding(8)
+            }
+            .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+            .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+    }
+
+    private var title: some View {
+        Text(item.title)
+            .font(.title3.bold())
+            .lineLimit(4)
+            .multilineTextAlignment(.leading)
     }
 
     private var header: some View {
@@ -61,19 +89,6 @@ struct ItemTile: View {
         }
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(.secondary)
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if let cover = item.cover {
-            CoverImage(cover: cover)
-        } else if let excerpt = item.excerpt {
-            Text(excerpt)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(6)
-                .multilineTextAlignment(.leading)
-        }
     }
 
     private func open() {
@@ -158,8 +173,9 @@ struct PreparingTile: View {
     }
 }
 
-/// The rounded card every tile is drawn on.
+/// The rounded glass card every tile without a picture is drawn on.
 struct TileCard<Content: View>: View {
+    var progress: Double?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -167,13 +183,32 @@ struct TileCard<Content: View>: View {
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
+            .background(ProgressFill(progress: progress))
+            .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
             .plate(cornerRadius: Tokens.tileRadius)
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
 
+/// How far a material is read, as the accent color rising from the bottom and fading out upward.
+struct ProgressFill: View {
+    let progress: Double?
+
+    var body: some View {
+        GeometryReader { geometry in
+            if let progress, progress > 0 {
+                LinearGradient(colors: [Color.accentColor.opacity(0.28), Color.accentColor.opacity(0)], startPoint: .bottom, endPoint: .top)
+                    .frame(height: geometry.size.height * min(progress, 1))
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 struct CoverImage: View {
     let cover: Cover
+    var cornerRadius: CGFloat = Tokens.tileRadius - Tokens.tilePadding
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
@@ -186,27 +221,13 @@ struct CoverImage: View {
                     Color.secondary.opacity(0.1)
                 }
             }
-            .clipShape(.rect(cornerRadius: Tokens.tileRadius - Tokens.tilePadding, style: .continuous))
+            .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
     }
 
     private var url: URL? {
         switch cover {
         case let .articleFile(materialID, path): library.articleFile(materialID, path: path)
         case let .remote(url): url
-        }
-    }
-}
-
-/// Marks a tile as the origin of the zoom into its material, when it sits in a navigation stack.
-private struct ZoomSource: ViewModifier {
-    let id: String
-    let namespace: Namespace.ID?
-
-    func body(content: Content) -> some View {
-        if let namespace {
-            content.matchedTransitionSource(id: id, in: namespace)
-        } else {
-            content
         }
     }
 }
