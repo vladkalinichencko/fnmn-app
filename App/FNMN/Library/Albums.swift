@@ -51,44 +51,57 @@ private struct AlbumFan: View {
                 } else {
                     ZStack {
                         ForEach(Array(front.enumerated().reversed()), id: \.element.id) { index, item in
-                            card(item)
-                                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-                                .scaleEffect(0.86)
-                                .rotationEffect(.degrees(angle(index)))
-                                .offset(x: Self.shifts[index], y: index == 0 ? 4 : -4)
+                            card(item, place: place(index))
                         }
                     }
                 }
             }
     }
 
+    /// Where a card lies in the fan: its turn, its size and how far it is moved from the middle.
+    private struct Place {
+        let degrees: Double
+        let scale: CGFloat
+        let offset: CGSize
+    }
+
+    private func place(_ index: Int) -> Place {
+        Place(
+            degrees: front.count == 1 ? -4 : Self.angles[index],
+            scale: 0.86,
+            offset: CGSize(width: Self.shifts[index], height: index == 0 ? 4 : -4)
+        )
+    }
+
+    /// A picture is laid down like a photo, with a white edge, a shadow inside and a deeper one under it.
+    /// A title lies on glass, and glass under a transform spreads past its frame, so the glass turns its shape instead.
     @ViewBuilder
-    private func card(_ item: LibraryItem) -> some View {
+    private func card(_ item: LibraryItem, place: Place) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
         if let cover = item.cover {
             CoverImage(cover: cover, cornerRadius: Tokens.tileRadius)
                 .overlay {
-                    RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
-                        .strokeBorder(.white.opacity(0.8), lineWidth: 2)
+                    shape.stroke(.black.opacity(0.35), lineWidth: 8).blur(radius: 6).clipShape(shape)
                 }
+                .overlay { shape.strokeBorder(.white.opacity(0.85), lineWidth: 2) }
+                .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
+                .scaleEffect(place.scale)
+                .rotationEffect(.degrees(place.degrees))
+                .offset(place.offset)
         } else {
             Text(item.title)
                 .font(.headline.weight(.black))
                 .lineLimit(5)
                 .padding(Tokens.tilePadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .plate(cornerRadius: Tokens.tileRadius)
-                .overlay {
-                    RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
-                        .strokeBorder(.separator, lineWidth: 0.5)
-                }
+                .scaleEffect(place.scale)
+                .rotationEffect(.degrees(place.degrees))
+                .offset(place.offset)
+                .plate(in: TurnedRectangle(cornerRadius: Tokens.tileRadius, degrees: place.degrees, scale: place.scale, offset: place.offset))
         }
     }
 
     /// Even a single card is turned a little, so an album never reads as a material's tile.
-    private func angle(_ index: Int) -> Double {
-        front.count == 1 ? -4 : Self.angles[index]
-    }
-
     private static let angles: [Double] = [2, -7, 7]
     private static let shifts: [CGFloat] = [0, -10, 10]
 }

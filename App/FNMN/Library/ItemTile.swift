@@ -58,10 +58,11 @@ struct ItemTile: View {
                     title.lineLimit(3)
                 }
                 .padding(Tokens.tilePadding - 2)
+                .padding(.bottom, (item.progress ?? 0) > 0 ? ProgressLine.clearance - (Tokens.tilePadding - 2) : 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay { ProgressLine(progress: item.progress, cornerRadius: Tokens.tileRadius - 8, inset: 5) }
-                .glassEffect(.regular, in: .rect(cornerRadius: Tokens.tileRadius - 8, style: .continuous))
-                .padding(8)
+                .overlay { ProgressLine(progress: item.progress, cornerRadius: Tokens.captionRadius) }
+                .glassEffect(.regular, in: .rect(cornerRadius: Tokens.captionRadius, style: .continuous))
+                .padding(Tokens.captionInset)
             }
             .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
@@ -188,46 +189,40 @@ struct TileCard<Content: View>: View {
     }
 }
 
-/// How far a material is read: a thin line inside the glass along its bottom edge, bending up with the corners
-/// at the same center as the glass's own curve.
+/// How far a material is read: a straight line inside the glass along its bottom edge. It spans the edge's
+/// flat part, so its rounded ends sit where the corners start to curve.
 struct ProgressLine: View {
     let progress: Double?
     let cornerRadius: CGFloat
-    var inset: CGFloat = 6
+
+    /// How far the line stays from the bottom edge, and the room text above it keeps.
+    static let inset: CGFloat = 9
+    static let thickness: CGFloat = 5
+    static var clearance: CGFloat { inset + thickness + 6 }
 
     var body: some View {
         if let progress, progress > 0 {
-            let edge = BottomEdge(radius: cornerRadius - inset)
-            ZStack {
-                edge.stroke(.quaternary, style: Self.stroke)
-                edge.trim(from: 0, to: min(progress, 1)).stroke(Color.accentColor, style: Self.stroke)
+            GeometryReader { geometry in
+                Capsule()
+                    .fill(.quaternary)
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .frame(width: max(geometry.size.width * min(progress, 1), Self.thickness))
+                    }
             }
-            .padding(inset)
+            .frame(height: Self.thickness)
+            .padding(.horizontal, cornerRadius)
+            .padding(.bottom, Self.inset)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .allowsHitTesting(false)
         }
-    }
-
-    private static let stroke = StrokeStyle(lineWidth: 3.5, lineCap: .round)
-}
-
-/// The lower half of a rounded rectangle's outline: up the left corner's arc, along the bottom, up the right corner's arc.
-private struct BottomEdge: Shape {
-    let radius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let r = min(radius, rect.height / 2, rect.width / 2)
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY - r))
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX + r, y: rect.maxY), radius: r)
-        path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.maxY))
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.maxX, y: rect.maxY - r), radius: r)
-        return path
     }
 }
 
 struct CoverImage: View {
     let cover: Cover
-    var cornerRadius: CGFloat = Tokens.tileRadius - Tokens.tilePadding
+    var cornerRadius: CGFloat = Tokens.concentric(Tokens.tileRadius, inset: Tokens.tilePadding)
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
