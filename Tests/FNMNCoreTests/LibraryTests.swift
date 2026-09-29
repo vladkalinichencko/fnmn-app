@@ -78,7 +78,7 @@ private let article = ImportPackage(
     let file = LibraryFile(url: directory)
     let loaded = try await file.load().catalog
     #expect(loaded.articles.map(\.material.id) == [article.material.id])
-    #expect(loaded.articles[0].headings.contains("Kernel"))
+    #expect(loaded.articles[0].searchText.contains("kernel"))
     #expect(loaded.articles[0].excerpt?.hasPrefix("A long enough") == true)
     #expect(try await file.article(article.material.id, revision: nil) == packaged)
     #expect(!FileManager.default.fileExists(atPath: directory.appending(path: "packages.json").path))
@@ -150,7 +150,7 @@ private let article = ImportPackage(
         body: "# Hello\n\nText"
     )
     try library.importPackage(packaged, at: .now)
-    #expect(library.articles[0].headings == ["Hello"])
+    #expect(library.articles[0].searchText.hasSuffix("\nhello"))
     #expect(throws: LibraryError.emptyDocument) {
         try library.importPackage(ImportPackage(material: laterArticle.material, sections: [], blocks: []), at: .now)
     }

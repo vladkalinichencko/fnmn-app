@@ -76,12 +76,12 @@ extension LibrarySnapshot {
             return book.metadata.authors.first.map { SourceRef(name: $0, homepage: nil) }
         }
         guard let article = articles.first(where: { $0.material.id == itemID }) else { return nil }
-        let key = SourceIndex.key(article.material.sourceURL.absoluteString)
+        let key = SourceIndex.key(article.material.sourceURL)
         let saved = browserCatalog?.sources.first { source in
             source.materials.contains { ([$0.url] + $0.savedURLs).map(SourceIndex.key).contains(key) }
         }
-        return saved.map { SourceRef(name: $0.name, homepage: URL(string: $0.url)) }
-            ?? SourceIndex(catalog: nil).source(for: article.material.sourceURL.absoluteString)
+        var sites = SourceIndex(catalog: nil)
+        return saved.map { SourceRef(name: $0.name, homepage: URL(string: $0.url)) } ?? sites.source(for: article.material.sourceURL)
     }
 
     public func items(inAlbum name: String) -> [LibraryItem] {
@@ -100,13 +100,22 @@ extension LibrarySnapshot {
     public func items(matching query: String) -> [LibraryItem] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return items }
-        let articleHits = Set(articles.filter { $0.matches(needle) }.map(\.material.id))
+        let folded = ArticleEntry.folded(needle)
+        func hit(_ text: String) -> Bool { ArticleEntry.folded(text).contains(folded) }
+        let articleHits = Set(articles.filter { $0.searchText.contains(folded) }.map(\.material.id))
         let bookHits = Set(books.filter { $0.matches(needle) }.map(\.id))
+        // Albums and sources repeat across tiles, so each name is tested once.
+        let albumHits = Set(albums.filter(hit))
+        var sourceHits: [String: Bool] = [:]
         return items.filter { item in
-            articleHits.contains(item.id) || bookHits.contains(item.id)
-                || item.title.localizedStandardContains(needle)
-                || item.source?.name.localizedStandardContains(needle) == true
-                || albums(of: item.id).contains { $0.localizedStandardContains(needle) }
+            if articleHits.contains(item.id) || bookHits.contains(item.id) { return true }
+            if item.kind == .link, hit(item.title) { return true }
+            if albums(of: item.id).contains(where: albumHits.contains) { return true }
+            guard let source = item.source?.name else { return false }
+            if let known = sourceHits[source] { return known }
+            let found = hit(source)
+            sourceHits[source] = found
+            return found
         }
     }
 
@@ -125,13 +134,13 @@ extension LibrarySnapshot {
     }
 
     private var allItems: [LibraryItem] {
-        let sources = SourceIndex(catalog: browserCatalog)
+        var sources = SourceIndex(catalog: browserCatalog)
         let prepared = articles.map { article in
             LibraryItem(
                 id: article.material.id,
                 kind: article.material.kind == .video ? .video : .article,
                 title: article.material.title,
-                source: sources.source(for: article.material.sourceURL.absoluteString),
+                source: sources.source(for: article.material.sourceURL),
                 originalURL: article.material.sourceURL,
                 addedAt: addedAt[article.material.id],
                 excerpt: article.excerpt,
@@ -150,7 +159,7 @@ extension LibrarySnapshot {
                 cover: nil
             )
         }
-        let preparedKeys = Set(articles.map { SourceIndex.key($0.material.sourceURL.absoluteString) })
+        let preparedKeys = Set(articles.map { SourceIndex.key($0.material.sourceURL) })
         let links = (browserCatalog?.sources ?? []).flatMap { source in
             source.materials.compactMap { material -> LibraryItem? in
                 let keys = ([material.url] + material.savedURLs).map(SourceIndex.key)
@@ -187,10 +196,16 @@ private struct SourceIndex {
         }
     }
 
-    func source(for url: String) -> SourceRef? {
+    /// A prepared material's address is already parsed, so it is not parsed again for every tile;
+    /// a site without a saved source is worked out once per host.
+    mutating func source(for url: URL) -> SourceRef? {
         if let known = sources[Self.key(url)] { return known }
-        guard let parsed = URL(string: url), let host = parsed.host() else { return nil }
-        return SourceRef(name: Self.siteName(host), homepage: URL(string: "\(parsed.scheme ?? "https")://\(host)"))
+        guard let host = url.host() else { return nil }
+        let site = "site:\(url.scheme ?? "https")://\(host)"
+        if let known = sources[site] { return known }
+        let ref = SourceRef(name: Self.siteName(host), homepage: URL(string: "\(url.scheme ?? "https")://\(host)"))
+        sources[site] = ref
+        return ref
     }
 
     /// The core of a host: `example` for example.com, www.example.co.uk and example.github.io.
@@ -205,7 +220,11 @@ private struct SourceIndex {
 
     /// YouTube links differ in shape but not in video; everything else compares by address.
     static func key(_ url: String) -> String {
-        if let parsed = URL(string: url), let video = YouTube.videoID(in: parsed) { return "youtube:\(video)" }
-        return url
+        URL(string: url).map(key) ?? url
+    }
+
+    static func key(_ url: URL) -> String {
+        if let video = YouTube.videoID(in: url) { return "youtube:\(video)" }
+        return url.absoluteString
     }
 }

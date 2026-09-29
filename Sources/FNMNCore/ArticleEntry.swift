@@ -7,8 +7,8 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
     public let material: Material
     public let excerpt: String?
     public let cover: Cover?
-    /// Section titles and headings, which search looks through along with the title.
-    public let headings: [String]
+    /// Title, address, byline, section titles and headings, one per line and folded for search.
+    public let searchText: String
     /// Changes exactly when the text does, so a new text is noticed without the old one in memory.
     public let textDigest: String
 
@@ -17,14 +17,15 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
         excerpt = package.material.kind == .video ? package.material.byline : ArticleBody.excerpt(package.body)
         cover = package.cover
         let markdown = ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks)
-        headings = package.sections.map(\.title) + ArticleBody.headings(in: markdown).map(\.title)
+        let fields = [package.material.title, package.material.sourceURL.absoluteString, package.material.byline ?? ""]
+            + package.sections.map(\.title) + ArticleBody.headings(in: markdown).map(\.title)
+        searchText = Self.folded(fields.joined(separator: "\n"))
         textDigest = Self.digest(package)
     }
 
-    func matches(_ query: String) -> Bool {
-        var fields = [material.title, material.sourceURL.absoluteString] + headings
-        if let byline = material.byline { fields.append(byline) }
-        return fields.contains { $0.localizedStandardContains(query) }
+    /// A query folded the same way; searching is then a plain substring test.
+    static func folded(_ text: String) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
     }
 
     private static func digest(_ package: ImportPackage) -> String {
