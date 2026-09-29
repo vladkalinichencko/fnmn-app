@@ -9,6 +9,53 @@ private struct VideoCue: Identifiable, Equatable {
     let text: String
 }
 
+/// An open video's transcript and where playback is. The lines are built once when the video opens.
+/// The player reports its second twice a second; views wake only when the line being spoken changes.
+@MainActor @Observable
+private final class VideoPlayback {
+    let cues: [VideoCue]
+    private(set) var activeIndex: Int
+    @ObservationIgnored private(set) var seconds: Double
+    @ObservationIgnored var savedAt = Date.distantPast
+
+    init(package: ImportPackage, seconds: Double) {
+        cues = package.blocks.compactMap { block in
+            guard block.kind == .transcript, let start = block.startSeconds else { return nil }
+            let text = block.html.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            return VideoCue(id: block.id, startSeconds: start, text: text)
+        }
+        self.seconds = seconds
+        activeIndex = Self.index(in: cues, at: seconds)
+    }
+
+    var activeCueID: String? {
+        cues.isEmpty ? nil : cues[activeIndex].id
+    }
+
+    /// The share of lines already spoken, saved as the video's progress.
+    var progress: Double {
+        cues.isEmpty ? 0 : Double(activeIndex + 1) / Double(cues.count)
+    }
+
+    func play(at seconds: Double) {
+        self.seconds = seconds
+        let index = Self.index(in: cues, at: seconds)
+        if index != activeIndex { activeIndex = index }
+    }
+
+    /// The last line that starts at or before the second, or the first line; the lines come in time order.
+    private static func index(in cues: [VideoCue], at seconds: Double) -> Int {
+        var low = 0
+        var high = cues.count
+        while low < high {
+            let middle = (low + high) / 2
+            if cues[middle].startSeconds <= seconds + 0.05 { low = middle + 1 } else { high = middle }
+        }
+        return max(low - 1, 0)
+    }
+}
+
 enum EmbedPhase: Equatable {
     case loading
     case ready
@@ -24,8 +71,7 @@ struct VideoReaderView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     let package: ImportPackage
-    @State private var seconds = 0.0
-    @State private var savedAt = Date.distantPast
+    @State private var playback: VideoPlayback?
     @State private var showCaptions = true
     @State private var seekTo: Double?
     @State private var phase = EmbedPhase.loading
@@ -35,22 +81,9 @@ struct VideoReaderView: View {
 
     private var materialID: String { package.material.id }
 
-    private var cues: [VideoCue] {
-        package.blocks.compactMap { block in
-            guard block.kind == .transcript, let start = block.startSeconds else { return nil }
-            let text = block.html.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return nil }
-            return VideoCue(id: block.id, startSeconds: start, text: text)
-        }
-    }
-
     private var videoID: String? {
         [package.blocks.first { $0.kind == .video }?.mediaURL, package.material.sourceURL]
             .compactMap { $0 }.compactMap(YouTube.videoID(in:)).first
-    }
-
-    private var activeCueID: String? {
-        (cues.last { $0.startSeconds <= seconds + 0.05 } ?? cues.first)?.id
     }
 
     private var savedSeconds: Double {
@@ -87,15 +120,24 @@ struct VideoReaderView: View {
             Menu("More", systemImage: "ellipsis") { videoMenu }
         }
         .onAppear {
-            seconds = savedSeconds
-            pinnedCue = activeCueID
+            guard playback == nil else { return }
+            let playback = VideoPlayback(package: package, seconds: savedSeconds)
+            self.playback = playback
+            pinnedCue = playback.activeCueID
         }
-        .onDisappear { save(force: true) }
+        .onDisappear {
+            resumeFollowing?.cancel()
+            save(force: true)
+        }
         .onChange(of: scenePhase) { _, phase in if phase != .active { save(force: true) } }
-        .onChange(of: seconds) { _, _ in
-            if followsCaptions { pinnedCue = activeCueID }
-            save(force: false)
+        .onChange(of: playback?.activeIndex) { _, _ in
+            if followsCaptions { pinnedCue = playback?.activeCueID }
         }
+    }
+
+    private func play(at seconds: Double) {
+        playback?.play(at: seconds)
+        save(force: false)
     }
 
     @ViewBuilder
@@ -123,7 +165,7 @@ struct VideoReaderView: View {
     @ViewBuilder
     private var player: some View {
         if let file = library.videoFile(materialID) {
-            SystemPlayer(url: file, start: savedSeconds, seekTo: $seekTo, seconds: $seconds, onPause: { save(force: true) })
+            SystemPlayer(url: file, start: savedSeconds, seekTo: $seekTo, onSeconds: play(at:), onPause: { save(force: true) })
                 .aspectRatio(16 / 9, contentMode: .fit)
         } else {
             ZStack {
@@ -133,8 +175,8 @@ struct VideoReaderView: View {
                         origin: origin,
                         start: savedSeconds,
                         seekTo: $seekTo,
-                        seconds: $seconds,
                         phase: $phase,
+                        onSeconds: play(at:),
                         onPause: { save(force: true) }
                     )
                     .aspectRatio(16 / 9, contentMode: .fit)
@@ -168,42 +210,41 @@ struct VideoReaderView: View {
         return phase
     }
 
+    @ViewBuilder
     private var captions: some View {
-        Group {
-            if cues.isEmpty {
-                ContentUnavailableView("No captions", systemImage: "captions.bubble", description: Text("YouTube did not return captions. The video still plays."))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        let active = cues.firstIndex { $0.id == activeCueID } ?? 0
-                        ForEach(Array(cues.enumerated()), id: \.element.id) { index, cue in
-                            Button {
-                                seekTo = cue.startSeconds
-                                seconds = cue.startSeconds
-                                save(force: true)
-                                followsCaptions = true
-                            } label: {
-                                CueRow(cue: cue, state: index < active ? .past : index == active ? .current : .ahead)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = cue.text }
-                            }
-                            .id(cue.id)
+        if let playback, playback.cues.isEmpty {
+            ContentUnavailableView("No captions", systemImage: "captions.bubble", description: Text("YouTube did not return captions. The video still plays."))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let playback {
+            let active = playback.activeIndex
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(playback.cues.enumerated()), id: \.element.id) { index, cue in
+                        Button {
+                            seekTo = cue.startSeconds
+                            playback.play(at: cue.startSeconds)
+                            save(force: true)
+                            followsCaptions = true
+                        } label: {
+                            CueRow(cue: cue, state: index < active ? .past : index == active ? .current : .ahead)
                         }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = cue.text }
+                        }
+                        .id(cue.id)
                     }
-                    .scrollTargetLayout()
-                    .padding(.horizontal, Tokens.gutter)
-                    .padding(.vertical, Tokens.gap)
-                    .animation(.snappy, value: activeCueID)
                 }
-                .background(Tokens.canvas)
-                .scrollPosition(id: $pinnedCue, anchor: .center)
-                .onScrollPhaseChange { _, phase in
-                    guard phase == .interacting else { return }
-                    pauseFollowing()
-                }
+                .scrollTargetLayout()
+                .padding(.horizontal, Tokens.gutter)
+                .padding(.vertical, Tokens.gap)
+                .animation(.snappy, value: active)
+            }
+            .background(Tokens.canvas)
+            .scrollPosition(id: $pinnedCue, anchor: .center)
+            .onScrollPhaseChange { _, phase in
+                guard phase == .interacting else { return }
+                pauseFollowing()
             }
         }
     }
@@ -221,13 +262,12 @@ struct VideoReaderView: View {
 
     /// Writes the exact second on pause, seek, leaving and backgrounding, and every two seconds while playing.
     private func save(force: Bool) {
-        guard force || Date.now.timeIntervalSince(savedAt) >= 2 else { return }
-        guard abs(seconds - savedSeconds) > 0.01 else { return }
-        savedAt = .now
+        guard let playback, force || Date.now.timeIntervalSince(playback.savedAt) >= 2 else { return }
+        guard abs(playback.seconds - savedSeconds) > 0.01 else { return }
+        playback.savedAt = .now
         let blockID = package.blocks.first { $0.kind == .video }?.id ?? materialID
-        let progress = cues.isEmpty ? 0 : Double((cues.firstIndex { $0.id == activeCueID } ?? -1) + 1) / Double(cues.count)
-        let position = ReadingPosition(blockID: blockID, videoSeconds: seconds)
-        Task { await library.apply(.savePosition(position, itemID: materialID, progress: progress)) }
+        let position = ReadingPosition(blockID: blockID, videoSeconds: playback.seconds)
+        Task { await library.apply(.savePosition(position, itemID: materialID, progress: playback.progress)) }
     }
 }
 
@@ -281,7 +321,7 @@ private struct SystemPlayer: UIViewControllerRepresentable {
     let url: URL
     let start: Double
     @Binding var seekTo: Double?
-    @Binding var seconds: Double
+    let onSeconds: (Double) -> Void
     let onPause: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -293,7 +333,7 @@ private struct SystemPlayer: UIViewControllerRepresentable {
         let controller = AVPlayerViewController()
         controller.player = player
         controller.allowsPictureInPicturePlayback = true
-        context.coordinator.observe(player, seconds: { seconds = $0 }, paused: onPause)
+        context.coordinator.observe(player, seconds: onSeconds, paused: onPause)
         return controller
     }
 
@@ -335,8 +375,8 @@ private struct YouTubeEmbedView: UIViewRepresentable {
     let origin: URL
     let start: Double
     @Binding var seekTo: Double?
-    @Binding var seconds: Double
     @Binding var phase: EmbedPhase
+    let onSeconds: (Double) -> Void
     let onPause: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -355,7 +395,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
-        context.coordinator.onSeconds = { seconds = $0 }
+        context.coordinator.onSeconds = onSeconds
         context.coordinator.onPhase = { phase = $0 }
         context.coordinator.onPause = onPause
         if context.coordinator.loaded != videoID {
@@ -433,7 +473,13 @@ private struct YouTubeEmbedView: UIViewRepresentable {
               onReady: function(){
                 window.fnmnSeek = function(seconds){ player.seekTo(seconds, true); };
                 post({kind:"ready"});
-                setInterval(function(){ post({kind:"time", seconds: player.getCurrentTime()}); }, 500);
+                var last = -1;
+                setInterval(function(){
+                  var seconds = player.getCurrentTime();
+                  if (seconds === last) return;
+                  last = seconds;
+                  post({kind:"time", seconds: seconds});
+                }, 500);
               },
               onStateChange: function(event){ if (event.data === YT.PlayerState.PAUSED) post({kind:"paused"}); },
               onError: function(event){ post({kind:"failed", code: String(event.data)}); }

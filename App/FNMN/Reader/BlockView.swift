@@ -423,6 +423,10 @@ struct ArticleVideo: View {
             .aspectRatio(16 / 9, contentMode: .fit)
             .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .task { player = AVPlayer(url: url) }
+            .onDisappear {
+                player?.pause()
+                player = nil
+            }
             .contextMenu {
                 if url.isFileURL {
                     Button("Save to Photos", systemImage: "square.and.arrow.down") {
