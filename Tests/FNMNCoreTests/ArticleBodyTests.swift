@@ -26,11 +26,37 @@ import Testing
     """
     #expect(ArticleBody.blocks(in: markdown) == [
         .heading(level: 1, title: "Momentum"),
-        .text("A **ball** on a hill."),
-        .image(alt: "slope", path: "assets/slope.gif"),
+        .text("A **ball** on a hill.\n\n![slope](assets/slope.gif)"),
         .video(path: "assets/roll.mp4"),
         .interactive(url: URL(string: "https://example.com/post/")!, selector: "#mount"),
         .text("```swift\n\nlet x = 1\n```"),
+    ])
+}
+
+@Test func picturesAndCodeJoinTheirParagraphAndOnlyTheOpeningPictureStandsAlone() {
+    let blocks = ArticleBody.blocks(in: """
+    ![cover](assets/cover.png)
+
+    # Title
+
+    First paragraph.
+
+    ```python
+    print(1)
+    ```
+
+    ## Section
+
+    ![chart](assets/chart.png)
+
+    Explained here.
+    """)
+    #expect(blocks == [
+        .image(alt: "cover", path: "assets/cover.png"),
+        .heading(level: 1, title: "Title"),
+        .text("First paragraph.\n\n```python\nprint(1)\n```"),
+        .heading(level: 2, title: "Section"),
+        .text("![chart](assets/chart.png)\n\nExplained here."),
     ])
 }
 

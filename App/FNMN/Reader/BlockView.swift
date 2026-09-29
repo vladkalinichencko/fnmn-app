@@ -218,6 +218,12 @@ struct PlateView: View {
         Button("Add Note", systemImage: "note.text") { send(.note(index)) }
         Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { actions.ask(text) }
         Button("Copy as Prompt", systemImage: "text.quote") { actions.copyPrompt(text) }
+        let pictures = ArticleBody.imagePaths(in: markdown).compactMap { UIImage(contentsOfFile: baseURL.appending(path: $0).path) }
+        ForEach(Array(pictures.enumerated()), id: \.offset) { number, picture in
+            Button(pictures.count == 1 ? "Save Picture to Photos" : "Save Picture \(number + 1) to Photos", systemImage: "square.and.arrow.down") {
+                UIImageWriteToSavedPhotosAlbum(picture, nil, nil, nil)
+            }
+        }
     }
 
     private var selectionMenu: @MainActor (String) -> [UIMenuElement] {

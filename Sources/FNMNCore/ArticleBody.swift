@@ -19,8 +19,12 @@ public struct ArticleHeading: Equatable, Identifiable, Sendable {
 
 public enum ArticleBody {
     /// Splits Markdown into reading blocks. A blank line ends a block, except inside a code fence or a `$$` formula;
-    /// a heading line is always its own block.
+    /// a heading line is always its own block. Pictures and code belong to the prose around them, never stand alone.
     public static func blocks(in markdown: String) -> [DocumentBlock] {
+        attachingFigures(rawBlocks(in: markdown))
+    }
+
+    private static func rawBlocks(in markdown: String) -> [DocumentBlock] {
         var blocks: [DocumentBlock] = []
         var lines: [Substring] = []
         var fence: Substring?
@@ -68,6 +72,55 @@ public enum ArticleBody {
         }
         flush()
         return blocks
+    }
+
+    /// A picture or code block joins the paragraph before it; after a heading it joins the paragraph that follows.
+    /// Only a picture that opens the document, before any prose, stays on its own: it is the article's cover.
+    private static func attachingFigures(_ blocks: [DocumentBlock]) -> [DocumentBlock] {
+        var result: [DocumentBlock] = []
+        var waiting: [String] = []
+        var seenProse = false
+
+        func flushWaiting() {
+            guard !waiting.isEmpty else { return }
+            result.append(.text(waiting.joined(separator: "\n\n")))
+            waiting = []
+        }
+
+        for block in blocks {
+            if let figure = figureMarkdown(block) {
+                if !seenProse, case .image = block {
+                    result.append(block)
+                } else if case let .text(previous)? = result.last, waiting.isEmpty {
+                    result[result.count - 1] = .text(previous + "\n\n" + figure)
+                } else {
+                    waiting.append(figure)
+                }
+            } else if case let .text(prose) = block {
+                result.append(.text((waiting + [prose]).joined(separator: "\n\n")))
+                waiting = []
+                seenProse = true
+            } else {
+                flushWaiting()
+                result.append(block)
+            }
+        }
+        flushWaiting()
+        return result
+    }
+
+    /// The Markdown of a block that belongs inside a paragraph's plate: a picture or a code fence.
+    private static func figureMarkdown(_ block: DocumentBlock) -> String? {
+        switch block {
+        case let .image(alt, path): "![\(alt)](\(path))"
+        case let .text(text) where text.hasPrefix("```"): text
+        default: nil
+        }
+    }
+
+    /// Every local picture a block of Markdown shows, in order.
+    public static func imagePaths(in markdown: String) -> [String] {
+        markdown.matches(of: /!\[[^\]]*\]\(([^)\s]+)\)/).map { String($0.1) }
     }
 
     public static func headings(in markdown: String) -> [ArticleHeading] {
