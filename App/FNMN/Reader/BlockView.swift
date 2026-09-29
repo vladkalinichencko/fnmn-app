@@ -3,29 +3,34 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// The one place that decides how each kind of block is drawn.
-struct BlockView: View {
+/// The one place that decides how each kind of block is drawn. It holds only values, so SwiftUI compares it
+/// and skips its body when nothing it shows has changed; actions go to the `ReaderCoordinator` in the environment.
+struct BlockView: View, Equatable {
     let block: DocumentBlock
     let index: Int
     let baseURL: URL
-    let current: Int?
     let mode: PlateMode
+    /// The paragraph scrolled past the top, or lies before the "read through here" mark.
+    let read: Bool
+    /// The "read through here" mark stands on this paragraph.
+    let markedReadThrough: Bool
+    /// Highlights and notes on this block.
+    let annotations: [Annotation]
     /// The number of blocks under this heading when the document is folded; nil while it is open.
     let folded: Int?
     /// A folded heading whose whole section lies before the reading place.
     let sectionRead: Bool
-    let actions: ParagraphActions
-    let send: (PlateAction) -> Void
-    let openSection: (Int) -> Void
 
     var body: some View {
         switch block {
         case let .heading(level, title):
-            HeadingView(level: level, title: title, folded: folded, read: sectionRead)
-                .onTapGesture { openSection(index) }
+            SectionHeading(index: index, level: level, title: title, folded: folded, read: sectionRead)
         case let .text(markdown):
-            PlateView(markdown: markdown, index: index, baseURL: baseURL, current: current, mode: mode, actions: actions, send: send)
-                .modifier(PinchFold())
+            PlateView(
+                markdown: markdown, index: index, baseURL: baseURL, mode: mode,
+                read: read, markedReadThrough: markedReadThrough, annotations: annotations
+            )
+            .modifier(PinchFold())
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
                 .modifier(PinchFold())
@@ -69,6 +74,21 @@ struct FoldIntoHeading: ViewModifier {
 extension AnyTransition {
     static var foldIntoHeading: AnyTransition {
         AnyTransition.modifier(active: FoldIntoHeading(amount: 1), identity: FoldIntoHeading(amount: 0))
+    }
+}
+
+/// Tapping a heading in the folded document opens the text at it.
+private struct SectionHeading: View {
+    let index: Int
+    let level: Int
+    let title: String
+    let folded: Int?
+    let read: Bool
+    @Environment(ReaderCoordinator.self) private var reader
+
+    var body: some View {
+        HeadingView(level: level, title: title, folded: folded, read: read)
+            .onTapGesture { reader.openSection(index) }
     }
 }
 
@@ -124,14 +144,14 @@ struct LeadImage: View {
 /// A paragraph, list, quote, table or code block on its own rounded plate.
 /// Dragging it left uncovers its margin note, which lies under the plate all along; the system's leading swipe marks "read to here".
 struct PlateView: View {
-    @Environment(LibraryModel.self) private var library
+    @Environment(ReaderCoordinator.self) private var reader
     let markdown: String
     let index: Int
     let baseURL: URL
-    let current: Int?
     let mode: PlateMode
-    let actions: ParagraphActions
-    let send: (PlateAction) -> Void
+    let read: Bool
+    let markedReadThrough: Bool
+    let annotations: [Annotation]
     @State private var drag: CGFloat = 0
     @State private var width: CGFloat = 0
 
@@ -162,9 +182,9 @@ struct PlateView: View {
     private func released(_ translation: CGFloat, _ velocity: CGFloat) {
         withAnimation(.spring(duration: 0.35, bounce: 0.2)) { drag = 0 }
         if noting {
-            if translation > 60 || velocity > 500 { send(.done) }
+            if translation > 60 || velocity > 500 { reader.send(.done) }
         } else if translation < -60 || velocity < -500 {
-            send(.note(index))
+            reader.send(.note(index))
         }
     }
 
@@ -182,10 +202,10 @@ struct PlateView: View {
             .overlay(alignment: .topTrailing) {
                 if let tick { tick } else { noteMark }
             }
-            .opacity(isRead && mode == .reading ? 0.55 : 1)
+            .opacity(read && mode == .reading ? 0.55 : 1)
             .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-            .modifier(TickOnTap(isOn: isTicking) { send(.toggle(index)) })
-            .modifier(TickOnTap(isOn: noting) { send(.done) })
+            .modifier(TickOnTap(isOn: isTicking) { reader.send(.toggle(index)) })
+            .modifier(TickOnTap(isOn: noting) { reader.send(.done) })
             .contextMenu { if mode == .reading { menu } }
             // Inside the system's swipe, which places the row itself and would undo an offset put around it.
             .offset(x: offset)
@@ -193,30 +213,29 @@ struct PlateView: View {
             .gesture(HorizontalPan(starts: { noting ? $0 > 0 : $0 < 0 }, changed: dragged, ended: released))
             .swipeActions(edge: .leading) {
                 if mode == .reading {
-                    let marked = library.progress.readThrough[actions.materialID] == index
-                    Button(marked ? "Unmark" : "Read to Here", systemImage: marked ? "arrow.uturn.backward" : "checkmark") {
-                        library.apply(.readThrough(piece: marked ? nil : index, itemID: actions.materialID))
+                    Button(markedReadThrough ? "Unmark" : "Read to Here", systemImage: markedReadThrough ? "arrow.uturn.backward" : "checkmark") {
+                        reader.readThrough(markedReadThrough ? nil : index)
                     }
                     .tint(.accentColor)
                 }
             }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
-            .sensoryFeedback(.selection, trigger: library.progress.readThrough[actions.materialID] == index)
+            .sensoryFeedback(.selection, trigger: markedReadThrough)
     }
 
     @ViewBuilder
     private var menu: some View {
         let text = plainText
         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
-        let target = actions.target(index, text: text)
-        ForEach(actions.commands(target), id: \.title) { command in
-            Button(command.title, systemImage: command.systemImage) { actions.perform(command, target) }
+        let target = reader.target(index, text: text)
+        ForEach(annotationCommands(annotations, at: target), id: \.title) { command in
+            Button(command.title, systemImage: command.systemImage) { reader.perform(command, target) }
         }
-        Button("Select Text", systemImage: "character.cursor.ibeam") { send(.selectText(index)) }
-        Button("Select Paragraphs", systemImage: "checklist") { send(.selectParagraphs(from: index)) }
-        Button("Add Note", systemImage: "note.text") { send(.note(index)) }
-        Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { actions.ask(text) }
-        Button("Copy as Prompt", systemImage: "text.quote") { actions.copyPrompt(text) }
+        Button("Select Text", systemImage: "character.cursor.ibeam") { reader.send(.selectText(index)) }
+        Button("Select Paragraphs", systemImage: "checklist") { reader.send(.selectParagraphs(from: index)) }
+        Button("Add Note", systemImage: "note.text") { reader.send(.note(index)) }
+        Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { reader.ask(text) }
+        Button("Copy as Prompt", systemImage: "text.quote") { reader.copyPrompt(text) }
         let pictures = ArticleBody.imagePaths(in: markdown).map { baseURL.appending(path: $0) }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         ForEach(Array(pictures.enumerated()), id: \.offset) { number, picture in
@@ -229,14 +248,15 @@ struct PlateView: View {
 
     private var selectionMenu: @MainActor (String) -> [UIMenuElement] {
         let text = plainText
-        let actions = actions
+        let reader = reader
+        let annotations = annotations
         let index = index
         return { selected in
-            let target = actions.target(index, text: text, quote: selected)
-            let marks = actions.commands(target).map { command in
-                UIAction(title: command.title, image: UIImage(systemName: command.systemImage)) { _ in actions.perform(command, target) }
+            let target = reader.target(index, text: text, quote: selected)
+            let marks = annotationCommands(annotations, at: target).map { command in
+                UIAction(title: command.title, image: UIImage(systemName: command.systemImage)) { _ in reader.perform(command, target) }
             }
-            let ask = UIAction(title: "Ask ChatGPT", image: UIImage(systemName: "bubble.left.and.text.bubble.right")) { _ in actions.ask(selected) }
+            let ask = UIAction(title: "Ask ChatGPT", image: UIImage(systemName: "bubble.left.and.text.bubble.right")) { _ in reader.ask(selected) }
             return marks + [ask]
         }
     }
@@ -267,20 +287,16 @@ struct PlateView: View {
         if case .selectingParagraphs = mode { true } else { false }
     }
 
-    private var isRead: Bool {
-        library.progress.isPieceRead(index, of: actions.materialID, current: current)
-    }
-
     private var marks: [ParagraphQuoteMark] {
-        actions.annotations.compactMap { annotation in
-            guard annotation.piece == index, let mark = annotation.mark, !annotation.quote.isEmpty else { return nil }
+        annotations.compactMap { annotation in
+            guard let mark = annotation.mark, !annotation.quote.isEmpty else { return nil }
             return ParagraphQuoteMark(quote: annotation.quote, mark: mark)
         }
     }
 
     /// The note on the whole paragraph. It is stored with the paragraph's text as its quote, so the shelf can show both.
     private var paragraphNote: String {
-        let notes = actions.annotations.filter { $0.piece == index && !$0.note.isEmpty }
+        let notes = annotations.filter { !$0.note.isEmpty }
         guard !notes.isEmpty else { return "" }
         let text = plainText
         return notes.first { $0.quote.isEmpty || $0.quote == text }?.note ?? ""
@@ -292,7 +308,7 @@ struct PlateView: View {
 
     private func saveNote(_ text: String) {
         let paragraph = plainText
-        Task { await library.apply(.note(text, actions.target(index, text: paragraph, quote: paragraph))) }
+        reader.note(text, reader.target(index, text: paragraph, quote: paragraph))
     }
 }
 

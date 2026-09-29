@@ -22,9 +22,10 @@ struct ItemScreen: View {
     }
 }
 
-private enum ArticleText: Equatable {
+private enum ArticleText {
     case loading
-    case ready(ImportPackage, ReaderDocument?)
+    case article(ReaderCoordinator, sourceURL: URL)
+    case video(ImportPackage)
     case failed(String)
 }
 
@@ -43,24 +44,36 @@ private struct ArticleOpener: View {
                 ProgressView()
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open this material", systemImage: "doc", description: Text(message))
-            case let .ready(package, document):
-                if let document {
-                    ArticleFlowView(package: package, document: document, startPiece: startPiece)
-                } else {
-                    VideoReaderView(package: package)
-                }
+            case let .article(reader, sourceURL):
+                MaterialReader(reader: reader, sourceURL: sourceURL)
+            case let .video(package):
+                VideoReaderView(package: package)
             }
         }
         .task(id: library.snapshot.articleRevisions[itemID]) {
             let interval = Signposts.library.beginInterval("Open material")
             defer { Signposts.library.endInterval("Open material", interval) }
             do {
-                let package = try await library.article(itemID)
-                text = .ready(package, package.material.kind == .video ? nil : await Self.document(of: package))
+                text = try await open()
             } catch {
                 text = .failed(error.localizedDescription)
             }
         }
+    }
+
+    private func open() async throws -> ArticleText {
+        let package = try await library.article(itemID)
+        guard package.material.kind != .video else { return .video(package) }
+        let reader = ReaderCoordinator(
+            document: await Self.document(of: package),
+            materialID: itemID,
+            title: package.material.title,
+            source: library.snapshot.source(of: itemID),
+            baseURL: library.articleFolder(itemID),
+            start: startPiece ?? library.position(of: itemID)?.pieceIndex,
+            library: library
+        )
+        return .article(reader, sourceURL: package.material.sourceURL)
     }
 
     @concurrent

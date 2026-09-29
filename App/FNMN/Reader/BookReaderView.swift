@@ -1,9 +1,9 @@
 import FNMNCore
 import SwiftUI
 
-private enum BookText: Equatable {
+private enum BookText {
     case loading
-    case ready(ReaderDocument, startPiece: Int?)
+    case ready(ReaderCoordinator)
     case failed(String)
 }
 
@@ -20,14 +20,8 @@ struct BookReaderView: View {
                 ProgressView()
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open the book", systemImage: "book.closed", description: Text(message))
-            case let .ready(document, start):
-                MaterialReader(
-                    document: document,
-                    baseURL: library.bookFolder(record.directoryName),
-                    materialID: record.id,
-                    header: MaterialHeader(title: record.metadata.title, source: library.snapshot.source(of: record.id)),
-                    startPiece: start
-                )
+            case let .ready(reader):
+                MaterialReader(reader: reader)
             }
         }
         .task { await open() }
@@ -37,7 +31,15 @@ struct BookReaderView: View {
         do {
             let markdown = try await library.bookText(record)
             let document = await Self.document(markdown, title: record.metadata.title)
-            text = .ready(document, startPiece: startPiece ?? savedPiece(in: document))
+            text = .ready(ReaderCoordinator(
+                document: document,
+                materialID: record.id,
+                title: record.metadata.title,
+                source: library.snapshot.source(of: record.id),
+                baseURL: library.bookFolder(record.directoryName),
+                start: startPiece ?? savedPiece(in: document),
+                library: library
+            ))
         } catch {
             text = .failed(error.localizedDescription)
         }

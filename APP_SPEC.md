@@ -43,7 +43,7 @@ App/FNMN/
   Mac/        MacServicePort + ArticleClient, MacConnection + Keychain
   Library/    LibraryScreen, AlbumScreen, SourceScreen, ItemGrid, ItemTile, AlbumTile,
               AlbumPicker, AddMenu, LinkSheet, LibraryCoordinator
-  Reader/     ItemScreen, ReaderCoordinator, MaterialReader (ArticleFlowView), BookReaderView,
+  Reader/     ItemScreen, ReaderCoordinator, MaterialReader, BookReaderView,
               ReadingSession, BlockView, MarkedMarkdown, ReaderSettings, LiveCropView, ChatGPTHandoff
   Video/      VideoReaderView (встроенный YouTube, системный плеер, подписи)
   Shelf/      ShelfScreen, AnnotationList
@@ -93,7 +93,8 @@ App/FNMN/
 - **LibraryModel:** загрузка `idle`, `loading`, `ready`, `failed(message)`. Загрузку запускает модель один раз, сколько бы окон её ни ждало.
 - **ImportJobs.** Задача: `preparing(stage, fraction)` → исчезает после сохранения или `failed(message)` → `retry` снова `preparing`, `dismiss` убирает и отменяет её опрос. Импорт папки FNMN проходит `downloadingFromCloud` и `importing(index, count)`. Держится на уровне приложения, поэтому переживает закрытие листа; Live Activity и фоновая задача iOS показывают первую идущую задачу и обновляются только при смене стадии или доли.- **LibraryCoordinator** (окно): `idle`, `addingLink(draft)`, `pickingFile`, `namingAlbum(draft)`, `renamingAlbum(name, draft)`, `pickingAlbum(itemID)`, `confirmingDelete(itemID)`, `confirmingAlbumDelete(name)`.
 - **Settings:** `editing`, `checking`, `connected`, `failed(message)`.
-- **ReaderCoordinator** (открытый материал): `opening`, `ready(ReaderDocument)`, `failed(message)`; внутри `ready` режим плашки `PlateMode` — `reading | selectingText(piece) | selectingParagraphs(pieces) | noting(piece)` и свёртка `ReadingFold`. Плашки получают координатор из окружения и шлют ему действия; замыканий во вью нет. Масштаб жеста pinch лежит в отдельном маленьком наблюдаемом значении, его читает только эффект свёртки.
+- **Открытие материала** (`ItemScreen`, `BookReaderView`): `loading`, затем статья или книга с готовым `ReaderCoordinator`, видео с пакетом, или `failed(message)`. Документ строится вне главного потока до создания координатора.
+- **ReaderCoordinator** (открытый документ): режим плашки `PlateMode` — `reading | selectingText(piece) | selectingParagraphs(pieces) | noting(piece)`, свёртка `ReadingFold`, место чтения и прокрутка колонки; он же сохраняет место и выполняет действия плашек. Блоки получают его из окружения, а от родителя только значения (блок, режим, прочитан ли, заметки этого блока), поэтому `BlockView` сравнивается через `.equatable()`, и смена места перерисовывает только блоки, у которых изменилось «прочитано». Масштаб жеста pinch лежит в отдельном маленьком наблюдаемом значении, его читает только эффект свёртки.
 - **Video**: встроенный плеер `EmbedPhase` — `loading | ready | failed(message)`; реплики транскрипта строятся один раз при открытии, наблюдаемое состояние — индекс активной реплики, а не секунда. Источник выводится из данных: скачанный файл в `videoFiles`, идущее скачивание — задача `ImportJobs` с входом `videoFile`, иначе встроенный YouTube.
 
 ## Хранение
