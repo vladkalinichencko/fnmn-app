@@ -13,13 +13,45 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
         }
     }
 
-    var color: Color? {
+    /// The page. Each background has a plate color that is the same hue with more white, or more light at night.
+    var canvas: Color {
         switch self {
-        case .system: nil
-        case .paper: Color(red: 0.97, green: 0.94, blue: 0.87)
-        case .gray: Color(white: 0.9)
+        case .system: Tokens.canvas
+        case .paper: Color(red: 0.95, green: 0.915, blue: 0.84)
+        case .gray: Color(white: 0.88)
         case .night: .black
         }
+    }
+
+    var plate: Color {
+        switch self {
+        case .system: Tokens.plateTint
+        case .paper: Color(red: 0.995, green: 0.98, blue: 0.945)
+        case .gray: Color(white: 0.965)
+        case .night: Color(white: 0.14)
+        }
+    }
+
+    /// A swatch drawn as an image, so the menu shows the color itself instead of tinting a template.
+    var swatch: Image {
+        let size = CGSize(width: 22, height: 22)
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            let circle = CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)
+            if self == .system {
+                UIColor.white.setFill()
+                context.cgContext.fillEllipse(in: circle)
+                UIColor.black.setFill()
+                context.cgContext.addArc(center: CGPoint(x: 11, y: 11), radius: 10, startAngle: -.pi / 2, endAngle: .pi / 2, clockwise: false)
+                context.cgContext.fillPath()
+            } else {
+                UIColor(canvas).setFill()
+                context.cgContext.fillEllipse(in: circle)
+            }
+            UIColor.separator.setStroke()
+            context.cgContext.setLineWidth(1)
+            context.cgContext.strokeEllipse(in: circle)
+        }
+        return Image(uiImage: image.withRenderingMode(.alwaysOriginal))
     }
 
     var scheme: ColorScheme? {
@@ -75,8 +107,7 @@ struct ReaderMenu: View {
             }
             Picker("Background", selection: $background) {
                 ForEach(ReaderBackground.allCases) { option in
-                    Label(option.name, systemImage: option == .system ? "circle.lefthalf.filled" : "circle.fill")
-                        .tint(option.color ?? .primary)
+                    Label { Text(option.name) } icon: { option.swatch }
                         .tag(option)
                 }
             }
@@ -108,7 +139,8 @@ struct ReaderAppearanceModifier: ViewModifier {
             .dynamicTypeSize(ReaderAppearance.sizes[min(max(size, 0), ReaderAppearance.sizes.count - 1)])
             // A font, not a font design: Textual derives code from the environment font with `.monospaced()`.
             .font(.system(.body, design: font.design))
-            .background(background.color ?? Tokens.canvas)
+            .background(background.canvas)
+            .environment(\.plateTint, background.plate)
             .environment(\.colorScheme, background.scheme ?? colorScheme)
     }
 

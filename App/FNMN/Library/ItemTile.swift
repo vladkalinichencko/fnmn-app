@@ -59,18 +59,18 @@ struct ItemTile: View {
                 }
                 .padding(Tokens.tilePadding - 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(ProgressFill(progress: item.progress))
-                .clipShape(.rect(cornerRadius: Tokens.tileRadius - 8, style: .continuous))
                 .glassEffect(.regular, in: .rect(cornerRadius: Tokens.tileRadius - 8, style: .continuous))
-                .padding(8)
+                .padding([.horizontal, .top], 8)
+                .padding(.bottom, 18)
             }
+            .overlay(alignment: .bottom) { ProgressLine(progress: item.progress) }
             .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 
     private var title: some View {
         Text(item.title)
-            .font(.title3.bold())
+            .font(.title3.weight(.black))
             .lineLimit(4)
             .multilineTextAlignment(.leading)
     }
@@ -144,7 +144,7 @@ struct PreparingTile: View {
         TileCard {
             VStack(alignment: .leading, spacing: 8) {
                 Text(job.title)
-                    .font(.title3.bold())
+                    .font(.title3.weight(.black))
                     .lineLimit(3)
                 switch job.phase {
                 case let .preparing(step):
@@ -183,26 +183,32 @@ struct TileCard<Content: View>: View {
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
-            .background(ProgressFill(progress: progress))
-            .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+            .overlay(alignment: .bottom) { ProgressLine(progress: progress) }
             .plate(cornerRadius: Tokens.tileRadius)
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
 
-/// How far a material is read, as the accent color rising from the bottom and fading out upward.
-struct ProgressFill: View {
+/// How far a material is read: a thin line along the bottom edge, inset so it ends where the corners begin to curve.
+struct ProgressLine: View {
     let progress: Double?
 
     var body: some View {
-        GeometryReader { geometry in
-            if let progress, progress > 0 {
-                LinearGradient(colors: [Color.accentColor.opacity(0.28), Color.accentColor.opacity(0)], startPoint: .bottom, endPoint: .top)
-                    .frame(height: geometry.size.height * min(progress, 1))
-                    .frame(maxHeight: .infinity, alignment: .bottom)
+        if let progress, progress > 0 {
+            GeometryReader { geometry in
+                Capsule()
+                    .fill(.quaternary)
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .frame(width: geometry.size.width * min(progress, 1))
+                    }
             }
+            .frame(height: 4)
+            .padding(.horizontal, Tokens.tileRadius * 0.6)
+            .padding(.bottom, 7)
+            .allowsHitTesting(false)
         }
-        .allowsHitTesting(false)
     }
 }
 

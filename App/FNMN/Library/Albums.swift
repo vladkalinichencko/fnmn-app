@@ -18,12 +18,19 @@ struct AlbumTile: View {
         if let pick { pick() } else { navigation.open(.album(album.name)) }
     }
 
+    /// The same outer size as a material's tile, so an album never looks smaller than what it holds.
     private var label: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             AlbumFan(covers: album.covers)
-            Text(album.name).font(.headline).lineLimit(1)
-            Text(album.count, format: .number).font(.subheadline).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(album.name).lineLimit(1)
+                Spacer(minLength: 4)
+                Text(album.count, format: .number).foregroundStyle(.secondary)
+            }
+            .font(.title3.weight(.black))
+            .padding(.horizontal, 4)
         }
+        .aspectRatio(Tokens.tileAspect, contentMode: .fit)
     }
 }
 
@@ -33,7 +40,7 @@ private struct AlbumFan: View {
 
     var body: some View {
         Color.clear
-            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay {
                 if covers.isEmpty {
                     Image(systemName: "rectangle.stack")
@@ -50,17 +57,21 @@ private struct AlbumFan: View {
                                         .strokeBorder(.white.opacity(0.8), lineWidth: 2)
                                 }
                                 .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
-                                .scaleEffect(covers.count == 1 ? 1 : 0.84)
-                                .rotationEffect(.degrees(Self.angles[index]))
+                                .scaleEffect(0.86)
+                                .rotationEffect(.degrees(angle(index)))
                                 .offset(x: Self.shifts[index], y: index == 0 ? 6 : -4)
                         }
                     }
-                    .padding(covers.count == 1 ? 0 : 4)
                 }
             }
     }
 
-    private static let angles: [Double] = [0, -9, 9]
+    /// Even a single cover is turned a little, so an album never reads as a material's tile.
+    private func angle(_ index: Int) -> Double {
+        covers.count == 1 ? -5 : Self.angles[index]
+    }
+
+    private static let angles: [Double] = [2, -9, 9]
     private static let shifts: [CGFloat] = [0, -14, 14]
 }
 
