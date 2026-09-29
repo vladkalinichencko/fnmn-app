@@ -1,6 +1,12 @@
 import FNMNCore
 import Foundation
 import Observation
+import os
+
+/// Intervals that show in Instruments' Points of Interest: loading the library and opening a material.
+enum Signposts {
+    static let library = OSSignposter(subsystem: "local.fnmn.reader", category: .pointsOfInterest)
+}
 
 enum LibraryLoadState: Equatable {
     case idle
@@ -37,6 +43,8 @@ final class LibraryModel {
         case .idle, .failed: break
         }
         loadState = .loading
+        let interval = Signposts.library.beginInterval("Load library")
+        defer { Signposts.library.endInterval("Load library", interval) }
         do {
             (snapshot, progress) = try await file.load()
             loadState = .ready

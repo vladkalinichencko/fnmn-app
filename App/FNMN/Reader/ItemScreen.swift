@@ -52,6 +52,8 @@ private struct ArticleOpener: View {
             }
         }
         .task(id: library.snapshot.articleRevisions[itemID]) {
+            let interval = Signposts.library.beginInterval("Open material")
+            defer { Signposts.library.endInterval("Open material", interval) }
             do {
                 let package = try await library.article(itemID)
                 text = .ready(package, package.material.kind == .video ? nil : await Self.document(of: package))
