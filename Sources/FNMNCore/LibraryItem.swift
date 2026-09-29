@@ -21,6 +21,8 @@ public struct SourceRef: Hashable, Sendable {
 
 public enum Cover: Codable, Hashable, Sendable {
     case articleFile(materialID: String, path: String)
+    /// The small cover picture the app keeps for a material that lives in iCloud.
+    case stored(materialID: String)
     case remote(URL)
 }
 

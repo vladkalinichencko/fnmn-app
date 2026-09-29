@@ -10,8 +10,9 @@ public struct DeliveryArchive: Sendable {
         self.url = url
     }
 
-    /// Reads the package, then copies every other entry to the file `destination` names for it.
-    public func unpack(filesInto destination: (ImportPackage, String) throws -> URL) throws -> ImportPackage {
+    /// Reads the package, then copies every other entry to the file `destination` names for it;
+    /// an entry it names no file for is skipped.
+    public func unpack(filesInto destination: (ImportPackage, String) throws -> URL?) throws -> ImportPackage {
         let archive = try FileHandle(forReadingFrom: url)
         defer { try? archive.close() }
         guard let first = try Self.nextEntry(in: archive), first.name == "package.json", first.isFile else {
@@ -20,10 +21,10 @@ public struct DeliveryArchive: Sendable {
         let package = try JSONDecoder().decode(ImportPackage.self, from: try Self.read(first.size, from: archive))
         try Self.skipPadding(after: first.size, in: archive)
         while let entry = try Self.nextEntry(in: archive) {
-            if entry.isFile {
-                try Self.copy(entry.size, from: archive, to: try destination(package, entry.name))
+            if entry.isFile, let file = try destination(package, entry.name) {
+                try Self.copy(entry.size, from: archive, to: file)
             } else {
-                _ = try Self.read(entry.size, from: archive)
+                try Self.skip(entry.size, in: archive)
             }
             try Self.skipPadding(after: entry.size, in: archive)
         }
@@ -83,6 +84,11 @@ public struct DeliveryArchive: Sendable {
             try file.write(contentsOf: part)
             left -= part.count
         }
+    }
+
+    /// A cut-short archive shows at the next header, which then cannot be read whole.
+    private static func skip(_ count: Int, in archive: FileHandle) throws {
+        try archive.seek(toOffset: try archive.offset() + UInt64(count))
     }
 
     private static func skipPadding(after size: Int, in archive: FileHandle) throws {

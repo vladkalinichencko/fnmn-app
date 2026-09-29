@@ -1,4 +1,7 @@
+import CryptoKit
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 private struct Note: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
@@ -94,12 +97,21 @@ public actor LibraryFile {
     }
 
     public nonisolated let root: URL
+    /// Unpacked copies of materials that live in iCloud, in a folder the system may empty when space runs low.
+    public nonisolated let cache: URL
+    /// The FNMN folder in iCloud Drive, once the app has access to it; materials imported from it live there.
+    public private(set) var cloudFolder: URL?
     public private(set) var corruptPackageNames: [String] = []
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    public init(url: URL) {
+    public init(url: URL, cache: URL? = nil) {
         root = url
+        self.cache = cache ?? url.appending(path: "cache")
+    }
+
+    public func useCloudFolder(_ folder: URL?) {
+        cloudFolder = folder
     }
 
     private var stateURL: URL { root.appending(path: "state.json") }
@@ -137,7 +149,7 @@ public actor LibraryFile {
         for package in packages {
             try writeText(package, revision: snapshot.articleRevisions[package.material.id])
         }
-        snapshot.articles.append(contentsOf: packages.map(ArticleEntry.init))
+        snapshot.articles.append(contentsOf: packages.map { ArticleEntry($0) })
         try sweepUnreferencedBooks(snapshot)
         try sweepArticleRevisions(snapshot)
         let foldedNotes = absorbLegacyNotes(legacyNotes, into: &snapshot)
@@ -244,13 +256,132 @@ public actor LibraryFile {
         }
     }
 
-    /// Stores a delivery archive from the Mac: its files and `text.json` go into a new revision.
+    /// Stores a delivery archive from the Mac. With the FNMN folder linked, the archive joins the others in
+    /// iCloud and the material lives there; without one, its files and `text.json` go into a revision in the app.
     public func storeArticle(archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         var next = snapshot
-        try unpackDelivery(archive, into: &next)
+        if let cloudFolder {
+            let package = try DeliveryArchive(url: archive).unpack { _, _ in nil }
+            let name = SHA256.hash(data: Data(package.material.id.utf8)).map { String(format: "%02x", $0) }.joined() + ".tar"
+            let destination = cloudFolder.appending(path: "deliveries").appending(path: name)
+            try placeInCloud(archive, at: destination)
+            next = try addCloudDelivery(destination, into: next)
+        } else {
+            try unpackDelivery(archive, into: &next)
+        }
         try save(next)
         try sweepArticleRevisions(next)
         return next
+    }
+
+    /// One delivery of the FNMN folder in iCloud: the package enters the catalog, and of its files only the
+    /// cover is kept, as a small picture; the archive stays in iCloud and is unpacked when the reader opens it.
+    public func addCloudDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let cover = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: cover) }
+        var hasCover = false
+        let package = try DeliveryArchive(url: archive).unpack { package, path in
+            guard case let .articleFile(_, coverPath)? = package.cover, coverPath == path else { return nil }
+            hasCover = true
+            return cover
+        }
+        if hasCover {
+            try writeThumbnail(of: cover, to: Self.coverFile(root: root, materialID: package.material.id))
+        }
+        var next = snapshot
+        try next.importPackage(package, at: .now, delivery: archive.lastPathComponent)
+        next.articleRevisions[package.material.id] = nil
+        return next
+    }
+
+    /// Where a material that lives in iCloud is unpacked; a new text gets a new folder.
+    public nonisolated func cachedFolder(of entry: ArticleEntry) -> URL {
+        cache.appending(path: "articles")
+            .appending(path: Self.articleDirectory(root: root, materialID: entry.material.id).lastPathComponent)
+            .appending(path: entry.textDigest, directoryHint: .isDirectory)
+    }
+
+    public func isUnpacked(_ entry: ArticleEntry) -> Bool {
+        FileManager.default.fileExists(atPath: cachedFolder(of: entry).appending(path: Self.textName).path)
+    }
+
+    /// The material's archive in the FNMN folder, once the folder is linked.
+    public func deliveryURL(of entry: ArticleEntry) -> URL? {
+        guard let cloudFolder, let name = entry.delivery else { return nil }
+        return cloudFolder.appending(path: "deliveries").appending(path: name)
+    }
+
+    /// Opens a material that lives in iCloud from its unpacked copy, unpacking the archive first when the
+    /// system has emptied the cache; the caller brings the archive down from iCloud before that.
+    public func openCloudArticle(_ entry: ArticleEntry) throws -> ImportPackage {
+        let folder = cachedFolder(of: entry)
+        let text = folder.appending(path: Self.textName)
+        if !FileManager.default.fileExists(atPath: text.path) {
+            guard let archive = deliveryURL(of: entry) else { throw LibraryError.cloudFolderMissing }
+            let incoming = folder.appendingPathExtension("incoming")
+            try? FileManager.default.removeItem(at: incoming)
+            let package = try DeliveryArchive(url: archive).unpack { _, path in
+                guard let file = Self.contained(path, in: incoming) else { throw LibraryError.escapedPath }
+                return file
+            }
+            try FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
+            try encoder.encode(package).write(to: incoming.appending(path: Self.textName))
+            try? FileManager.default.removeItem(at: folder)
+            try FileManager.default.moveItem(at: incoming, to: folder)
+        }
+        return try decoder.decode(ImportPackage.self, from: Data(contentsOf: text))
+    }
+
+    /// The small cover picture kept in the app for a material that lives in iCloud.
+    public static func coverFile(root: URL, materialID: String) -> URL {
+        root.appending(path: "covers").appending(path: articleDirectory(root: root, materialID: materialID).lastPathComponent)
+    }
+
+    /// A copy placed beside and renamed over, under file coordination, is a new version to iCloud, not a conflict.
+    private func placeInCloud(_ archive: URL, at destination: URL) throws {
+        let incoming = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.copyItem(at: archive, to: incoming)
+        defer { try? FileManager.default.removeItem(at: incoming) }
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var coordination: NSError?
+        var failure: Error?
+        NSFileCoordinator().coordinate(writingItemAt: destination, options: .forReplacing, error: &coordination) { url in
+            do {
+                if FileManager.default.fileExists(atPath: url.path) {
+                    _ = try FileManager.default.replaceItemAt(url, withItemAt: incoming)
+                } else {
+                    try FileManager.default.moveItem(at: incoming, to: url)
+                }
+            } catch {
+                failure = error
+            }
+        }
+        if let error = coordination ?? failure { throw error }
+    }
+
+    /// Covers are shown on tiles a few hundred points wide, so 800 pixels is enough; a picture with
+    /// transparency stays a PNG, so it does not turn black behind. A cover only decorates its tile, so a picture
+    /// ImageIO cannot read leaves the tile without one instead of stopping the import.
+    private func writeThumbnail(of picture: URL, to destination: URL) throws {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 800,
+        ]
+        guard let source = CGImageSourceCreateWithURL(picture as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return
+        }
+        let opaque = [.none, .noneSkipFirst, .noneSkipLast].contains(image.alphaInfo)
+        let type = (opaque ? UTType.jpeg : UTType.png).identifier as CFString
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard let file = CGImageDestinationCreateWithURL(destination as CFURL, type, 1, nil) else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: destination.path])
+        }
+        CGImageDestinationAddImage(file, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        guard CGImageDestinationFinalize(file) else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: destination.path])
+        }
     }
 
     /// Unpacks one delivery into a new revision of its article and enters the package in the catalog;
@@ -437,7 +568,12 @@ public actor LibraryFile {
         if let revision, !revision.isEmpty {
             folder = folder.appending(path: revision)
         }
-        folder = folder.standardizedFileURL
+        return contained(path, in: folder)
+    }
+
+    /// A relative path from a package, only when it stays inside the folder.
+    static func contained(_ path: String, in folder: URL) -> URL? {
+        let folder = folder.standardizedFileURL
         guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return nil }
         let destination = folder.appending(path: path).standardizedFileURL
         guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
@@ -509,13 +645,18 @@ public actor LibraryFile {
         }
     }
 
+    /// Files of materials kept in the app go with their material or an older revision; for a material that
+    /// lives in iCloud, its cover picture and unpacked copy go with it, and a copy of an older text goes too.
     private func sweepArticleRevisions(_ snapshot: LibrarySnapshot) throws {
+        try sweepCloudCopies(snapshot)
         let articles = root.appending(path: "articles")
         guard let keys = try? FileManager.default.contentsOfDirectory(at: articles, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
         let live = Dictionary(uniqueKeysWithValues: snapshot.articleRevisions.map {
             (Self.articleDirectory(root: root, materialID: $0.key).lastPathComponent, $0.value)
         })
-        let known = Set(snapshot.articles.map { Self.articleDirectory(root: root, materialID: $0.material.id).lastPathComponent })
+        let known = Set(snapshot.articles.filter { $0.delivery == nil }.map {
+            Self.articleDirectory(root: root, materialID: $0.material.id).lastPathComponent
+        })
         for keyURL in keys {
             guard known.contains(keyURL.lastPathComponent) else {
                 try FileManager.default.removeItem(at: keyURL)
@@ -532,6 +673,29 @@ public actor LibraryFile {
                     try FileManager.default.removeItem(at: child)
                 }
             }
+        }
+    }
+
+    private func sweepCloudCopies(_ snapshot: LibrarySnapshot) throws {
+        let cloud = snapshot.articles.filter { $0.delivery != nil }
+        let digests = Dictionary(cloud.map { (Self.articleDirectory(root: root, materialID: $0.material.id).lastPathComponent, $0.textDigest) },
+                                 uniquingKeysWith: { first, _ in first })
+        let unpacked = cache.appending(path: "articles")
+        for keyURL in (try? FileManager.default.contentsOfDirectory(at: unpacked, includingPropertiesForKeys: nil)) ?? [] {
+            guard let digest = digests[keyURL.lastPathComponent] else {
+                try FileManager.default.removeItem(at: keyURL)
+                continue
+            }
+            for copy in (try? FileManager.default.contentsOfDirectory(at: keyURL, includingPropertiesForKeys: nil)) ?? [] where copy.lastPathComponent != digest {
+                try FileManager.default.removeItem(at: copy)
+            }
+        }
+        let covered = Set(cloud.filter { if case .stored = $0.cover { true } else { false } }.map {
+            Self.coverFile(root: root, materialID: $0.material.id).lastPathComponent
+        })
+        for cover in (try? FileManager.default.contentsOfDirectory(at: root.appending(path: "covers"), includingPropertiesForKeys: nil)) ?? []
+        where !covered.contains(cover.lastPathComponent) {
+            try FileManager.default.removeItem(at: cover)
         }
     }
 

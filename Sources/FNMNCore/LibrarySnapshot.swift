@@ -27,12 +27,12 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
 
     /// Adds or replaces a prepared article or video. A material that is in no album yet lands in the albums
     /// the package names; otherwise the reader's albums stay. A changed text drops the old marks.
-    public mutating func importPackage(_ package: ImportPackage, at date: Date) throws {
+    public mutating func importPackage(_ package: ImportPackage, at date: Date, delivery: String? = nil) throws {
         guard package.version == 1 else { throw LibraryError.unsupportedVersion(package.version) }
         let hasBody = !(package.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasBody || !package.blocks.isEmpty else { throw LibraryError.emptyDocument }
         let id = package.material.id
-        let entry = ArticleEntry(package)
+        let entry = ArticleEntry(package, delivery: delivery)
         if let index = articles.firstIndex(where: { $0.material.id == id }) {
             if articles[index].textDigest != entry.textDigest {
                 forgetMarks(of: id)
@@ -99,6 +99,7 @@ public enum LibraryError: Error, Equatable {
     case escapedPath
     case albumNameTaken(String)
     case emptyAlbumName
+    case cloudFolderMissing
 }
 
 extension LibraryError: LocalizedError {
@@ -109,6 +110,7 @@ extension LibraryError: LocalizedError {
         case .escapedPath: "A file path points outside the library."
         case let .albumNameTaken(name): "An album named “\(name)” already exists."
         case .emptyAlbumName: "Enter an album name."
+        case .cloudFolderMissing: "This material lives in the FNMN folder in iCloud Drive. Choose that folder again with + → File."
         }
     }
 }

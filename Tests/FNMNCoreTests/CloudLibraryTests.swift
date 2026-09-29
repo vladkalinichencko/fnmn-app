@@ -1,0 +1,75 @@
+@testable import FNMNCore
+import CoreGraphics
+import Foundation
+import ImageIO
+import Testing
+import UniformTypeIdentifiers
+
+private func png(side: Int = 8) throws -> Data {
+    let context = try #require(CGContext(
+        data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    ))
+    context.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
+    context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+    let image = try #require(context.makeImage())
+    let data = NSMutableData()
+    let destination = try #require(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, image, nil)
+    #expect(CGImageDestinationFinalize(destination))
+    return data as Data
+}
+
+private let illustrated = ImportPackage(
+    material: Material(id: "article:cloud", kind: .article, title: "Cloud", sourceURL: URL(string: "https://example.com/cloud")!),
+    sections: [],
+    blocks: [],
+    body: "![c](assets/cover.png)\n\nA long enough opening paragraph so the article has an excerpt.\n\n![d](assets/diagram.png)"
+)
+
+@Test func aMaterialFromICloudKeepsOnlyItsCoverInTheAppAndUnpacksWhenOpened() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let archive = cloud.appending(path: "deliveries/a.tar")
+    try writeDelivery(illustrated, files: [("assets/cover.png", try png()), ("assets/diagram.png", try png())], to: archive)
+    let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
+    await file.useCloudFolder(cloud)
+
+    var library = try await file.addCloudDelivery(archive, into: LibrarySnapshot())
+    try await file.save(library, previous: LibrarySnapshot())
+    let entry = try #require(library.articles.first)
+    #expect(entry.delivery == "a.tar")
+    #expect(entry.cover == .stored(materialID: "article:cloud"))
+    #expect(FileManager.default.fileExists(atPath: LibraryFile.coverFile(root: file.root, materialID: "article:cloud").path))
+    #expect(!FileManager.default.fileExists(atPath: file.root.appending(path: "articles").path))
+    #expect(await !file.isUnpacked(entry))
+
+    #expect(try await file.openCloudArticle(entry) == illustrated)
+    #expect(await file.isUnpacked(entry))
+    #expect(FileManager.default.fileExists(atPath: file.cachedFolder(of: entry).appending(path: "assets/diagram.png").path))
+
+    let deleted = try library.applying(.delete(itemID: "article:cloud"))
+    try await file.save(deleted, previous: library)
+    library = deleted
+    #expect(!FileManager.default.fileExists(atPath: file.cachedFolder(of: entry).path))
+    #expect(!FileManager.default.fileExists(atPath: LibraryFile.coverFile(root: file.root, materialID: "article:cloud").path))
+}
+
+@Test func aMaterialTheMacPreparesForThePhoneJoinsTheFolderInICloud() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud, withIntermediateDirectories: true)
+    let download = root.appending(path: "download.tar")
+    try writeDelivery(illustrated, files: [("assets/cover.png", try png())], to: download)
+    let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
+    await file.useCloudFolder(cloud)
+
+    let library = try await file.storeArticle(archive: download, into: LibrarySnapshot())
+    let entry = try #require(library.articles.first)
+    let placed = try #require(await file.deliveryURL(of: entry))
+    #expect(placed.deletingLastPathComponent().lastPathComponent == "deliveries")
+    #expect(FileManager.default.fileExists(atPath: placed.path))
+    #expect(FileManager.default.fileExists(atPath: download.path))
+    #expect(try await file.openCloudArticle(entry) == illustrated)
+}

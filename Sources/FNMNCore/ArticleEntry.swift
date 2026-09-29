@@ -11,11 +11,20 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
     public let searchText: String
     /// Changes exactly when the text does, so a new text is noticed without the old one in memory.
     public let textDigest: String
+    /// The archive's name in the FNMN folder's `deliveries/` in iCloud Drive, where the material lives;
+    /// nil for a material kept inside the app.
+    public let delivery: String?
 
-    public init(_ package: ImportPackage) {
+    /// A material that lives in iCloud keeps its cover as a small picture in the app, so a tile never
+    /// downloads the whole archive.
+    public init(_ package: ImportPackage, delivery: String? = nil) {
         material = package.material
         excerpt = package.material.kind == .video ? package.material.byline : ArticleBody.excerpt(package.body)
-        cover = package.cover
+        self.delivery = delivery
+        cover = switch (package.cover, delivery) {
+        case (.articleFile?, _?): .stored(materialID: package.material.id)
+        case let (cover, _): cover
+        }
         let markdown = ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks)
         let fields = [package.material.title, package.material.sourceURL.absoluteString, package.material.byline ?? ""]
             + package.sections.map(\.title) + ArticleBody.headings(in: markdown).map(\.title)
