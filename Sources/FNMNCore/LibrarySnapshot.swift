@@ -57,6 +57,16 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         }
     }
 
+    /// Saved links without a prepared material go into their albums (address → album names);
+    /// a link the reader already put somewhere stays there.
+    mutating func placeLinks(_ albums: [String: [String]]) {
+        for item in items where item.kind == .link && self.albums(of: item.id).isEmpty {
+            if let names = albums[String(item.id.dropFirst("link:".count))] {
+                place(item.id, in: names)
+            }
+        }
+    }
+
     mutating func place(_ materialID: String, in names: [String]) {
         let names = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard !names.isEmpty else { return }

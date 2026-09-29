@@ -36,6 +36,7 @@ private let article = ImportPackage(
     let catalog = #"{"collections":[{"id":"reading","name":"Reading"}],"sources":[{"name":"Example","url":"https://example.com","kind":"site","saved_in":["reading"],"found_in":["reading"],"materials":[]},{"name":"Author","url":"https://example.org","kind":"author","saved_in":["reading"],"found_in":["reading"],"materials":[{"title":"A","url":"https://example.com/a","saved_in":["reading"],"found_in":["reading"]}]}]}"#
     try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
     try writeDelivery(article, files: [("assets/p.png", Data("png".utf8))], to: prepared.appending(path: "deliveries/a.tar"))
+    try Data(#"[{"url":"https://example.com/a","folders":["Web"]}]"#.utf8).write(to: prepared.appending(path: "index.json"))
 
     let file = LibraryFile(url: root.appending(path: "library"))
     let imported = try await file.storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
@@ -48,6 +49,18 @@ private let article = ImportPackage(
     #expect(try await file.article(article.material.id, revision: revision) == article)
     let picture = try #require(LibraryFile.articleFile(root: root.appending(path: "library"), materialID: article.material.id, path: "assets/p.png", revision: revision))
     #expect(try Data(contentsOf: picture) == Data("png".utf8))
+}
+
+@Test func aLinkTheMacCouldNotPrepareLandsInItsAlbum() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let prepared = root.appending(path: "prepared")
+    try FileManager.default.createDirectory(at: prepared.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let catalog = #"{"collections":[],"sources":[{"name":"ACM","url":"https://dl.acm.org","kind":"site","saved_in":[],"found_in":[],"materials":[{"title":"Paper","url":"https://dl.acm.org/doi/1","saved_in":[],"found_in":[]}]}]}"#
+    try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
+    try Data(#"[{"url":"https://dl.acm.org/doi/1","folders":["HCI"]}]"#.utf8).write(to: prepared.appending(path: "index.json"))
+    let imported = try await LibraryFile(url: root.appending(path: "library")).storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
+    #expect(imported.items(inAlbum: "HCI").map(\.id) == ["link:https://dl.acm.org/doi/1"])
+    #expect(imported.items(inAlbum: "HCI").first?.kind == .link)
 }
 
 @Test func importKeepsTheMarkdownBody() async throws {

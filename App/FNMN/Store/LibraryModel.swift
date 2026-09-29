@@ -124,6 +124,7 @@ final class LibraryModel {
         }
         onStep(.downloadingFromCloud)
         try await CloudFolder.download(catalog)
+        try await CloudFolder.download(url.appending(path: "index.json"))
         let deliveries = try await CloudFolder.files(in: url.appending(path: "deliveries"), withExtension: "tar")
         try await write(saving: false) { [file] snapshot in
             var next = try await file.applyBrowserCatalog(from: url, into: snapshot)
@@ -133,6 +134,7 @@ final class LibraryModel {
                 next = try await file.addDelivery(delivery, into: next)
                 CloudFolder.evict(delivery)
             }
+            next = try await file.placeLinks(from: url, into: next)
             try await file.save(next, previous: snapshot)
             return next
         }

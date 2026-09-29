@@ -316,6 +316,7 @@ public actor LibraryFile {
         for url in deliveries {
             next = try addDelivery(url, into: next)
         }
+        next = try placeLinks(from: source, into: next)
         try save(next, previous: snapshot)
         return next
     }
@@ -328,6 +329,20 @@ public actor LibraryFile {
         next.retireAlbums(catalog.collections.map(\.name))
         next.browserCatalog = catalog
         return next
+    }
+
+    /// The last step of a browser library import: links the Mac could not prepare join the albums the
+    /// reviewed table gives them, from `index.json`, like prepared materials do from their packages.
+    public func placeLinks(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let rows = try decoder.decode([IndexRow].self, from: Data(contentsOf: source.appending(path: "index.json")))
+        var next = snapshot
+        next.placeLinks(Dictionary(rows.map { ($0.url, $0.folders) }, uniquingKeysWith: { first, _ in first }))
+        return next
+    }
+
+    private struct IndexRow: Decodable {
+        let url: String
+        let folders: [String]
     }
 
     /// One delivery of a browser library into a new revision, without saving: the caller saves once

@@ -3,7 +3,8 @@
     .venv/bin/python mac/publish_library.py prepared-browser-library fixtures/books/principles-of-deep-learning-theory \
         ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
 
-The destination gets `catalog.json`, `deliveries/` and `books/<name>/`. Book text goes through the same
+The destination gets `catalog.json`, `index.json` (every material with its reviewed albums, so a link the Mac
+could not prepare still lands in its album), `deliveries/` and `books/<name>/`. Book text goes through the same
 Markdown rules as every package, so a formula inside a sentence stays in its paragraph.
 """
 
@@ -19,6 +20,7 @@ from markdown import normalize
 def publish(prepared: Path, books: list[Path], destination: Path) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copy2(prepared / "catalog.json", destination / "catalog.json")
+    shutil.copy2(prepared / "index.json", destination / "index.json")
     # Replaced whole: copying over the old files makes iCloud keep both as "name 2.json".
     shutil.rmtree(destination / "deliveries", ignore_errors=True)
     shutil.copytree(prepared / "deliveries", destination / "deliveries")
