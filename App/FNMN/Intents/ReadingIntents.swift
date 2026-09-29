@@ -4,7 +4,7 @@ import UIKit
 
 struct ContinueReadingIntent: AppIntent {
     static let title: LocalizedStringResource = "Continue Reading"
-    static let description = IntentDescription("Open the material you were last reading in FNMN.")
+    static let description = IntentDescription("Open the material you were last reading in Feynman.")
     static let supportedModes: IntentModes = .foreground(.immediate)
 
     @MainActor
@@ -16,8 +16,8 @@ struct ContinueReadingIntent: AppIntent {
 }
 
 struct AddLinkIntent: AppIntent {
-    static let title: LocalizedStringResource = "Add Link to FNMN"
-    static let description = IntentDescription("Open FNMN’s add sheet with a link ready to import.")
+    static let title: LocalizedStringResource = "Add Link to Feynman"
+    static let description = IntentDescription("Open Feynman’s add sheet with a link ready to import.")
     static let supportedModes: IntentModes = .foreground(.immediate)
 
     @Parameter(title: "Link")
@@ -39,7 +39,7 @@ struct AddLinkIntent: AppIntent {
 
 struct AskAboutSelectionIntent: AppIntent {
     static let title: LocalizedStringResource = "Ask About This Passage"
-    static let description = IntentDescription("Send the passage last selected in FNMN to ChatGPT.")
+    static let description = IntentDescription("Send the passage last selected in Feynman to ChatGPT.")
     static let supportedModes: IntentModes = .foreground(.immediate)
 
     @MainActor
@@ -76,7 +76,7 @@ struct AskAboutSelectionIntent: AppIntent {
 
 private struct NoPassageError: Error, CustomLocalizedStringResourceConvertible {
     var localizedStringResource: LocalizedStringResource {
-        "Select a passage in FNMN first, then try again."
+        "Select a passage in Feynman first, then try again."
     }
 }
 
