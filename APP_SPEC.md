@@ -27,7 +27,7 @@ Keychain             (взаимодействие)        ▲
 | `FNMNCore` (Swift-пакет в корне) | Типы документа и библиотеки, `LibraryChange` и `applying`, селекторы, разбор Markdown на абзацы, выделения, свёртка, маршрут ссылки, файловое хранилище `LibraryFile`. Без SwiftUI и UIKit, покрыт тестами `swift test`. | Foundation |
 | `FNMN` (приложение) | Хранилище `LibraryModel`, порт Mac, координаторы и вью. | FNMNCore, Textual |
 | `Textual` (`Vendor/Textual`) | Отрисовка Markdown, формул (swiftui-math), кода с подсветкой Prism и таблиц в SwiftUI. Копия библиотеки Guille Gonzalez (MIT) с одной добавкой: `textualSelectionMenu` кладёт пункты приложения в меню выделенного текста. | SwiftUIMath, swift-concurrency-extras |
-| `SwiftUIMath` (`Vendor/SwiftUIMath`) | Вёрстка формул. Копия swiftui-math (MIT) с одной добавкой: `\underbrace{…}` рисует скобку под основанием, как KaTeX. | — |
+| `SwiftUIMath` (`Vendor/SwiftUIMath`) | Вёрстка формул. Копия swiftui-math (MIT) с одной добавкой: `\underbrace{…}` рисует скобку под основанием, как KaTeX. В `mathFonts.bundle` оставлен только Latin Modern, шрифт формул Textual по умолчанию. | — |
 | `Share` | Передаёт ссылку в приложение через `CaptureHandoff`. | FNMNCore |
 | `Activity` | Live Activity подготовки. | — |
 
