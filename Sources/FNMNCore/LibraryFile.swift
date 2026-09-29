@@ -8,12 +8,10 @@ private struct Note: Codable, Equatable, Identifiable, Sendable {
 }
 
 public actor LibraryFile {
-    /// `state.json` holds what the reader did; prepared articles live in `packages.json`
-    /// and are written only when an import or a delete changes them.
+    /// `state.json` holds the reader's albums, marks and books; prepared articles live in `packages.json`
+    /// and are written only when an import or a delete changes them; reading progress lives in `progress.json`.
     private struct UserState: Codable {
-        var positions: [String: ReadingPosition] = [:]
-        var readThrough: [String: Int] = [:]
-        var readings: [String: MaterialReading] = [:]
+        var legacyProgress: ReadingProgress?
         var books: [BookRecord] = []
         var albums: [String] = []
         var placements: [String: [String]] = [:]
@@ -26,16 +24,14 @@ public actor LibraryFile {
         var legacyNotes: [Note] = []
         var legacyPackages: [ImportPackage]?
 
-        /// Older files called albums `folders` and annotations `highlights`, and kept packages and block notes inline.
+        /// Older files called albums `folders` and annotations `highlights`, and kept packages, block notes
+        /// and reading progress inline.
         enum CodingKeys: String, CodingKey {
-            case positions, readThrough, readings, books, albums, placements, annotations, archived, addedAt, articleRevisions, videoFiles, browserCatalog
-            case folders, highlights, notes, packages
+            case books, albums, placements, annotations, archived, addedAt, articleRevisions, videoFiles, browserCatalog
+            case folders, highlights, notes, packages, positions, readThrough, readings
         }
 
         init(_ snapshot: LibrarySnapshot) {
-            positions = snapshot.positions
-            readThrough = snapshot.readThrough
-            readings = snapshot.readings
             books = snapshot.books
             albums = snapshot.albums
             placements = snapshot.placements
@@ -49,9 +45,13 @@ public actor LibraryFile {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            positions = try container.decodeIfPresent([String: ReadingPosition].self, forKey: .positions) ?? [:]
-            readThrough = try container.decodeIfPresent([String: Int].self, forKey: .readThrough) ?? [:]
-            readings = try container.decodeIfPresent([String: MaterialReading].self, forKey: .readings) ?? [:]
+            if container.contains(.positions) || container.contains(.readThrough) || container.contains(.readings) {
+                var progress = ReadingProgress()
+                progress.positions = try container.decodeIfPresent([String: ReadingPosition].self, forKey: .positions) ?? [:]
+                progress.readThrough = try container.decodeIfPresent([String: Int].self, forKey: .readThrough) ?? [:]
+                progress.readings = try container.decodeIfPresent([String: MaterialReading].self, forKey: .readings) ?? [:]
+                legacyProgress = progress
+            }
             books = try container.decodeIfPresent([BookRecord].self, forKey: .books) ?? []
             albums = try container.decodeIfPresent([String].self, forKey: .albums)
                 ?? container.decodeIfPresent([String].self, forKey: .folders) ?? []
@@ -69,9 +69,6 @@ public actor LibraryFile {
 
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(positions, forKey: .positions)
-            try container.encode(readThrough, forKey: .readThrough)
-            try container.encode(readings, forKey: .readings)
             try container.encode(books, forKey: .books)
             try container.encode(albums, forKey: .albums)
             try container.encode(placements, forKey: .placements)
@@ -84,9 +81,6 @@ public actor LibraryFile {
         }
 
         func apply(to snapshot: inout LibrarySnapshot) {
-            snapshot.positions = positions
-            snapshot.readThrough = readThrough
-            snapshot.readings = readings
             snapshot.books = books
             snapshot.albums = albums
             snapshot.placements = placements
@@ -110,17 +104,20 @@ public actor LibraryFile {
 
     private var stateURL: URL { root.appending(path: "state.json") }
     private var packagesURL: URL { root.appending(path: "packages.json") }
+    private var progressURL: URL { root.appending(path: "progress.json") }
 
-    public func load() throws -> LibrarySnapshot {
+    public func load() throws -> (catalog: LibrarySnapshot, progress: ReadingProgress) {
         try recoverReplacedDirectories(in: root.appending(path: "books"))
         var snapshot = LibrarySnapshot()
         var legacyNotes: [Note] = []
         var legacyPackages: [ImportPackage]?
+        var legacyProgress: ReadingProgress?
         if FileManager.default.fileExists(atPath: stateURL.path) {
             let state = try decoder.decode(UserState.self, from: Data(contentsOf: stateURL))
             state.apply(to: &snapshot)
             legacyNotes = state.legacyNotes
             legacyPackages = state.legacyPackages
+            legacyProgress = state.legacyProgress
         }
         var migrated = false
         if FileManager.default.fileExists(atPath: packagesURL.path) {
@@ -137,11 +134,24 @@ public actor LibraryFile {
         try sweepUnreferencedBooks(snapshot)
         try sweepArticleRevisions(snapshot)
         let foldedNotes = absorbLegacyNotes(legacyNotes, into: &snapshot)
-        let foldedPlaces = absorbLegacyArticlePositions(into: &snapshot)
-        if migrated || foldedNotes || foldedPlaces {
+        // Progress moves out of `state.json` first, so a crash in between never loses it.
+        let storedProgress = FileManager.default.fileExists(atPath: progressURL.path)
+        var progress = storedProgress
+            ? try decoder.decode(ReadingProgress.self, from: Data(contentsOf: progressURL))
+            : legacyProgress ?? ReadingProgress()
+        let foldedPlaces = absorbLegacyArticlePositions(into: &progress, packages: snapshot.packages)
+        if foldedPlaces || (!storedProgress && legacyProgress != nil) {
+            try saveProgress(progress)
+        }
+        if migrated || foldedNotes || legacyProgress != nil {
             try save(snapshot)
         }
-        return snapshot
+        return (snapshot, progress)
+    }
+
+    public func saveProgress(_ progress: ReadingProgress) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try encoder.encode(progress).write(to: progressURL, options: .atomic)
     }
 
     /// Writes the reader's state, and the packages only when they differ from `previous`;
@@ -354,12 +364,12 @@ public actor LibraryFile {
         return true
     }
 
-    private func absorbLegacyArticlePositions(into snapshot: inout LibrarySnapshot) -> Bool {
+    private func absorbLegacyArticlePositions(into progress: inout ReadingProgress, packages: [ImportPackage]) -> Bool {
         var changed = false
-        for (materialID, position) in snapshot.positions {
-            guard let package = snapshot.packages.first(where: { $0.material.id == materialID }),
+        for (materialID, position) in progress.positions {
+            guard let package = packages.first(where: { $0.material.id == materialID }),
                   let piece = ArticleBody.legacyPiece(for: position, in: package) else { continue }
-            snapshot.positions[materialID] = .piece(piece)
+            progress.positions[materialID] = .piece(piece)
             changed = true
         }
         return changed

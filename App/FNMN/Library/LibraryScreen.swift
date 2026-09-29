@@ -12,7 +12,7 @@ struct LibraryScreen: View {
         RouteStack(path: $navigation.library) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap) {
-                    let continued = library.snapshot.continueItems()
+                    let continued = library.snapshot.continueItems(library.progress)
                     if !continued.isEmpty {
                         LibrarySection("Continue") { ItemGrid(items: continued) }
                     }

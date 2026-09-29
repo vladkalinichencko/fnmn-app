@@ -128,7 +128,7 @@ private struct LibraryDialogsModifier: ViewModifier {
         albumName = ""
         Task {
             await library.apply(.createAlbum(name))
-            if let itemID { await library.apply(.addToAlbum(name, itemID: itemID)) }
+            if let itemID { await library.apply(.addToAlbum(name, itemIDs: [itemID])) }
         }
     }
 

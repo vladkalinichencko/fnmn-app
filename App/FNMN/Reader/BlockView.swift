@@ -198,15 +198,15 @@ struct PlateView: View {
             .gesture(HorizontalPan(starts: { noting ? $0 > 0 : $0 < 0 }, changed: dragged, ended: released))
             .swipeActions(edge: .leading) {
                 if mode == .reading {
-                    let marked = library.snapshot.readThrough[actions.materialID] == index
+                    let marked = library.progress.readThrough[actions.materialID] == index
                     Button(marked ? "Unmark" : "Read to Here", systemImage: marked ? "arrow.uturn.backward" : "checkmark") {
-                        Task { await library.apply(.readThrough(piece: marked ? nil : index, itemID: actions.materialID)) }
+                        library.apply(.readThrough(piece: marked ? nil : index, itemID: actions.materialID))
                     }
                     .tint(.accentColor)
                 }
             }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
-            .sensoryFeedback(.selection, trigger: library.snapshot.readThrough[actions.materialID] == index)
+            .sensoryFeedback(.selection, trigger: library.progress.readThrough[actions.materialID] == index)
     }
 
     @ViewBuilder
@@ -271,7 +271,7 @@ struct PlateView: View {
     }
 
     private var isRead: Bool {
-        library.snapshot.isPieceRead(index, of: actions.materialID, current: current)
+        library.progress.isPieceRead(index, of: actions.materialID, current: current)
     }
 
     private var marks: [ParagraphQuoteMark] {

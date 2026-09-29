@@ -1,16 +1,13 @@
 import Foundation
 
-/// Every change a reader can make to the library. A new change is a new case here and one branch in `applying`.
+/// Every change a reader can make to the catalog; reading progress changes through `ProgressChange`.
+/// A new change is a new case here and one branch in `applying`.
 public enum LibraryChange: Equatable, Sendable {
-    case open(itemID: String)
-    case setRead(Bool, itemID: String)
     case setArchived(Bool, itemID: String)
-    case savePosition(ReadingPosition, itemID: String, progress: Double)
-    case readThrough(piece: Int?, itemID: String)
     case createAlbum(String)
     case renameAlbum(String, to: String)
     case deleteAlbum(String)
-    case addToAlbum(String, itemID: String)
+    case addToAlbum(String, itemIDs: [String])
     case removeFromAlbum(String, itemID: String)
     case mark(TextMark, AnnotationTarget)
     case unmark(TextMark, AnnotationTarget)
@@ -24,18 +21,9 @@ extension LibrarySnapshot {
     public func applying(_ change: LibraryChange, at date: Date = .now) throws -> LibrarySnapshot {
         var next = self
         switch change {
-        case let .open(itemID):
-            next.readings[itemID, default: MaterialReading()].openedAt = date
-        case let .setRead(isRead, itemID):
-            next.readings[itemID, default: MaterialReading()].isRead = isRead
         case let .setArchived(isArchived, itemID):
             next.archived.removeAll { $0 == itemID }
             if isArchived { next.archived.append(itemID) }
-        case let .savePosition(position, itemID, progress):
-            next.positions[itemID] = position
-            next.readings[itemID, default: MaterialReading()].progress = progress
-        case let .readThrough(piece, itemID):
-            next.readThrough[itemID] = piece
         case let .createAlbum(name):
             next.albums.append(try next.freshAlbumName(name))
         case let .renameAlbum(name, newName):
@@ -50,8 +38,8 @@ extension LibrarySnapshot {
                 let rest = names.filter { $0 != name }
                 return rest.isEmpty ? nil : rest
             }
-        case let .addToAlbum(name, itemID):
-            next.place(itemID, in: [name])
+        case let .addToAlbum(name, itemIDs):
+            for itemID in itemIDs { next.place(itemID, in: [name]) }
         case let .removeFromAlbum(name, itemID):
             let rest = next.albums(of: itemID).filter { $0 != name }
             next.placements[itemID] = rest.isEmpty ? nil : rest
@@ -68,9 +56,8 @@ extension LibrarySnapshot {
         case let .delete(itemID):
             next.packages.removeAll { $0.material.id == itemID }
             next.books.removeAll { $0.id == itemID }
-            next.forgetReading(of: itemID)
+            next.forgetMarks(of: itemID)
             next.placements[itemID] = nil
-            next.readings[itemID] = nil
             next.archived.removeAll { $0 == itemID }
             next.addedAt[itemID] = nil
             next.articleRevisions[itemID] = nil

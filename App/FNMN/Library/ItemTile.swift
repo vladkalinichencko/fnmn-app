@@ -18,15 +18,20 @@ struct ItemGrid: View {
 struct ItemTile: View {
     let item: LibraryItem
     var album: String?
+    @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
     @Environment(\.openURL) private var openURL
+
+    private var progress: Double? {
+        library.progress.readings[item.id]?.progress
+    }
 
     var body: some View {
         Button(action: open) {
             if let cover = item.cover {
                 coverTile(cover)
             } else {
-                TileCard(progress: item.progress) {
+                TileCard(progress: progress) {
                     VStack(alignment: .leading, spacing: 8) {
                         header
                         title
@@ -58,9 +63,9 @@ struct ItemTile: View {
                     title.lineLimit(3)
                 }
                 .padding(Tokens.tilePadding - 2)
-                .padding(.bottom, (item.progress ?? 0) > 0 ? ProgressLine.clearance - (Tokens.tilePadding - 2) : 0)
+                .padding(.bottom, (progress ?? 0) > 0 ? ProgressLine.clearance - (Tokens.tilePadding - 2) : 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay { ProgressLine(progress: item.progress, cornerRadius: Tokens.captionRadius) }
+                .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.captionRadius) }
                 .glassEffect(.regular, in: .rect(cornerRadius: Tokens.captionRadius, style: .continuous))
                 .padding(Tokens.captionInset)
             }
@@ -117,8 +122,9 @@ struct ItemActions: View {
             }
         }
         if item.kind != .link {
-            Button(item.isRead ? "Mark as Unread" : "Mark as Read", systemImage: item.isRead ? "circle" : "checkmark.circle") {
-                Task { await library.apply(.setRead(!item.isRead, itemID: item.id)) }
+            let isRead = library.progress.readings[item.id]?.isRead ?? false
+            Button(isRead ? "Mark as Unread" : "Mark as Read", systemImage: isRead ? "circle" : "checkmark.circle") {
+                library.apply(.setRead(!isRead, itemID: item.id))
             }
         }
         if let url = item.originalURL {

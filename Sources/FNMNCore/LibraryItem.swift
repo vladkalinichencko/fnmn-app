@@ -12,8 +12,6 @@ public struct LibraryItem: Identifiable, Hashable, Sendable {
     public let addedAt: Date?
     public let excerpt: String?
     public let cover: Cover?
-    public let progress: Double?
-    public let isRead: Bool
 }
 
 public struct SourceRef: Hashable, Sendable {
@@ -52,9 +50,9 @@ extension LibrarySnapshot {
         allItems.first { $0.id == id }
     }
 
-    public func continueItems(limit: Int = 4) -> [LibraryItem] {
+    public func continueItems(_ progress: ReadingProgress, limit: Int = 4) -> [LibraryItem] {
         let opened = items.compactMap { item -> (LibraryItem, Date)? in
-            guard !item.isRead, let date = readings[item.id]?.openedAt else { return nil }
+            guard let reading = progress.readings[item.id], !reading.isRead, let date = reading.openedAt else { return nil }
             return (item, date)
         }
         return opened.sorted { $0.1 > $1.1 }.prefix(limit).map(\.0)
@@ -125,13 +123,6 @@ extension LibrarySnapshot {
         }
     }
 
-    /// A paragraph is read when it scrolled past the top, or when it lies at or before the reader's "read through here" mark.
-    public func isPieceRead(_ piece: Int, of itemID: String, current: Int?) -> Bool {
-        if let mark = readThrough[itemID], piece <= mark { return true }
-        guard let current else { return false }
-        return piece < current
-    }
-
     private var allItems: [LibraryItem] {
         let sources = SourceIndex(catalog: browserCatalog)
         let prepared = packages.map { package in
@@ -143,9 +134,7 @@ extension LibrarySnapshot {
                 originalURL: package.material.sourceURL,
                 addedAt: addedAt[package.material.id],
                 excerpt: package.material.kind == .video ? package.material.byline : ArticleBody.excerpt(package.body),
-                cover: package.cover,
-                progress: readings[package.material.id]?.progress,
-                isRead: readings[package.material.id]?.isRead ?? false
+                cover: package.cover
             )
         }
         let bookItems = books.map { book in
@@ -157,9 +146,7 @@ extension LibrarySnapshot {
                 originalURL: nil,
                 addedAt: addedAt[book.id],
                 excerpt: book.metadata.subtitle,
-                cover: nil,
-                progress: readings[book.id]?.progress,
-                isRead: readings[book.id]?.isRead ?? false
+                cover: nil
             )
         }
         let preparedKeys = Set(packages.map { SourceIndex.key($0.material.sourceURL.absoluteString) })
@@ -176,9 +163,7 @@ extension LibrarySnapshot {
                     originalURL: url,
                     addedAt: addedAt[id],
                     excerpt: url.host(),
-                    cover: nil,
-                    progress: nil,
-                    isRead: readings[id]?.isRead ?? false
+                    cover: nil
                 )
             }
         }

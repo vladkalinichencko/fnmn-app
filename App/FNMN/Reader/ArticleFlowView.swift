@@ -53,8 +53,9 @@ struct MaterialReader: View {
         .task {
             guard !state.didRestore else { return }
             send(.restored)
-            if let startPiece { send(.scroll(startPiece)) }
+            if let piece = startPiece ?? library.position(of: materialID)?.pieceIndex { send(.scroll(piece)) }
         }
+        .onDisappear { Task { await library.saveProgress() } }
     }
 
     private func send(_ action: ReaderAction, count: Int? = nil) {
@@ -63,7 +64,7 @@ struct MaterialReader: View {
         guard case let .visible(index) = action, index != previous else { return }
         let total = count ?? ArticleBody.blocks(in: markdown).count
         let progress = total == 0 ? 0 : Double(index + 1) / Double(total)
-        Task { await library.apply(.savePosition(.piece(index), itemID: materialID, progress: progress)) }
+        library.apply(.savePosition(.piece(index), itemID: materialID, progress: progress))
     }
 }
 
@@ -80,7 +81,7 @@ struct ArticleFlowView: View {
             materialID: id,
             header: MaterialHeader(title: package.material.title, source: library.snapshot.source(of: id)),
             sourceURL: package.material.sourceURL,
-            startPiece: startPiece ?? library.snapshot.positions[id]?.pieceIndex
+            startPiece: startPiece
         )
     }
 }

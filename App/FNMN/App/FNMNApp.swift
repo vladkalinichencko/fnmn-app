@@ -28,6 +28,7 @@ struct FNMNApp: App {
 /// One window: its own tab, navigation and dialogs over the shared library.
 private struct WindowRoot: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(\.scenePhase) private var scenePhase
     @State private var navigation = WindowNavigation()
     @State private var dialogs = LibraryDialogs()
     @State private var pendingContinue = false
@@ -52,6 +53,9 @@ private struct WindowRoot: View {
         .environment(navigation)
         .environment(dialogs)
         .task { await library.load() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { Task { await library.saveProgress() } }
+        }
         .onChange(of: library.loadState) { _, state in
             guard state == .ready, pendingContinue else { return }
             pendingContinue = false
@@ -75,7 +79,7 @@ private struct WindowRoot: View {
     }
 
     private func continueReading() {
-        guard let id = library.snapshot.continuedID else { return }
+        guard let id = library.snapshot.continuedID(library.progress) else { return }
         navigation.show(.item(id))
     }
 }

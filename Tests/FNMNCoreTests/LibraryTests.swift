@@ -45,7 +45,7 @@ private let article = ImportPackage(
     #expect(imported.browserCatalog?.sources.last?.materials.first?.savedURLs == [])
     #expect(imported.packages.map(\.material.id) == [article.material.id])
     let reloaded = try await file.load()
-    #expect(reloaded.browserCatalog == imported.browserCatalog)
+    #expect(reloaded.catalog.browserCatalog == imported.browserCatalog)
 }
 
 @Test func importKeepsTheMarkdownBody() throws {
@@ -62,8 +62,10 @@ private let article = ImportPackage(
     let file = LibraryFile(url: directory.appending(path: "library.json"))
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
-    library.positions[article.material.id] = ReadingPosition(blockID: "b1", textOffset: 12)
+    var progress = ReadingProgress()
+    progress.positions[article.material.id] = ReadingPosition(blockID: "b1", textOffset: 12)
     try await file.save(library)
+    try await file.saveProgress(progress)
     let stateURL = directory.appending(path: "library.json").appending(path: "state.json")
     var text = try String(contentsOf: stateURL, encoding: .utf8)
     let note = #"[{"id":"00000000-0000-0000-0000-000000000009","materialID":"\#(article.material.id)","blockID":"piece:4","text":"Remember this"}]"#
@@ -72,8 +74,8 @@ private let article = ImportPackage(
     }
     try Data(text.utf8).write(to: stateURL)
     let loaded = try await file.load()
-    #expect(loaded.positions[article.material.id]?.blockID == "b1")
-    #expect(loaded.annotations.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.note == "Remember this" && $0.piece == 4 && $0.mark == nil })
+    #expect(loaded.progress.positions[article.material.id]?.blockID == "b1")
+    #expect(loaded.catalog.annotations.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.note == "Remember this" && $0.piece == 4 && $0.mark == nil })
     let saved = try String(contentsOf: stateURL, encoding: .utf8)
     #expect(!saved.contains("\"notes\""))
 }
@@ -89,10 +91,28 @@ private let article = ImportPackage(
     )
     var library = LibrarySnapshot()
     try library.importPackage(placed, at: .now)
-    library.positions[placed.material.id] = ReadingPosition(blockID: "b1")
+    var progress = ReadingProgress()
+    progress.positions[placed.material.id] = ReadingPosition(blockID: "b1")
     try await file.save(library)
+    try await file.saveProgress(progress)
     let loaded = try await file.load()
-    #expect(loaded.positions[placed.material.id]?.pieceIndex == 0)
+    #expect(loaded.progress.positions[placed.material.id]?.pieceIndex == 0)
+}
+
+@Test func progressInsideOldStateMovesToItsOwnFile() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let stateURL = directory.appending(path: "state.json")
+    try Data(#"{"positions":{"a":{"blockID":"piece:3","textOffset":0}},"readThrough":{"a":2},"readings":{"a":{"isRead":true}},"albums":["Later"]}"#.utf8)
+        .write(to: stateURL)
+    let file = LibraryFile(url: directory)
+    let loaded = try await file.load()
+    #expect(loaded.progress.positions["a"]?.pieceIndex == 3)
+    #expect(loaded.progress.readThrough["a"] == 2)
+    #expect(loaded.progress.readings["a"]?.isRead == true)
+    #expect(loaded.catalog.albums == ["Later"])
+    #expect(!(try String(contentsOf: stateURL, encoding: .utf8)).contains("positions"))
+    #expect(try await file.load().progress == loaded.progress)
 }
 
 @Test func articleBodyImportsWithoutBlocks() throws {
@@ -120,27 +140,27 @@ private let laterArticle = ImportPackage(
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
     try library.importPackage(laterArticle, at: .now)
-    library.positions[article.material.id] = ReadingPosition(blockID: "b1")
-    library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
-    library = try library.applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 1))
-    library = try library.applying(.open(itemID: laterArticle.material.id), at: Date(timeIntervalSinceReferenceDate: 2))
-    #expect(library.continuedID == laterArticle.material.id)
+    var progress = ReadingProgress()
+    progress.positions[article.material.id] = ReadingPosition(blockID: "b1")
+    progress.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
+    progress = progress.applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 1))
+    progress = progress.applying(.open(itemID: laterArticle.material.id), at: Date(timeIntervalSinceReferenceDate: 2))
+    #expect(library.continuedID(progress) == laterArticle.material.id)
 }
 
 @Test func continueFallsBackToSavedPositionWhenNothingWasOpened() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
     try library.importPackage(laterArticle, at: .now)
-    library.positions[article.material.id] = ReadingPosition(blockID: "b1")
-    library.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
-    #expect(library.continuedID == article.material.id)
+    var progress = ReadingProgress()
+    progress.positions[article.material.id] = ReadingPosition(blockID: "b1")
+    progress.positions[laterArticle.material.id] = ReadingPosition(blockID: "b1")
+    #expect(library.continuedID(progress) == article.material.id)
 }
 
-@Test func openingDoesNotMarkMaterialRead() throws {
-    var library = LibrarySnapshot()
-    try library.importPackage(article, at: .now)
-    library = try library.applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 1))
-    #expect(library.readings[article.material.id]?.isRead == false)
+@Test func openingDoesNotMarkMaterialRead() {
+    let progress = ReadingProgress().applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 1))
+    #expect(progress.readings[article.material.id]?.isRead == false)
 }
 
 @Test func openingAndReadStateSurviveDiskRoundTrip() async throws {
@@ -148,10 +168,14 @@ private let laterArticle = ImportPackage(
     let file = LibraryFile(url: directory.appending(path: "library.json"))
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
-    library = try library.applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 10))
-    library = try library.applying(.setRead(true, itemID: article.material.id))
+    let progress = ReadingProgress()
+        .applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 10))
+        .applying(.setRead(true, itemID: article.material.id))
     try await file.save(library)
-    #expect(try await file.load() == library)
+    try await file.saveProgress(progress)
+    let loaded = try await file.load()
+    #expect(loaded.catalog == library)
+    #expect(loaded.progress == progress)
 }
 
 @Test func oldStateWithoutReadingsStillLoads() async throws {
@@ -159,9 +183,9 @@ private let laterArticle = ImportPackage(
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     try Data(#"{"positions":{},"notes":[],"folders":[]}"#.utf8)
         .write(to: directory.appending(path: "state.json"))
-    let snapshot = try await LibraryFile(url: directory).load()
-    #expect(snapshot.readings.isEmpty)
-    #expect(snapshot.continuedID == nil)
+    let loaded = try await LibraryFile(url: directory).load()
+    #expect(loaded.progress.readings.isEmpty)
+    #expect(loaded.catalog.continuedID(loaded.progress) == nil)
 }
 
 private var sampleBook: URL {
@@ -199,7 +223,7 @@ private var sampleBook: URL {
     let imported = try BookCatalog.inspect(from: sampleBook)
     let library = try await file.storeBook(imported.record, from: sampleBook, into: LibrarySnapshot())
     try await file.save(library)
-    let loaded = try await file.load()
+    let loaded = try await file.load().catalog
     #expect(loaded.books.count == 1)
     #expect(loaded.books[0].metadata.toc.count == 223)
     let copied = directory.appending(path: "books").appending(path: imported.record.directoryName)
@@ -214,7 +238,7 @@ private var sampleBook: URL {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     try Data(#"{"positions":{},"notes":[],"folders":[]}"#.utf8)
         .write(to: directory.appending(path: "state.json"))
-    let snapshot = try await LibraryFile(url: directory).load()
+    let snapshot = try await LibraryFile(url: directory).load().catalog
     #expect(snapshot.books.isEmpty)
 }
 
@@ -347,8 +371,8 @@ private func span(_ quote: String) -> AnnotationTarget {
     try library.importPackage(article, at: .now)
     library.importBook(namedBook, at: .now)
     #expect(library.unsortedItems.map(\.id) == [namedBook.id])
-    library = try library.applying(.addToAlbum("Web", itemID: article.material.id))
-    library = try library.applying(.addToAlbum("Reading", itemID: namedBook.id))
+    library = try library.applying(.addToAlbum("Web", itemIDs: [article.material.id]))
+    library = try library.applying(.addToAlbum("Reading", itemIDs: [namedBook.id]))
     #expect(library.unsortedItems.isEmpty)
     #expect(library.items(inAlbum: "Inbox").map(\.id) == [article.material.id])
     #expect(library.items(inAlbum: "Web").map(\.id) == [article.material.id])
@@ -363,35 +387,40 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(library.albumSummaries.map(\.count) == [1, 0])
 }
 
-@Test func readThroughKeepsEarlierParagraphsRead() throws {
-    var library = LibrarySnapshot()
-    library = try library.applying(.readThrough(piece: 5, itemID: "a"))
-    #expect(library.isPieceRead(5, of: "a", current: 0))
-    #expect(!library.isPieceRead(6, of: "a", current: 3))
-    #expect(library.isPieceRead(7, of: "a", current: 8))
+@Test func readThroughKeepsEarlierParagraphsRead() {
+    let progress = ReadingProgress().applying(.readThrough(piece: 5, itemID: "a"))
+    #expect(progress.isPieceRead(5, of: "a", current: 0))
+    #expect(!progress.isPieceRead(6, of: "a", current: 3))
+    #expect(progress.isPieceRead(7, of: "a", current: 8))
 }
 
 @Test func deletingAnItemForgetsEverythingAboutIt() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
-    library = try library.applying(.savePosition(.piece(3), itemID: article.material.id, progress: 0.5))
-    library = try library.applying(.delete(itemID: article.material.id))
-    #expect(library.packages.isEmpty && library.positions.isEmpty && library.placements.isEmpty && library.readings.isEmpty)
+    let progress = ReadingProgress().applying(.savePosition(.piece(3), itemID: article.material.id, progress: 0.5))
+    let deleted = try library.applying(.delete(itemID: article.material.id))
+    let forgotten = deleted.progressChanges(since: library).reduce(progress) { $0.applying($1) }
+    #expect(deleted.packages.isEmpty && deleted.placements.isEmpty)
+    #expect(forgotten == ReadingProgress())
 }
 
-@Test func readerStateSavesWithoutRewritingPackages() async throws {
+@Test func readingProgressSavesWithoutRewritingTheCatalog() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory)
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
     try await file.save(library)
-    let packages = directory.appending(path: "packages.json")
-    let written = try FileManager.default.attributesOfItem(atPath: packages.path)[.modificationDate] as? Date
+    let written = try ["packages.json", "state.json"].map { name in
+        try FileManager.default.attributesOfItem(atPath: directory.appending(path: name).path)[.modificationDate] as? Date
+    }
     try await Task.sleep(for: .milliseconds(20))
-    let moved = try library.applying(.savePosition(.piece(1), itemID: article.material.id, progress: 0.1))
-    try await file.save(moved, previous: library)
-    #expect(try FileManager.default.attributesOfItem(atPath: packages.path)[.modificationDate] as? Date == written)
-    #expect(try await file.load() == moved)
+    let moved = ReadingProgress().applying(.savePosition(.piece(1), itemID: article.material.id, progress: 0.1))
+    try await file.saveProgress(moved)
+    let after = try ["packages.json", "state.json"].map { name in
+        try FileManager.default.attributesOfItem(atPath: directory.appending(path: name).path)[.modificationDate] as? Date
+    }
+    #expect(after == written)
+    #expect(try await file.load().progress == moved)
 }
 
 @Test func aDownloadedVideoLeavesWithItsMaterial() async throws {
@@ -416,7 +445,7 @@ private func span(_ quote: String) -> AnnotationTarget {
     let inline = String(decoding: try JSONEncoder().encode([article]), as: UTF8.self)
     try Data(#"{"positions":{},"folders":["Inbox"],"placements":{"\#(article.material.id)":["Inbox"]},"packages":\#(inline)}"#.utf8)
         .write(to: directory.appending(path: "state.json"))
-    let loaded = try await LibraryFile(url: directory).load()
+    let loaded = try await LibraryFile(url: directory).load().catalog
     #expect(loaded.packages.map(\.material.id) == [article.material.id])
     #expect(loaded.albums == ["Inbox"])
     #expect(FileManager.default.fileExists(atPath: directory.appending(path: "packages.json").path))
@@ -427,15 +456,15 @@ private func span(_ quote: String) -> AnnotationTarget {
 @Test func reimportKeepsMarksUntilTheBodyChanges() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
-    library.positions[article.material.id] = ReadingPosition(blockID: "b1")
     library.annotations.append(Annotation(materialID: article.material.id, piece: 0, quote: "Text", mark: .highlight))
+    let first = library
     try library.importPackage(article, at: .now)
     #expect(library.annotations.count == 1)
-    #expect(library.positions[article.material.id]?.blockID == "b1")
+    #expect(library.progressChanges(since: first).isEmpty)
     let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "A different page.")
     try library.importPackage(changed, at: .now)
     #expect(library.annotations.isEmpty)
-    #expect(library.positions[article.material.id] == nil)
+    #expect(library.progressChanges(since: first) == [.restart(itemID: article.material.id)])
 }
 
 @Test func bookDirectoriesFollowTheBookIdentity() {
@@ -487,7 +516,7 @@ private func span(_ quote: String) -> AnnotationTarget {
     try Data("not json".utf8).write(to: packages.appending(path: "bad.json"))
     try Data(#"{"positions":{},"notes":[],"folders":[]}"#.utf8).write(to: directory.appending(path: "state.json"))
     let file = LibraryFile(url: directory)
-    let loaded = try await file.load()
+    let loaded = try await file.load().catalog
     #expect(loaded.packages.map(\.material.id) == [article.material.id])
     #expect(await file.corruptPackageNames == ["bad.json"])
 }

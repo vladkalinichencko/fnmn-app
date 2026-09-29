@@ -3,7 +3,7 @@ import SwiftUI
 
 private enum BookText: Equatable {
     case loading
-    case ready(String)
+    case ready(String, startPiece: Int?)
     case failed(String)
 }
 
@@ -20,13 +20,13 @@ struct BookReaderView: View {
                 ProgressView()
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open the book", systemImage: "book.closed", description: Text(message))
-            case let .ready(markdown):
+            case let .ready(markdown, start):
                 MaterialReader(
                     markdown: markdown,
                     baseURL: library.bookFolder(record.directoryName),
                     materialID: record.id,
                     header: MaterialHeader(title: record.metadata.title, source: library.snapshot.source(of: record.id)),
-                    startPiece: startPiece ?? savedPiece(in: markdown)
+                    startPiece: start
                 )
             }
         }
@@ -36,14 +36,14 @@ struct BookReaderView: View {
     private func open() async {
         do {
             let markdown = try await library.bookText(record)
-            text = .ready(markdown)
+            text = .ready(markdown, startPiece: startPiece ?? savedPiece(in: markdown))
         } catch {
             text = .failed(error.localizedDescription)
         }
     }
 
     private func savedPiece(in markdown: String) -> Int? {
-        guard let position = library.snapshot.positions[record.id] else { return nil }
+        guard let position = library.position(of: record.id) else { return nil }
         if let piece = position.pieceIndex { return piece }
         guard let heading = BookCatalog.headingID(in: position) else { return nil }
         let headings = ArticleBody.headings(in: markdown)

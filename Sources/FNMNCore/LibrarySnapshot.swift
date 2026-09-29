@@ -7,9 +7,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var browserCatalog: BrowserCatalog?
     public var albums: [String] = []
     public var placements: [String: [String]] = [:]
-    public var positions: [String: ReadingPosition] = [:]
-    public var readThrough: [String: Int] = [:]
-    public var readings: [String: MaterialReading] = [:]
     public var annotations: [Annotation] = []
     public var archived: [String] = []
     public var addedAt: [String: Date] = [:]
@@ -27,21 +24,8 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         placements[materialID] ?? []
     }
 
-    public var continuedID: String? {
-        let known = Set(packages.map(\.material.id) + books.map(\.id))
-        let opened = readings.compactMap { materialID, reading -> (String, Date)? in
-            guard let openedAt = reading.openedAt, known.contains(materialID), !isArchived(materialID) else { return nil }
-            return (materialID, openedAt)
-        }
-        if let materialID = opened.max(by: { $0.1 < $1.1 })?.0 { return materialID }
-        if let article = packages.first(where: { positions[$0.material.id] != nil }) {
-            return article.material.id
-        }
-        return books.first(where: { positions[$0.id] != nil })?.id
-    }
-
     /// Adds or replaces a prepared article or video. A material that is in no album yet lands in the albums
-    /// the package names; otherwise the reader's albums stay. A changed text drops the old place and marks.
+    /// the package names; otherwise the reader's albums stay. A changed text drops the old marks.
     public mutating func importPackage(_ package: ImportPackage, at date: Date) throws {
         guard package.version == 1 else { throw LibraryError.unsupportedVersion(package.version) }
         let hasBody = !(package.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -50,7 +34,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         if let index = packages.firstIndex(where: { $0.material.id == id }) {
             let existing = packages[index]
             if existing.body != package.body || existing.blocks != package.blocks {
-                forgetReading(of: id)
+                forgetMarks(of: id)
             }
             packages[index] = package
         } else {
@@ -64,8 +48,8 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
 
     public mutating func importBook(_ record: BookRecord, at date: Date) {
         if let index = books.firstIndex(where: { $0.id == record.id }) {
+            if books[index] != record { forgetMarks(of: record.id) }
             books[index] = record
-            forgetReading(of: record.id)
         } else {
             books.append(record)
             addedAt[record.id] = date
@@ -88,9 +72,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         }
     }
 
-    mutating func forgetReading(of materialID: String) {
-        positions[materialID] = nil
-        readThrough[materialID] = nil
+    mutating func forgetMarks(of materialID: String) {
         annotations.removeAll { $0.materialID == materialID }
     }
 

@@ -115,7 +115,7 @@ private struct AlbumTileBehavior: ViewModifier {
     func body(content: Content) -> some View {
         content
             .dropDestination(for: String.self) { ids, _ in
-                Task { for id in ids { await library.apply(.addToAlbum(album.name, itemID: id)) } }
+                Task { await library.apply(.addToAlbum(album.name, itemIDs: ids)) }
                 return !ids.isEmpty
             }
             .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
@@ -160,7 +160,7 @@ struct AlbumPicker: View {
                     ForEach(library.snapshot.albumSummaries) { album in
                         AlbumTile(album: album) {
                             dialogs.send(.dismiss)
-                            Task { await library.apply(.addToAlbum(album.name, itemID: itemID)) }
+                            Task { await library.apply(.addToAlbum(album.name, itemIDs: [itemID])) }
                         }
                     }
                 }

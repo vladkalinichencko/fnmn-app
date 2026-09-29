@@ -10,14 +10,20 @@ enum LibraryLoadState: Equatable {
 }
 
 /// The one owner of the library: every change goes through `apply`, is written to disk, then published.
+/// The catalog and reading progress are separate properties, so a view that reads one never wakes for the other.
 @MainActor @Observable
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
+    private(set) var progress = ReadingProgress()
     private(set) var loadState = LibraryLoadState.idle
     var failure: String?
     let storageURL: URL
     private let file: LibraryFile
     private var lastWrite: Task<Void, Never>?
+    /// Saved places wait here: a reader saves one at every paragraph, and nothing on screen shows them.
+    @ObservationIgnored private var places: [ProgressChange] = []
+    @ObservationIgnored private var progressWrite: Task<Void, Never>?
+    @ObservationIgnored private var progressUnsaved = false
 
     init(storageURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "FNMN")) {
         self.storageURL = storageURL
@@ -32,7 +38,7 @@ final class LibraryModel {
         }
         loadState = .loading
         do {
-            snapshot = try await file.load()
+            (snapshot, progress) = try await file.load()
             loadState = .ready
             let corrupt = await file.corruptPackageNames
             if !corrupt.isEmpty {
@@ -49,6 +55,48 @@ final class LibraryModel {
         } catch {
             failure = error.localizedDescription
         }
+    }
+
+    /// A saved place is published with the next other progress change or with the write; every other change
+    /// is published at once. The write follows two seconds after the last change.
+    func apply(_ change: ProgressChange) {
+        if case .savePosition = change {
+            places.append(change)
+        } else {
+            progress = (places + [change]).reduce(progress) { $0.applying($1) }
+            places = []
+        }
+        progressUnsaved = true
+        progressWrite?.cancel()
+        progressWrite = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            await saveProgress()
+        }
+    }
+
+    /// Writes progress now: when the app leaves the foreground and when a reader closes.
+    func saveProgress() async {
+        progressWrite?.cancel()
+        guard progressUnsaved else { return }
+        if !places.isEmpty {
+            progress = places.reduce(progress) { $0.applying($1) }
+            places = []
+        }
+        progressUnsaved = false
+        do {
+            try await file.saveProgress(progress)
+        } catch {
+            failure = error.localizedDescription
+        }
+    }
+
+    /// Where a reader opens, including a place that is not published yet.
+    func position(of itemID: String) -> ReadingPosition? {
+        for case let .savePosition(position, id, _) in places.reversed() where id == itemID {
+            return position
+        }
+        return progress.positions[itemID]
     }
 
     /// Stores a package the Mac prepared, with its pictures and videos.
@@ -116,7 +164,8 @@ final class LibraryModel {
     }
 
     /// Writes run one after another, each on the snapshot the previous one produced.
-    /// Imports save their own files, so only reader changes are saved here.
+    /// Imports save their own files, so only reader changes are saved here. A material that left
+    /// or got a new text loses its reading progress in the same step.
     private func write(saving: Bool, _ next: @escaping @MainActor (LibrarySnapshot) async throws -> LibrarySnapshot) async throws {
         let previous = lastWrite
         let task = Task { @MainActor in
@@ -126,6 +175,7 @@ final class LibraryModel {
             guard updated != current else { return }
             if saving { try await file.save(updated, previous: current) }
             snapshot = updated
+            for change in updated.progressChanges(since: current) { apply(change) }
         }
         lastWrite = Task { _ = try? await task.value }
         try await task.value

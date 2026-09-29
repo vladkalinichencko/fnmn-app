@@ -14,6 +14,8 @@ private struct VideoCue: Identifiable, Equatable {
 @MainActor @Observable
 private final class VideoPlayback {
     let cues: [VideoCue]
+    /// The saved second the video opened at.
+    let start: Double
     private(set) var activeIndex: Int
     @ObservationIgnored private(set) var seconds: Double
     @ObservationIgnored var savedAt = Date.distantPast
@@ -25,6 +27,7 @@ private final class VideoPlayback {
             guard !text.isEmpty else { return nil }
             return VideoCue(id: block.id, startSeconds: start, text: text)
         }
+        start = seconds
         self.seconds = seconds
         activeIndex = Self.index(in: cues, at: seconds)
     }
@@ -87,7 +90,7 @@ struct VideoReaderView: View {
     }
 
     private var savedSeconds: Double {
-        library.snapshot.positions[materialID]?.videoSeconds ?? 0
+        library.position(of: materialID)?.videoSeconds ?? 0
     }
 
     private var download: ImportJob? {
@@ -128,6 +131,7 @@ struct VideoReaderView: View {
         .onDisappear {
             resumeFollowing?.cancel()
             save(force: true)
+            Task { await library.saveProgress() }
         }
         .onChange(of: scenePhase) { _, phase in if phase != .active { save(force: true) } }
         .onChange(of: playback?.activeIndex) { _, _ in
@@ -165,15 +169,17 @@ struct VideoReaderView: View {
     @ViewBuilder
     private var player: some View {
         if let file = library.videoFile(materialID) {
-            SystemPlayer(url: file, start: savedSeconds, seekTo: $seekTo, onSeconds: play(at:), onPause: { save(force: true) })
-                .aspectRatio(16 / 9, contentMode: .fit)
+            if let playback {
+                SystemPlayer(url: file, start: playback.start, seekTo: $seekTo, onSeconds: play(at:), onPause: { save(force: true) })
+                    .aspectRatio(16 / 9, contentMode: .fit)
+            }
         } else {
             ZStack {
-                if let videoID, let origin = mac.connection?.endpoint {
+                if let playback, let videoID, let origin = mac.connection?.endpoint {
                     YouTubeEmbedView(
                         videoID: videoID,
                         origin: origin,
-                        start: savedSeconds,
+                        start: playback.start,
                         seekTo: $seekTo,
                         phase: $phase,
                         onSeconds: play(at:),
@@ -260,14 +266,14 @@ struct VideoReaderView: View {
         }
     }
 
-    /// Writes the exact second on pause, seek, leaving and backgrounding, and every two seconds while playing.
+    /// Saves the exact second on pause, seek, leaving and backgrounding, and every two seconds while playing.
     private func save(force: Bool) {
         guard let playback, force || Date.now.timeIntervalSince(playback.savedAt) >= 2 else { return }
         guard abs(playback.seconds - savedSeconds) > 0.01 else { return }
         playback.savedAt = .now
         let blockID = package.blocks.first { $0.kind == .video }?.id ?? materialID
         let position = ReadingPosition(blockID: blockID, videoSeconds: playback.seconds)
-        Task { await library.apply(.savePosition(position, itemID: materialID, progress: playback.progress)) }
+        library.apply(.savePosition(position, itemID: materialID, progress: playback.progress))
     }
 }
 

@@ -22,7 +22,7 @@ struct ItemScreen: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)
-        .task { await library.apply(.open(itemID: itemID)) }
+        .task { library.apply(.open(itemID: itemID)) }
     }
 }
 
