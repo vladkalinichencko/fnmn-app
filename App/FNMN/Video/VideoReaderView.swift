@@ -79,6 +79,7 @@ struct VideoReaderView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(Tokens.canvas)
         .navigationTitle(package.material.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -141,18 +142,18 @@ struct VideoReaderView: View {
                 }
                 switch embedState {
                 case .loading:
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 180)
+                    VideoPlaceholder { ProgressView() }
                 case .ready:
                     EmptyView()
                 case let .failed(message):
-                    ContentUnavailableView {
-                        Label(package.material.title, systemImage: "play.rectangle")
-                    } description: {
+                    VStack(spacing: 0) {
+                        VideoPlaceholder {
+                            Image(systemName: "play.fill").font(.largeTitle).foregroundStyle(.tertiary)
+                        }
                         Text(message)
-                    } actions: {
-                        Link("Open on YouTube", destination: package.material.sourceURL)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 180)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -160,9 +161,10 @@ struct VideoReaderView: View {
     }
 
     /// The embed needs a page address of our own for YouTube to accept it; it is the Mac's.
+    /// The original and the download stay in the `···` menu, so the message only says what is missing.
     private var embedState: EmbedPhase {
-        guard videoID != nil else { return .failed("This address has no YouTube video.") }
-        guard mac.connection != nil else { return .failed("Set up the Mac in Settings to play videos here, or download the video.") }
+        guard videoID != nil else { return .failed("Not a YouTube video") }
+        guard mac.connection != nil else { return .failed("Connect the Mac in Settings to play here") }
         return phase
     }
 
@@ -173,28 +175,30 @@ struct VideoReaderView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(cues) { cue in
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        let active = cues.firstIndex { $0.id == activeCueID } ?? 0
+                        ForEach(Array(cues.enumerated()), id: \.element.id) { index, cue in
                             Button {
                                 seekTo = cue.startSeconds
                                 seconds = cue.startSeconds
                                 save(force: true)
                                 followsCaptions = true
                             } label: {
-                                Text(cue.text)
-                                    .multilineTextAlignment(.leading)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 6)
-                                    .padding(.horizontal, 10)
-                                    .background(cue.id == activeCueID ? Color.accentColor.opacity(0.15) : .clear, in: .rect(cornerRadius: 10, style: .continuous))
+                                CueRow(cue: cue, state: index < active ? .past : index == active ? .current : .ahead)
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = cue.text }
+                            }
                             .id(cue.id)
                         }
                     }
                     .scrollTargetLayout()
-                    .padding()
+                    .padding(.horizontal, Tokens.gutter)
+                    .padding(.vertical, Tokens.gap)
+                    .animation(.snappy, value: activeCueID)
                 }
+                .background(Tokens.canvas)
                 .scrollPosition(id: $pinnedCue, anchor: .center)
                 .onScrollPhaseChange { _, phase in
                     guard phase == .interacting else { return }
@@ -224,6 +228,51 @@ struct VideoReaderView: View {
         let progress = cues.isEmpty ? 0 : Double((cues.firstIndex { $0.id == activeCueID } ?? -1) + 1) / Double(cues.count)
         let position = ReadingPosition(blockID: blockID, videoSeconds: seconds)
         Task { await library.apply(.savePosition(position, itemID: materialID, progress: progress)) }
+    }
+}
+
+/// One line of the transcript, in the reader's font: the line being spoken sits on a plate like a paragraph,
+/// what is already said fades back, and each line keeps its time at the side.
+private struct CueRow: View {
+    enum State { case past, current, ahead }
+    let cue: VideoCue
+    let state: State
+    @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(Duration.seconds(cue.startSeconds).formatted(.time(pattern: cue.startSeconds >= 3600 ? .hourMinuteSecond : .minuteSecond)))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(state == .current ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+                .frame(minWidth: 36, alignment: .trailing)
+            Text(cue.text)
+                .font(.system(.body, design: readerFont.design))
+                .foregroundStyle(state == .past ? .secondary : .primary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background {
+            if state == .current {
+                Color.clear.plate(cornerRadius: Tokens.plateRadius - 8)
+            }
+        }
+        .contentShape(.rect)
+    }
+}
+
+/// Where the video will be: a gray frame of the video's shape, holding a spinner or a play symbol.
+private struct VideoPlaceholder<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: Tokens.plateRadius, style: .continuous)
+            .fill(.quaternary)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay(content: content)
+            .padding(.horizontal, Tokens.gutter)
+            .padding(.vertical, Tokens.gap)
     }
 }
 
