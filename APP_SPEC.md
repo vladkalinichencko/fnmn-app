@@ -45,7 +45,7 @@ App/FNMN/
               AlbumPicker, AddMenu, LinkSheet, LibraryCoordinator
   Reader/     ItemScreen, ReaderCoordinator, MaterialReader, BookReaderView,
               ReadingSession, BlockView, MarkedMarkdown, ReaderSettings, LiveCropView, ChatGPTHandoff
-  Video/      VideoReaderView (встроенный YouTube, системный плеер, подписи)
+  Video/      VideoCoordinator, VideoReaderView (встроенный YouTube, системный плеер, подписи)
   Shelf/      ShelfScreen, AnnotationList
   Search/     SearchScreen
   Settings/   SettingsScreen
@@ -96,7 +96,7 @@ App/FNMN/
 - **Settings:** `editing`, `checking`, `connected`, `failed(message)`.
 - **Открытие материала** (`ItemScreen`, `BookReaderView`): `loading`, затем статья или книга с готовым `ReaderCoordinator`, видео с пакетом, или `failed(message)`. Документ строится вне главного потока до создания координатора.
 - **ReaderCoordinator** (открытый документ): режим плашки `PlateMode` — `reading | selectingText(piece) | selectingParagraphs(pieces) | noting(piece)`, свёртка `ReadingFold`, место чтения и прокрутка колонки; он же сохраняет место и выполняет действия плашек. Блоки получают его из окружения, а от родителя только значения (блок, режим, прочитан ли, заметки этого блока), поэтому `BlockView` сравнивается через `.equatable()`, и смена места перерисовывает только блоки, у которых изменилось «прочитано». Масштаб жеста pinch лежит в отдельном маленьком наблюдаемом значении, его читает только эффект свёртки.
-- **Video**: встроенный плеер `EmbedPhase` — `loading | ready | failed(message)`; реплики транскрипта строятся один раз при открытии, наблюдаемое состояние — индекс активной реплики, а не секунда. Источник выводится из данных: скачанный файл в `videoFiles`, идущее скачивание — задача `ImportJobs` с входом `videoFile`, иначе встроенный YouTube.
+- **VideoCoordinator** (открытое видео): `VideoState` — активная реплика, строка, на которой стоит транскрипт, следует ли он за видео, ещё не выполненная перемотка, `EmbedPhase` встроенного плеера (`loading | ready | failed(message)`) и показ подписей; `VideoAction` и чистый `videoReduce`. Реплики строятся один раз при открытии. Секунда плеера живёт вне наблюдаемого состояния, состояние меняется только при смене реплики. Эффекты — сохранение точной секунды и таймер, который через пять секунд после ручной прокрутки возвращает слежение; координатор держит этот таймер и отменяет его при уходе с экрана. Источник выводится из данных: скачанный файл в `videoFiles`, идущее скачивание — задача `ImportJobs` с входом `videoFile`, иначе встроенный YouTube.
 
 ## Хранение
 

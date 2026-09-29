@@ -3,68 +3,6 @@ import FNMNCore
 import SwiftUI
 import WebKit
 
-private struct VideoCue: Identifiable, Equatable {
-    let id: String
-    let startSeconds: Double
-    let text: String
-}
-
-/// An open video's transcript and where playback is. The lines are built once when the video opens.
-/// The player reports its second twice a second; views wake only when the line being spoken changes.
-@MainActor @Observable
-private final class VideoPlayback {
-    let cues: [VideoCue]
-    /// The saved second the video opened at.
-    let start: Double
-    private(set) var activeIndex: Int
-    @ObservationIgnored private(set) var seconds: Double
-    @ObservationIgnored var savedAt = Date.distantPast
-
-    init(package: ImportPackage, seconds: Double) {
-        cues = package.blocks.compactMap { block in
-            guard block.kind == .transcript, let start = block.startSeconds else { return nil }
-            let text = block.html.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return nil }
-            return VideoCue(id: block.id, startSeconds: start, text: text)
-        }
-        start = seconds
-        self.seconds = seconds
-        activeIndex = Self.index(in: cues, at: seconds)
-    }
-
-    var activeCueID: String? {
-        cues.isEmpty ? nil : cues[activeIndex].id
-    }
-
-    /// The share of lines already spoken, saved as the video's progress.
-    var progress: Double {
-        cues.isEmpty ? 0 : Double(activeIndex + 1) / Double(cues.count)
-    }
-
-    func play(at seconds: Double) {
-        self.seconds = seconds
-        let index = Self.index(in: cues, at: seconds)
-        if index != activeIndex { activeIndex = index }
-    }
-
-    /// The last line that starts at or before the second, or the first line; the lines come in time order.
-    private static func index(in cues: [VideoCue], at seconds: Double) -> Int {
-        var low = 0
-        var high = cues.count
-        while low < high {
-            let middle = (low + high) / 2
-            if cues[middle].startSeconds <= seconds + 0.05 { low = middle + 1 } else { high = middle }
-        }
-        return max(low - 1, 0)
-    }
-}
-
-enum EmbedPhase: Equatable {
-    case loading
-    case ready
-    case failed(String)
-}
-
 /// A video with its transcript. A downloaded file plays in the system player, otherwise YouTube plays embedded.
 /// The second the viewer stopped at is saved exactly and survives restarts.
 struct VideoReaderView: View {
@@ -73,24 +11,14 @@ struct VideoReaderView: View {
     @Environment(ImportJobs.self) private var imports
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
-    let package: ImportPackage
-    @State private var playback: VideoPlayback?
-    @State private var showCaptions = true
-    @State private var seekTo: Double?
-    @State private var phase = EmbedPhase.loading
-    @State private var pinnedCue: String?
-    @State private var followsCaptions = true
-    @State private var resumeFollowing: Task<Void, Never>?
+    let video: VideoCoordinator
 
+    private var package: ImportPackage { video.package }
     private var materialID: String { package.material.id }
 
     private var videoID: String? {
         [package.blocks.first { $0.kind == .video }?.mediaURL, package.material.sourceURL]
             .compactMap { $0 }.compactMap(YouTube.videoID(in:)).first
-    }
-
-    private var savedSeconds: Double {
-        library.position(of: materialID)?.videoSeconds ?? 0
     }
 
     private var download: ImportJob? {
@@ -100,16 +28,17 @@ struct VideoReaderView: View {
     var body: some View {
         GeometryReader { geometry in
             let sideBySide = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
+            let showsCaptions = video.state.showsCaptions
             Group {
                 if sideBySide {
                     HStack(alignment: .top, spacing: 0) {
-                        player.frame(maxWidth: showCaptions ? geometry.size.width * 0.58 : .infinity, maxHeight: .infinity)
-                        if showCaptions { captions.frame(width: geometry.size.width * 0.42, height: geometry.size.height) }
+                        player.frame(maxWidth: showsCaptions ? geometry.size.width * 0.58 : .infinity, maxHeight: .infinity)
+                        if showsCaptions { captions.frame(width: geometry.size.width * 0.42, height: geometry.size.height) }
                     }
                 } else {
                     VStack(spacing: 0) {
                         player
-                        if showCaptions { captions }
+                        if showsCaptions { captions }
                     }
                 }
             }
@@ -119,29 +48,15 @@ struct VideoReaderView: View {
         .navigationTitle(package.material.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Toggle(showCaptions ? "Hide Captions" : "Show Captions", systemImage: "captions.bubble", isOn: $showCaptions)
+            Toggle(
+                video.state.showsCaptions ? "Hide Captions" : "Show Captions",
+                systemImage: "captions.bubble",
+                isOn: video.binding(\.showsCaptions, send: VideoAction.showCaptions)
+            )
             Menu("More", systemImage: "ellipsis") { videoMenu }
         }
-        .onAppear {
-            guard playback == nil else { return }
-            let playback = VideoPlayback(package: package, seconds: savedSeconds)
-            self.playback = playback
-            pinnedCue = playback.activeCueID
-        }
-        .onDisappear {
-            resumeFollowing?.cancel()
-            save(force: true)
-            Task { await library.saveProgress() }
-        }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { save(force: true) } }
-        .onChange(of: playback?.activeIndex) { _, _ in
-            if followsCaptions { pinnedCue = playback?.activeCueID }
-        }
-    }
-
-    private func play(at seconds: Double) {
-        playback?.play(at: seconds)
-        save(force: false)
+        .onDisappear { video.send(.left) }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { video.send(.left) } }
     }
 
     @ViewBuilder
@@ -168,25 +83,33 @@ struct VideoReaderView: View {
 
     @ViewBuilder
     private var player: some View {
+        let video = video
         if let file = library.videoFile(materialID) {
-            if let playback {
-                SystemPlayer(url: file, start: playback.start, seekTo: $seekTo, onSeconds: play(at:), onPause: { save(force: true) })
-                    .aspectRatio(16 / 9, contentMode: .fit)
-            }
+            SystemPlayer(
+                url: file,
+                start: video.start,
+                seekTo: video.state.seekTo,
+                onSeekDone: { video.send(.seekDone) },
+                onSeconds: { video.send(.played($0)) },
+                onPause: { video.send(.paused) }
+            )
+            .aspectRatio(16 / 9, contentMode: .fit)
         } else {
             ZStack {
-                if let playback, let videoID, let origin = mac.connection?.endpoint {
+                if let videoID, let origin = mac.connection?.endpoint {
                     YouTubeEmbedView(
                         videoID: videoID,
                         origin: origin,
-                        start: playback.start,
-                        seekTo: $seekTo,
-                        phase: $phase,
-                        onSeconds: play(at:),
-                        onPause: { save(force: true) }
+                        start: video.start,
+                        seekTo: video.state.seekTo,
+                        phase: video.state.embed,
+                        onSeekDone: { video.send(.seekDone) },
+                        onPhase: { video.send(.embed($0)) },
+                        onSeconds: { video.send(.played($0)) },
+                        onPause: { video.send(.paused) }
                     )
                     .aspectRatio(16 / 9, contentMode: .fit)
-                    .opacity(phase == .ready ? 1 : 0)
+                    .opacity(video.state.embed == .ready ? 1 : 0)
                 }
                 switch embedState {
                 case .loading:
@@ -213,24 +136,21 @@ struct VideoReaderView: View {
     private var embedState: EmbedPhase {
         guard videoID != nil else { return .failed("Not a YouTube video") }
         guard mac.connection != nil else { return .failed("Connect the Mac in Settings to play here") }
-        return phase
+        return video.state.embed
     }
 
     @ViewBuilder
     private var captions: some View {
-        if let playback, playback.cues.isEmpty {
+        if video.cues.isEmpty {
             ContentUnavailableView("No captions", systemImage: "captions.bubble", description: Text("YouTube did not return captions. The video still plays."))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let playback {
-            let active = playback.activeIndex
+        } else {
+            let active = video.state.activeIndex
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(playback.cues.enumerated()), id: \.element.id) { index, cue in
+                    ForEach(Array(video.cues.enumerated()), id: \.element.id) { index, cue in
                         Button {
-                            seekTo = cue.startSeconds
-                            playback.play(at: cue.startSeconds)
-                            save(force: true)
-                            followsCaptions = true
+                            video.send(.jumped(toCue: index))
                         } label: {
                             CueRow(cue: cue, state: index < active ? .past : index == active ? .current : .ahead)
                         }
@@ -247,33 +167,11 @@ struct VideoReaderView: View {
                 .animation(.snappy, value: active)
             }
             .background(Tokens.canvas)
-            .scrollPosition(id: $pinnedCue, anchor: .center)
+            .scrollPosition(id: video.binding(\.pinnedCue, send: VideoAction.pinned), anchor: .center)
             .onScrollPhaseChange { _, phase in
-                guard phase == .interacting else { return }
-                pauseFollowing()
+                if phase == .interacting { video.send(.scrolledByHand) }
             }
         }
-    }
-
-    /// Scrolling the transcript by hand stops it following the video for a few seconds.
-    private func pauseFollowing() {
-        followsCaptions = false
-        resumeFollowing?.cancel()
-        resumeFollowing = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            followsCaptions = true
-        }
-    }
-
-    /// Saves the exact second on pause, seek, leaving and backgrounding, and every two seconds while playing.
-    private func save(force: Bool) {
-        guard let playback, force || Date.now.timeIntervalSince(playback.savedAt) >= 2 else { return }
-        guard abs(playback.seconds - savedSeconds) > 0.01 else { return }
-        playback.savedAt = .now
-        let blockID = package.blocks.first { $0.kind == .video }?.id ?? materialID
-        let position = ReadingPosition(blockID: blockID, videoSeconds: playback.seconds)
-        library.apply(.savePosition(position, itemID: materialID, progress: playback.progress))
     }
 }
 
@@ -326,7 +224,8 @@ private struct VideoPlaceholder<Content: View>: View {
 private struct SystemPlayer: UIViewControllerRepresentable {
     let url: URL
     let start: Double
-    @Binding var seekTo: Double?
+    let seekTo: Double?
+    let onSeekDone: @MainActor () -> Void
     let onSeconds: @MainActor (Double) -> Void
     let onPause: @MainActor () -> Void
 
@@ -346,7 +245,8 @@ private struct SystemPlayer: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
         guard let value = seekTo, let player = controller.player else { return }
         player.seek(to: CMTime(seconds: value, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-        DispatchQueue.main.async { seekTo = nil }
+        let done = onSeekDone
+        Task { @MainActor in done() }
     }
 
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
@@ -381,10 +281,12 @@ private struct YouTubeEmbedView: UIViewRepresentable {
     let videoID: String
     let origin: URL
     let start: Double
-    @Binding var seekTo: Double?
-    @Binding var phase: EmbedPhase
-    let onSeconds: (Double) -> Void
-    let onPause: () -> Void
+    let seekTo: Double?
+    let phase: EmbedPhase
+    let onSeekDone: @MainActor () -> Void
+    let onPhase: @MainActor (EmbedPhase) -> Void
+    let onSeconds: @MainActor (Double) -> Void
+    let onPause: @MainActor () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -403,17 +305,17 @@ private struct YouTubeEmbedView: UIViewRepresentable {
 
     func updateUIView(_ view: WKWebView, context: Context) {
         context.coordinator.onSeconds = onSeconds
-        context.coordinator.onPhase = { phase = $0 }
+        context.coordinator.onPhase = onPhase
         context.coordinator.onPause = onPause
         if context.coordinator.loaded != videoID {
             context.coordinator.loaded = videoID
             context.coordinator.resumeAt = start
-            phase = .loading
             view.loadHTMLString(Self.page(videoID: videoID, origin: origin, start: start), baseURL: origin)
         }
         if phase == .ready, let value = seekTo ?? context.coordinator.takeResume() {
+            let done = seekTo == nil ? nil : onSeekDone
             view.evaluateJavaScript("window.fnmnSeek(\(value));") { _, _ in
-                DispatchQueue.main.async { if self.seekTo == value { self.seekTo = nil } }
+                if let done { Task { @MainActor in done() } }
             }
         }
     }
@@ -422,12 +324,13 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         view.configuration.userContentController.removeScriptMessageHandler(forName: "fnmn")
     }
 
+    @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var loaded: String?
         var resumeAt: Double?
-        var onSeconds: ((Double) -> Void)?
-        var onPhase: ((EmbedPhase) -> Void)?
-        var onPause: (() -> Void)?
+        var onSeconds: (@MainActor (Double) -> Void)?
+        var onPhase: (@MainActor (EmbedPhase) -> Void)?
+        var onPause: (@MainActor () -> Void)?
 
         /// The exact saved second, applied once the player is ready; the page itself can only start on a whole second.
         func takeResume() -> Double? {

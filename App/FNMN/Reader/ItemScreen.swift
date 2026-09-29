@@ -25,7 +25,7 @@ struct ItemScreen: View {
 private enum ArticleText {
     case loading
     case article(ReaderCoordinator, sourceURL: URL)
-    case video(ImportPackage)
+    case video(VideoCoordinator)
     case failed(String)
 }
 
@@ -46,8 +46,8 @@ private struct ArticleOpener: View {
                 ContentUnavailableView("Couldn’t open this material", systemImage: "doc", description: Text(message))
             case let .article(reader, sourceURL):
                 MaterialReader(reader: reader, sourceURL: sourceURL)
-            case let .video(package):
-                VideoReaderView(package: package)
+            case let .video(video):
+                VideoReaderView(video: video)
             }
         }
         .task(id: library.snapshot.articleRevisions[itemID]) {
@@ -63,7 +63,7 @@ private struct ArticleOpener: View {
 
     private func open() async throws -> ArticleText {
         let package = try await library.article(itemID)
-        guard package.material.kind != .video else { return .video(package) }
+        guard package.material.kind != .video else { return .video(VideoCoordinator(package: package, library: library)) }
         let reader = ReaderCoordinator(
             document: await Self.document(of: package),
             materialID: itemID,
