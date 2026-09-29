@@ -73,8 +73,11 @@ extension StructuredText.TableCell {
   struct SpacingKey: PreferenceKey {
     static let defaultValue = Spacing()
 
+    /// A view that sets no spacing leaves the table's own value; taking the last value as is let an empty
+    /// one reset the grid to its default spacing, which drew the dividers several points thick.
     static func reduce(value: inout Spacing, nextValue: () -> Spacing) {
-      value = nextValue()
+      let next = nextValue()
+      value = Spacing(horizontal: next.horizontal ?? value.horizontal, vertical: next.vertical ?? value.vertical)
     }
   }
 }
