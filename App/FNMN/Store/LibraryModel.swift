@@ -3,6 +3,7 @@ import Foundation
 import Observation
 
 enum LibraryLoadState: Equatable {
+    case idle
     case loading
     case ready
     case failed(String)
@@ -12,7 +13,7 @@ enum LibraryLoadState: Equatable {
 @MainActor @Observable
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
-    private(set) var loadState = LibraryLoadState.loading
+    private(set) var loadState = LibraryLoadState.idle
     var failure: String?
     let storageURL: URL
     private let file: LibraryFile
@@ -23,7 +24,12 @@ final class LibraryModel {
         file = LibraryFile(url: storageURL)
     }
 
+    /// Every window asks for the library; only the first ask, or a retry after a failure, reads it.
     func load() async {
+        switch loadState {
+        case .loading, .ready: return
+        case .idle, .failed: break
+        }
         loadState = .loading
         do {
             snapshot = try await file.load()

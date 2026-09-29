@@ -35,7 +35,7 @@ private struct WindowRoot: View {
     var body: some View {
         Group {
             switch library.loadState {
-            case .loading:
+            case .idle, .loading:
                 ProgressView()
             case let .failed(message):
                 ContentUnavailableView {
@@ -51,7 +51,7 @@ private struct WindowRoot: View {
         }
         .environment(navigation)
         .environment(dialogs)
-        .task { if library.loadState == .loading { await library.load() } }
+        .task { await library.load() }
         .onChange(of: library.loadState) { _, state in
             guard state == .ready, pendingContinue else { return }
             pendingContinue = false
