@@ -243,6 +243,21 @@ private var sampleBook: URL {
     }
 }
 
+@Test func aPickedPackageOrBookFolderIsStoredAndAPDFIsNot() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let file = LibraryFile(url: directory.appending(path: "library"))
+    let picked = directory.appending(path: "a.json")
+    try JSONEncoder().encode(article).write(to: picked)
+    var library = try await file.storePicked(picked, into: LibrarySnapshot())
+    library = try await file.storePicked(sampleBook, into: library)
+    #expect(library.articles.map(\.material.id) == [article.material.id])
+    #expect(library.books.count == 1)
+    let pdf = directory.appending(path: "b.pdf")
+    try Data("%PDF".utf8).write(to: pdf)
+    await #expect(throws: CaptureError.unprepared(.pdf)) { try await file.storePicked(pdf, into: library) }
+}
+
 @Test func bookImportCopiesCatalogIntoLibrary() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory)

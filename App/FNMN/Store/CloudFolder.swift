@@ -5,16 +5,22 @@ import Foundation
 /// before that sees no such file, so its material would show as a bare link.
 enum CloudFolder {
     /// Asks iCloud for every file under the folder and returns when all of them are on the device.
+    /// The folder holds thousands of files, so the walk runs off the main thread, and the check
+    /// waits longer each time nothing new has arrived: from half a second up to five.
+    @concurrent
     static func download(_ folder: URL, timeout: Duration = .seconds(600)) async throws {
         var pending = missing(in: folder)
         for file in pending {
             try? FileManager.default.startDownloadingUbiquitousItem(at: file)
         }
         let deadline = ContinuousClock.now + timeout
+        var pause = Duration.milliseconds(500)
         while !pending.isEmpty {
             guard ContinuousClock.now < deadline else { throw CloudFolderError.notDownloaded(pending.count) }
-            try await Task.sleep(for: .milliseconds(500))
-            pending = pending.filter { !isLocal($0) }
+            try await Task.sleep(for: pause)
+            let still = pending.filter { !isLocal($0) }
+            pause = still.count == pending.count ? min(pause * 2, .seconds(5)) : .milliseconds(500)
+            pending = still
         }
     }
 

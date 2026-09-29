@@ -104,39 +104,11 @@ final class LibraryModel {
         try await write(saving: false) { [file] snapshot in try await file.storeArticle(package, files: files, into: snapshot) }
     }
 
-    /// Stores a picked prepared package, book folder, or the FNMN folder: a prepared browser library
-    /// (`catalog.json`, `deliveries/`) with its books in `books/`.
+    /// Stores a picked prepared package, book folder, or the FNMN folder. Reading it happens in `LibraryFile`,
+    /// off the main thread; a folder is first brought down from iCloud.
     func importFile(at url: URL) async throws {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
-            throw CaptureError.unrecognizedDocument
-        }
-        if isDirectory.boolValue {
-            try await CloudFolder.download(url)
-        }
-        if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
-            try await write(saving: false) { [file] snapshot in try await file.storeBrowserLibrary(from: url, into: snapshot) }
-            for book in try bookFolders(in: url.appending(path: "books")) {
-                try await importFile(at: book)
-            }
-        } else if isDirectory.boolValue {
-            let record = try BookCatalog.inspect(from: url).record
-            try await write(saving: false) { [file] snapshot in try await file.storeBook(record, from: url, into: snapshot) }
-        } else if url.pathExtension.lowercased() == "json" {
-            let package = try JSONDecoder().decode(ImportPackage.self, from: Data(contentsOf: url))
-            try await store(package, files: [:])
-        } else if url.pathExtension.lowercased() == "pdf" {
-            throw CaptureError.unprepared(.pdf)
-        } else {
-            throw CaptureError.unrecognizedDocument
-        }
-    }
-
-    private func bookFolders(in folder: URL) throws -> [URL] {
-        guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
-        return try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        try await CloudFolder.download(url)
+        try await write(saving: false) { [file] snapshot in try await file.storePicked(url, into: snapshot) }
     }
 
     func storeVideoFile(_ itemID: String, from download: URL) async throws {

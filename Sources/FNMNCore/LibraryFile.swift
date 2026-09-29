@@ -237,6 +237,38 @@ public actor LibraryFile {
         }
     }
 
+    /// Stores a picked prepared package, book folder, or the FNMN folder: a prepared browser library
+    /// (`catalog.json`, `deliveries/`) with its books in `books/`.
+    public func storePicked(_ url: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            throw CaptureError.unrecognizedDocument
+        }
+        if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
+            var next = try storeBrowserLibrary(from: url, into: snapshot)
+            for book in try bookFolders(in: url.appending(path: "books")) {
+                next = try storeBook(try BookCatalog.inspect(from: book).record, from: book, into: next)
+            }
+            return next
+        } else if isDirectory.boolValue {
+            return try storeBook(try BookCatalog.inspect(from: url).record, from: url, into: snapshot)
+        } else if url.pathExtension.lowercased() == "json" {
+            let package = try decoder.decode(ImportPackage.self, from: Data(contentsOf: url))
+            return try storeArticle(package, files: [:], into: snapshot)
+        } else if url.pathExtension.lowercased() == "pdf" {
+            throw CaptureError.unprepared(.pdf)
+        } else {
+            throw CaptureError.unrecognizedDocument
+        }
+    }
+
+    private func bookFolders(in folder: URL) throws -> [URL] {
+        guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
     public func storeBrowserLibrary(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
         let deliveries = try FileManager.default.contentsOfDirectory(
