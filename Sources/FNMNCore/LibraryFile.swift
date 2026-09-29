@@ -156,6 +156,12 @@ public actor LibraryFile {
         if FileManager.default.fileExists(atPath: packagesURL.path) {
             try FileManager.default.removeItem(at: packagesURL)
         }
+        // The oldest layout kept one file per package; once every one of them is in, the folder goes.
+        // A file that could not be read keeps the folder, so it is not lost.
+        let legacyFolder = root.appending(path: "packages")
+        if corruptPackageNames.isEmpty, FileManager.default.fileExists(atPath: legacyFolder.path) {
+            try FileManager.default.removeItem(at: legacyFolder)
+        }
         return (snapshot, progress)
     }
 

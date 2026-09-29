@@ -570,6 +570,16 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(try String(contentsOf: content, encoding: .utf8) == "old")
 }
 
+@Test func theOldPackagesFolderGoesOnceEveryPackageIsIn() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let packages = directory.appending(path: "packages")
+    try FileManager.default.createDirectory(at: packages, withIntermediateDirectories: true)
+    try JSONEncoder().encode(article).write(to: packages.appending(path: "good.json"))
+    let loaded = try await LibraryFile(url: directory).load().catalog
+    #expect(loaded.articles.map(\.material.id) == [article.material.id])
+    #expect(!FileManager.default.fileExists(atPath: packages.path))
+}
+
 @Test func oneCorruptPackageDoesNotHideTheOthers() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let packages = directory.appending(path: "packages")
@@ -581,6 +591,7 @@ private func span(_ quote: String) -> AnnotationTarget {
     let loaded = try await file.load().catalog
     #expect(loaded.articles.map(\.material.id) == [article.material.id])
     #expect(await file.corruptPackageNames == ["bad.json"])
+    #expect(FileManager.default.fileExists(atPath: packages.appending(path: "bad.json").path))
 }
 
 @Test func legacyArticleAssetsSurviveLoad() async throws {
