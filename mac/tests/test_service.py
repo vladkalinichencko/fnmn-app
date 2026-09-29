@@ -47,6 +47,21 @@ class ServiceTests(unittest.TestCase):
                 time.sleep(0.05)
         self.assertEqual((status["phase"], status["error"]), ("failed", "no text layer"))
 
+    def test_video_job_hands_over_the_downloaded_file(self):
+        def fake_download(url, folder, report):
+            report("downloadingVideo", 1, 2)
+            file = folder / "abcdefghijk.mp4"
+            file.write_bytes(b"mp4")
+            return file
+
+        with patch("jobs.youtube.download", fake_download):
+            job = self.client.post("/videos", json={"url": "https://youtu.be/abcdefghijk"}).json()
+            while (status := self.client.get(f"/jobs/{job['id']}").json())["phase"] != "done":
+                time.sleep(0.05)
+        response = self.client.get(f"/jobs/{job['id']}/file")
+        self.assertEqual((response.status_code, response.content), (200, b"mp4"))
+        self.assertEqual(response.headers["content-type"], "video/mp4")
+
 
 if __name__ == "__main__":
     unittest.main()

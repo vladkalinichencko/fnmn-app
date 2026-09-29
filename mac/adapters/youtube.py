@@ -41,6 +41,36 @@ def read(url: str, web: Web, report: Report) -> Video:
     return Video(video_id, title, author, cues)
 
 
+def download(url: str, folder: Path, report: Report) -> Path:
+    """Saves the video as one mp4 up to 720p, so the phone can play it offline in the system player."""
+    video_id = video_id_from_url(url)
+    if video_id is None:
+        raise ValueError("YouTube address has no video id")
+
+    def progress(state: dict) -> None:
+        if state.get("status") == "downloading":
+            total = state.get("total_bytes") or state.get("total_bytes_estimate")
+            report("downloadingVideo", int(state.get("downloaded_bytes") or 0) >> 20, int(total) >> 20 if total else None)
+
+    options = {
+        "noplaylist": True, "quiet": True, "noprogress": True,
+        "js_runtimes": {"node": {"path": "node"}},
+        "format": "bv*[ext=mp4][height<=720]+ba[ext=m4a]/b[ext=mp4][height<=720]/b[ext=mp4]",
+        "merge_output_format": "mp4",
+        "outtmpl": str(folder / f"{video_id}.%(ext)s"),
+        "progress_hooks": [progress],
+    }
+    import yt_dlp
+
+    report("downloadingVideo", None, None)
+    with yt_dlp.YoutubeDL(options) as ydl:
+        ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+    file = folder / f"{video_id}.mp4"
+    if not file.exists():
+        raise ImportFailure("downloadingVideo", "yt-dlp did not produce an mp4")
+    return file
+
+
 def video_id_from_url(url: str) -> str | None:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()

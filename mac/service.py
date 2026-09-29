@@ -3,6 +3,8 @@
     POST /jobs            {"url", "folders"} -> {"id", ...status}
     GET  /jobs/{id}       phase queued | running | done | failed, stage, done, total, error
     GET  /jobs/{id}/package   the delivery once the job is done
+    POST /videos          {"url"} -> a job that downloads the YouTube video as an mp4
+    GET  /jobs/{id}/file  the mp4 once that job is done
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 import jobs
@@ -18,6 +21,10 @@ import jobs
 class ImportRequest(BaseModel):
     url: str
     folders: list[str] = []
+
+
+class VideoRequest(BaseModel):
+    url: str
 
 
 def require_token(authorization: str | None = Header(default=None)) -> None:
@@ -52,6 +59,19 @@ def job_package(job_id: str) -> dict:
     if job.phase != "done":
         raise HTTPException(409, f"job is {job.phase}")
     return job.package
+
+
+@app.post("/videos", status_code=202)
+def start_video(request: VideoRequest) -> dict:
+    return jobs.submit(request.url, [], kind="videoFile").status()
+
+
+@app.get("/jobs/{job_id}/file")
+def job_file(job_id: str) -> FileResponse:
+    job = _job(job_id)
+    if job.phase != "done" or job.file is None:
+        raise HTTPException(409, f"job is {job.phase}")
+    return FileResponse(job.file, media_type="video/mp4", filename=job.file.name)
 
 
 def _job(job_id: str) -> jobs.Job:

@@ -7,13 +7,18 @@ Jobs live in memory: restarting the service forgets them.
 
 from __future__ import annotations
 
+import tempfile
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
+from adapters import youtube
 from importer import import_link
 from web import LIVE
+
+_FILES = Path(tempfile.gettempdir()) / "fnmn-video-files"
 
 _POOL = ThreadPoolExecutor(max_workers=4)
 _JOBS: dict[str, Job] = {}
@@ -25,20 +30,23 @@ class Job:
     id: str
     url: str
     folders: list[str]
+    kind: str = "import"
     phase: str = "queued"
     stage: str | None = None
     done: int | None = None
     total: int | None = None
     error: str | None = None
     package: dict | None = None
+    file: Path | None = None
 
     def status(self) -> dict:
         return {"id": self.id, "url": self.url, "phase": self.phase, "stage": self.stage,
                 "done": self.done, "total": self.total, "error": self.error}
 
 
-def submit(url: str, folders: list[str]) -> Job:
-    job = Job(uuid.uuid4().hex, url, folders)
+def submit(url: str, folders: list[str], kind: str = "import") -> Job:
+    """`import` prepares a package; `videoFile` downloads a YouTube video as an mp4."""
+    job = Job(uuid.uuid4().hex, url, folders, kind)
     with _LOCK:
         _JOBS[job.id] = job
     _POOL.submit(_run, job)
@@ -57,7 +65,11 @@ def _run(job: Job) -> None:
         job.stage, job.done, job.total = stage, done, total
 
     try:
-        job.package = import_link(job.url, job.folders, LIVE, report)
+        if job.kind == "videoFile":
+            _FILES.mkdir(parents=True, exist_ok=True)
+            job.file = youtube.download(job.url, _FILES, report)
+        else:
+            job.package = import_link(job.url, job.folders, LIVE, report)
     except Exception as error:
         job.phase, job.error = "failed", str(error)
         return

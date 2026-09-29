@@ -6,6 +6,7 @@ from lxml import html
 
 from adapters.html_markdown import _picture, _selector, article_markdown
 from tests.test_article import imported_article
+from markdown import normalize
 
 
 PAGES = (
@@ -80,7 +81,7 @@ class DistillTests(unittest.TestCase):
         self.assertNotIn("dt-math[block]", package["body"])
         if formula:
             self.assertIn(f"$$\n{formula}\n$$", package["body"])
-        self.assertEqual(package["body"], markdown)
+        self.assertEqual(package["body"], normalize(markdown))
 
         root = document.find(".//d-article")
         if root is None:

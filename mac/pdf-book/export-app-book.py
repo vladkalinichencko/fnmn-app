@@ -8,6 +8,8 @@ import shutil
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from markdown import normalize  # noqa: E402
 from math_issues import math_issues  # noqa: E402
 
 
@@ -85,7 +87,7 @@ def main():
     if config.get('strip_heading_numbers', True):
         text = HEADING.sub(lambda match: f'{match[1]} {clean_heading(len(match[1]), match[2])}', text)
     text = re.sub(r'!\[Figure from PDF page \d+\]', '![Figure]', text)
-    text = re.sub(r'\n{3,}', '\n\n', text).strip() + '\n'
+    text = normalize(re.sub(r'\n{3,}', '\n\n', text)).strip() + '\n'
 
     options.output.mkdir(parents=True, exist_ok=True)
     (options.output / 'content.md').write_text(text)
