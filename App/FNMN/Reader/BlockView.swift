@@ -283,8 +283,10 @@ struct PlateView: View {
 
     /// The note on the whole paragraph. It is stored with the paragraph's text as its quote, so the shelf can show both.
     private var paragraphNote: String {
+        let notes = actions.annotations.filter { $0.piece == index && !$0.note.isEmpty }
+        guard !notes.isEmpty else { return "" }
         let text = plainText
-        return actions.annotations.first { $0.piece == index && !$0.note.isEmpty && ($0.quote.isEmpty || $0.quote == text) }?.note ?? ""
+        return notes.first { $0.quote.isEmpty || $0.quote == text }?.note ?? ""
     }
 
     private var plainText: String {
@@ -299,16 +301,42 @@ struct PlateView: View {
 
 /// A note in the margin beside its paragraph: plain text on the page, no frame, saved when it closes.
 /// It is as tall as its paragraph; a longer note scrolls, fading out at the edge it continues past.
+/// Every plate on screen carries one, so the editor exists only while the note is open; otherwise
+/// the note is plain text for the strip a drag uncovers.
 private struct MarginNote: View {
     let saved: String
     let active: Bool
     let save: (String) -> Void
     @State private var draft = ""
-    @State private var overflow = Overflow()
+    @State private var overflow = Overflow(below: true)
     @FocusState private var focused: Bool
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
     var body: some View {
+        Group {
+            if active {
+                editor
+            } else {
+                Text(draft.isEmpty ? "Note" : draft)
+                    .font(.system(.callout, design: readerFont.design))
+                    .foregroundStyle(draft.isEmpty ? .tertiary : .primary)
+                    .padding(.vertical, Tokens.tilePadding)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .clipped()
+            }
+        }
+        .mask(fade)
+        .onAppear { draft = saved }
+        .onChange(of: saved) { draft = saved }
+        .onChange(of: active) {
+            guard !active else { return }
+            focused = false
+            overflow = Overflow(below: true)
+            if draft != saved { save(draft) }
+        }
+    }
+
+    private var editor: some View {
         ScrollView {
             TextField("Note", text: $draft, axis: .vertical)
                 .font(.system(.callout, design: readerFont.design))
@@ -325,17 +353,7 @@ private struct MarginNote: View {
         } action: { _, new in
             overflow = new
         }
-        .mask(fade)
-        .onAppear { draft = saved }
-        .onChange(of: saved) { draft = saved }
-        .onChange(of: active) {
-            if active {
-                focused = saved.isEmpty
-            } else {
-                focused = false
-                if draft != saved { save(draft) }
-            }
-        }
+        .onAppear { focused = saved.isEmpty }
     }
 
     private var fade: some View {
