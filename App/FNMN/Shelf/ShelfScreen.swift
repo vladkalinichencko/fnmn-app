@@ -65,7 +65,7 @@ private struct ShelfSection<Content: View>: View {
             // A symbol inside the text sits on the letters' middle, where a separate image would sink to the baseline.
             Button { navigation.open(route) } label: {
                 Text(count > preview ? "\(title) \(Image(systemName: "chevron.forward"))" : "\(title)")
-                    .font(.title.weight(.bold))
+                    .font(Tokens.sectionTitle)
                     .foregroundStyle(.primary)
             }
             .buttonStyle(.plain)
@@ -105,23 +105,6 @@ struct ArchiveScreen: View {
         }
         .background(Tokens.canvas)
         .navigationTitle("Archive")
-    }
-}
-
-/// A rounded rectangle turned about its center. Glass drawn in it stays inside the frame,
-/// where glass under `rotationEffect` spreads past it.
-private struct TurnedRectangle: Shape {
-    let cornerRadius: CGFloat
-    let degrees: Double
-
-    func path(in rect: CGRect) -> Path {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .path(in: rect)
-            .applying(
-                CGAffineTransform(translationX: rect.midX, y: rect.midY)
-                    .rotated(by: degrees * .pi / 180)
-                    .translatedBy(x: -rect.midX, y: -rect.midY)
-            )
     }
 }
 

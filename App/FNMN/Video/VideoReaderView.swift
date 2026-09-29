@@ -255,7 +255,7 @@ private struct CueRow: View {
         .padding(.horizontal, 12)
         .background {
             if state == .current {
-                Color.clear.plate(cornerRadius: Tokens.plateRadius - 8)
+                Color.clear.plate(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: 8))
             }
         }
         .contentShape(.rect)

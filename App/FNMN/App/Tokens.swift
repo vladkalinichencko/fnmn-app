@@ -16,6 +16,39 @@ enum Tokens {
     })
     /// White in light mode, raised gray in dark mode: the tint of every plate's glass.
     static let plateTint = Color(uiColor: .secondarySystemGroupedBackground)
+    /// The title of a screen's section: Continue, Unsorted, Albums, Annotations, Archive.
+    static let sectionTitle = Font.title.bold()
+
+    /// The radius of a shape set `inset` inside one of radius `outer`, so both curves share a center.
+    static func concentric(_ outer: CGFloat, inset: CGFloat) -> CGFloat {
+        max(outer - inset, 0)
+    }
+
+    /// The glass caption of a picture tile, inset from the tile's edges.
+    static let captionInset: CGFloat = 8
+    static var captionRadius: CGFloat { concentric(tileRadius, inset: captionInset) }
+    /// A code block inside a paragraph plate, whose text starts `tilePadding` in.
+    static var codeRadius: CGFloat { concentric(plateRadius, inset: tilePadding) }
+}
+
+/// A rounded rectangle turned, scaled and moved about its center. Glass under `rotationEffect` or
+/// `scaleEffect` draws past its own frame, so a turned plate keeps its view still and turns its glass's shape.
+struct TurnedRectangle: Shape {
+    let cornerRadius: CGFloat
+    var degrees: Double = 0
+    var scale: CGFloat = 1
+    var offset: CGSize = .zero
+
+    func path(in rect: CGRect) -> Path {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .path(in: rect)
+            .applying(
+                CGAffineTransform(translationX: rect.midX + offset.width, y: rect.midY + offset.height)
+                    .rotated(by: degrees * .pi / 180)
+                    .scaledBy(x: scale, y: scale)
+                    .translatedBy(x: -rect.midX, y: -rect.midY)
+            )
+    }
 }
 
 extension EnvironmentValues {

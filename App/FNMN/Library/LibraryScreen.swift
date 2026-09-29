@@ -61,7 +61,7 @@ struct LibrarySection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
-            Text(title).font(.title2.bold())
+            Text(title).font(Tokens.sectionTitle)
             content()
         }
     }
