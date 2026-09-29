@@ -1,15 +1,15 @@
 import Foundation
 
 /// A folder picked from iCloud Drive may hold only placeholders on this device: the file
-/// `deliveries/abc.json` is then `.abc.json.icloud` until it is downloaded. Reading the folder
+/// `deliveries/abc.tar` is then `.abc.tar.icloud` until it is downloaded. Reading the folder
 /// before that sees no such file, so its material would show as a bare link.
 enum CloudFolder {
-    /// Asks iCloud for every file under the folder and returns when all of them are on the device.
-    /// The folder holds thousands of files, so the walk runs off the main thread, and the check
+    /// Asks iCloud for a file, or every file under a folder, and returns when all of them are on the device.
+    /// A folder holds thousands of files, so the walk runs off the main thread, and the check
     /// waits longer each time nothing new has arrived: from half a second up to five.
     @concurrent
-    static func download(_ folder: URL, timeout: Duration = .seconds(600)) async throws {
-        var pending = missing(in: folder)
+    static func download(_ item: URL, timeout: Duration = .seconds(600)) async throws {
+        var pending = missing(in: item)
         for file in pending {
             try? FileManager.default.startDownloadingUbiquitousItem(at: file)
         }
@@ -24,17 +24,50 @@ enum CloudFolder {
         }
     }
 
-    /// Files under the folder that are still only in iCloud, by the names they will have once downloaded.
-    private static func missing(in folder: URL) -> [URL] {
+    /// Whether the file is in the folder, on the device or still only in iCloud.
+    static func contains(_ file: URL) -> Bool {
+        FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)
+    }
+
+    /// The folder's files with the extension, by the names they have once downloaded, in name order.
+    @concurrent
+    static func files(in folder: URL, withExtension pathExtension: String) async throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .map(downloadedName)
+            .filter { $0.pathExtension == pathExtension }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Drops the device's copy of an imported file; iCloud keeps it. A folder on the device itself has
+    /// nothing to drop, and a copy that stays only takes space, so neither stops the import.
+    static func evict(_ file: URL) {
+        guard (try? file.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) == true else { return }
+        try? FileManager.default.evictUbiquitousItem(at: file)
+    }
+
+    /// Files under the item that are still only in iCloud, by the names they will have once downloaded.
+    private static func missing(in item: URL) -> [URL] {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return isLocal(item) ? [] : [item]
+        }
         let keys: [URLResourceKey] = [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]
-        guard let walk = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys) else { return [] }
+        guard let walk = FileManager.default.enumerator(at: item, includingPropertiesForKeys: keys) else { return [] }
         return walk.compactMap { $0 as? URL }.compactMap { url in
-            let name = url.lastPathComponent
-            if name.hasPrefix("."), name.hasSuffix(".icloud") {
-                return url.deletingLastPathComponent().appending(path: String(name.dropFirst().dropLast(".icloud".count)))
-            }
+            let name = downloadedName(url)
+            if name != url { return name }
             return isLocal(url) ? nil : url
         }
+    }
+
+    private static func downloadedName(_ url: URL) -> URL {
+        let name = url.lastPathComponent
+        guard name.hasPrefix("."), name.hasSuffix(".icloud") else { return url }
+        return url.deletingLastPathComponent().appending(path: String(name.dropFirst().dropLast(".icloud".count)))
+    }
+
+    private static func placeholder(of file: URL) -> URL {
+        file.deletingLastPathComponent().appending(path: ".\(file.lastPathComponent).icloud")
     }
 
     private static func isLocal(_ url: URL) -> Bool {

@@ -113,10 +113,33 @@ final class LibraryModel {
     }
 
     /// Stores a picked prepared package, book folder, or the FNMN folder. Reading it happens in `LibraryFile`,
-    /// off the main thread; a folder is first brought down from iCloud.
-    func importFile(at url: URL) async throws {
-        try await CloudFolder.download(url)
-        try await write(saving: false) { [file] snapshot in try await file.storePicked(url, into: snapshot) }
+    /// off the main thread. The FNMN folder comes down from iCloud one delivery at a time, and each delivery's
+    /// copy on the device is dropped once it is in the library, so the phone never holds the whole folder.
+    func importFile(at url: URL, onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
+        let catalog = url.appending(path: "catalog.json")
+        guard CloudFolder.contains(catalog) else {
+            try await CloudFolder.download(url)
+            try await write(saving: false) { [file] snapshot in try await file.storePicked(url, into: snapshot) }
+            return
+        }
+        onStep(.downloadingFromCloud)
+        try await CloudFolder.download(catalog)
+        let deliveries = try await CloudFolder.files(in: url.appending(path: "deliveries"), withExtension: "tar")
+        try await write(saving: false) { [file] snapshot in
+            var next = try await file.applyBrowserCatalog(from: url, into: snapshot)
+            for (index, delivery) in deliveries.enumerated() {
+                onStep(.importing(index, of: deliveries.count))
+                try await CloudFolder.download(delivery)
+                next = try await file.addDelivery(delivery, into: next)
+                CloudFolder.evict(delivery)
+            }
+            try await file.save(next, previous: snapshot)
+            return next
+        }
+        let books = url.appending(path: "books")
+        onStep(.downloadingFromCloud)
+        try await CloudFolder.download(books)
+        try await write(saving: false) { [file] snapshot in try await file.storeBooks(in: books, into: snapshot) }
     }
 
     func storeVideoFile(_ itemID: String, from download: URL) async throws {

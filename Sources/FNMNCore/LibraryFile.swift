@@ -278,11 +278,8 @@ public actor LibraryFile {
             throw CaptureError.unrecognizedDocument
         }
         if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
-            var next = try storeBrowserLibrary(from: url, into: snapshot)
-            for book in try bookFolders(in: url.appending(path: "books")) {
-                next = try storeBook(try BookCatalog.inspect(from: book).record, from: book, into: next)
-            }
-            return next
+            let next = try storeBrowserLibrary(from: url, into: snapshot)
+            return try storeBooks(in: url.appending(path: "books"), into: next)
         } else if isDirectory.boolValue {
             return try storeBook(try BookCatalog.inspect(from: url).record, from: url, into: snapshot)
         } else if url.pathExtension.lowercased() == "tar" {
@@ -297,26 +294,47 @@ public actor LibraryFile {
         }
     }
 
-    private func bookFolders(in folder: URL) throws -> [URL] {
-        guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
-        return try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
+    /// Every book folder under `books/` of the FNMN folder, each copied in and saved.
+    public func storeBooks(in folder: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        guard FileManager.default.fileExists(atPath: folder.path) else { return snapshot }
+        let books = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var next = snapshot
+        for book in books {
+            next = try storeBook(try BookCatalog.inspect(from: book).record, from: book, into: next)
+        }
+        return next
     }
 
+    /// The whole prepared browser library at once, from a folder already on the device.
     public func storeBrowserLibrary(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
         let deliveries = try FileManager.default.contentsOfDirectory(
             at: source.appending(path: "deliveries"), includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == "tar" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var next = try applyBrowserCatalog(from: source, into: snapshot)
+        for url in deliveries {
+            next = try addDelivery(url, into: next)
+        }
+        try save(next, previous: snapshot)
+        return next
+    }
+
+    /// The first step of a browser library import: its catalog of sources, whose reviewed albums replace
+    /// the browser's collections.
+    public func applyBrowserCatalog(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
         var next = snapshot
         next.retireAlbums(catalog.collections.map(\.name))
         next.browserCatalog = catalog
-        for url in deliveries {
-            try unpackDelivery(url, into: &next)
-        }
-        try save(next)
-        try sweepArticleRevisions(next)
+        return next
+    }
+
+    /// One delivery of a browser library into a new revision, without saving: the caller saves once
+    /// every delivery is in, and a revision left by an import that stopped halfway is swept at the next load.
+    public func addDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        var next = snapshot
+        try unpackDelivery(archive, into: &next)
         return next
     }
 

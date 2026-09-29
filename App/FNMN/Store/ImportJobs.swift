@@ -94,7 +94,7 @@ final class ImportJobs {
         do {
             switch job.input {
             case let .link(url): try await prepare(url, jobID: job.id)
-            case let .file(url): try await importFile(url)
+            case let .file(url): try await importFile(url, jobID: job.id)
             case let .videoFile(itemID, url): try await downloadVideo(url, itemID: itemID, jobID: job.id)
             }
             send(.finished(job.id))
@@ -136,10 +136,10 @@ final class ImportJobs {
         await confirmStored(job.id, connection: connection)
     }
 
-    private func importFile(_ url: URL) async throws {
+    private func importFile(_ url: URL, jobID: UUID) async throws {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
-        try await library.importFile(at: url)
+        try await library.importFile(at: url) { self.send(.progressed(jobID, $0)) }
     }
 
     /// The Live Activity and the background task follow the oldest job still preparing.
@@ -183,4 +183,9 @@ extension ImportJob.Input {
 extension ImportStep {
     static let sending = ImportStep(text: "Sending to the Mac", fraction: nil)
     static let saving = ImportStep(text: "Saving", fraction: nil)
+    static let downloadingFromCloud = ImportStep(text: "Downloading from iCloud", fraction: nil)
+
+    static func importing(_ index: Int, of count: Int) -> ImportStep {
+        ImportStep(text: "Importing \(index + 1) of \(count)", fraction: Double(index) / Double(max(count, 1)))
+    }
 }

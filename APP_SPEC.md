@@ -8,7 +8,7 @@
 BOUNDARY ─────────→ STATE ──────────→ SELECTORS ─────→ VIEWS
 LibraryFile          LibrarySnapshot    LibraryItem,      SwiftUI, только рисуют
 MacServicePort       ReadingProgress    AlbumSummary,     и шлют действия
-CloudFolderPort      (данные)           AnnotationGroup,
+CloudFolder          (данные)           AnnotationGroup,
 ImageFiles           Coordinator.state  ReaderDocument
 Keychain             (взаимодействие)        ▲
      ▲                    ▲                  │
@@ -39,7 +39,7 @@ Keychain             (взаимодействие)        ▲
 App/FNMN/
   App/        FNMNApp, AppShell (вкладки и поиск), WindowNavigation, Tokens (отступы, радиусы)
   Store/      LibraryModel (каталог и прогресс, apply, импорт),
-              ImportJobs (задачи Mac и Live Activity), CloudFolderPort, ImageFiles (миниатюры)
+              ImportJobs (задачи Mac и Live Activity), CloudFolder, ImageFiles (миниатюры)
   Mac/        MacServicePort + ArticleClient, MacConnection + Keychain
   Library/    LibraryScreen, AlbumScreen, SourceScreen, ItemGrid, ItemTile, AlbumTile,
               AlbumPicker, AddMenu, LinkSheet, LibraryCoordinator
@@ -91,7 +91,8 @@ App/FNMN/
 Каждая машина — `enum State` и `enum Action` с чистым `reduce` рядом со своим координатором.
 
 - **LibraryModel:** загрузка `idle`, `loading`, `ready`, `failed(message)`. Загрузку запускает модель один раз, сколько бы окон её ни ждало.
-- **ImportJobs.** Задача: `preparing(stage, fraction)` → исчезает после сохранения или `failed(message)` → `retry` снова `preparing`, `dismiss` убирает и отменяет её опрос. Импорт папки FNMN проходит `downloadingFromCloud` и `importing(index, count)`. Держится на уровне приложения, поэтому переживает закрытие листа; Live Activity и фоновая задача iOS показывают первую идущую задачу и обновляются только при смене стадии или доли.- **LibraryCoordinator** (окно): `idle`, `addingLink(draft)`, `pickingFile`, `namingAlbum(draft)`, `renamingAlbum(name, draft)`, `pickingAlbum(itemID)`, `confirmingDelete(itemID)`, `confirmingAlbumDelete(name)`.
+- **ImportJobs.** Задача: `preparing(stage, fraction)` → исчезает после сохранения или `failed(message)` → `retry` снова `preparing`, `dismiss` убирает и отменяет её опрос. Импорт папки FNMN проходит `downloadingFromCloud` и `importing(index, count)`. Держится на уровне приложения, поэтому переживает закрытие листа; Live Activity и фоновая задача iOS показывают первую идущую задачу и обновляются только при смене стадии или доли.
+- **LibraryCoordinator** (окно): `idle`, `addingLink(draft)`, `pickingFile`, `namingAlbum(draft)`, `renamingAlbum(name, draft)`, `pickingAlbum(itemID)`, `confirmingDelete(itemID)`, `confirmingAlbumDelete(name)`.
 - **Settings:** `editing`, `checking`, `connected`, `failed(message)`.
 - **Открытие материала** (`ItemScreen`, `BookReaderView`): `loading`, затем статья или книга с готовым `ReaderCoordinator`, видео с пакетом, или `failed(message)`. Документ строится вне главного потока до создания координатора.
 - **ReaderCoordinator** (открытый документ): режим плашки `PlateMode` — `reading | selectingText(piece) | selectingParagraphs(pieces) | noting(piece)`, свёртка `ReadingFold`, место чтения и прокрутка колонки; он же сохраняет место и выполняет действия плашек. Блоки получают его из окружения, а от родителя только значения (блок, режим, прочитан ли, заметки этого блока), поэтому `BlockView` сравнивается через `.equatable()`, и смена места перерисовывает только блоки, у которых изменилось «прочитано». Масштаб жеста pinch лежит в отдельном маленьком наблюдаемом значении, его читает только эффект свёртки.
@@ -106,7 +107,7 @@ App/FNMN/
 - `MacServicePort` — сервис Mac. Интервал опроса задания растёт от 1 до 5 секунд, пока стадия не меняется, и сбрасывается при смене. Готовая поставка скачивается файлом на диск; после сохранения приложение шлёт `DELETE /jobs/{id}`, и Mac удаляет файл задания.
 
 Поставка статьи — один несжатый USTAR-архив: первым `package.json` (`ImportPackage`), за ним файлы по относительным путям из Markdown ([эскиз](notes/design/delivery-archive.md)). Так приходят и задания с Mac, и `deliveries/*.tar` папки FNMN. Архив знает только `DeliveryArchive` в FNMNCore: он читает его за один проход с буфером фиксированного размера и отдаёт пакет и файлы, пути которых проверяет `LibraryFile`.
-- `CloudFolderPort` — папка FNMN в iCloud Drive: перечислить поставки, скачать одну, убрать её локальную копию (`evictUbiquitousItem`). Импорт идёт поставка за поставкой, поэтому на устройстве лежит одна поставка за раз.
+- `CloudFolder` — папка FNMN в iCloud Drive: перечислить поставки вместе с ещё не скачанными, скачать одну, убрать её локальную копию (`evictUbiquitousItem`). Импорт идёт поставка за поставкой, поэтому на устройстве лежит одна поставка за раз; каталог сохраняется один раз, когда все поставки внутри.
 - `ImageFiles` — картинки статьи с диска: размер без декодирования, миниатюра по размеру показа через ImageIO, кэш в памяти, который очищается при предупреждении о памяти. Вью не читают файлы картинок сами.
 
 ## Отрисовка документа
