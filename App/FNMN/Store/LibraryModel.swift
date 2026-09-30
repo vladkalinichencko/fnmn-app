@@ -216,8 +216,8 @@ final class LibraryModel {
     /// Makes the FNMN folder the library's home: what an older version kept in the app moves there, then
     /// the folder is read and the other devices' journals are taken in.
     func linkLibraryFolder(_ folder: URL, onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
-        UserDefaults.standard.set(try folder.bookmarkData(), forKey: Self.cloudFolderKey)
         _ = folder.startAccessingSecurityScopedResource()
+        UserDefaults.standard.set(try folder.bookmarkData(), forKey: Self.cloudFolderKey)
         await file.useCloudFolder(folder)
         cloudFolder = folder
         try await moveIntoCloudIfNeeded()
@@ -228,7 +228,7 @@ final class LibraryModel {
     /// Reads the FNMN folder: its catalog, then every delivery.
     private func readLibraryFolder(onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
         guard let folder = cloudFolder else { throw LibraryError.cloudFolderMissing }
-        onStep(.downloadingFromCloud)
+        onStep(.readingLibraryFolder)
         let catalog = folder.appending(path: "catalog.json")
         let hasCatalog = CloudFolder.contains(catalog)
         if hasCatalog { try await CloudFolder.download(catalog) }

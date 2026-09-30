@@ -216,7 +216,8 @@ extension ImportJob.Input {
     var firstStep: ImportStep {
         switch self {
         case .link, .videoFile: .sending
-        case .file, .libraryFolder: .downloadingFromCloud
+        case .file: .downloadingFromCloud
+        case .libraryFolder: .readingLibraryFolder
         }
     }
 
@@ -230,6 +231,7 @@ extension ImportStep {
     static let sending = ImportStep(text: "Sending to the server", fraction: nil, symbol: "arrow.up.circle")
     static let saving = ImportStep(text: "Saving", fraction: nil, symbol: "tray.and.arrow.down")
     static let downloadingFromCloud = ImportStep(text: "Downloading from iCloud", fraction: nil, symbol: "icloud.and.arrow.down")
+    static let readingLibraryFolder = ImportStep(text: "Reading the FNMN folder", fraction: nil, symbol: "folder")
 
     static func importing(_ index: Int, of count: Int) -> ImportStep {
         ImportStep(text: "Importing \(index + 1) of \(count)", fraction: Double(index) / Double(max(count, 1)), symbol: "tray.and.arrow.down")
