@@ -10,13 +10,11 @@ struct ReaderState: Equatable {
     var place: Int?
     /// The block the column shows at the top.
     var scrollID: Int?
-    /// The saved place, until the column first appears and goes there.
-    var start: Int?
+    /// Opened at a note rather than to read on: scrolling looks around and leaves the place where reading stopped.
+    var keepsPlace = false
 }
 
 enum ReaderAction {
-    /// The column is on screen: go to the saved place, once.
-    case restore
     /// The person scrolled the column to this block.
     case scrolled(Int?)
     case plate(PlateAction)
@@ -36,14 +34,9 @@ enum ReaderAction {
 func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: ReaderDocument) -> ReaderState {
     var state = state
     switch action {
-    case .restore:
-        guard let start = state.start else { return state }
-        state.start = nil
-        state.place = start
-        state.scrollID = start
     case let .scrolled(index):
         state.scrollID = index
-        if let index, document.blocks.indices.contains(index), state.fold == .open {
+        if let index, document.blocks.indices.contains(index), state.fold == .open, !state.keepsPlace {
             state.place = index
         }
     case let .plate(action):
@@ -79,14 +72,17 @@ final class ReaderCoordinator {
     private(set) var state: ReaderState
     @ObservationIgnored private let library: LibraryModel
 
-    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, start: Int?, library: LibraryModel) {
+    /// The column starts at the note it was opened at, or else at the place reading stopped; it is there on its
+    /// first frame, before it could report the top of the text as a new place.
+    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, place: Int?, note: Int?, library: LibraryModel) {
         self.document = document
         self.materialID = materialID
         self.title = title
         self.source = source
         self.baseURL = baseURL
-        state = ReaderState(start: start)
+        state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library
+        state.scrollID = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
     }
 
     func send(_ action: ReaderAction) {
@@ -122,7 +118,7 @@ final class ReaderCoordinator {
         switch action {
         case .plate: .snappy
         case .pinched, .openSection: .spring(duration: 0.45, bounce: 0.15)
-        case .restore, .scrolled, .mark, .note, .readThrough, .ask, .copyPrompt: nil
+        case .scrolled, .mark, .note, .readThrough, .ask, .copyPrompt: nil
         }
     }
 
@@ -146,7 +142,7 @@ final class ReaderCoordinator {
             ChatGPTHandoff.copyAndOpen(title: title, passage: passage)
         case let .copyPrompt(passage):
             _ = ChatGPTHandoff.remember(title: title, passage: passage)
-        case .restore, .plate, .pinched, .openSection:
+        case .plate, .pinched, .openSection:
             break
         }
     }

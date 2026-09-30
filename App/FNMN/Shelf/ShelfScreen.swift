@@ -114,6 +114,7 @@ private struct AnnotationCard: View {
     let annotation: Annotation
     @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
+    @State private var quoteHeight: CGFloat = 0
 
     var body: some View {
         Button {
@@ -138,9 +139,10 @@ private struct AnnotationCard: View {
         }
     }
 
+    /// The note comes up over the lower half of the quote's plate.
     @ViewBuilder
     private var composition: some View {
-        VStack(alignment: .trailing, spacing: -18) {
+        VStack(alignment: .trailing, spacing: -quoteHeight / 2) {
             if !annotation.quote.isEmpty {
                 // Alone, the quote stands in the middle; with a note, it moves left to make room for it.
                 quote
@@ -165,6 +167,7 @@ private struct AnnotationCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .rotationEffect(.degrees(Self.quoteTurn))
             .plate(in: TurnedRectangle(cornerRadius: Tokens.plateRadius, degrees: Self.quoteTurn))
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { quoteHeight = $0 }
     }
 
     private static let quoteTurn = -1.5
@@ -177,7 +180,8 @@ private struct AnnotationCard: View {
         return String(cut[..<(cut.lastIndex(of: " ") ?? cut.endIndex)]) + "…"
     }
 
-    /// The note has no frame: a blur that fades out at its edges keeps it readable over the quote.
+    /// The note has no frame: a thick blur keeps it readable over the quote. The blur is drawn well past the
+    /// text, so its soft edge has faded out completely before the drawing ends and no rectangle shows.
     private var note: some View {
         Text(annotation.note)
             .font(.callout.weight(.semibold))
@@ -185,8 +189,9 @@ private struct AnnotationCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 Rectangle()
-                    .fill(.regularMaterial)
-                    .mask { RoundedRectangle(cornerRadius: Tokens.plateRadius, style: .continuous).padding(6).blur(radius: 10) }
+                    .fill(.thickMaterial)
+                    .mask { RoundedRectangle(cornerRadius: Tokens.plateRadius, style: .continuous).padding(30).blur(radius: 12) }
+                    .padding(-24)
             }
     }
 }

@@ -60,12 +60,17 @@ struct ItemTile: View {
         .contextMenu { ItemActions(item: item, album: album) }
     }
 
-    /// A tile with a picture has no frame: the picture fills it and the title sits on glass that bends it.
+    /// A tile with a picture has no frame: the picture fills it, fades into the page toward its lower half, and the
+    /// title sits on glass that bends it.
     private func coverTile(_ cover: Cover, job: ImportJob?) -> some View {
         let progress = job?.fraction ?? progress
         return Color.clear
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             .overlay { CoverImage(cover: cover, cornerRadius: 0) }
+            .overlay {
+                LinearGradient(colors: [.clear, Tokens.canvas], startPoint: .center, endPoint: .bottom)
+                    .allowsHitTesting(false)
+            }
             .overlay(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     header(job)

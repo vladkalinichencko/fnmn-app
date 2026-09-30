@@ -74,7 +74,8 @@ private struct ArticleOpener: View {
             title: package.material.title,
             source: library.snapshot.source(of: itemID),
             baseURL: baseURL,
-            start: startPiece ?? library.position(of: itemID)?.pieceIndex,
+            place: library.position(of: itemID)?.pieceIndex,
+            note: startPiece,
             library: library
         )
         return .article(reader, sourceURL: package.material.sourceURL)

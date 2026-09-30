@@ -11,6 +11,11 @@ enum ImageFiles {
     /// The picture's size in pixels, read from the file's header without decoding it.
     @concurrent
     static func pixelSize(of url: URL) async -> CGSize? {
+        headerSize(of: url)
+    }
+
+    /// The same, read where it is asked; a header is a few hundred bytes, so a view can read it while it is laid out.
+    nonisolated static func headerSize(of url: URL) -> CGSize? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? CGFloat,

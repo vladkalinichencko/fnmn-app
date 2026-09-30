@@ -12,7 +12,6 @@ struct MaterialReader: View {
             .modifier(ReaderAppearanceModifier())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ReaderMenu(itemID: reader.materialID, page: sourceURL) }
-            .task { reader.send(.restore) }
             .onDisappear { Task { await library.saveProgress() } }
     }
 }

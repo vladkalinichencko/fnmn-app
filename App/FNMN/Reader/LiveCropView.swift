@@ -56,6 +56,13 @@ private struct LiveCropWebView: UIViewRepresentable {
         configuration.allowsInlineMediaPlayback = true
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.add(context.coordinator, name: "crop")
+        // The figure is cut out as soon as the page's markup is parsed, not after every picture, font and script
+        // of the whole page has loaded; it keeps reporting its height while the rest arrives.
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: Coordinator.script(selector: selector),
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         view.scrollView.isScrollEnabled = false
@@ -64,7 +71,6 @@ private struct LiveCropWebView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
-        context.coordinator.selector = selector
         context.coordinator.onPhase = { phase = $0 }
         guard context.coordinator.loaded != url else { return }
         context.coordinator.loaded = url
@@ -78,16 +84,7 @@ private struct LiveCropWebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var loaded: URL?
-        var selector: String?
         var onPhase: ((CropPhase) -> Void)?
-
-        func webView(_ view: WKWebView, didFinish navigation: WKNavigation!) {
-            view.evaluateJavaScript(Self.script(selector: selector)) { _, error in
-                if let error {
-                    self.onPhase?(.failed(error.localizedDescription))
-                }
-            }
-        }
 
         func webView(_ view: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             onPhase?(.failed(error.localizedDescription))
@@ -116,11 +113,11 @@ private struct LiveCropWebView: UIViewRepresentable {
             }
         }
 
-        private static func script(selector: String?) -> String {
+        static func script(selector: String?) -> String {
             let encoded = (try? JSONEncoder().encode(selector)) ?? Data("null".utf8)
             let literal = String(decoding: encoded, as: UTF8.self)
             return """
-            (function() {
+            (function crop() {
               const selector = \(literal);
               function report(height) {
                 window.webkit.messageHandlers.crop.postMessage({kind: "height", height: height});
@@ -131,6 +128,12 @@ private struct LiveCropWebView: UIViewRepresentable {
               }
               const target = document.querySelector(selector);
               if (!target) {
+                // A page that builds the figure with its own scripts has it only once it has loaded.
+                if (document.readyState !== "complete" && !window.__fnmnCropWaited) {
+                  window.__fnmnCropWaited = true;
+                  window.addEventListener("load", crop);
+                  return;
+                }
                 window.webkit.messageHandlers.crop.postMessage({kind: "missing"});
                 return;
               }

@@ -123,6 +123,7 @@ struct HeadingView: View {
             }
         }
         .foregroundStyle(read ? .secondary : .primary)
+        .animation(.easeInOut(duration: 0.4), value: read)
         .padding(.top, folded == nil ? (level <= 2 ? Tokens.gap : 4) : 4)
         .padding(.bottom, folded == nil ? 0 : 4)
         .contentShape(.rect)
@@ -162,24 +163,27 @@ struct PlateView: View {
     let markedReadThrough: Bool
     let annotations: [Annotation]
     @State private var drag: CGFloat = 0
-    @State private var width: CGFloat = 0
+    @State private var size = CGSize.zero
+    /// The height of the note's text, which the tab on the plate's edge follows.
+    @State private var noteHeight: CGFloat = 0
 
     private var noting: Bool { mode == .noting(index) }
     /// How far the plate moves aside for its note: a little over half its width.
-    private var noteWidth: CGFloat { width * 0.58 }
+    private var noteWidth: CGFloat { size.width * 0.58 }
     private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
 
+    /// The note lies over the row, above the plate, so touches reach it once the plate has moved aside; only the
+    /// strip the plate has uncovered shows, cut at the plate's own edge, so it seems to have been under it all along.
     var body: some View {
         plate
             .frame(maxWidth: .infinity)
-            .background(alignment: .trailing) {
-                MarginNote(saved: paragraphNote, active: noting, save: saveNote)
-                    .frame(width: noteWidth - Tokens.gap)
-                    // Only the strip the plate has moved off shows, so the note seems to have been under it all along.
-                    .mask(alignment: .trailing) { Rectangle().frame(width: max(-offset - Tokens.gap, 0)) }
+            .overlay(alignment: .trailing) {
+                MarginNote(saved: paragraphNote, active: noting, save: saveNote) { noteHeight = $0 }
+                    .frame(width: max(noteWidth - Tokens.gap, 0))
+                    .mask(alignment: .trailing) { Rectangle().frame(width: max(-offset, 0)) }
                     .allowsHitTesting(noting)
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
             .animation(.spring(duration: 0.35, bounce: 0.2), value: noting)
     }
 
@@ -216,9 +220,10 @@ struct PlateView: View {
                 if let tick { tick } else { noteMark }
             }
             .opacity(read && mode == .reading ? 0.55 : 1)
+            .animation(.easeInOut(duration: 0.4), value: read)
             .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-            .modifier(TickOnTap(isOn: isTicking) { reader.send(.plate(.toggle(index))) })
-            .modifier(TickOnTap(isOn: noting) { reader.send(.plate(.done)) })
+            .gesture(TapGesture().onEnded { reader.send(.plate(.toggle(index))) }, isEnabled: isTicking)
+            .gesture(TapGesture().onEnded { reader.send(.plate(.done)) }, isEnabled: noting)
             .contextMenu { if mode == .reading { menu } }
             // Inside the system's swipe, which places the row itself and would undo an offset put around it.
             .offset(x: offset)
@@ -285,13 +290,14 @@ struct PlateView: View {
         )
     }
 
-    /// A small tab on the right edge of a plate that has a note; the note itself shows when the plate is pulled aside.
+    /// A tab on the right edge of a plate that has a note, as tall as the note's text within the plate; the note
+    /// itself shows when the plate is pulled aside.
     @ViewBuilder
     private var noteMark: some View {
         if !paragraphNote.isEmpty, offset == 0 {
             Capsule()
                 .fill(.tint)
-                .frame(width: 4, height: 22)
+                .frame(width: 4, height: min(max(noteHeight, 22), max(size.height - 2 * Tokens.tilePadding - 4, 22)))
                 .padding(.top, Tokens.tilePadding + 2)
                 .offset(x: 2)
         }
@@ -328,29 +334,47 @@ struct PlateView: View {
 
 /// A note in the margin beside its paragraph: plain text on the page, no frame, saved when it closes.
 /// It is as tall as its paragraph; a longer note scrolls, fading out at the edge it continues past.
-/// Every plate on screen carries one, so the editor exists only while the note is open; otherwise
-/// the note is plain text for the strip a drag uncovers.
+/// The scroll view stays the same while the note opens and closes, so the note never swaps for another view;
+/// inside it, every plate on screen carries plain text, and only the open note an editor in the same place.
 private struct MarginNote: View {
     let saved: String
     let active: Bool
     let save: (String) -> Void
+    /// The height of the note's text, without the room around it.
+    let measured: (CGFloat) -> Void
     @State private var draft = ""
-    @State private var overflow = Overflow(below: true)
+    @State private var overflow = Overflow()
     @FocusState private var focused: Bool
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
     var body: some View {
-        Group {
-            if active {
-                editor
-            } else {
-                Text(draft.isEmpty ? "Note" : draft)
-                    .font(.system(.callout, design: readerFont.design))
-                    .foregroundStyle(draft.isEmpty ? .tertiary : .primary)
-                    .padding(.vertical, Tokens.tilePadding)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .clipped()
+        ScrollView {
+            Group {
+                if active {
+                    TextField("Note", text: $draft, axis: .vertical)
+                        .focused($focused)
+                        .onAppear { focused = saved.isEmpty }
+                } else {
+                    Text(draft.isEmpty ? "Note" : draft)
+                        .foregroundStyle(draft.isEmpty ? .tertiary : .primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .font(.system(.callout, design: readerFont.design))
+            .padding(.vertical, Tokens.tilePadding)
+        }
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDisabled(!active)
+        .onScrollGeometryChange(for: Overflow.self) { geometry in
+            Overflow(
+                above: geometry.contentOffset.y > 1,
+                below: geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 1,
+                text: geometry.contentSize.height - 2 * Tokens.tilePadding
+            )
+        } action: { _, new in
+            overflow = new
+            measured(new.text)
         }
         .mask(fade)
         .onAppear { draft = saved }
@@ -358,29 +382,8 @@ private struct MarginNote: View {
         .onChange(of: active) {
             guard !active else { return }
             focused = false
-            overflow = Overflow(below: true)
             if draft != saved { save(draft) }
         }
-    }
-
-    private var editor: some View {
-        ScrollView {
-            TextField("Note", text: $draft, axis: .vertical)
-                .font(.system(.callout, design: readerFont.design))
-                .focused($focused)
-                .padding(.vertical, Tokens.tilePadding)
-        }
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize)
-        .onScrollGeometryChange(for: Overflow.self) { geometry in
-            Overflow(
-                above: geometry.contentOffset.y > 1,
-                below: geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 1
-            )
-        } action: { _, new in
-            overflow = new
-        }
-        .onAppear { focused = saved.isEmpty }
     }
 
     private var fade: some View {
@@ -396,6 +399,7 @@ private struct MarginNote: View {
     private struct Overflow: Equatable {
         var above = false
         var below = false
+        var text: CGFloat = 0
     }
 }
 
@@ -411,25 +415,19 @@ private struct TextSelection: ViewModifier {
     }
 }
 
-private struct TickOnTap: ViewModifier {
-    let isOn: Bool
-    let toggle: () -> Void
-
-    func body(content: Content) -> some View {
-        if isOn {
-            content.onTapGesture(perform: toggle)
-        } else {
-            content
-        }
-    }
-}
-
 /// A picture that stands on its own between paragraphs, never wider than the picture itself.
 private struct StandaloneImage: View {
     let url: URL
     let alt: String
-    /// The picture's own size, read from its file header when the block appears.
+    /// The picture's own size, read from its file header before the block is laid out: a picture that took its
+    /// height only after it appeared would push the text below it down while scrolling up.
     @State private var natural: CGSize?
+
+    init(url: URL, alt: String) {
+        self.url = url
+        self.alt = alt
+        _natural = State(initialValue: url.isFileURL ? ImageFiles.headerSize(of: url) : nil)
+    }
 
     var body: some View {
         Group {
@@ -451,9 +449,6 @@ private struct StandaloneImage: View {
         }
         .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .frame(maxWidth: .infinity)
-        .task(id: url) {
-            if url.isFileURL { natural = await ImageFiles.pixelSize(of: url) }
-        }
         .contextMenu {
             Button("Save to Photos", systemImage: "square.and.arrow.down") {
                 guard let image = UIImage(contentsOfFile: url.path) else { return }
