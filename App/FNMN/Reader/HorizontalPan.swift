@@ -49,7 +49,7 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
             let moved = pan.translation(in: view)
-            guard abs(moved.x) > abs(moved.y) * 1.5, starts(moved.x) else { return false }
+            guard abs(moved.x) > abs(moved.y), starts(moved.x) else { return false }
             if moved.x > 0, pan.location(in: view.window).x - moved.x < Self.backEdge { return false }
             var touched = view.hitTest(pan.location(in: view), with: nil)
             while let current = touched, current !== view {

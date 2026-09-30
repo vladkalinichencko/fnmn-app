@@ -92,7 +92,7 @@ enum ReaderAppearance {
 
 /// The reader's one `···` button: text size and background right inside the menu, and the original.
 struct ReaderMenu: View {
-    let itemID: String
+    let reader: ReaderCoordinator
     let page: URL?
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.system
@@ -122,7 +122,15 @@ struct ReaderMenu: View {
                 Text(font.name)
             }
             .pickerStyle(.menu)
-            OpenOriginalButton(itemID: itemID, page: page)
+            let foldable = reader.document.foldableHeadings
+            if !foldable.isEmpty {
+                if reader.state.folded == foldable {
+                    Button("Expand All", systemImage: "arrow.up.left.and.arrow.down.right") { reader.send(.foldAll(false)) }
+                } else {
+                    Button("Collapse All", systemImage: "arrow.down.right.and.arrow.up.left") { reader.send(.foldAll(true)) }
+                }
+            }
+            OpenOriginalButton(itemID: reader.materialID, page: page)
         }
     }
 }

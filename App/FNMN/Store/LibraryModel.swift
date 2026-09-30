@@ -107,7 +107,7 @@ final class LibraryModel {
             places = []
         }
         switch change {
-        case .open, .setRead, .readThrough: record(.progress(change))
+        case .open, .setRead, .readThrough, .fold: record(.progress(change))
         case .savePosition, .restart, .forget: break
         }
         scheduleSave()

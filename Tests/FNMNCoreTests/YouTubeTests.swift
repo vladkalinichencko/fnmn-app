@@ -36,3 +36,20 @@ import Testing
     #expect(readingPlaceTarget(place: 2, visible: [0, 2]) == 2)
     #expect(readingPlaceTarget(place: nil, visible: [0, 2]) == 0)
 }
+
+@Test func everySectionWithBlocksUnderItStartsClosedExceptWhereTheReaderOpens() {
+    let document = ReaderDocument(markdown: "# Book\n\nIntro.\n\n# One\n\n## Inner\n\nText.\n\n# Two\n\nMore.", title: "Book")
+    #expect(document.foldableHeadings == [2, 3, 5])
+    #expect(document.headings(holding: 4) == [2, 3])
+    #expect(document.foldableHeadings.subtracting(document.headings(holding: 4)) == [5])
+}
+
+@Test func foldedHeadingsAreKeptPerMaterialAndForgottenWithItsText() {
+    var progress = ReadingProgress().applying(.fold([1, 4], itemID: "a"))
+    #expect(progress.folded["a"] == [1, 4])
+    progress = progress.applying(.fold([], itemID: "a"))
+    #expect(progress.folded["a"] == [])
+    #expect(progress.applying(.restart(itemID: "a")).folded["a"] == nil)
+    let decoded = try? JSONDecoder().decode(ReadingProgress.self, from: JSONEncoder().encode(progress))
+    #expect(decoded == progress)
+}

@@ -15,6 +15,16 @@ extension ReaderDocument {
         return visible
     }
 
+    /// The headings with something under them: every section that can close up. The title the header shows is not one.
+    public var foldableHeadings: Set<Int> {
+        Set(sections.keys.filter { $0 != repeatedTitle && holdsBlocks($0) })
+    }
+
+    /// The headings whose sections contain this block, so the block stays on the page when they are open.
+    public func headings(holding block: Int) -> Set<Int> {
+        Set(sections.filter { $0.key < block && $0.value.end > block }.keys)
+    }
+
     /// Whether a heading holds anything to fold away.
     public func holdsBlocks(_ heading: Int) -> Bool {
         (sections[heading]?.end ?? 0) > heading + 1

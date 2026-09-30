@@ -28,6 +28,8 @@ enum ReaderAction {
     case plate(PlateAction)
     /// A heading was tapped: its section closes up under it, or opens again.
     case toggleSection(Int)
+    /// Every section closes up under its heading, or every one opens.
+    case foldAll(Bool)
     case mark(AnnotationCommand, AnnotationTarget)
     case note(String, AnnotationTarget)
     case readThrough(Int?)
@@ -55,6 +57,8 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
     case let .toggleSection(index):
         guard document.holdsBlocks(index) else { return state }
         if state.folded.remove(index) == nil { state.folded.insert(index) }
+    case let .foldAll(closed):
+        state.folded = closed ? document.foldableHeadings : []
     case .mark, .note, .readThrough, .ask, .copyPrompt:
         break
     }
@@ -87,6 +91,9 @@ final class ReaderCoordinator {
         self.baseURL = baseURL
         state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library
+        // A material nobody has folded by hand opens closed up. The block the reader opens at stays on the page.
+        let saved = library.progress.folded[materialID].map(Set.init) ?? document.foldableHeadings
+        state.folded = (note ?? place).map { saved.subtracting(document.headings(holding: $0)) } ?? saved
         state.opening = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
         state.hidesColumn = state.opening != nil
     }
@@ -116,7 +123,7 @@ final class ReaderCoordinator {
 
     private func animation(for action: ReaderAction) -> Animation? {
         switch action {
-        case .plate, .toggleSection: .snappy
+        case .plate, .toggleSection, .foldAll: .snappy
         case .opened, .scrolled, .mark, .note, .readThrough, .ask, .copyPrompt: nil
         }
     }
@@ -144,8 +151,15 @@ final class ReaderCoordinator {
         case .opened:
             guard next != before, let target = next.scrollID else { return }
             position.scrollTo(id: target, anchor: .top)
-        case .plate, .toggleSection:
+        case .plate:
             break
+        case .toggleSection, .foldAll:
+            guard next.folded != before.folded else { return }
+            library.apply(.fold(next.folded.sorted(), itemID: materialID))
+            // The top block may have gone under a closed heading; the column goes to the one that stands for it.
+            if let place = next.place, !visible.contains(place), let target = current(in: visible) {
+                position.scrollTo(id: target, anchor: .top)
+            }
         }
     }
 

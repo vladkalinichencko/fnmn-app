@@ -6,8 +6,19 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
     public var positions: [String: ReadingPosition] = [:]
     public var readThrough: [String: Int] = [:]
     public var readings: [String: MaterialReading] = [:]
+    /// The headings a material has closed up. A material without an entry has never been folded by hand,
+    /// and opens with every section closed.
+    public var folded: [String: [Int]] = [:]
 
     public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        positions = try container.decode([String: ReadingPosition].self, forKey: .positions)
+        readThrough = try container.decode([String: Int].self, forKey: .readThrough)
+        readings = try container.decode([String: MaterialReading].self, forKey: .readings)
+        folded = try container.decodeIfPresent([String: [Int]].self, forKey: .folded) ?? [:]
+    }
 
     public func applying(_ change: ProgressChange, at date: Date = .now) -> ReadingProgress {
         var next = self
@@ -21,12 +32,16 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
             next.readings[itemID, default: MaterialReading()].progress = progress
         case let .readThrough(piece, itemID):
             next.readThrough[itemID] = piece
+        case let .fold(headings, itemID):
+            next.folded[itemID] = headings
         case let .restart(itemID):
             next.positions[itemID] = nil
             next.readThrough[itemID] = nil
+            next.folded[itemID] = nil
         case let .forget(itemID):
             next.positions[itemID] = nil
             next.readThrough[itemID] = nil
+            next.folded[itemID] = nil
             next.readings[itemID] = nil
         }
         return next
@@ -46,6 +61,8 @@ public enum ProgressChange: Codable, Equatable, Sendable {
     case setRead(Bool, itemID: String)
     case savePosition(ReadingPosition, itemID: String, progress: Double)
     case readThrough(piece: Int?, itemID: String)
+    /// The headings of the material that are closed up, sorted.
+    case fold([Int], itemID: String)
     /// The material's text was replaced: its place and "read through here" point nowhere now.
     case restart(itemID: String)
     /// The material left the library.

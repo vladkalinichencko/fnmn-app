@@ -11,7 +11,7 @@ struct MaterialReader: View {
         ReadingSession(reader: reader)
             .modifier(ReaderAppearanceModifier())
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ReaderMenu(itemID: reader.materialID, page: sourceURL) }
+            .toolbar { ReaderMenu(reader: reader, page: sourceURL) }
             .onDisappear { Task { await library.saveProgress() } }
     }
 }

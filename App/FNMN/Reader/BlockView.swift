@@ -62,8 +62,13 @@ private struct SectionHeading: View {
 
     var body: some View {
         HeadingView(level: level, title: title, fold: fold, read: read)
-            .onTapGesture {
-                if fold != .none { reader.send(.toggleSection(index)) }
+            // Over the title, which would otherwise take the touch: the whole heading is the button.
+            .overlay {
+                if fold != .none {
+                    Color.clear
+                        .contentShape(.rect)
+                        .onTapGesture { reader.send(.toggleSection(index)) }
+                }
             }
     }
 }
@@ -82,7 +87,7 @@ struct HeadingView: View {
             InlineText(markdown: title, syntaxExtensions: [.math])
                 .font(font)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if case let .closed(hidden) = fold {
+            if case let .closed(hidden) = fold, hidden > 0 {
                 Text(hidden, format: .number)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
