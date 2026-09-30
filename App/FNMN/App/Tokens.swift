@@ -54,8 +54,6 @@ struct TurnedRectangle: Shape {
 extension EnvironmentValues {
     /// The color plates are tinted toward; a reader background sets a lighter shade of itself.
     @Entry var plateTint: Color = Tokens.plateTint
-    /// The page behind the plates; a reader background sets its own.
-    @Entry var pageColor: Color = Tokens.canvas
 }
 
 extension View {

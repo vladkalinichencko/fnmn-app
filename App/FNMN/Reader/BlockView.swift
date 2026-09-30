@@ -162,7 +162,6 @@ struct PlateView: View {
     let read: Bool
     let markedReadThrough: Bool
     let annotations: [Annotation]
-    @Environment(\.pageColor) private var page
     /// How far the finger has moved the plate from where the mode puts it; zero whenever no finger is on it.
     @State private var drag: CGFloat = 0
     @State private var size = CGSize.zero
@@ -176,11 +175,13 @@ struct PlateView: View {
     private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
     private static let slide = Animation.spring(duration: 0.35, bounce: 0.2)
 
-    /// The note lies under the plate and the plate slides off it. The plate is opaque, so the note shows only where
-    /// the plate has uncovered it, and touches there reach the note. The system's swipe moves the two together.
+    /// The note lies under the glass plate, blurred by it, and the plate slides off it; touches on the uncovered note
+    /// reach the note. The system's swipe moves the two together. The note is editable only while the plate stands
+    /// aside: an editor is a UIKit view, which draws over SwiftUI's own drawing, so under a moving plate it would
+    /// show on top of the glass.
     var body: some View {
         ZStack(alignment: .trailing) {
-            MarginNote(saved: paragraphNote, active: noting, save: saveNote) { noteHeight = $0 }
+            MarginNote(saved: paragraphNote, active: noting && drag == 0, save: saveNote) { noteHeight = $0 }
                 .frame(width: max(noteWidth - Tokens.gap, 0), height: size.height)
                 // At rest the note's corners would show past the plate's rounded ones.
                 .opacity(offset < 0 ? 1 : 0)
@@ -239,9 +240,6 @@ struct PlateView: View {
             }
             .opacity(read && mode == .reading ? 0.55 : 1)
             .animation(.easeInOut(duration: 0.4), value: read)
-            // Glass lets through what lies under it; the page color under the glass hides the note, and a read plate
-            // still fades into the page.
-            .background(page, in: .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             // The menu lifts the plate by this shape too; by the frame it would lift the square corners around the glass.
             .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .gesture(TapGesture().onEnded { reader.send(.plate(.toggle(index))) }, isEnabled: isTicking)
@@ -343,9 +341,9 @@ struct PlateView: View {
 }
 
 /// A note in the margin beside its paragraph: plain text on the page, no frame, saved when it closes.
-/// It is as tall as its paragraph; a longer note scrolls, fading out at the edge it continues past.
-/// The scroll view stays the same while the note opens and closes, so the note never swaps for another view;
-/// inside it, every plate on screen carries plain text, and only the open note an editor in the same place.
+/// It is as tall as its paragraph; a longer note fades out at its lower edge and scrolls while it is edited.
+/// Closed, it is SwiftUI's own text, which the glass plate over it blurs. Open, it is an editor in a scroll view,
+/// both UIKit views that draw over everything SwiftUI draws; the text keeps the same place in either.
 private struct MarginNote: View {
     let saved: String
     let active: Bool
@@ -354,39 +352,44 @@ private struct MarginNote: View {
     let measured: (CGFloat) -> Void
     @State private var draft = ""
     @State private var overflow = Overflow()
+    /// The height the paragraph gives the note.
+    @State private var room: CGFloat = 0
     @FocusState private var focused: Bool
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
     var body: some View {
-        ScrollView {
-            Group {
-                if active {
+        Group {
+            if active {
+                ScrollView {
                     TextField("Note", text: $draft, axis: .vertical)
                         .focused($focused)
                         .onAppear { focused = saved.isEmpty }
-                } else {
-                    Text(draft.isEmpty ? "Note" : draft)
-                        .foregroundStyle(draft.isEmpty ? .tertiary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .modifier(NoteLayout(design: readerFont.design))
                 }
+                .scrollIndicators(.hidden)
+                .scrollBounceBehavior(.basedOnSize)
+                .onScrollGeometryChange(for: Overflow.self) { geometry in
+                    Overflow(
+                        above: geometry.contentOffset.y > 1,
+                        below: geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 1,
+                        text: geometry.contentSize.height
+                    )
+                } action: { _, new in overflow = new }
+            } else {
+                Text(draft.isEmpty ? "Note" : draft)
+                    .foregroundStyle(draft.isEmpty ? .tertiary : .primary)
+                    .modifier(NoteLayout(design: readerFont.design))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        overflow = Overflow(below: height > room + 1, text: height)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .clipped()
             }
-            .font(.system(.callout, design: readerFont.design))
-            .padding(.vertical, Tokens.tilePadding)
         }
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollDisabled(!active)
-        .onScrollGeometryChange(for: Overflow.self) { geometry in
-            Overflow(
-                above: geometry.contentOffset.y > 1,
-                below: geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 1,
-                text: geometry.contentSize.height - 2 * Tokens.tilePadding
-            )
-        } action: { _, new in
-            overflow = new
-            measured(new.text)
-        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
         .mask(fade)
+        .onChange(of: overflow.text) { measured(overflow.text - 2 * Tokens.tilePadding) }
         .onAppear { draft = saved }
         .onChange(of: saved) { draft = saved }
         .onChange(of: active) {
@@ -406,9 +409,22 @@ private struct MarginNote: View {
         }
     }
 
+    /// The closed text and the editor stand in the same place, so the note does not move when it opens.
+    private struct NoteLayout: ViewModifier {
+        let design: Font.Design
+
+        func body(content: Content) -> some View {
+            content
+                .font(.system(.callout, design: design))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, Tokens.tilePadding)
+        }
+    }
+
     private struct Overflow: Equatable {
         var above = false
         var below = false
+        /// The height of the text with the room above and below it.
         var text: CGFloat = 0
     }
 }
