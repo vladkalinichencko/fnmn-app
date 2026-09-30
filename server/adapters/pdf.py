@@ -1,4 +1,4 @@
-"""Any PDF through the book pipeline in mac/pdf-book.
+"""Any PDF through the book pipeline in server/pdf-book.
 
 Every page goes to DeepSeek-OCR-2, the assembler joins that OCR with the PDF
 text layer, footnotes and formulas the assembler doubts go back to the model,

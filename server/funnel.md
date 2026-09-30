@@ -4,12 +4,12 @@ Funnel на бесплатном Tailscale Personal публикует лока�
 
 ## Mac
 
-Сервис и Tailscale работают как два агента входа в систему: они стартуют после входа в macOS и перезапускаются при падении. Код агентов — [`fnmn-mac.sh`](fnmn-mac.sh), логи — `~/Library/Logs/FNMN/`.
+Сервис и Tailscale работают как два агента входа в систему: они стартуют после входа в macOS и перезапускаются при падении. Код агентов — [`fnmn-server.sh`](fnmn-server.sh), логи — `~/Library/Logs/FNMN/`.
 
 ```sh
-mac/fnmn-mac.sh on       # установить и запустить оба агента
-mac/fnmn-mac.sh status   # состояние агентов, адрес Funnel и проверка /health с токеном
-mac/fnmn-mac.sh off      # остановить и удалить агентов
+server/fnmn-server.sh on       # установить и запустить оба агента
+server/fnmn-server.sh status   # состояние агентов, адрес Funnel и проверка /health с токеном
+server/fnmn-server.sh off      # остановить и удалить агентов
 ```
 
 `tailscaled` работает без системного VPN-интерфейса (`--tun=userspace-networking`) и хранит вход, настройку Funnel и TLS-сертификат в `~/Library/Application Support/FNMN/Tailscale`. Сервис слушает только `127.0.0.1:8765` и при каждом старте берёт токен из Keychain. После перезапуска `tailscaled` TLS поднимается примерно за минуту.
@@ -21,7 +21,7 @@ mac/fnmn-mac.sh off      # остановить и удалить агентов
 ```sh
 brew install tailscale
 security add-generic-password -s local.fnmn.mac-service -a fnmn -w "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
-mac/fnmn-mac.sh on
+server/fnmn-server.sh on
 ```
 
 Войти в tailnet по ссылке, которую напечатает первая команда, затем опубликовать только порт сервиса:

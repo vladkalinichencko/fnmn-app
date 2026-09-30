@@ -98,7 +98,7 @@ FNMN уже зависит от Trafilatura. README описывает rule-base
 
 В текущем `master` перед удалением шума вызывается `recover_math`: для каждого `math` берётся `annotation[@encoding="application/x-tex"]`, иначе `alttext`, и LaTeX переносится в `tail` как `\(...\)` или `\[...\]`. https://raw.githubusercontent.com/adbar/trafilatura/master/trafilatura/htmlprocessing.py
 
-Закреплённая в проекте trafilatura 2.0.0 этой функции не содержит. Там `math` сразу входит в `MANUALLY_CLEANED` и удаляется вместе с поддеревом. `mac/requirements.txt`, установленный пакет 2.0.0.
+Закреплённая в проекте trafilatura 2.0.0 этой функции не содержит. Там `math` сразу входит в `MANUALLY_CLEANED` и удаляется вместе с поддеревом. `server/requirements.txt`, установленный пакет 2.0.0.
 
 В `master` после salvage тег `math` всё равно входит в `MANUALLY_CLEANED` и удаляется. Исходник к этому моменту уже лежит в `tail`. https://raw.githubusercontent.com/adbar/trafilatura/master/trafilatura/settings.py
 

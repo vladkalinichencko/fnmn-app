@@ -1,6 +1,6 @@
 """Build a source-centered library from Safari and selected Dia folders.
 
-    python3 mac/browser_library.py -o browser-library.json
+    python3 server/browser_library.py -o browser-library.json
 
 The output keeps each source once, records every collection where a saved URL
 appeared, and expands saved YouTube playlists into their videos.

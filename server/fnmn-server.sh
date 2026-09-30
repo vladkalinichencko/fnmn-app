@@ -1,13 +1,13 @@
 #!/bin/zsh
-# Keep the FNMN Mac service and its Tailscale Funnel running as login agents.
+# Keep the FNMN server and its Tailscale Funnel running as login agents.
 #
-#   mac/fnmn-mac.sh on       install and start both agents; they restart after login and on crash
-#   mac/fnmn-mac.sh off      stop both agents and remove them
-#   mac/fnmn-mac.sh status   show agents, Funnel address and an authorized /health check
+#   server/fnmn-server.sh on       install and start both agents; they restart after login and on crash
+#   server/fnmn-server.sh off      stop both agents and remove them
+#   server/fnmn-server.sh status   show agents, Funnel address and an authorized /health check
 set -euo pipefail
 
-MAC="${0:A:h}"
-ROOT="${MAC:h}"
+SERVER="${0:A:h}"
+ROOT="${SERVER:h}"
 AGENTS="$HOME/Library/LaunchAgents"
 LOGS="$HOME/Library/Logs/FNMN"
 STATE="$HOME/Library/Application Support/FNMN/Tailscale"
@@ -52,7 +52,7 @@ case "${1:-}" in
     install -d -m 700 "$STATE"
     agent $TAILSCALE /opt/homebrew/bin/tailscaled --tun=userspace-networking \
       "--statedir=$STATE" "--socket=$SOCKET" --no-logs-no-support
-    agent $SERVICE "$MAC/fnmn-mac.sh" serve
+    agent $SERVICE "$SERVER/fnmn-server.sh" serve
     start $TAILSCALE
     start $SERVICE
     ;;
@@ -71,7 +71,7 @@ case "${1:-}" in
     curl -sS -m 20 -H "Authorization: Bearer $(token)" "https://$address/health"; echo
     ;;
   serve)
-    cd "$MAC"
+    cd "$SERVER"
     FNMN_TOKEN="$(token)" exec "$ROOT/.venv/bin/python" -m uvicorn service:app --host 127.0.0.1 --port $PORT
     ;;
   *)

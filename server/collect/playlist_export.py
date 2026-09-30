@@ -7,7 +7,7 @@ One row per (playlist, video) with adjacent fields for clustering:
 Default source is the account library tab (saved + created playlists,
 Watch Later, Liked), which needs login cookies:
 
-    python3 mac/playlist_export.py --cookies cookies.txt -o playlists.csv
+    python3 server/playlist_export.py --cookies cookies.txt -o playlists.csv
 
 Pass --playlist (repeatable) to export specific playlists instead.
 """
@@ -36,7 +36,7 @@ def playlist_source(playlist_id: str) -> str:
 
 def dump_json_lines(command: list[str]) -> list[dict]:
     if shutil.which("yt-dlp") is None:
-        raise RuntimeError("yt-dlp not found on PATH (pip install -r mac/requirements.txt)")
+        raise RuntimeError("yt-dlp not found on PATH (pip install -r server/requirements.txt)")
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     assert process.stdout is not None
     entries: list[dict] = []

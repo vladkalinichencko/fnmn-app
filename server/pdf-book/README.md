@@ -10,30 +10,30 @@ Install the pinned OCR environment:
 
 ```bash
 python3 -m venv .venv-ocr
-.venv-ocr/bin/pip install -r mac/pdf-book/requirements-ocr.txt
+.venv-ocr/bin/pip install -r server/pdf-book/requirements-ocr.txt
 ```
 
 Run the complete pipeline from the repository root:
 
 ```bash
-.venv-ocr/bin/python mac/pdf-book/run-ocr2.py \
+.venv-ocr/bin/python server/pdf-book/run-ocr2.py \
   /path/to/book.pdf /path/to/work/ocr
 
-.venv-ocr/bin/python mac/pdf-book/assemble-book.py \
+.venv-ocr/bin/python server/pdf-book/assemble-book.py \
   /path/to/book.pdf /path/to/work/ocr /path/to/work/book.md
 
-.venv-ocr/bin/python mac/pdf-book/run-footnote-ocr.py \
+.venv-ocr/bin/python server/pdf-book/run-footnote-ocr.py \
   /path/to/work/book.candidates.json /path/to/work/footnote-overrides.json
 
-.venv-ocr/bin/python mac/pdf-book/run-formula-ocr.py \
+.venv-ocr/bin/python server/pdf-book/run-formula-ocr.py \
   /path/to/work/book.candidates.json /path/to/work/formula-overrides.json
 
-.venv-ocr/bin/python mac/pdf-book/assemble-book.py \
+.venv-ocr/bin/python server/pdf-book/assemble-book.py \
   /path/to/book.pdf /path/to/work/ocr /path/to/work/book.md \
   --footnote-overrides /path/to/work/footnote-overrides.json \
   --formula-overrides /path/to/work/formula-overrides.json
 
-python3 mac/pdf-book/export-app-book.py \
+python3 server/pdf-book/export-app-book.py \
   /path/to/work/book.md /path/to/book-config.json /path/to/output-book
 ```
 

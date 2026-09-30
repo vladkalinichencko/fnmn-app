@@ -1,6 +1,6 @@
 """Export Safari Reading List, Safari tab groups, and Dia bookmarks to CSV.
 
-    python3 mac/browser_links_export.py -o browser-links.csv
+    python3 server/browser_links_export.py -o browser-links.csv
 
 Each row keeps its source, Dia profile, and bookmark folder path. The script
 reads browser files without changing them; it does not export Dia tab groups.

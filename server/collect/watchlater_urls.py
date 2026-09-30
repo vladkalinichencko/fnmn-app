@@ -1,13 +1,13 @@
 """List every video URL in a YouTube playlist, defaulting to Watch Later.
 
 Watch Later is private, so YouTube only shows it to a logged-in browser.
-This script calls yt-dlp (already in mac/requirements.txt) with your
+This script calls yt-dlp (already in server/requirements.txt) with your
 browser cookies, pages through the whole playlist, and writes one
 canonical watch URL per line:
 
-    python3 mac/watchlater_urls.py --cookies-from-browser chrome -o watchlater.txt
+    python3 server/watchlater_urls.py --cookies-from-browser chrome -o watchlater.txt
 
-That file feeds straight into mac/youtube_prepare.py.
+That file feeds straight into server/youtube_prepare.py.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def urls_from_lines(lines) -> list[str]:
 
 def list_playlist(url: str, cookies_from_browser: str | None, cookies_file: str | None) -> list[str]:
     if shutil.which("yt-dlp") is None:
-        raise RuntimeError("yt-dlp not found on PATH (pip install -r mac/requirements.txt)")
+        raise RuntimeError("yt-dlp not found on PATH (pip install -r server/requirements.txt)")
     command = build_command(url, cookies_from_browser, cookies_file)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     assert process.stdout is not None
