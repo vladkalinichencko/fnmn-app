@@ -58,7 +58,7 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         guard document.holdsBlocks(index) else { return state }
         if state.folded.remove(index) == nil { state.folded.insert(index) }
     case let .foldAll(closed):
-        state.folded = closed ? document.foldableHeadings : []
+        state.folded = closed ? document.lowestHeadings : []
     case .mark, .note, .readThrough, .ask, .copyPrompt:
         break
     }
@@ -91,8 +91,8 @@ final class ReaderCoordinator {
         self.baseURL = baseURL
         state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library
-        // A material nobody has folded by hand opens closed up. The block the reader opens at stays on the page.
-        let saved = library.progress.folded[materialID].map(Set.init) ?? document.foldableHeadings
+        // A material nobody has folded by hand opens with its lowest sections closed up, the contents showing. The block the reader opens at stays on the page.
+        let saved = library.progress.folded[materialID].map(Set.init) ?? document.lowestHeadings
         state.folded = (note ?? place).map { saved.subtracting(document.headings(holding: $0)) } ?? saved
         state.opening = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
         state.hidesColumn = state.opening != nil

@@ -122,9 +122,9 @@ struct ReaderMenu: View {
                 Text(font.name)
             }
             .pickerStyle(.menu)
-            let foldable = reader.document.foldableHeadings
-            if !foldable.isEmpty {
-                if reader.state.folded == foldable {
+            let lowest = reader.document.lowestHeadings
+            if !lowest.isEmpty {
+                if lowest.isSubset(of: reader.state.folded) {
                     Button("Expand All", systemImage: "arrow.up.left.and.arrow.down.right") { reader.send(.foldAll(false)) }
                 } else {
                     Button("Collapse All", systemImage: "arrow.down.right.and.arrow.up.left") { reader.send(.foldAll(true)) }

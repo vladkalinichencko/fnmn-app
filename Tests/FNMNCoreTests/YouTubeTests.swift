@@ -37,11 +37,11 @@ import Testing
     #expect(readingPlaceTarget(place: nil, visible: [0, 2]) == 0)
 }
 
-@Test func everySectionWithBlocksUnderItStartsClosedExceptWhereTheReaderOpens() {
+@Test func onlyTheLowestSectionsStartClosedExceptWhereTheReaderOpens() {
     let document = ReaderDocument(markdown: "# Book\n\nIntro.\n\n# One\n\n## Inner\n\nText.\n\n# Two\n\nMore.", title: "Book")
-    #expect(document.foldableHeadings == [2, 3, 5])
+    #expect(document.lowestHeadings == [3, 5])
     #expect(document.headings(holding: 4) == [2, 3])
-    #expect(document.foldableHeadings.subtracting(document.headings(holding: 4)) == [5])
+    #expect(document.lowestHeadings.subtracting(document.headings(holding: 4)) == [5])
 }
 
 @Test func foldedHeadingsAreKeptPerMaterialAndForgottenWithItsText() {

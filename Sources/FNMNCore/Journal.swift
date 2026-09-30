@@ -92,9 +92,33 @@ public func merge(
             guard let next = try? catalog.applying(change, at: event.time) else { continue }
             progress = next.progressChanges(since: catalog).reduce(progress) { $0.applying($1) }
             catalog = next
+        case let .progress(.reset(itemID)):
+            // A reset wipes only what was recorded before it: a later change, made here or anywhere, stays.
+            let before = progress
+            progress = progress.applying(.reset(itemID: itemID), at: event.time)
+            func later(_ name: String) -> Bool { (sync.clock["\(name):\(itemID)"] ?? .distantPast) > event.time }
+            if later("position") {
+                progress.positions[itemID] = before.positions[itemID]
+                progress.readings[itemID, default: MaterialReading()].progress = before.readings[itemID]?.progress
+            }
+            if later("readThrough") { progress.readThrough[itemID] = before.readThrough[itemID] }
+            if later("opened") { progress.readings[itemID, default: MaterialReading()].openedAt = before.readings[itemID]?.openedAt }
+            if later("read") { progress.readings[itemID, default: MaterialReading()].isRead = before.readings[itemID]?.isRead ?? false }
         case let .progress(change):
+            // What was recorded before a reset that is already known here was wiped by it and must not come back.
+            if let itemID = change.readingItemID, let reset = sync.clock["reset:\(itemID)"], event.time <= reset { continue }
             progress = progress.applying(change, at: event.time)
         }
     }
     return (catalog, progress, sync)
+}
+
+extension ProgressChange {
+    /// The material a change to its reading state belongs to; nil for changes a reset does not wipe.
+    fileprivate var readingItemID: String? {
+        switch self {
+        case let .open(itemID), let .setRead(_, itemID), let .savePosition(_, itemID, _), let .readThrough(_, itemID): itemID
+        case .fold, .reset, .restart, .forget: nil
+        }
+    }
 }

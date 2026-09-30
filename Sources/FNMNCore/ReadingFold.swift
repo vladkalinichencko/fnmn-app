@@ -15,9 +15,13 @@ extension ReaderDocument {
         return visible
     }
 
-    /// The headings with something under them: every section that can close up. The title the header shows is not one.
-    public var foldableHeadings: Set<Int> {
-        Set(sections.keys.filter { $0 != repeatedTitle && holdsBlocks($0) })
+    /// The headings of the lowest level in each branch: those with text under them and no heading beneath. Closing
+    /// them hides only the paragraphs, so every heading of every level stays on the page as the contents.
+    /// The title the header shows is not one.
+    public var lowestHeadings: Set<Int> {
+        Set(sections.filter { index, section in
+            index != repeatedTitle && section.size > 0 && section.size == section.end - index - 1
+        }.keys)
     }
 
     /// The headings whose sections contain this block, so the block stays on the page when they are open.

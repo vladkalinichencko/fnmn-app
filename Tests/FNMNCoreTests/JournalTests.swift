@@ -94,3 +94,36 @@ private func library() throws -> LibrarySnapshot {
     #expect(merged.catalog.articles.isEmpty)
     #expect(merged.progress == ReadingProgress())
 }
+
+private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceReferenceDate: seconds) }
+
+@Test func aResetWipesWhatCameBeforeItAndKeepsWhatCameAfter() throws {
+    let id = paper.material.id
+    let events = [
+        JournalEvent(time: stamp(10), change: .progress(.savePosition(.piece(1), itemID: id, progress: 0.5))),
+        JournalEvent(time: stamp(20), change: .progress(.reset(itemID: id))),
+        JournalEvent(time: stamp(30), change: .progress(.savePosition(.piece(0), itemID: id, progress: 0.1))),
+    ]
+    let merged = merge(events, into: try library(), ReadingProgress(), sync: JournalSync())
+    #expect(merged.progress.positions[id] == .piece(0))
+}
+
+@Test func aResetFromAnotherDeviceLeavesWhatThisDeviceReadAfterIt() throws {
+    let id = paper.material.id
+    var sync = JournalSync()
+    var progress = ReadingProgress()
+    progress = progress.applying(.savePosition(.piece(1), itemID: id, progress: 0.5))
+    sync.record(JournalEvent(time: stamp(30), change: .progress(.savePosition(.piece(1), itemID: id, progress: 0.5))))
+    let reset = JournalEvent(time: stamp(20), change: .progress(.reset(itemID: id)))
+    let merged = merge([reset], into: try library(), progress, sync: sync)
+    #expect(merged.progress.positions[id] == .piece(1))
+}
+
+@Test func anOlderPlateFromAnotherDeviceDoesNotUndoAResetHere() throws {
+    let id = paper.material.id
+    var sync = JournalSync()
+    sync.record(JournalEvent(time: stamp(20), change: .progress(.reset(itemID: id))))
+    let late = JournalEvent(time: stamp(10), change: .progress(.savePosition(.piece(1), itemID: id, progress: 0.5)))
+    let merged = merge([late], into: try library(), ReadingProgress(), sync: sync)
+    #expect(merged.progress.positions[id] == nil)
+}
