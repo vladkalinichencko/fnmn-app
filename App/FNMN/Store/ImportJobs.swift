@@ -107,20 +107,16 @@ final class ImportJobs {
     }
 
     private func prepare(_ url: URL, jobID: UUID) async throws {
-        guard CaptureRoute.source(for: url) != nil else { throw CaptureError.unrecognizedDocument }
+        guard CaptureRoute.source(for: url) != nil else { throw CaptureError.notAWebLink }
         if try await storedFromMac(jobID: jobID, start: { try await self.mac.port.startJob(url: url, connection: $0) }) == nil {
             try await library.storeMade(.link(url))
         }
     }
 
-    /// A prepared pick is stored as it is; any other file goes to the Mac, and its original to `originals/`.
+    /// The file goes to the Mac, which makes a material of it, and the file itself to `originals/`.
     private func importFile(_ url: URL, jobID: UUID) async throws {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
-        guard !library.isPrepared(url) else {
-            try await library.importFile(at: url) { self.send(.progressed(jobID, $0)) }
-            return
-        }
         try await CloudFolder.download(url)
         send(.progressed(jobID, .sending))
         let made = try await storedFromMac(jobID: jobID) { try await self.mac.port.startFileJob(file: url, connection: $0) }

@@ -223,24 +223,6 @@ public actor LibraryFile {
 
     // MARK: Adding materials
 
-    /// Whether what was picked with `+` → File is already prepared: a delivery archive or a prepared library
-    /// (`catalog.json`, `deliveries/`). Any other file goes to the Mac, which makes a material of it.
-    public nonisolated static func isPrepared(_ url: URL) -> Bool {
-        url.pathExtension.lowercased() == "tar"
-            || FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path)
-    }
-
-    /// Stores a prepared pick; whatever is not in the FNMN folder yet is copied there.
-    public func storePicked(_ url: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        if url.pathExtension.lowercased() == "tar" {
-            return try storeArticle(archive: url, into: snapshot)
-        } else if Self.isPrepared(url) {
-            return try storeBrowserLibrary(from: url, into: snapshot)
-        } else {
-            throw CaptureError.unrecognizedDocument
-        }
-    }
-
     /// A link or file kept as it is, made on this phone, becomes a delivery like any other.
     public func storeMade(_ package: ImportPackage, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let archive = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
@@ -249,7 +231,7 @@ public actor LibraryFile {
         return try storeArticle(archive: archive, into: snapshot)
     }
 
-    /// A delivery archive, picked anywhere or prepared by the Mac for this phone, joins the others in the FNMN folder.
+    /// A delivery archive the server prepared for this phone joins the others in the FNMN folder.
     public func storeArticle(archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let package = try DeliveryArchive(url: archive).unpack { _, _ in nil }
         let destination = try requireCloudFolder().appending(path: "deliveries").appending(path: Self.deliveryName(package.material.id))
@@ -259,22 +241,9 @@ public actor LibraryFile {
         return next
     }
 
-    /// A prepared library: the FNMN folder itself, read in place, or another one, whose deliveries are copied in.
-    public func storeBrowserLibrary(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let deliveries = try requireCloudFolder().appending(path: "deliveries")
-        let archives = try FileManager.default.contentsOfDirectory(
-            at: source.appending(path: "deliveries"), includingPropertiesForKeys: nil
-        ).filter { $0.pathExtension == "tar" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
-        var next = try applyBrowserCatalog(from: source, into: snapshot)
-        for archive in archives {
-            let destination = deliveries.appending(path: archive.lastPathComponent)
-            if destination.standardizedFileURL != archive.standardizedFileURL {
-                try placeInCloud(archive, at: destination)
-            }
-            next = try addCloudDelivery(destination, into: next)
-        }
-        try save(next, previous: snapshot)
-        return next
+    /// The material a delivery archive holds, read here so the main thread never reads an archive.
+    public func materialID(ofDelivery archive: URL) throws -> String {
+        try DeliveryArchive(url: archive).unpack { _, _ in nil }.material.id
     }
 
     /// The first step of a browser library import: its catalog of sources, whose reviewed albums replace

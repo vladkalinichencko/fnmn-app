@@ -29,20 +29,22 @@ private let article = ImportPackage(
     #expect(library.albums(of: article.material.id) == ["ML Theory"])
 }
 
-@Test func browserImportKeepsSourceOnlySitesAndPreparedMaterials() async throws {
+@Test func theFNMNFolderKeepsSourceOnlySitesAndPreparedMaterials() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let prepared = root.appending(path: "prepared")
-    try FileManager.default.createDirectory(at: prepared.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let folder = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: folder.appending(path: "deliveries"), withIntermediateDirectories: true)
     let catalog = #"{"collections":[{"id":"reading","name":"Reading"}],"sources":[{"name":"Example","url":"https://example.com","kind":"site","saved_in":["reading"],"found_in":["reading"],"materials":[]},{"name":"Author","url":"https://example.org","kind":"author","saved_in":["reading"],"found_in":["reading"],"materials":[{"title":"A","url":"https://example.com/a","saved_in":["reading"],"found_in":["reading"]}]}]}"#
-    try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
-    try writeDelivery(article, files: [("assets/p.png", Data("png".utf8))], to: prepared.appending(path: "deliveries/a.tar"))
+    try Data(catalog.utf8).write(to: folder.appending(path: "catalog.json"))
+    let delivery = folder.appending(path: "deliveries/a.tar")
+    try writeDelivery(article, files: [("assets/p.png", Data("png".utf8))], to: delivery)
 
     let file = await libraryFile(root)
-    let imported = try await file.storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
+    let catalogued = try await file.applyBrowserCatalog(from: folder, into: LibrarySnapshot())
+    let imported = try await file.addCloudDelivery(delivery, into: catalogued)
+    try await file.save(imported, previous: LibrarySnapshot())
     #expect(imported.browserCatalog?.sources.first?.materials.isEmpty == true)
     #expect(imported.browserCatalog?.sources.last?.materials.first?.savedURLs == [])
     #expect(imported.articles.map(\.material.id) == [article.material.id])
-    #expect(FileManager.default.fileExists(atPath: root.appending(path: "FNMN/deliveries/a.tar").path))
     let reloaded = try await file.load()
     #expect(reloaded.catalog.browserCatalog == imported.browserCatalog)
     let entry = try #require(imported.articles.first)
@@ -263,18 +265,6 @@ private let laterArticle = ImportPackage(
     let loaded = try await LibraryFile(url: directory).load()
     #expect(loaded.progress.readings.isEmpty)
     #expect(loaded.catalog.continuedID(loaded.progress) == nil)
-}
-
-@Test func aPickedArchiveGoesIntoTheFNMNFolderAndAnyOtherFileToTheMac() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let file = await libraryFile(directory)
-    let picked = directory.appending(path: "a.tar")
-    try writeDelivery(article, to: picked)
-    #expect(LibraryFile.isPrepared(picked))
-    let library = try await file.storePicked(picked, into: LibrarySnapshot())
-    #expect(library.articles.map(\.material.id) == [article.material.id])
-    #expect(!LibraryFile.isPrepared(directory.appending(path: "b.pdf")))
 }
 
 @Test func aFileKeptWithoutTheMacIsKnownByItsBytesLikeOneTheMacMade() async throws {
@@ -502,9 +492,9 @@ private func span(_ quote: String) -> AnnotationTarget {
     try Data(#"{"videoFiles":{"\#(article.material.id)":"a.mp4"}}"#.utf8).write(to: app.appending(path: "state.json"))
     let file = await libraryFile(directory)
     _ = try await file.load()
-    let picked = directory.appending(path: "a.tar")
-    try writeDelivery(article, to: picked)
-    let library = try await file.storePicked(picked, into: LibrarySnapshot())
+    let delivery = directory.appending(path: "a.tar")
+    try writeDelivery(article, to: delivery)
+    let library = try await file.storeArticle(archive: delivery, into: LibrarySnapshot())
     #expect(await file.holdsMaterialsInApp(library))
     _ = try await file.moveIntoCloud(library)
     let entry = try #require(library.articles.first)

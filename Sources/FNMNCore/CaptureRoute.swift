@@ -39,13 +39,13 @@ public enum CaptureRoute {
 }
 
 public enum CaptureError: Error, Equatable {
-    case unrecognizedDocument
+    case notAWebLink
 }
 
 extension CaptureError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .unrecognizedDocument: "Choose a file, a prepared material (.tar) or the FNMN folder."
+        case .notAWebLink: "Add a web link that starts with http or https."
         }
     }
 }
