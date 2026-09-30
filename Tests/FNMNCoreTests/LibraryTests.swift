@@ -95,6 +95,21 @@ private let paperLink = ImportPackage(
     #expect(library.articles.map(\.material.id) == [paper.material.id])
 }
 
+@Test func aPageIsShownByItsMaterialOnceOneIsMadeAndByItsLinkBefore() throws {
+    let page = try #require(paperLink.material.sourceURL)
+    var library = LibrarySnapshot()
+    #expect(library.materialID(forPage: page) == nil)
+    try library.importPackage(paperLink, at: .now)
+    #expect(library.materialID(forPage: page) == paperLink.material.id)
+    let paper = ImportPackage(
+        material: Material(id: "article:https://dl.acm.org/doi/1", kind: .article, title: "Paper", sourceURL: page),
+        sections: article.sections, blocks: article.blocks, folders: []
+    )
+    try library.importPackage(paper, at: .now)
+    try library.importPackage(paperLink, at: .now)
+    #expect(library.materialID(forPage: page) == paper.material.id)
+}
+
 @Test func importKeepsTheMarkdownBody() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = await libraryFile(root)

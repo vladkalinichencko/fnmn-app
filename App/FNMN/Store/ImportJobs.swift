@@ -1,8 +1,10 @@
 import FNMNCore
 import Foundation
 import Observation
+import os
 
-/// One link or file on its way into the library. It shows as a tile in Unsorted until it is stored.
+/// One link or file on its way into the library. It is kept as a card first, and the job shows on that card
+/// until the server's material takes its place; until the card exists, the job has a tile of its own in Unsorted.
 struct ImportJob: Identifiable, Equatable {
     enum Input: Equatable {
         case link(URL)
@@ -20,6 +22,8 @@ struct ImportJob: Identifiable, Equatable {
 
     let id: UUID
     let input: Input
+    /// The card the job shows on.
+    var itemID: String?
     var phase: Phase
 
     var title: String {
@@ -33,11 +37,15 @@ struct ImportJob: Identifiable, Equatable {
 
 enum ImportAction {
     case submit(ImportJob.Input, id: UUID)
+    /// The link or file is in the library as a card.
+    case placed(UUID, itemID: String)
     case progressed(UUID, ImportStep)
     case finished(UUID)
     case failed(UUID, String)
     case retry(UUID)
     case dismiss(UUID)
+    /// The reader deleted a card, and whatever was being prepared for it stops.
+    case deleted(itemID: String)
 }
 
 func importReduce(_ jobs: [ImportJob], _ action: ImportAction) -> [ImportJob] {
@@ -48,7 +56,9 @@ func importReduce(_ jobs: [ImportJob], _ action: ImportAction) -> [ImportJob] {
     }
     switch action {
     case let .submit(input, id):
-        jobs.insert(ImportJob(id: id, input: input, phase: .preparing(input.firstStep)), at: 0)
+        jobs.insert(ImportJob(id: id, input: input, itemID: input.itemID, phase: .preparing(input.firstStep)), at: 0)
+    case let .placed(id, itemID):
+        update(id) { $0.itemID = itemID }
     case let .progressed(id, step):
         update(id) { if case .preparing = $0.phase { $0.phase = .preparing(step) } }
     case let .finished(id):
@@ -59,6 +69,8 @@ func importReduce(_ jobs: [ImportJob], _ action: ImportAction) -> [ImportJob] {
         update(id) { if case .failed = $0.phase { $0.phase = .preparing($0.input.firstStep) } }
     case let .dismiss(id):
         jobs.removeAll { $0.id == id }
+    case let .deleted(itemID):
+        jobs.removeAll { $0.itemID == itemID }
     }
     return jobs
 }
@@ -71,6 +83,7 @@ final class ImportJobs {
     private let server: ServerLink
     private var shownJobID: UUID?
     @ObservationIgnored private var running: [UUID: Task<Void, Never>] = [:]
+    private static let log = Logger(subsystem: "local.fnmn.reader", category: "import")
 
     init(library: LibraryModel, server: ServerLink) {
         self.library = library
@@ -92,69 +105,70 @@ final class ImportJobs {
         showFirstPreparingJob(ending: action)
     }
 
+    /// The card that shows a material's job, if one is running or failed.
+    func job(of itemID: String) -> ImportJob? {
+        jobs.first { $0.itemID == itemID }
+    }
+
     private func run(_ job: ImportJob) async {
         do {
             switch job.input {
-            case let .link(url): try await prepare(url, jobID: job.id)
-            case let .file(url): try await importFile(url, jobID: job.id)
+            case let .link(url): try await addLink(url, job: job)
+            case let .file(url): try await addFile(url, job: job)
             case let .libraryFolder(folder): try await library.linkLibraryFolder(folder) { self.send(.progressed(job.id, $0)) }
             case let .videoFile(itemID, url): try await downloadVideo(url, itemID: itemID, jobID: job.id)
             }
             send(.finished(job.id))
-        } catch {
+        } catch where !Task.isCancelled {
+            Self.log.error("\(job.title, privacy: .public): \(error.localizedDescription, privacy: .public)")
             send(.failed(job.id, error.localizedDescription))
-        }
+        } catch {}
     }
 
-    private func prepare(_ url: URL, jobID: UUID) async throws {
+    /// The link is a card at once; the server's material from the page takes its place. A page the library
+    /// already holds a material of keeps that card, and the server prepares it again.
+    private func addLink(_ url: URL, job: ImportJob) async throws {
         guard CaptureRoute.source(for: url) != nil else { throw CaptureError.notAWebLink }
-        if try await storedFromServer(jobID: jobID, start: { try await self.server.port.startJob(url: url, connection: $0) }) == nil {
-            try await library.storeMade(.link(url))
+        if job.itemID == nil {
+            try await library.storeLink(url)
+            send(.placed(job.id, itemID: library.snapshot.materialID(forPage: url) ?? ImportPackage.link(url).material.id))
         }
+        try await prepareOnServer(jobID: job.id) { try await self.server.port.startJob(url: url, connection: $0) }
     }
 
-    /// The file goes to the server, which makes a material of it, and the file itself to `originals/`.
-    private func importFile(_ url: URL, jobID: UUID) async throws {
+    /// The file is a card at once, with the file itself in `originals/`; the server's material has the same id,
+    /// known by the file's bytes, and replaces the card.
+    private func addFile(_ url: URL, job: ImportJob) async throws {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
-        try await CloudFolder.download(url)
-        send(.progressed(jobID, .sending))
-        let made = try await storedFromServer(jobID: jobID) { try await self.server.port.startFileJob(file: url, connection: $0) }
-        send(.progressed(jobID, .saving))
-        let materialID = if let made { made } else { try await keep(url) }
-        try await library.storeOriginal(url, of: materialID)
-    }
-
-    private func keep(_ file: URL) async throws -> String {
-        let package = try ImportPackage.file(file)
-        try await library.storeMade(package)
-        return package.material.id
-    }
-
-    /// Runs a job on the server and stores the delivery it made, even a link or file it could not read.
-    /// Nil when the server is not set up, cannot be reached or failed, and the phone keeps the link or file itself;
-    /// sending it again once the server answers replaces that material.
-    private func storedFromServer(jobID: UUID, start: (ServerConnection) async throws -> ServerJob) async throws -> String? {
-        guard let connection = try? server.configured() else { return nil }
-        let job: ServerJob
-        let archive: URL
-        do {
-            job = try await server.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
-            guard job.phase == .done else { return nil }
-            send(.progressed(jobID, .saving))
-            archive = try await server.port.delivery(of: job.id, connection: connection)
-        } catch where !Task.isCancelled {
-            return nil
+        if job.itemID == nil {
+            try await CloudFolder.download(url)
+            send(.progressed(job.id, .saving))
+            send(.placed(job.id, itemID: try await library.storeFile(url)))
         }
-        defer { try? FileManager.default.removeItem(at: archive) }
-        let materialID = try await library.store(archive: archive)
-        await confirmStored(job.id, connection: connection)
-        return materialID
+        send(.progressed(job.id, .sending))
+        try await prepareOnServer(jobID: job.id) { try await self.server.port.startFileJob(file: url, connection: $0) }
     }
 
-    /// The material is in the library whether or not the server hears this; a server that does not keeps the
-    /// job's file until it restarts, so a lost confirmation does not fail the import.
-    private func confirmStored(_ id: String, connection: ServerConnection) async {
+    /// Runs a job on the server and stores the delivery it made in the card's place. A server that is not set up,
+    /// cannot be reached or could not read the material fails the job with its reason, and the card stays as it is.
+    private func prepareOnServer(jobID: UUID, start: (ServerConnection) async throws -> ServerJob) async throws {
+        let connection = try server.configured()
+        let job = try await server.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
+        guard job.phase == .done, job.error == nil else {
+            await forget(job.id, connection: connection)
+            throw ServerError.rejected(job.error ?? "The server could not prepare this material.")
+        }
+        send(.progressed(jobID, .saving))
+        let archive = try await server.port.delivery(of: job.id, connection: connection)
+        defer { try? FileManager.default.removeItem(at: archive) }
+        try await library.store(archive: archive)
+        await forget(job.id, connection: connection)
+    }
+
+    /// The server drops the job and its file; one that does not hear this drops them when it restarts, so a lost
+    /// message does not fail the import.
+    private func forget(_ id: String, connection: ServerConnection) async {
         try? await server.port.forget(id, connection: connection)
     }
 
@@ -169,7 +183,7 @@ final class ImportJobs {
         let video = try await server.port.videoFile(of: job.id, connection: connection)
         defer { try? FileManager.default.removeItem(at: video) }
         try await library.storeOriginal(video, of: itemID)
-        await confirmStored(job.id, connection: connection)
+        await forget(job.id, connection: connection)
     }
 
     /// The Live Activity and the background task follow the oldest job still preparing.
@@ -194,29 +208,28 @@ extension ImportJob {
     var isPreparing: Bool {
         if case .preparing = phase { true } else { false }
     }
-
-    /// Links and files become new materials and show as tiles; a video download belongs to its video.
-    var addsMaterial: Bool {
-        if case .videoFile = input { false } else { true }
-    }
 }
 
 extension ImportJob.Input {
     var firstStep: ImportStep {
         switch self {
         case .link, .videoFile: .sending
-        case .file: .saving
-        case .libraryFolder: .downloadingFromCloud
+        case .file, .libraryFolder: .downloadingFromCloud
         }
+    }
+
+    /// A video download belongs to its video from the start; a link or file gets its card once it is stored.
+    var itemID: String? {
+        if case let .videoFile(itemID, _) = self { itemID } else { nil }
     }
 }
 
 extension ImportStep {
-    static let sending = ImportStep(text: "Sending to the server", fraction: nil)
-    static let saving = ImportStep(text: "Saving", fraction: nil)
-    static let downloadingFromCloud = ImportStep(text: "Downloading from iCloud", fraction: nil)
+    static let sending = ImportStep(text: "Sending to the server", fraction: nil, symbol: "arrow.up.circle")
+    static let saving = ImportStep(text: "Saving", fraction: nil, symbol: "tray.and.arrow.down")
+    static let downloadingFromCloud = ImportStep(text: "Downloading from iCloud", fraction: nil, symbol: "icloud.and.arrow.down")
 
     static func importing(_ index: Int, of count: Int) -> ImportStep {
-        ImportStep(text: "Importing \(index + 1) of \(count)", fraction: Double(index) / Double(max(count, 1)))
+        ImportStep(text: "Importing \(index + 1) of \(count)", fraction: Double(index) / Double(max(count, 1)), symbol: "tray.and.arrow.down")
     }
 }

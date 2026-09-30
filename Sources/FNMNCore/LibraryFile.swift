@@ -241,9 +241,9 @@ public actor LibraryFile {
         return next
     }
 
-    /// The material a delivery archive holds, read here so the main thread never reads an archive.
-    public func materialID(ofDelivery archive: URL) throws -> String {
-        try DeliveryArchive(url: archive).unpack { _, _ in nil }.material.id
+    /// A picked file kept as it is, known by its bytes, which are hashed here so the main thread never reads the file.
+    public func package(ofFile file: URL) throws -> ImportPackage {
+        try .file(file)
     }
 
     /// The first step of a browser library import: its catalog of sources, whose reviewed albums replace

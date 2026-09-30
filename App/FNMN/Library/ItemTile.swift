@@ -19,6 +19,7 @@ struct ItemTile: View {
     let item: LibraryItem
     var album: String?
     @Environment(LibraryModel.self) private var library
+    @Environment(ImportJobs.self) private var imports
     @Environment(WindowNavigation.self) private var navigation
     @Environment(\.openURL) private var openURL
 
@@ -26,23 +27,30 @@ struct ItemTile: View {
         library.progress.readings[item.id]?.progress
     }
 
+    /// The server preparing this material, or a download for it; its stage replaces the kind in the header.
+    private var job: ImportJob? {
+        imports.job(of: item.id)
+    }
+
     var body: some View {
+        let job = job
         Button(action: open) {
             if let cover = item.cover {
-                coverTile(cover)
+                coverTile(cover, job: job)
             } else {
                 TileCard(progress: progress) {
                     VStack(alignment: .leading, spacing: 8) {
-                        header
+                        header(job)
                         title
                         if let excerpt = item.excerpt {
                             Text(excerpt)
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
-                                .lineLimit(6)
+                                .lineLimit(job == nil ? 6 : 3)
                                 .multilineTextAlignment(.leading)
                         }
                         Spacer(minLength: 0)
+                        if let job { JobStatus(phase: job.phase) }
                     }
                 }
             }
@@ -53,14 +61,15 @@ struct ItemTile: View {
     }
 
     /// A tile with a picture has no frame: the picture fills it and the title sits on glass that bends it.
-    private func coverTile(_ cover: Cover) -> some View {
+    private func coverTile(_ cover: Cover, job: ImportJob?) -> some View {
         Color.clear
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             .overlay { CoverImage(cover: cover, cornerRadius: 0) }
             .overlay(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
-                    header
+                    header(job)
                     title.lineLimit(3)
+                    if let job { JobStatus(phase: job.phase) }
                 }
                 .padding(Tokens.tilePadding - 2)
                 .padding(.bottom, (progress ?? 0) > 0 ? ProgressLine.clearance - (Tokens.tilePadding - 2) : 0)
@@ -80,7 +89,7 @@ struct ItemTile: View {
             .multilineTextAlignment(.leading)
     }
 
-    private var header: some View {
+    private func header(_ job: ImportJob?) -> some View {
         HStack(alignment: .firstTextBaseline) {
             if let date = item.addedAt {
                 Text(date.formatted(date: .numeric, time: .omitted))
@@ -88,7 +97,7 @@ struct ItemTile: View {
                 Text(source.name).lineLimit(1)
             }
             Spacer(minLength: 4)
-            if let symbol = item.kind.badge {
+            if let symbol = job?.symbol ?? item.kind.badge {
                 Image(systemName: symbol)
             }
         }
@@ -114,9 +123,14 @@ struct ItemActions: View {
     let item: LibraryItem
     var album: String?
     @Environment(LibraryModel.self) private var library
+    @Environment(ImportJobs.self) private var imports
     @Environment(LibraryDialogs.self) private var dialogs
 
     var body: some View {
+        if let job = imports.job(of: item.id) {
+            JobActions(job: job)
+            Divider()
+        }
         Button("Add to Album…", systemImage: "rectangle.stack.badge.plus") {
             dialogs.send(.pickAlbum(itemID: item.id))
         }
@@ -145,40 +159,68 @@ struct ItemActions: View {
     }
 }
 
-/// A material still on its way from the server or from a file.
+/// A job with no card yet: the FNMN folder being read, or a picked file still coming down from iCloud.
 struct PreparingTile: View {
     let job: ImportJob
-    @Environment(ImportJobs.self) private var imports
 
     var body: some View {
         TileCard {
             VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: job.symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 Text(job.title)
                     .font(.title3.weight(.black))
                     .lineLimit(3)
-                switch job.phase {
-                case let .preparing(step):
-                    Text(step.text).font(.callout).foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                    if let fraction = step.fraction {
-                        ProgressView(value: fraction)
-                    } else {
-                        ProgressView().frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                case let .failed(message):
-                    Label(message, systemImage: "exclamationmark.triangle")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(6)
-                    Spacer(minLength: 0)
-                }
+                Spacer(minLength: 0)
+                JobStatus(phase: job.phase)
             }
         }
-        .contextMenu {
-            if case .failed = job.phase {
-                Button("Try Again", systemImage: "arrow.clockwise") { imports.send(.retry(job.id)) }
+        .contextMenu { JobActions(job: job) }
+    }
+}
+
+/// What a card's job is doing: a caption over a bar of its own, grey so it never reads as the accent line of
+/// reading progress along the edge. A stage with no known share shows a spinner; a failure shows its reason.
+struct JobStatus: View {
+    let phase: ImportJob.Phase
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            switch phase {
+            case let .preparing(step):
+                if let fraction = step.fraction {
+                    Text(step.text).lineLimit(1)
+                    ProgressView(value: fraction)
+                } else {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text(step.text).lineLimit(1)
+                    }
+                }
+            case let .failed(message):
+                Text(message).lineLimit(3)
             }
-            Button("Remove", systemImage: "xmark", role: .destructive) { imports.send(.dismiss(job.id)) }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .tint(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Try Again and Dismiss for a job that failed, Stop for one still running.
+struct JobActions: View {
+    let job: ImportJob
+    @Environment(ImportJobs.self) private var imports
+
+    var body: some View {
+        if case .failed = job.phase {
+            Button("Try Again", systemImage: "arrow.clockwise") { imports.send(.retry(job.id)) }
+            Button("Dismiss", systemImage: "xmark") { imports.send(.dismiss(job.id)) }
+        } else {
+            Button("Stop", systemImage: "stop.circle") { imports.send(.dismiss(job.id)) }
         }
     }
 }
@@ -257,6 +299,15 @@ struct CoverImage: View {
                 }
             }
             .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+extension ImportJob {
+    var symbol: String {
+        switch phase {
+        case let .preparing(step): step.symbol
+        case .failed: "exclamationmark.triangle"
+        }
     }
 }
 

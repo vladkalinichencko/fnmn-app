@@ -187,17 +187,24 @@ final class LibraryModel {
         return progress.positions[itemID]
     }
 
-    /// Stores a delivery archive the server prepared, with its pictures and videos, and returns the stored
-    /// material's id. The archive is read in `LibraryFile`, off the main thread.
-    func store(archive: URL) async throws -> String {
-        let materialID = try await file.materialID(ofDelivery: archive)
+    /// Stores a delivery archive the server prepared, with its pictures and videos, in the place of the link
+    /// or file it was made from. The archive is read in `LibraryFile`, off the main thread.
+    func store(archive: URL) async throws {
         try await write(saving: false) { [file] snapshot in try await file.storeArticle(archive: archive, into: snapshot) }
-        return materialID
     }
 
-    /// A link or file kept as it is, when the server could not make anything of it.
-    func storeMade(_ package: ImportPackage) async throws {
+    /// A link kept as it is, the card that shows it until the server prepares the page.
+    func storeLink(_ url: URL) async throws {
+        try await write(saving: false) { [file] snapshot in try await file.storeMade(.link(url), into: snapshot) }
+    }
+
+    /// A picked file kept as it is, with the file itself in `originals/`, until the server makes a material of it;
+    /// returns the material's id.
+    func storeFile(_ picked: URL) async throws -> String {
+        let package = try await file.package(ofFile: picked)
         try await write(saving: false) { [file] snapshot in try await file.storeMade(package, into: snapshot) }
+        try await storeOriginal(picked, of: package.material.id)
+        return package.material.id
     }
 
     /// Makes the FNMN folder the library's home: what an older version kept in the app moves there, then

@@ -22,6 +22,13 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         placements[materialID] ?? []
     }
 
+    /// The material that stands for a page: the one made from it, or else its link.
+    public func materialID(forPage url: URL) -> String? {
+        let key = SourceIndex.key(url)
+        let samePage = articles.filter { $0.material.sourceURL.map(SourceIndex.key) == key }
+        return (samePage.first { $0.material.kind != .link } ?? samePage.first)?.material.id
+    }
+
     /// Adds or replaces a prepared article or video. A material that is in no album yet lands in the albums
     /// the package names; otherwise the reader's albums stay. A changed text drops the old marks.
     public mutating func importPackage(_ package: ImportPackage, at date: Date, delivery: String? = nil) throws {

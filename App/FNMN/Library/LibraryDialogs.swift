@@ -104,7 +104,10 @@ private struct LibraryDialogsModifier: ViewModifier {
                 titleVisibility: .visible,
                 presenting: dialogs.dialog.deletedItem
             ) { itemID in
-                Button("Delete", role: .destructive) { Task { await library.apply(.delete(itemID: itemID)) } }
+                Button("Delete", role: .destructive) {
+                    imports.send(.deleted(itemID: itemID))
+                    Task { await library.apply(.delete(itemID: itemID)) }
+                }
             } message: { _ in
                 Text("Its place, highlights and notes are deleted too.")
             }

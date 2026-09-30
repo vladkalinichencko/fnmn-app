@@ -18,7 +18,7 @@ struct LibraryScreen: View {
                     }
                     LibrarySection("Unsorted") {
                         LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                            ForEach(imports.jobs.filter(\.addsMaterial)) { PreparingTile(job: $0) }
+                            ForEach(imports.jobs.filter { $0.itemID == nil }) { PreparingTile(job: $0) }
                             ForEach(library.snapshot.unsortedItems) { ItemTile(item: $0) }
                         }
                     }

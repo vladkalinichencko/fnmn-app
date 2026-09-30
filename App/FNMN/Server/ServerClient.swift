@@ -13,7 +13,7 @@ protocol ServerPort {
     func startVideoDownload(url: URL, connection: ServerConnection) async throws -> ServerJob
     /// Downloads the finished video file to a temporary location.
     func videoFile(of id: String, connection: ServerConnection) async throws -> URL
-    /// Tells the server the result is stored, so it removes the file and forgets the job.
+    /// Tells the server to remove the job and its file.
     func forget(_ id: String, connection: ServerConnection) async throws
 }
 
@@ -48,30 +48,33 @@ struct ServerJob: Decodable, Equatable {
 
     var step: ImportStep {
         let fraction = total.flatMap { total in done.map { total > 0 ? Double($0) / Double(total) : 0 } }
-        return ImportStep(text: text, fraction: fraction)
+        let (text, symbol) = described
+        return ImportStep(text: text, fraction: fraction, symbol: symbol)
     }
 
-    private var text: String {
+    private var described: (text: String, symbol: String) {
         let count = total.map { " \(done ?? 0) of \($0)" } ?? ""
         switch phase == .queued ? "queued" : stage ?? "" {
-        case "queued": return "Waiting for the server"
-        case "fetchingPage": return "Fetching the page"
-        case "fetchingAssets": return "Downloading files" + count
-        case "waitingForOCR": return "Waiting for another PDF to finish"
-        case "ocr": return "Reading page" + count
-        case "assembly": return "Joining OCR with the PDF text"
-        case "footnotes": return "Re-reading footnotes" + count
-        case "formulas": return "Re-reading formulas" + count
-        case "export": return "Checking the result"
-        case "downloadingVideo": return "Downloading the video" + (total.map { " \(done ?? 0) of \($0) MB" } ?? "")
-        case let other: return other
+        case "queued": return ("Waiting for the server", "clock")
+        case "fetchingPage": return ("Fetching the page", "globe")
+        case "fetchingAssets": return ("Downloading files" + count, "arrow.down.circle")
+        case "waitingForOCR": return ("Waiting for another PDF to finish", "clock")
+        case "ocr": return ("Reading page" + count, "doc.text.viewfinder")
+        case "assembly": return ("Joining OCR with the PDF text", "doc.on.doc")
+        case "footnotes": return ("Re-reading footnotes" + count, "doc.text.viewfinder")
+        case "formulas": return ("Re-reading formulas" + count, "function")
+        case "export": return ("Checking the result", "checkmark.seal")
+        case "downloadingVideo": return ("Downloading the video" + (total.map { " \(done ?? 0) of \($0) MB" } ?? ""), "arrow.down.circle")
+        case let other: return (other, "gearshape")
         }
     }
 }
 
+/// Where a job is: a caption, how far along when that is known, and the symbol a card shows for the stage.
 struct ImportStep: Equatable {
     let text: String
     let fraction: Double?
+    let symbol: String
 }
 
 struct ServerClient: ServerPort {
