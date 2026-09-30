@@ -159,6 +159,13 @@ struct ItemActions: View {
                 library.apply(.setRead(!isRead, itemID: item.id))
                 Task { await library.apply(.setArchived(!isRead, itemID: item.id)) }
             }
+            let reading = library.progress.readings[item.id]
+            let started = reading?.openedAt != nil || library.progress.positions[item.id] != nil || library.progress.readThrough[item.id] != nil
+            if started, !isRead {
+                Button("Remove from Continue", systemImage: "arrow.counterclockwise") {
+                    library.apply(.reset(itemID: item.id))
+                }
+            }
         }
         if let url = item.originalURL {
             ShareLink(item: url)

@@ -37,6 +37,7 @@ public struct JournalEvent: Codable, Equatable, Sendable {
         case let .progress(.savePosition(_, itemID, _)): "position:\(itemID)"
         case let .progress(.readThrough(_, itemID)): "readThrough:\(itemID)"
         case let .progress(.fold(_, itemID)): "fold:\(itemID)"
+        case let .progress(.reset(itemID)): "reset:\(itemID)"
         case let .library(.setArchived(_, itemID)): "archived:\(itemID)"
         case let .library(.addToAlbum(name, itemIDs)) where itemIDs.count == 1: "placement:\(itemIDs[0]):\(name)"
         case let .library(.removeFromAlbum(name, itemID)): "placement:\(itemID):\(name)"

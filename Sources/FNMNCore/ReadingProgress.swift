@@ -32,6 +32,10 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
             next.readings[itemID, default: MaterialReading()].progress = progress
         case let .readThrough(piece, itemID):
             next.readThrough[itemID] = piece
+        case let .reset(itemID):
+            next.positions[itemID] = nil
+            next.readThrough[itemID] = nil
+            next.readings[itemID] = nil
         case let .fold(headings, itemID):
             next.folded[itemID] = headings
         case let .restart(itemID):
@@ -47,8 +51,10 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
         return next
     }
 
-    /// A paragraph is read when it scrolled past the top, or when it lies at or before the reader's "read through here" mark.
+    /// A paragraph is read when the material is marked read, when it scrolled past the top, or when it lies at or
+    /// before the reader's "read through here" mark.
     public func isPieceRead(_ piece: Int, of itemID: String, current: Int?) -> Bool {
+        if readings[itemID]?.isRead == true { return true }
         if let mark = readThrough[itemID], piece <= mark { return true }
         guard let current else { return false }
         return piece < current
@@ -63,6 +69,9 @@ public enum ProgressChange: Codable, Equatable, Sendable {
     case readThrough(piece: Int?, itemID: String)
     /// The headings of the material that are closed up, sorted.
     case fold([Int], itemID: String)
+    /// The reader starts the material over: the place, the "read through here" mark and everything else
+    /// reading recorded are gone, and it leaves Continue.
+    case reset(itemID: String)
     /// The material's text was replaced: its place and "read through here" point nowhere now.
     case restart(itemID: String)
     /// The material left the library.

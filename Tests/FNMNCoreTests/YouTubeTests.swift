@@ -53,3 +53,24 @@ import Testing
     let decoded = try? JSONDecoder().decode(ReadingProgress.self, from: JSONEncoder().encode(progress))
     #expect(decoded == progress)
 }
+
+@Test func aMaterialMarkedReadHasEveryParagraphRead() {
+    let progress = ReadingProgress().applying(.setRead(true, itemID: "a"))
+    #expect(progress.isPieceRead(999, of: "a", current: nil))
+    #expect(!progress.isPieceRead(0, of: "b", current: nil))
+    #expect(!progress.applying(.setRead(false, itemID: "a")).isPieceRead(3, of: "a", current: 1))
+}
+
+@Test func startingAMaterialOverLeavesContinueAndKeepsItsFoldedHeadings() {
+    let now = Date.now
+    let progress = ReadingProgress()
+        .applying(.open(itemID: "a"), at: now)
+        .applying(.savePosition(.piece(4), itemID: "a", progress: 0.4))
+        .applying(.readThrough(piece: 3, itemID: "a"))
+        .applying(.fold([1], itemID: "a"))
+        .applying(.reset(itemID: "a"))
+    #expect(progress.positions["a"] == nil)
+    #expect(progress.readThrough["a"] == nil)
+    #expect(progress.readings["a"] == nil)
+    #expect(progress.folded["a"] == [1])
+}
