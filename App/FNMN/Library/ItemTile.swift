@@ -56,6 +56,7 @@ struct ItemTile: View {
             }
         }
         .buttonStyle(.plain)
+        .zoomSource(of: item.id, cornerRadius: Tokens.tileRadius)
         .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
         .draggable(item.id)
         .contextMenu { ItemActions(item: item, album: album) }

@@ -90,38 +90,46 @@ enum ReaderAppearance {
     static let defaultSize = 3
 }
 
-/// The reader's one `···` button: text size and background right inside the menu, and the original.
-struct ReaderMenu: View {
-    let reader: ReaderCoordinator
-    let page: URL?
+/// Text size, background and font, the same three choices for every screen that reads text.
+struct ReaderAppearanceControls: View {
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.system
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
 
     var body: some View {
+        ControlGroup {
+            Button("Smaller", systemImage: "textformat.size.smaller") { size -= 1 }
+                .disabled(size <= 0)
+            Button("Larger", systemImage: "textformat.size.larger") { size += 1 }
+                .disabled(size >= ReaderAppearance.sizes.count - 1)
+        }
+        Picker("Background", selection: $background) {
+            ForEach(ReaderBackground.allCases) { option in
+                Label { Text(option.name) } icon: { option.swatch }
+                    .tag(option)
+            }
+        }
+        .pickerStyle(.palette)
+        Picker(selection: $font) {
+            ForEach(ReaderFont.allCases) { option in
+                Text(option.name).tag(option)
+            }
+        } label: {
+            Label("Font", systemImage: "textformat")
+            Text(font.name)
+        }
+        .pickerStyle(.menu)
+    }
+}
+
+/// The reader's one `···` button: text size and background right inside the menu, and the original.
+struct ReaderMenu: View {
+    let reader: ReaderCoordinator
+    let page: URL?
+
+    var body: some View {
         Menu("Reading Options", systemImage: "ellipsis") {
-            ControlGroup {
-                Button("Smaller", systemImage: "textformat.size.smaller") { size -= 1 }
-                    .disabled(size <= 0)
-                Button("Larger", systemImage: "textformat.size.larger") { size += 1 }
-                    .disabled(size >= ReaderAppearance.sizes.count - 1)
-            }
-            Picker("Background", selection: $background) {
-                ForEach(ReaderBackground.allCases) { option in
-                    Label { Text(option.name) } icon: { option.swatch }
-                        .tag(option)
-                }
-            }
-            .pickerStyle(.palette)
-            Picker(selection: $font) {
-                ForEach(ReaderFont.allCases) { option in
-                    Text(option.name).tag(option)
-                }
-            } label: {
-                Label("Font", systemImage: "textformat")
-                Text(font.name)
-            }
-            .pickerStyle(.menu)
+            ReaderAppearanceControls()
             let lowest = reader.document.lowestHeadings
             if !lowest.isEmpty {
                 if lowest.isSubset(of: reader.state.folded) {

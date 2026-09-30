@@ -13,7 +13,9 @@ struct VideoReaderView: View {
     let video: VideoCoordinator
     /// The saved video file once it is on this device.
     @State private var playable: URL?
+    @State private var stageHeight: CGFloat = 0
 
+    private var hasCaptions: Bool { !video.cues.isEmpty }
     private var package: ImportPackage { video.package }
     private var materialID: String { package.material.id }
 
@@ -29,38 +31,49 @@ struct VideoReaderView: View {
     var body: some View {
         GeometryReader { geometry in
             let sideBySide = geometry.size.width > geometry.size.height
-            let showsCaptions = video.state.showsCaptions
+            let showsCaptions = hasCaptions && video.state.showsCaptions
             Group {
                 if sideBySide {
                     HStack(spacing: 0) {
                         stage
                             .padding(Tokens.gutter)
                             .frame(width: showsCaptions ? geometry.size.width * 0.58 : geometry.size.width, height: geometry.size.height)
-                        if showsCaptions { captions.frame(width: geometry.size.width * 0.42, height: geometry.size.height) }
+                        if showsCaptions {
+                            captions
+                                .frame(width: geometry.size.width * 0.42, height: geometry.size.height)
+                                .transition(.opacity)
+                        }
                     }
                 } else {
-                    // The transcript runs under the plate, which floats over it as glass.
-                    Group {
-                        if showsCaptions { captions } else { Color.clear }
-                    }
-                    .safeAreaInset(edge: .top, spacing: 0) {
+                    // The transcript runs under the plate, which floats over it as glass; with no transcript
+                    // shown the plate sits in the middle of the screen.
+                    ZStack(alignment: showsCaptions ? .top : .center) {
+                        if showsCaptions {
+                            captions
+                                .contentMargins(.top, stageHeight + Tokens.gap, for: .scrollContent)
+                                .contentMargins(.top, stageHeight, for: .scrollIndicators)
+                                .transition(.opacity)
+                        }
                         stage
                             .padding(.horizontal, Tokens.gutter)
-                            .padding(.bottom, Tokens.gap)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stageHeight = $0 }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: showsCaptions ? .top : .center)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.smooth, value: showsCaptions)
         }
-        .background(Tokens.canvas)
+        .modifier(ReaderAppearanceModifier())
         .navigationTitle(package.material.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Toggle(
                 video.state.showsCaptions ? "Hide Captions" : "Show Captions",
                 systemImage: "captions.bubble",
-                isOn: video.binding(\.showsCaptions, send: VideoAction.showCaptions)
+                isOn: hasCaptions ? video.binding(\.showsCaptions, send: VideoAction.showCaptions) : .constant(false)
             )
+            .disabled(!hasCaptions)
             Menu("More", systemImage: "ellipsis") { videoMenu }
         }
         .onDisappear { video.send(.left) }
@@ -69,6 +82,7 @@ struct VideoReaderView: View {
 
     @ViewBuilder
     private var videoMenu: some View {
+        ReaderAppearanceControls()
         if library.originalFile(materialID) != nil {
             Button("Remove Download", systemImage: "trash") {
                 Task { await library.removeOriginal(of: materialID) }
@@ -89,21 +103,20 @@ struct VideoReaderView: View {
         OpenOriginalButton(itemID: materialID, page: package.material.sourceURL)
     }
 
-    /// The video inside a glass plate: the picture, or a spinner on the glass until it appears, with a refusal below it.
+    /// The video as a glass plate of its own size: the picture, or a spinner on the glass until it appears,
+    /// with a refusal below it.
     private var stage: some View {
-        VStack(spacing: Tokens.captionInset) {
+        VStack(spacing: 0) {
             player
                 .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(.rect(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: Tokens.captionInset), style: .continuous))
             if case let .failed(message) = embedState, library.originalFile(materialID) == nil {
                 Text(message)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, Tokens.captionInset)
-                    .padding(.bottom, Tokens.captionInset)
+                    .padding(Tokens.tilePadding)
             }
         }
-        .padding(Tokens.captionInset)
+        .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .plate(cornerRadius: Tokens.plateRadius)
     }
 
@@ -170,49 +183,42 @@ struct VideoReaderView: View {
         return video.state.embed
     }
 
-    @ViewBuilder
     private var captions: some View {
-        if video.cues.isEmpty {
-            ContentUnavailableView("No captions", systemImage: "captions.bubble", description: Text("YouTube did not return captions. The video still plays."))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            let active = video.state.activeIndex
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(video.cues.enumerated()), id: \.element.id) { index, cue in
-                        Button {
-                            video.send(.jumped(toCue: index))
-                        } label: {
-                            CueRow(cue: cue, state: index < active ? .past : index == active ? .current : .ahead)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = cue.text }
-                        }
-                        .id(cue.id)
+        let active = video.state.activeIndex
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(video.cues.enumerated()), id: \.element.id) { index, cue in
+                    Button {
+                        video.send(.jumped(toCue: index))
+                    } label: {
+                        CueRow(cue: cue, state: index < active ? .past : index == active ? .current : .ahead)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = cue.text }
+                    }
+                    .id(cue.id)
+                }
+            }
+            .backgroundPreferenceValue(CurrentCueBounds.self) { bounds in
+                GeometryReader { proxy in
+                    if let bounds {
+                        let frame = proxy[bounds]
+                        Color.clear
+                            .plate(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: 8))
+                            .frame(width: frame.width, height: frame.height)
+                            .offset(x: frame.minX, y: frame.minY)
+                            .transition(.opacity)
                     }
                 }
-                .backgroundPreferenceValue(CurrentCueBounds.self) { bounds in
-                    GeometryReader { proxy in
-                        if let bounds {
-                            let frame = proxy[bounds]
-                            Color.clear
-                                .plate(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: 8))
-                                .frame(width: frame.width, height: frame.height)
-                                .offset(x: frame.minX, y: frame.minY)
-                                .transition(.opacity)
-                        }
-                    }
-                }
-                .scrollTargetLayout()
-                .padding(.horizontal, Tokens.gutter)
-                .padding(.vertical, Tokens.gap)
             }
-            .background(Tokens.canvas)
-            .scrollPosition(id: video.binding(\.pinnedCue, send: VideoAction.pinned), anchor: .center)
-            .onScrollPhaseChange { _, phase in
-                if phase == .interacting { video.send(.scrolledByHand) }
-            }
+            .scrollTargetLayout()
+            .padding(.horizontal, Tokens.gutter)
+            .padding(.vertical, Tokens.gap)
+        }
+        .scrollPosition(id: video.binding(\.pinnedCue, send: VideoAction.pinned), anchor: .center)
+        .onScrollPhaseChange { _, phase in
+            if phase == .interacting { video.send(.scrolledByHand) }
         }
     }
 }
@@ -356,10 +362,14 @@ private struct YouTubeEmbedView: UIViewRepresentable {
             context.coordinator.resumeAt = start
             view.loadHTMLString(Self.page(videoID: videoID, origin: origin, start: start), baseURL: origin)
         }
-        if phase == .ready, let value = seekTo ?? context.coordinator.takeResume() {
-            let done = seekTo == nil ? nil : onSeekDone
-            view.evaluateJavaScript("window.fnmnSeek(\(value));") { _, _ in
-                if let done { Task { @MainActor in done() } }
+        if phase == .ready {
+            if let value = seekTo {
+                let done = onSeekDone
+                view.evaluateJavaScript("window.fnmnSeek(\(value));") { _, _ in
+                    Task { @MainActor in done() }
+                }
+            } else if let value = context.coordinator.takeResume() {
+                view.evaluateJavaScript("window.fnmnCue(\(value));")
             }
         }
     }
@@ -416,6 +426,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         <script>
         function post(payload){ window.webkit.messageHandlers.fnmn.postMessage(payload); }
         window.fnmnSeek = function(){};
+        window.fnmnCue = function(){};
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         tag.onerror = function(){ post({kind:"failed", code:"api"}); };
@@ -426,6 +437,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
             events: {
               onReady: function(){
                 window.fnmnSeek = function(seconds){ player.seekTo(seconds, true); };
+                window.fnmnCue = function(seconds){ player.cueVideoById({videoId: "\(videoID)", startSeconds: seconds}); };
                 post({kind:"ready"});
                 var last = -1;
                 setInterval(function(){
