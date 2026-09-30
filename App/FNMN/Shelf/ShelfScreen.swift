@@ -60,7 +60,7 @@ private struct ShelfSection<Content: View>: View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
             // A symbol inside the text sits on the letters' middle, where a separate image would sink to the baseline.
             Button { navigation.open(route) } label: {
-                Text("\(title) \(Image(systemName: "chevron.forward"))")
+                Text("\(title) \(Text(Image(systemName: "chevron.forward")).font(.title3.weight(.semibold)).foregroundStyle(.secondary))")
                     .font(Tokens.sectionTitle)
                     .foregroundStyle(.primary)
             }
@@ -136,10 +136,11 @@ private struct AnnotationCard: View {
         }
     }
 
-    /// The note comes up over the lower half of the quote's plate.
+    /// The note starts halfway down the quote's plate. The card is as tall as whichever reaches lower, the quote
+    /// or the note, so a short note never lets the quote run into the next card.
     @ViewBuilder
     private var composition: some View {
-        VStack(alignment: .trailing, spacing: -quoteHeight / 2) {
+        ZStack(alignment: .topTrailing) {
             if !annotation.quote.isEmpty {
                 // Alone, the quote stands in the middle; with a note, it moves left to make room for it.
                 quote
@@ -150,6 +151,7 @@ private struct AnnotationCard: View {
                 note
                     .padding(.leading, annotation.quote.isEmpty ? 0 : 64)
                     .rotationEffect(.degrees(annotation.quote.isEmpty ? 0 : 1), anchor: .topTrailing)
+                    .padding(.top, annotation.quote.isEmpty ? 0 : quoteHeight / 2)
             }
         }
         .padding(.top, 10)
