@@ -30,6 +30,24 @@ import Testing
     #expect(visiblePieceIndexes(in: pieces, fold: opened).count == pieces.count)
 }
 
+@Test func eachPinchFoldsBlocksIntoTheNearestBlockAboveThatStays() {
+    let pieces = ArticleBody.blocks(in: """
+    Before any heading.
+
+    # Chapter
+
+    A paragraph.
+
+    ## Section
+
+    Another paragraph.
+    """)
+    #expect(readingFoldParents(.open, blocks: pieces) == [0: nil, 2: 1, 4: 3])
+    let once = readingFoldPinchIn(.open, blocks: pieces)
+    #expect(readingFoldParents(once, blocks: pieces) == [3: 1])
+    #expect(readingFoldParents(readingFoldPinchIn(once, blocks: pieces), blocks: pieces).isEmpty)
+}
+
 @Test func pinchOnAPageWithoutHeadingsStaysOpen() {
     let pieces = ArticleBody.blocks(in: "Only a paragraph.")
     #expect(readingFoldPinchIn(.open, blocks: pieces) == .open)

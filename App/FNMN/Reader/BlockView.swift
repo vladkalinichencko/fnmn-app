@@ -18,7 +18,7 @@ struct BlockView: View, Equatable {
     let annotations: [Annotation]
     /// The number of blocks under this heading when the document is folded; nil while it is open.
     let folded: Int?
-    /// A folded heading whose whole section lies before the reading place.
+    /// A heading whose section is read to its last block, by the reading place or the "read through here" mark.
     let sectionRead: Bool
 
     var body: some View {
@@ -30,16 +30,12 @@ struct BlockView: View, Equatable {
                 markdown: markdown, index: index, baseURL: baseURL, mode: mode,
                 read: read, markedReadThrough: markedReadThrough, annotations: annotations
             )
-            .modifier(PinchFold())
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
-                .modifier(PinchFold())
         case let .video(path):
             ArticleVideo(url: resolve(path))
-                .modifier(PinchFold())
         case let .interactive(url, selector):
             LiveCropView(url: url, selector: selector)
-                .modifier(PinchFold())
         }
     }
 
@@ -49,31 +45,44 @@ struct BlockView: View, Equatable {
     }
 }
 
-/// While fingers pinch in, the blocks begin to fold up into their heading, as far as the fingers have gone.
-private struct PinchFold: ViewModifier {
+/// While fingers pinch in, the blocks the pinch will fold away, paragraphs or headings, begin to rise into
+/// the block they fold into, as far as the fingers have gone.
+struct PinchFold: ViewModifier {
+    let index: Int
+    /// Whether the next pinch in folds this block away, and the block above it that stays, which it folds into.
+    let folding: Bool
+    let parent: Int?
     @Environment(PinchScale.self) private var pinch
 
     func body(content: Content) -> some View {
-        content.modifier(FoldIntoHeading(amount: min(max(1 - pinch.value, 0), 0.6) / 0.6 * 0.5))
+        let amount = folding ? min(max(1 - pinch.value, 0), 0.6) / 0.6 * 0.5 : 0
+        content.modifier(FoldIntoHeading(index: index, parent: parent, amount: amount))
     }
 }
 
-/// A block folding up toward the heading above it: it tips back about its top edge and flattens there.
-/// At 1 it is folded away; the same effect carries the fold's transition and the pinch that leads to it.
+/// A block folding into the one above it that stays: it rises toward that block's lower edge, flattening and
+/// fading as it goes, so a whole section gathers under its heading. At 1 it is folded away; the same effect
+/// carries the fold's transition and the pinch that leads to it.
 struct FoldIntoHeading: ViewModifier {
+    let index: Int
+    let parent: Int?
     let amount: Double
+    @Environment(PinchScale.self) private var pinch
 
     func body(content: Content) -> some View {
         content
-            .rotation3DEffect(.degrees(-35 * amount), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.25)
-            .scaleEffect(x: 1 - 0.06 * amount, y: 1 - 0.5 * amount, anchor: .top)
+            .scaleEffect(x: 1 - 0.06 * amount, y: 1 - 0.4 * amount, anchor: .top)
+            .offset(y: -pinch.rise(of: index, into: parent) * amount)
             .opacity(1 - amount)
     }
 }
 
 extension AnyTransition {
-    static var foldIntoHeading: AnyTransition {
-        AnyTransition.modifier(active: FoldIntoHeading(amount: 1), identity: FoldIntoHeading(amount: 0))
+    static func fold(_ index: Int, into parent: Int?) -> AnyTransition {
+        .modifier(
+            active: FoldIntoHeading(index: index, parent: parent, amount: 1),
+            identity: FoldIntoHeading(index: index, parent: parent, amount: 0)
+        )
     }
 }
 
@@ -93,7 +102,7 @@ private struct SectionHeading: View {
 }
 
 /// A heading on the page. Open and folded it is the same view, so it slides to its place in the outline
-/// instead of fading out and in; folded, it sits closer, shows how many blocks it holds and grays once read.
+/// instead of fading out and in; folded, it sits closer and shows how many blocks it holds. It grays once its section is read.
 struct HeadingView: View {
     let level: Int
     let title: String
@@ -113,7 +122,7 @@ struct HeadingView: View {
                     .transition(.opacity)
             }
         }
-        .foregroundStyle(read && folded != nil ? .secondary : .primary)
+        .foregroundStyle(read ? .secondary : .primary)
         .padding(.top, folded == nil ? (level <= 2 ? Tokens.gap : 4) : 4)
         .padding(.bottom, folded == nil ? 0 : 4)
         .contentShape(.rect)

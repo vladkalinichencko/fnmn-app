@@ -52,6 +52,17 @@ extension AnnotationCommand {
 @MainActor @Observable
 final class PinchScale {
     var value: CGFloat = 1
+    /// Where each block lies in the column. Nothing is drawn from it directly, so it is not observed; a fold
+    /// reads it when fingers move.
+    @ObservationIgnored var frames: [Int: CGRect] = [:]
+
+    /// How far a block rises to reach the lower edge of the block it folds into; to the top of the column
+    /// when nothing above it stays.
+    func rise(of index: Int, into parent: Int?) -> CGFloat {
+        guard let frame = frames[index] else { return 0 }
+        let floor = parent.flatMap { frames[$0]?.maxY } ?? 0
+        return max(frame.minY - floor, 0)
+    }
 }
 
 /// One open document drawn from its coordinator: the column of blocks, the header and the pinch between sections.
@@ -63,6 +74,7 @@ struct ReadingSession: View {
     @State private var pinch = PinchScale()
     /// Resets the pinch when the gesture ends or is cancelled.
     @GestureState private var pinching = false
+    private static let column = "column"
 
     var body: some View {
         let document = reader.document
@@ -70,6 +82,7 @@ struct ReadingSession: View {
         let current = reader.current(in: visible)
         let marks = Dictionary(grouping: library.snapshot.annotations.filter { $0.materialID == reader.materialID }, by: \.piece)
         let progress = library.progress
+        let foldParents = readingFoldParents(reader.state.fold, blocks: document.blocks)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Tokens.gap) {
                 if let lead = document.lead, case let .image(_, path) = document.blocks[lead] {
@@ -87,13 +100,16 @@ struct ReadingSession: View {
                         markedReadThrough: progress.readThrough[reader.materialID] == index,
                         annotations: marks[index] ?? [],
                         folded: reader.state.fold == .open ? nil : section?.size ?? 0,
-                        sectionRead: section.map { section in reader.state.place.map { section.end <= $0 } ?? false } ?? false
+                        sectionRead: section.map { progress.isPieceRead($0.end - 1, of: reader.materialID, current: reader.state.place) } ?? false
                     )
                     .equatable()
+                    .modifier(PinchFold(index: index, folding: foldParents.keys.contains(index), parent: foldParents[index] ?? nil))
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.column)) } action: { pinch.frames[index] = $0 }
                     .id(index)
-                    .transition(.foldIntoHeading)
+                    .transition(.fold(index, into: foldParents[index] ?? nil))
                 }
             }
+            .coordinateSpace(.named(Self.column))
             .scrollTargetLayout()
             .padding(.horizontal, Tokens.gutter)
             .padding(.bottom, 80)

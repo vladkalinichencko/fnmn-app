@@ -40,6 +40,22 @@ public func visiblePieceIndexes(in blocks: [DocumentBlock], fold: ReadingFold) -
     }
 }
 
+/// The blocks the next pinch in folds away, each with the block it folds into: the nearest one above it that
+/// stays on the page, nil when nothing above stays.
+public func readingFoldParents(_ fold: ReadingFold, blocks: [DocumentBlock]) -> [Int: Int?] {
+    let staying = Set(visiblePieceIndexes(in: blocks, fold: readingFoldPinchIn(fold, blocks: blocks)))
+    var parents: [Int: Int?] = [:]
+    var parent: Int?
+    for index in visiblePieceIndexes(in: blocks, fold: fold) {
+        if staying.contains(index) {
+            parent = index
+        } else {
+            parents[index] = parent
+        }
+    }
+    return parents
+}
+
 public func readingPlaceTarget(place: Int?, visible: [Int]) -> Int? {
     guard let place else { return visible.first }
     if visible.contains(place) { return place }
