@@ -223,23 +223,30 @@ public actor LibraryFile {
 
     // MARK: Adding materials
 
-    /// Sorts out what was picked with `+` → File, anywhere: a delivery archive or a prepared library
-    /// (`catalog.json`, `deliveries/`). Whatever is not in the FNMN folder yet is copied there.
-    /// A PDF is recognized only to say it has to be prepared on the Mac first.
+    /// Whether what was picked with `+` → File is already prepared: a delivery archive or a prepared library
+    /// (`catalog.json`, `deliveries/`). Any other file goes to the Mac, which makes a material of it.
+    public nonisolated static func isPrepared(_ url: URL) -> Bool {
+        url.pathExtension.lowercased() == "tar"
+            || FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path)
+    }
+
+    /// Stores a prepared pick; whatever is not in the FNMN folder yet is copied there.
     public func storePicked(_ url: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
-            throw CaptureError.unrecognizedDocument
-        }
-        if isDirectory.boolValue, FileManager.default.fileExists(atPath: url.appending(path: "catalog.json").path) {
-            return try storeBrowserLibrary(from: url, into: snapshot)
-        } else if url.pathExtension.lowercased() == "tar" {
+        if url.pathExtension.lowercased() == "tar" {
             return try storeArticle(archive: url, into: snapshot)
-        } else if url.pathExtension.lowercased() == "pdf" {
-            throw CaptureError.unprepared(.pdf)
+        } else if Self.isPrepared(url) {
+            return try storeBrowserLibrary(from: url, into: snapshot)
         } else {
             throw CaptureError.unrecognizedDocument
         }
+    }
+
+    /// A link or file kept as it is, made on this phone, becomes a delivery like any other.
+    public func storeMade(_ package: ImportPackage, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
+        let archive = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
+        defer { try? FileManager.default.removeItem(at: archive) }
+        try DeliveryArchive.write(package, files: [], to: archive)
+        return try storeArticle(archive: archive, into: snapshot)
     }
 
     /// A delivery archive, picked anywhere or prepared by the Mac for this phone, joins the others in the FNMN folder.

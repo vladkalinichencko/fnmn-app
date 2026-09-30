@@ -1,6 +1,7 @@
 """HTTP boundary of the Mac service. Every request needs the bearer token.
 
     POST /jobs            {"url", "folders"} -> {"id", ...status}
+    POST /files?name=     the file's bytes as the body -> a job that makes a material of it by its type
     GET  /jobs/{id}       phase queued | running | done | failed, stage, done, total, error
     GET  /jobs/{id}/package   the delivery archive (tar) once the job is done
     POST /videos          {"url"} -> a job that downloads the YouTube video as an mp4
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 import os
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -49,6 +50,11 @@ def start_job(request: ImportRequest) -> dict:
     return jobs.submit(request.url, request.folders).status()
 
 
+@app.post("/files", status_code=202)
+async def start_file(request: Request, name: str) -> dict:
+    return jobs.submit(name, [], kind="file", upload=await request.body()).status()
+
+
 @app.get("/jobs/{job_id}")
 def job_status(job_id: str) -> dict:
     return _job(job_id).status()
@@ -57,7 +63,7 @@ def job_status(job_id: str) -> dict:
 @app.get("/jobs/{job_id}/package")
 def job_package(job_id: str) -> FileResponse:
     job = _job(job_id)
-    if job.phase != "done" or job.kind != "import" or job.file is None:
+    if job.phase != "done" or job.kind == "videoFile" or job.file is None:
         raise HTTPException(409, f"job is {job.phase}")
     return FileResponse(job.file, media_type="application/x-tar", filename=job.file.name)
 

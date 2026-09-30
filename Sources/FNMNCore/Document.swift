@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 public struct BrowserCatalog: Codable, Equatable, Sendable {
@@ -67,8 +68,41 @@ public struct ImportPackage: Codable, Equatable, Sendable {
     }
 }
 
+extension ImportPackage {
+    /// A link kept as it is, when the Mac cannot be reached; the Mac makes the same one (`package.link_delivery`)
+    /// when it cannot read the page, and a material made later from the page takes its place.
+    public static func link(_ url: URL) -> ImportPackage {
+        let path = ((url.host() ?? "") + url.path(percentEncoded: true))
+        let title = path.hasSuffix("/") ? String(path.dropLast()) : path
+        return ImportPackage(
+            material: Material(id: "link:\(url.absoluteString)", kind: .link, title: title.isEmpty ? url.absoluteString : title, sourceURL: url),
+            sections: [], blocks: []
+        )
+    }
+
+    /// A file kept as it is, known by its bytes like everything the Mac makes of a file (`package.file_delivery`),
+    /// so sending the same file to the Mac later replaces it.
+    public static func file(_ file: URL) throws -> ImportPackage {
+        let name = file.deletingPathExtension().lastPathComponent
+        return ImportPackage(
+            material: Material(id: try fileID(file), kind: .link, title: name.isEmpty ? file.lastPathComponent : name, sourceURL: nil),
+            sections: [], blocks: []
+        )
+    }
+
+    static func fileID(_ file: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { try? handle.close() }
+        var hash = SHA256()
+        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+            hash.update(data: chunk)
+        }
+        return "file:" + hash.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 public struct Material: Codable, Equatable, Identifiable, Sendable {
-    /// `link` is a page nothing could be made of: it has no text, and opening it opens the page.
+    /// `link` is a page or file nothing could be made of: it has no text, and opening it opens its original.
     public enum Kind: String, Codable, Sendable { case article, video, book, link }
     public let id: String
     public let kind: Kind

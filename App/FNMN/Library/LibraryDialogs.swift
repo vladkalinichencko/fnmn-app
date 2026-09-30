@@ -75,7 +75,7 @@ private struct LibraryDialogsModifier: ViewModifier {
             }
             .fileImporter(
                 isPresented: dialogs.isShowing { $0 == .pickingFile },
-                allowedContentTypes: [.json, .pdf, .folder]
+                allowedContentTypes: [.item]
             ) { result in
                 guard case let .success(url) = result else { return }
                 imports.send(.submit(.file(url), id: UUID()))

@@ -39,15 +39,13 @@ public enum CaptureRoute {
 }
 
 public enum CaptureError: Error, Equatable {
-    case unprepared(CaptureSource)
     case unrecognizedDocument
 }
 
 extension CaptureError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case let .unprepared(source): "\(source.folderName) is recognized, but the Mac service does not prepare it yet."
-        case .unrecognizedDocument: "Choose a prepared material (.tar) or the FNMN folder."
+        case .unrecognizedDocument: "Choose a file, a prepared material (.tar) or the FNMN folder."
         }
     }
 }

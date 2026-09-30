@@ -108,17 +108,52 @@ final class ImportJobs {
 
     private func prepare(_ url: URL, jobID: UUID) async throws {
         guard CaptureRoute.source(for: url) != nil else { throw CaptureError.unrecognizedDocument }
-        let connection = try mac.configured()
-        let started = try await mac.port.startJob(url: url, connection: connection)
-        let job = try await mac.port.finished(started, connection: connection) { send(.progressed(jobID, $0)) }
-        guard job.phase == .done else {
-            throw MacServiceError.rejected(job.error ?? "The Mac could not prepare this link.")
+        if try await storedFromMac(jobID: jobID, start: { try await self.mac.port.startJob(url: url, connection: $0) }) == nil {
+            try await library.storeMade(.link(url))
         }
+    }
+
+    /// A prepared pick is stored as it is; any other file goes to the Mac, and its original to `originals/`.
+    private func importFile(_ url: URL, jobID: UUID) async throws {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        guard !library.isPrepared(url) else {
+            try await library.importFile(at: url) { self.send(.progressed(jobID, $0)) }
+            return
+        }
+        try await CloudFolder.download(url)
+        send(.progressed(jobID, .sending))
+        let made = try await storedFromMac(jobID: jobID) { try await self.mac.port.startFileJob(file: url, connection: $0) }
         send(.progressed(jobID, .saving))
-        let archive = try await mac.port.delivery(of: job.id, connection: connection)
+        let materialID = if let made { made } else { try await keep(url) }
+        try await library.storeOriginal(url, of: materialID)
+    }
+
+    private func keep(_ file: URL) async throws -> String {
+        let package = try ImportPackage.file(file)
+        try await library.storeMade(package)
+        return package.material.id
+    }
+
+    /// Runs a job on the Mac and stores the delivery it made, even a link or file it could not read.
+    /// Nil when the Mac is not set up, cannot be reached or failed, and the phone keeps the link or file itself;
+    /// sending it again once the Mac answers replaces that material.
+    private func storedFromMac(jobID: UUID, start: (MacConnection) async throws -> MacJob) async throws -> String? {
+        guard let connection = try? mac.configured() else { return nil }
+        let job: MacJob
+        let archive: URL
+        do {
+            job = try await mac.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
+            guard job.phase == .done else { return nil }
+            send(.progressed(jobID, .saving))
+            archive = try await mac.port.delivery(of: job.id, connection: connection)
+        } catch where !Task.isCancelled {
+            return nil
+        }
         defer { try? FileManager.default.removeItem(at: archive) }
-        try await library.store(archive: archive)
+        let materialID = try await library.store(archive: archive)
         await confirmStored(job.id, connection: connection)
+        return materialID
     }
 
     /// The material is in the library whether or not the Mac hears this; a Mac that does not keeps the
@@ -139,12 +174,6 @@ final class ImportJobs {
         defer { try? FileManager.default.removeItem(at: video) }
         try await library.storeOriginal(video, of: itemID)
         await confirmStored(job.id, connection: connection)
-    }
-
-    private func importFile(_ url: URL, jobID: UUID) async throws {
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        try await library.importFile(at: url) { self.send(.progressed(jobID, $0)) }
     }
 
     /// The Live Activity and the background task follow the oldest job still preparing.

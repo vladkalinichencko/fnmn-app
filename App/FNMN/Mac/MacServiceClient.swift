@@ -5,6 +5,8 @@ import Foundation
 protocol MacServicePort {
     func check(connection: MacConnection) async throws
     func startJob(url: URL, connection: MacConnection) async throws -> MacJob
+    /// Sends a file for the Mac to make a material of by its type.
+    func startFileJob(file: URL, connection: MacConnection) async throws -> MacJob
     func job(_ id: String, connection: MacConnection) async throws -> MacJob
     /// Downloads the finished delivery archive to a temporary file.
     func delivery(of id: String, connection: MacConnection) async throws -> URL
@@ -88,6 +90,17 @@ struct MacServiceClient: MacServicePort {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(JobRequest(url: url, folders: []))
         return try await decoded(MacJob.self, for: request)
+    }
+
+    func startFileJob(file: URL, connection: MacConnection) async throws -> MacJob {
+        var request = authorizedRequest(path: "files", connection: connection)
+        request.url?.append(queryItems: [URLQueryItem(name: "name", value: file.lastPathComponent)])
+        request.httpMethod = "POST"
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 600
+        let (data, response) = try await URLSession.shared.upload(for: request, fromFile: file)
+        try accept(response, data: data)
+        return try JSONDecoder().decode(MacJob.self, from: data)
     }
 
     func job(_ id: String, connection: MacConnection) async throws -> MacJob {

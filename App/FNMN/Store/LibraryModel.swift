@@ -187,13 +187,27 @@ final class LibraryModel {
         return progress.positions[itemID]
     }
 
-    /// Stores a delivery archive the Mac prepared, with its pictures and videos, reading it off the main thread.
-    func store(archive: URL) async throws {
+    /// Stores a delivery archive the Mac prepared, with its pictures and videos, reading it off the main thread,
+    /// and returns the stored material's id.
+    @discardableResult
+    func store(archive: URL) async throws -> String {
+        let materialID = try DeliveryArchive(url: archive).unpack { _, _ in nil }.material.id
         try await write(saving: false) { [file] snapshot in try await file.storeArticle(archive: archive, into: snapshot) }
+        return materialID
     }
 
-    /// Stores what was picked with `+` → File, anywhere: it is copied into the FNMN folder. Picking the FNMN
-    /// folder itself reads it again. Reading happens in `LibraryFile`, off the main thread.
+    /// A link or file kept as it is, when the Mac could not make anything of it.
+    func storeMade(_ package: ImportPackage) async throws {
+        try await write(saving: false) { [file] snapshot in try await file.storeMade(package, into: snapshot) }
+    }
+
+    /// Whether a pick is stored as it is: the FNMN folder, another prepared library or a delivery archive.
+    func isPrepared(_ url: URL) -> Bool {
+        url.standardizedFileURL == cloudFolder?.standardizedFileURL || LibraryFile.isPrepared(url)
+    }
+
+    /// Stores a prepared pick from anywhere: it is copied into the FNMN folder. Picking the FNMN folder itself
+    /// reads it again. Reading happens in `LibraryFile`, off the main thread.
     func importFile(at url: URL, onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
         guard let folder = cloudFolder else { throw LibraryError.cloudFolderMissing }
         if url.standardizedFileURL == folder.standardizedFileURL {

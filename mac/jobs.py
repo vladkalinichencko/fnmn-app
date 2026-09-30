@@ -2,8 +2,8 @@
 
 A job moves queued -> running -> done | failed. While it runs, its adapter
 reports the current stage and page count, which the phone reads by polling.
-A link nothing could be made of is still done: its delivery is the link
-itself, and `error` says why.
+A link or file nothing could be made of is still done: its delivery is the
+link or the file itself, and `error` says why.
 A finished job keeps its file, the delivery archive or the video, until the
 phone says it has stored it; then `forget` removes both. Jobs live in memory:
 restarting the service forgets them.
@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from adapters import youtube
-from importer import import_link
-from package import link_delivery, write_delivery
+from importer import import_file, import_link
+from package import Delivery, file_delivery, link_delivery, write_delivery
 from web import LIVE
 
 _FILES = Path(tempfile.gettempdir()) / "fnmn-job-files"
@@ -42,16 +42,19 @@ class Job:
     total: int | None = None
     error: str | None = None
     file: Path | None = None
-    """The delivery archive of an `import`, or the mp4 of a `videoFile`."""
+    """The delivery archive of an `import` or a `file`, or the mp4 of a `videoFile`."""
+    upload: bytes | None = None
+    """What the phone sent for a `file` job, named by `url`, until the job has read it."""
 
     def status(self) -> dict:
         return {"id": self.id, "url": self.url, "phase": self.phase, "stage": self.stage,
                 "done": self.done, "total": self.total, "error": self.error}
 
 
-def submit(url: str, folders: list[str], kind: str = "import") -> Job:
-    """`import` prepares a package; `videoFile` downloads a YouTube video as an mp4."""
-    job = Job(uuid.uuid4().hex, url, folders, kind)
+def submit(url: str, folders: list[str], kind: str = "import", upload: bytes | None = None) -> Job:
+    """`import` prepares a package from a link, `file` from the `upload` named `url`; `videoFile` downloads
+    a YouTube video as an mp4."""
+    job = Job(uuid.uuid4().hex, url, folders, kind, upload=upload)
     with _LOCK:
         _JOBS[job.id] = job
     _POOL.submit(_run, job)
@@ -83,16 +86,26 @@ def _run(job: Job) -> None:
         if job.kind == "videoFile":
             job.file = youtube.download(job.url, _FILES, report)
         else:
-            try:
-                delivery = import_link(job.url, job.folders, LIVE, report)
-            except Exception as failure:
-                # Nothing could be made of the page, so the library gets the link itself.
-                job.error = str(failure)
-                delivery = link_delivery(job.url, None, job.folders)
             archive = _FILES / f"{job.id}.tar"
-            write_delivery(archive, delivery)
+            write_delivery(archive, _delivery(job, report))
             job.file = archive
     except Exception as error:
         job.phase, job.error = "failed", str(error)
         return
     job.phase = "done"
+
+
+def _delivery(job: Job, report) -> Delivery:
+    """What the link or file became, or else, when nothing could be made of it, the link or file itself."""
+    if job.kind == "file":
+        data, job.upload = job.upload or b"", None
+        try:
+            return import_file(job.url, data, LIVE, report)
+        except Exception as failure:
+            job.error = str(failure)
+            return file_delivery(job.url, data)
+    try:
+        return import_link(job.url, job.folders, LIVE, report)
+    except Exception as failure:
+        job.error = str(failure)
+        return link_delivery(job.url, None, job.folders)

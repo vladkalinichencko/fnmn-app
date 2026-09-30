@@ -265,17 +265,36 @@ private let laterArticle = ImportPackage(
     #expect(loaded.catalog.continuedID(loaded.progress) == nil)
 }
 
-@Test func aPickedArchiveGoesIntoTheFNMNFolderAndAPDFDoesNot() async throws {
+@Test func aPickedArchiveGoesIntoTheFNMNFolderAndAnyOtherFileToTheMac() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let file = await libraryFile(directory)
     let picked = directory.appending(path: "a.tar")
     try writeDelivery(article, to: picked)
+    #expect(LibraryFile.isPrepared(picked))
     let library = try await file.storePicked(picked, into: LibrarySnapshot())
     #expect(library.articles.map(\.material.id) == [article.material.id])
-    let pdf = directory.appending(path: "b.pdf")
-    try Data("%PDF".utf8).write(to: pdf)
-    await #expect(throws: CaptureError.unprepared(.pdf)) { try await file.storePicked(pdf, into: library) }
+    #expect(!LibraryFile.isPrepared(directory.appending(path: "b.pdf")))
+}
+
+@Test func aFileKeptWithoutTheMacIsKnownByItsBytesLikeOneTheMacMade() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let slides = directory.appending(path: "slides.key")
+    try Data("keynote".utf8).write(to: slides)
+    let package = try ImportPackage.file(slides)
+    // hashlib.sha256(b"keynote").hexdigest(), as `package.file_id` names it on the Mac.
+    #expect(package.material.id == "file:cae9d3b20ba8a78238099f47745d060f9be0f3812b9711d6ff27ce0f134a38fa")
+    #expect(package.material.kind == .link)
+    #expect(package.material.title == "slides")
+    let library = try await libraryFile(directory).storeMade(package, into: LibrarySnapshot())
+    #expect(library.item(package.material.id)?.kind == .link)
+}
+
+@Test func aLinkKeptWithoutTheMacHasTheIDTheMacGivesIt() {
+    let link = ImportPackage.link(URL(string: "https://dl.acm.org/doi/1/")!)
+    #expect(link.material.id == "link:https://dl.acm.org/doi/1/")
+    #expect(link.material.title == "dl.acm.org/doi/1")
 }
 
 @Test func aMaterialMadeFromAFileHasItsAuthorsForASource() throws {
@@ -352,7 +371,6 @@ private let namedBook = ImportPackage(
     for row in rows {
         #expect(CaptureRoute.source(for: row.url)?.rawValue == row.source)
     }
-    #expect(CaptureError.unprepared(.youtube).errorDescription?.contains("YouTube") == true)
 }
 
 private struct CaptureSourceRow: Decodable {

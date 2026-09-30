@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import os
@@ -9,7 +10,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import jobs
-from package import Delivery
+from package import Delivery, Document
 from service import app
 
 
@@ -66,6 +67,38 @@ class ServiceTests(unittest.TestCase):
             package = json.loads(archive.extractfile("package.json").read())
         self.assertEqual(package["material"]["id"], "link:https://example.com/a.pdf")
         self.assertEqual((package["material"]["kind"], package["folders"]), ("link", ["Books"]))
+
+    def _package_of_file(self, name, data):
+        job = self.client.post("/files", params={"name": name}, content=data).json()
+        while (status := self.client.get(f"/jobs/{job['id']}").json())["phase"] in ("queued", "running"):
+            time.sleep(0.05)
+        with tarfile.open(fileobj=io.BytesIO(self.client.get(f"/jobs/{job['id']}/package").content)) as archive:
+            return status, json.loads(archive.extractfile("package.json").read())
+
+    def test_a_markdown_file_becomes_a_material_known_by_its_bytes(self):
+        data = "# Notes\n\nA paragraph written on the phone.".encode()
+        status, package = self._package_of_file("notes.md", data)
+        self.assertEqual((status["phase"], status["error"]), ("done", None))
+        self.assertEqual(package["material"]["id"], "file:" + hashlib.sha256(data).hexdigest())
+        self.assertEqual((package["material"]["kind"], package["material"]["title"]), ("article", "Notes"))
+        self.assertIsNone(package["material"]["sourceURL"])
+        self.assertIn("A paragraph written on the phone.", package["body"])
+
+    def test_a_file_nothing_could_be_read_from_arrives_as_the_file_with_its_reason(self):
+        status, package = self._package_of_file("slides.key", b"keynote")
+        self.assertEqual(status["phase"], "done")
+        self.assertIn(".key", status["error"])
+        self.assertEqual(package["material"], {"id": "file:" + hashlib.sha256(b"keynote").hexdigest(),
+                                               "kind": "link", "title": "slides"})
+
+    def test_a_pdf_file_goes_through_the_pdf_pipeline(self):
+        def fake_transcribe(pdf, title, authors, report):
+            self.assertEqual(pdf, b"%PDF")
+            return Document("# Paper\n\nText.", None, "A. Author")
+
+        with patch("adapters.file.pdf.transcribe", fake_transcribe):
+            _, package = self._package_of_file("paper.pdf", b"%PDF")
+        self.assertEqual((package["material"]["title"], package["material"]["byline"]), ("Paper", "A. Author"))
 
     def test_video_job_hands_over_the_downloaded_file(self):
         def fake_download(url, folder, report):

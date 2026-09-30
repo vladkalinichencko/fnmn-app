@@ -14,6 +14,12 @@ from web import Web
 def read(url: str, web: Web, report: Report) -> Document:
     report("fetchingPage", None, None)
     source, markdown, assets = _readable_page(url, web)
+    return document(source, markdown, assets, web, report)
+
+
+def document(source: str, markdown: str, assets: dict[str, str], web: Web, report: Report) -> Document:
+    """A page already turned into Markdown, with the pictures and videos it names; one the web no longer
+    serves leaves the text."""
     report("fetchingAssets", 0, len(assets))
     files: dict[str, bytes] = {}
     for done, (path, asset_url) in enumerate(assets.items(), 1):

@@ -63,7 +63,30 @@ PACKAGE_NAME = "package.json"
 def package(url: str, content: Document | Video, folders: list[str]) -> Delivery:
     if isinstance(content, Video):
         return Delivery(_video_package(content, folders))
-    return Delivery(_document_package(url, content, folders), content.files)
+    fallback = urlparse(url).netloc
+    return Delivery(_document_package(stable_id("article", url), url, content, folders, fallback), content.files)
+
+
+def file_id(data: bytes) -> str:
+    """A material made from a file is known by the file's bytes, so the same file sent again replaces it.
+    The phone names a file it keeps without the Mac the same way."""
+    return "file:" + hashlib.sha256(data).hexdigest()
+
+
+def package_file(name: str, data: bytes, document: Document) -> Delivery:
+    """A material made from a file has no page: its original is the file, which the phone keeps in `originals/`."""
+    return Delivery(_document_package(file_id(data), None, document, [], Path(name).stem or name), document.files)
+
+
+def file_delivery(name: str, data: bytes) -> Delivery:
+    """What a file becomes when nothing could be made of it: a material with no text whose original is the file."""
+    return Delivery({
+        "version": 1,
+        "material": {"id": file_id(data), "kind": "link", "title": Path(name).stem or name},
+        "sections": [],
+        "blocks": [],
+        "folders": [],
+    })
 
 
 def link_delivery(url: str, title: str | None, folders: list[str]) -> Delivery:
@@ -179,7 +202,7 @@ def stable_id(prefix: str, value: str) -> str:
     return f"{prefix}:{hashlib.sha256(value.encode()).hexdigest()[:24]}"
 
 
-def _document_package(url: str, document: Document, folders: list[str]) -> dict:
+def _document_package(material_id: str, url: str | None, document: Document, folders: list[str], fallback: str) -> dict:
     if not document.markdown.strip():
         raise ValueError("article markdown is empty")
     body = normalize(document.markdown)
@@ -187,9 +210,9 @@ def _document_package(url: str, document: Document, folders: list[str]) -> dict:
     return {
         "version": 1,
         "material": {
-            "id": stable_id("article", url),
+            "id": material_id,
             "kind": "article",
-            "title": heading or urlparse(url).netloc,
+            "title": heading or fallback,
             "sourceURL": url,
             "byline": document.author,
         },
