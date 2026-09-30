@@ -24,7 +24,7 @@ from pathlib import Path
 from adapters.youtube import video_id_from_url
 from importer import import_link
 from markdown import first_heading, had_site_header, normalize, page_title, plain_title
-from package import Delivery, Video, package, read_delivery, write_delivery, write_if_changed
+from package import Delivery, Video, link_delivery, package, read_delivery, write_delivery, write_if_changed
 from web import LIVE
 
 ALBUMS = Path(__file__).parent / "browser_albums.tsv"
@@ -73,6 +73,17 @@ def prepare(row: dict, output: Path, enrich_videos: bool = False, refetch: bool 
         return url, None
     except Exception as error:
         return url, str(error)
+
+
+def link_unprepared(rows: list[dict], output: Path) -> int:
+    """Every material that was never prepared becomes a link delivery, without asking its site again."""
+    count = 0
+    for row in rows:
+        destination = _delivery(output, row)
+        if not destination.exists():
+            write_delivery(destination, link_delivery(row["url"], row["title"], row["folders"]))
+            count += 1
+    return count
 
 
 def _delivery(output: Path, row: dict) -> Path:
@@ -141,6 +152,7 @@ def main() -> None:
     parser.add_argument("--seed-videos", action="store_true", help="Create playable video records without fetching captions")
     parser.add_argument("--enrich-videos", action="store_true", help="Retry video records without captions")
     parser.add_argument("--repackage", action="store_true", help="Apply albums and Markdown rules to prepared deliveries")
+    parser.add_argument("--links", action="store_true", help="Save every material not prepared yet as a link delivery, without fetching")
     parser.add_argument("--refetch", action="store_true", help="Read prepared web pages again; a page that fails keeps its delivery")
     args = parser.parse_args()
     library = json.loads(args.input.read_text(encoding="utf-8"))
@@ -157,6 +169,9 @@ def main() -> None:
         parser.error("deliveries are still one JSON each; run --repackage first, or they would be fetched again")
     if args.seed_videos:
         print(f"seeded {seed_videos(library, rows, args.output)} videos; existing deliveries kept")
+        return
+    if args.links:
+        print(f"{link_unprepared(rows, args.output)} links")
         return
     selected = [row for row in rows if args.kind == "all" or ("video" if video_id_from_url(row["url"]) else "web") == args.kind]
     if args.refetch:

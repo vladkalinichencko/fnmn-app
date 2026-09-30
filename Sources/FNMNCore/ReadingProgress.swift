@@ -66,9 +66,6 @@ extension LibrarySnapshot {
                 changes.append(.forget(itemID: id))
             }
         }
-        for id in previous.linkIDs.subtracting(linkIDs) {
-            changes.append(.forget(itemID: id))
-        }
         return changes
     }
 
@@ -81,9 +78,5 @@ extension LibrarySnapshot {
         }
         if let materialID = opened.max(by: { $0.1 < $1.1 })?.0 { return materialID }
         return articles.first(where: { progress.positions[$0.material.id] != nil })?.material.id
-    }
-
-    private var linkIDs: Set<String> {
-        Set((browserCatalog?.sources ?? []).flatMap { $0.materials.map { Self.linkID($0.url) } })
     }
 }

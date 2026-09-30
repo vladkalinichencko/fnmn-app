@@ -49,18 +49,6 @@ public struct BrowserCatalog: Codable, Equatable, Sendable {
     }
 }
 
-extension BrowserCatalog {
-    func removing(url: String) -> BrowserCatalog {
-        BrowserCatalog(collections: collections, sources: sources.map { source in
-            BrowserCatalog.Source(
-                name: source.name, url: source.url, kind: source.kind,
-                savedIn: source.savedIn, foundIn: source.foundIn,
-                materials: source.materials.filter { $0.url != url }
-            )
-        })
-    }
-}
-
 public struct ImportPackage: Codable, Equatable, Sendable {
     public let version: Int
     public let material: Material
@@ -80,7 +68,8 @@ public struct ImportPackage: Codable, Equatable, Sendable {
 }
 
 public struct Material: Codable, Equatable, Identifiable, Sendable {
-    public enum Kind: String, Codable, Sendable { case article, video, book }
+    /// `link` is a page nothing could be made of: it has no text, and opening it opens the page.
+    public enum Kind: String, Codable, Sendable { case article, video, book, link }
     public let id: String
     public let kind: Kind
     public let title: String

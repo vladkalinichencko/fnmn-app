@@ -36,7 +36,6 @@ private let article = ImportPackage(
     let catalog = #"{"collections":[{"id":"reading","name":"Reading"}],"sources":[{"name":"Example","url":"https://example.com","kind":"site","saved_in":["reading"],"found_in":["reading"],"materials":[]},{"name":"Author","url":"https://example.org","kind":"author","saved_in":["reading"],"found_in":["reading"],"materials":[{"title":"A","url":"https://example.com/a","saved_in":["reading"],"found_in":["reading"]}]}]}"#
     try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
     try writeDelivery(article, files: [("assets/p.png", Data("png".utf8))], to: prepared.appending(path: "deliveries/a.tar"))
-    try Data(#"[{"url":"https://example.com/a","folders":["Web"]}]"#.utf8).write(to: prepared.appending(path: "index.json"))
 
     let file = await libraryFile(root)
     let imported = try await file.storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
@@ -58,16 +57,40 @@ func libraryFile(_ root: URL) async -> LibraryFile {
     return file
 }
 
-@Test func aLinkTheMacCouldNotPrepareLandsInItsAlbum() async throws {
+private let paperLink = ImportPackage(
+    material: Material(id: "link:https://dl.acm.org/doi/1", kind: .link, title: "dl.acm.org/doi/1", sourceURL: URL(string: "https://dl.acm.org/doi/1")!),
+    sections: [], blocks: [], folders: ["HCI"]
+)
+
+@Test func aLinkTheMacCouldNotPrepareIsADeliveryInItsAlbum() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let prepared = root.appending(path: "prepared")
-    try FileManager.default.createDirectory(at: prepared.appending(path: "deliveries"), withIntermediateDirectories: true)
-    let catalog = #"{"collections":[],"sources":[{"name":"ACM","url":"https://dl.acm.org","kind":"site","saved_in":[],"found_in":[],"materials":[{"title":"Paper","url":"https://dl.acm.org/doi/1","saved_in":[],"found_in":[]}]}]}"#
-    try Data(catalog.utf8).write(to: prepared.appending(path: "catalog.json"))
-    try Data(#"[{"url":"https://dl.acm.org/doi/1","folders":["HCI"]}]"#.utf8).write(to: prepared.appending(path: "index.json"))
-    let imported = try await libraryFile(root).storeBrowserLibrary(from: prepared, into: LibrarySnapshot())
-    #expect(imported.items(inAlbum: "HCI").map(\.id) == ["link:https://dl.acm.org/doi/1"])
-    #expect(imported.items(inAlbum: "HCI").first?.kind == .link)
+    let delivery = root.appending(path: "link.tar")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try writeDelivery(paperLink, to: delivery)
+    let imported = try await libraryFile(root).storeArticle(archive: delivery, into: LibrarySnapshot())
+    let item = try #require(imported.items(inAlbum: "HCI").first)
+    #expect(item.id == paperLink.material.id)
+    #expect(item.kind == .link)
+    #expect(item.originalURL == paperLink.material.sourceURL)
+    #expect(item.excerpt == "dl.acm.org")
+}
+
+@Test func aMaterialMadeFromALinkedPageTakesTheLinksPlace() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(paperLink, at: .distantPast)
+    library = try library.applying(.setArchived(true, itemID: paperLink.material.id))
+    let paper = ImportPackage(
+        material: Material(id: "article:https://dl.acm.org/doi/1", kind: .article, title: "Paper", sourceURL: paperLink.material.sourceURL!),
+        sections: article.sections, blocks: article.blocks, folders: []
+    )
+    try library.importPackage(paper, at: .now)
+    #expect(library.articles.map(\.material.id) == [paper.material.id])
+    #expect(library.albums(of: paper.material.id) == ["HCI"])
+    #expect(library.isArchived(paper.material.id))
+    #expect(library.archivedItems.first?.addedAt == .distantPast)
+
+    try library.importPackage(paperLink, at: .now)
+    #expect(library.articles.map(\.material.id) == [paper.material.id])
 }
 
 @Test func importKeepsTheMarkdownBody() async throws {

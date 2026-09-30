@@ -1,6 +1,6 @@
 import Foundation
 
-/// One material as every screen sees it: a prepared article, video or book, or a saved link the Mac has not prepared.
+/// One material as every screen sees it: an article, video or book, or a link nothing could be made of.
 public struct LibraryItem: Identifiable, Hashable, Sendable {
     public enum Kind: Hashable, Sendable { case article, video, book, link }
 
@@ -25,6 +25,7 @@ extension LibraryItem.Kind {
         case .article: .article
         case .video: .video
         case .book: .book
+        case .link: .link
         }
     }
 }
@@ -58,8 +59,6 @@ public struct AnnotationGroup: Identifiable, Sendable {
 }
 
 extension LibrarySnapshot {
-    public static func linkID(_ url: String) -> String { "link:\(url)" }
-
     /// Every material outside the archive, newest first.
     public var items: [LibraryItem] {
         allItems.filter { !isArchived($0.id) }
@@ -125,7 +124,6 @@ extension LibrarySnapshot {
         var sourceHits: [String: Bool] = [:]
         return items.filter { item in
             if articleHits.contains(item.id) { return true }
-            if item.kind == .link, hit(item.title) { return true }
             if albums(of: item.id).contains(where: albumHits.contains) { return true }
             guard let source = item.source?.name else { return false }
             if let known = sourceHits[source] { return known }
@@ -151,7 +149,7 @@ extension LibrarySnapshot {
 
     private var allItems: [LibraryItem] {
         var sources = SourceIndex(catalog: browserCatalog)
-        let prepared = articles.map { article in
+        return articles.map { article in
             let material = article.material
             return LibraryItem(
                 id: material.id,
@@ -164,30 +162,12 @@ extension LibrarySnapshot {
                 cover: article.cover
             )
         }
-        let preparedKeys = Set(articles.compactMap { $0.material.sourceURL.map(SourceIndex.key) })
-        let links = (browserCatalog?.sources ?? []).flatMap { source in
-            source.materials.compactMap { material -> LibraryItem? in
-                let keys = ([material.url] + material.savedURLs).map(SourceIndex.key)
-                guard !keys.contains(where: preparedKeys.contains), let url = URL(string: material.url) else { return nil }
-                let id = Self.linkID(material.url)
-                return LibraryItem(
-                    id: id,
-                    kind: .link,
-                    title: material.title,
-                    source: SourceRef(name: source.name, homepage: URL(string: source.url)),
-                    originalURL: url,
-                    addedAt: addedAt[id],
-                    excerpt: url.host(),
-                    cover: nil
-                )
-            }
-        }
-        return (prepared + links).sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+        .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
     }
 }
 
 /// Finds the author, blog or channel a saved link came from.
-private struct SourceIndex {
+struct SourceIndex {
     private var sources: [String: SourceRef] = [:]
 
     init(catalog: BrowserCatalog?) {

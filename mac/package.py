@@ -66,6 +66,24 @@ def package(url: str, content: Document | Video, folders: list[str]) -> Delivery
     return Delivery(_document_package(url, content, folders), content.files)
 
 
+def link_delivery(url: str, title: str | None, folders: list[str]) -> Delivery:
+    """What a link becomes when nothing could be made of it: a material with no text whose original is the
+    page. Its id is the one the app has always given a saved link, so its albums and marks stay with it."""
+    parsed = urlparse(url)
+    return Delivery({
+        "version": 1,
+        "material": {
+            "id": f"link:{url}",
+            "kind": "link",
+            "title": title or (parsed.netloc + parsed.path).rstrip("/") or url,
+            "sourceURL": url,
+        },
+        "sections": [],
+        "blocks": [],
+        "folders": folders,
+    })
+
+
 def book_delivery(folder: Path) -> Delivery:
     """A book the PDF pipeline exported (`content.md`, `metadata.json`, `assets/`) as a delivery like any other:
     its text is the body, whose headings are its table of contents, and its authors the byline. It has no page

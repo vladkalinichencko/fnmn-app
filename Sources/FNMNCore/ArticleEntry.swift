@@ -19,7 +19,11 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
     /// downloads the whole archive.
     public init(_ package: ImportPackage, delivery: String? = nil) {
         material = package.material
-        excerpt = package.material.kind == .video ? package.material.byline : ArticleBody.excerpt(package.body)
+        excerpt = switch package.material.kind {
+        case .video: package.material.byline
+        case .link: package.material.sourceURL?.host()
+        case .article, .book: ArticleBody.excerpt(package.body)
+        }
         self.delivery = delivery
         cover = switch (package.cover, delivery) {
         case (.articleFile?, _?): .stored(materialID: package.material.id)

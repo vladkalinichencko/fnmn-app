@@ -2,6 +2,8 @@
 
 A job moves queued -> running -> done | failed. While it runs, its adapter
 reports the current stage and page count, which the phone reads by polling.
+A link nothing could be made of is still done: its delivery is the link
+itself, and `error` says why.
 A finished job keeps its file, the delivery archive or the video, until the
 phone says it has stored it; then `forget` removes both. Jobs live in memory:
 restarting the service forgets them.
@@ -18,7 +20,7 @@ from pathlib import Path
 
 from adapters import youtube
 from importer import import_link
-from package import write_delivery
+from package import link_delivery, write_delivery
 from web import LIVE
 
 _FILES = Path(tempfile.gettempdir()) / "fnmn-job-files"
@@ -81,7 +83,12 @@ def _run(job: Job) -> None:
         if job.kind == "videoFile":
             job.file = youtube.download(job.url, _FILES, report)
         else:
-            delivery = import_link(job.url, job.folders, LIVE, report)
+            try:
+                delivery = import_link(job.url, job.folders, LIVE, report)
+            except Exception as failure:
+                # Nothing could be made of the page, so the library gets the link itself.
+                job.error = str(failure)
+                delivery = link_delivery(job.url, None, job.folders)
             archive = _FILES / f"{job.id}.tar"
             write_delivery(archive, delivery)
             job.file = archive

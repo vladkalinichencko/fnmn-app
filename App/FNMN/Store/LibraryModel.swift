@@ -222,23 +222,23 @@ final class LibraryModel {
         guard let folder = cloudFolder else { throw LibraryError.cloudFolderMissing }
         onStep(.downloadingFromCloud)
         let catalog = folder.appending(path: "catalog.json")
-        if CloudFolder.contains(catalog) {
-            try await CloudFolder.download(catalog)
-            try await CloudFolder.download(folder.appending(path: "index.json"))
-            let deliveries = try await CloudFolder.files(in: folder.appending(path: "deliveries"), withExtension: "tar")
-            try await write(saving: false) { [file] snapshot in
-                var next = try await file.applyBrowserCatalog(from: folder, into: snapshot)
-                for (index, delivery) in deliveries.enumerated() {
-                    onStep(.importing(index, of: deliveries.count))
-                    try await CloudFolder.download(delivery)
-                    next = try await file.addCloudDelivery(delivery, into: next)
-                    CloudFolder.evict(delivery)
-                }
-                next = try await file.placeLinks(from: folder, into: next)
-                try await file.save(next, previous: snapshot)
-                return next
+        let hasCatalog = CloudFolder.contains(catalog)
+        if hasCatalog { try await CloudFolder.download(catalog) }
+        let deliveryFolder = folder.appending(path: "deliveries")
+        let deliveries = CloudFolder.contains(deliveryFolder)
+            ? try await CloudFolder.files(in: deliveryFolder, withExtension: "tar") : []
+        try await write(saving: false) { [file] snapshot in
+            var next = hasCatalog ? try await file.applyBrowserCatalog(from: folder, into: snapshot) : snapshot
+            for (index, delivery) in deliveries.enumerated() {
+                onStep(.importing(index, of: deliveries.count))
+                try await CloudFolder.download(delivery)
+                next = try await file.addCloudDelivery(delivery, into: next)
+                CloudFolder.evict(delivery)
             }
+            try await file.save(next, previous: snapshot)
+            return next
         }
+        await readOriginals()
     }
 
     private func moveIntoCloudIfNeeded() async throws {

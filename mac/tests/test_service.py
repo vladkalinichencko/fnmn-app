@@ -52,15 +52,20 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(file.exists())
         self.assertEqual(self.client.get(f"/jobs/{job['id']}").status_code, 404)
 
-    def test_failed_job_keeps_its_reason(self):
+    def test_a_link_nothing_could_be_made_of_arrives_as_the_link_with_its_reason(self):
         def fail(url, folders, web, report):
             raise ValueError("no text layer")
 
         with patch("jobs.import_link", fail):
-            job = self.client.post("/jobs", json={"url": "https://example.com/a.pdf"}).json()
+            job = self.client.post("/jobs", json={"url": "https://example.com/a.pdf", "folders": ["Books"]}).json()
             while (status := self.client.get(f"/jobs/{job['id']}").json())["phase"] == "queued" or status["phase"] == "running":
                 time.sleep(0.05)
-        self.assertEqual((status["phase"], status["error"]), ("failed", "no text layer"))
+        self.assertEqual((status["phase"], status["error"]), ("done", "no text layer"))
+        response = self.client.get(f"/jobs/{job['id']}/package")
+        with tarfile.open(fileobj=io.BytesIO(response.content)) as archive:
+            package = json.loads(archive.extractfile("package.json").read())
+        self.assertEqual(package["material"]["id"], "link:https://example.com/a.pdf")
+        self.assertEqual((package["material"]["kind"], package["folders"]), ("link", ["Books"]))
 
     def test_video_job_hands_over_the_downloaded_file(self):
         def fake_download(url, folder, report):

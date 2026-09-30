@@ -57,9 +57,6 @@ extension LibrarySnapshot {
             next.archived.removeAll { $0 == itemID }
             next.addedAt[itemID] = nil
             next.articleRevisions[itemID] = nil
-            if let catalog = next.browserCatalog, itemID.hasPrefix("link:") {
-                next.browserCatalog = catalog.removing(url: String(itemID.dropFirst(5)))
-            }
         }
         return next
     }
