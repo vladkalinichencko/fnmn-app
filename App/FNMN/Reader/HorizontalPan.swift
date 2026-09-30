@@ -27,8 +27,11 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
         switch recognizer.state {
         case .began, .changed:
             changed(translation)
-        case .ended, .cancelled, .failed:
+        case .ended:
             ended(translation, recognizer.velocity(in: recognizer.view).x)
+        // Taken over by the system, for a scroll or a menu: as if the finger had not moved.
+        case .cancelled, .failed:
+            ended(0, 0)
         default:
             break
         }
@@ -47,6 +50,12 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
         /// Only the page's own scrolling stays exclusive.
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
             !(other.view is UIScrollView)
+        }
+
+        /// Another sideways pan on the plate, the system's swipe among them, starts only once this one has declined,
+        /// so the plate never moves under two gestures at once. Scrolling, taps and presses do not wait.
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            other is UIPanGestureRecognizer && !(other.view is UIScrollView)
         }
     }
 }

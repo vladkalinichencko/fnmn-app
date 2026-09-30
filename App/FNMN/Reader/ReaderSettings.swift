@@ -140,6 +140,7 @@ struct ReaderAppearanceModifier: ViewModifier {
             .font(.system(.body, design: font.design))
             .background(background.canvas)
             .environment(\.plateTint, background.plate)
+            .environment(\.pageColor, background.canvas)
             .environment(\.colorScheme, background.scheme ?? colorScheme)
             // The bar's glass follows the window, not the environment above; without this a dark page
             // got light buttons, and a button's label and its glass disagreed on the scheme.

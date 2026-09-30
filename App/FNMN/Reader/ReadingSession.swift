@@ -116,7 +116,12 @@ struct ReadingSession: View {
             .padding(.bottom, 80)
         }
         .swipeActionsContainer()
-        .scrollPosition(id: reader.scrollPosition, anchor: .top)
+        .scrollPosition(Bindable(reader).position, anchor: .top)
+        // The place is read off the rows the person sees, never through the position that moves the column:
+        // a position written back on each step made the column pull the next block to its top while scrolling up.
+        .onScrollTargetVisibilityChange(idType: Int.self, threshold: 0.01) { shown in
+            if let top = shown.min() { reader.send(.scrolled(top)) }
+        }
         // The column is laid out unseen at the top and shows only once it stands where it opens, so the jump there is never seen.
         .animation(.easeOut(duration: 0.3)) { $0.opacity(reader.state.opening == nil ? 1 : 0) }
         // After the first layout, when the lazy column knows its rows and can go to one far down.

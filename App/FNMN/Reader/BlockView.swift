@@ -162,6 +162,8 @@ struct PlateView: View {
     let read: Bool
     let markedReadThrough: Bool
     let annotations: [Annotation]
+    @Environment(\.pageColor) private var page
+    /// How far the finger has moved the plate from where the mode puts it; zero whenever no finger is on it.
     @State private var drag: CGFloat = 0
     @State private var size = CGSize.zero
     /// The height of the note's text, which the tab on the plate's edge follows.
@@ -170,41 +172,52 @@ struct PlateView: View {
     private var noting: Bool { mode == .noting(index) }
     /// How far the plate moves aside for its note: a little over half its width.
     private var noteWidth: CGFloat { size.width * 0.58 }
-    /// Where the plate stands follows only the mode and the finger, so an open note always has the plate aside.
+    /// The mode alone says where the plate rests, aside exactly while its note is open; the finger only adds to it.
     private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
     private static let slide = Animation.spring(duration: 0.35, bounce: 0.2)
 
-    /// The note lies under the plate, and the plate slides off it. The plate is glass, so the note shows only while
-    /// the plate is off its place and fades as the plate comes back over it. The plate is moved inside the system's
-    /// swipe, whose frame stays where the plate was; its touch area is moved with the plate, so touches on the
-    /// uncovered note reach the note under it.
+    /// The note lies under the plate and the plate slides off it. The plate is opaque, so the note shows only where
+    /// the plate has uncovered it, and touches there reach the note. The system's swipe moves the two together.
     var body: some View {
         ZStack(alignment: .trailing) {
             MarginNote(saved: paragraphNote, active: noting, save: saveNote) { noteHeight = $0 }
                 .frame(width: max(noteWidth - Tokens.gap, 0), height: size.height)
+                // At rest the note's corners would show past the plate's rounded ones.
                 .opacity(offset < 0 ? 1 : 0)
                 .allowsHitTesting(noting)
             plate
-                .frame(maxWidth: .infinity)
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
-                .contentShape(.interaction, Rectangle().offset(x: offset))
+                .offset(x: offset)
+                // Leftward opens the note while reading, rightward closes it; every other swipe is the system's.
+                .gesture(HorizontalPan(starts: { noting ? $0 > 0 : mode == .reading && $0 < 0 }, changed: dragged, ended: released))
         }
         .animation(Self.slide, value: noting)
+        .swipeActions(edge: .leading) {
+            if mode == .reading {
+                Button(markedReadThrough ? "Unmark" : "Read to Here", systemImage: markedReadThrough ? "arrow.uturn.backward" : "checkmark") {
+                    reader.send(.readThrough(markedReadThrough ? nil : index))
+                }
+                .tint(.accentColor)
+            }
+        }
     }
 
+    /// The plate follows the finger toward the other side, a little past the note's edge when opening, and never
+    /// back past where it rests.
     private func dragged(_ translation: CGFloat) {
-        guard mode == .reading || noting else { return }
-        drag = noting ? max(translation, 0) : max(min(translation, 0), -noteWidth - 20)
+        drag = noting ? min(max(translation, 0), noteWidth) : max(min(translation, 0), -noteWidth - 20)
     }
 
-    /// The drag and the mode change in one animation, so the plate goes straight from under the finger to where
-    /// the mode puts it instead of springing back to its place and out again.
+    /// The plate changes sides only when it has gone, or is thrown, past half the note's width; otherwise it goes
+    /// back to where the mode keeps it. The drag and the mode change in one animation, so the plate goes straight
+    /// from under the finger to its place.
     private func released(_ translation: CGFloat, _ velocity: CGFloat) {
+        let thrown = translation + velocity * 0.2
         withAnimation(Self.slide) {
             drag = 0
-            if noting {
-                if translation > 60 || velocity > 500 { reader.send(.plate(.done)) }
-            } else if translation < -60 || velocity < -500 {
+            if noting, thrown > noteWidth / 2 {
+                reader.send(.plate(.done))
+            } else if !noting, thrown < -noteWidth / 2 {
                 reader.send(.plate(.note(index)))
             }
         }
@@ -226,23 +239,14 @@ struct PlateView: View {
             }
             .opacity(read && mode == .reading ? 0.55 : 1)
             .animation(.easeInOut(duration: 0.4), value: read)
+            // Glass lets through what lies under it; the page color under the glass hides the note, and a read plate
+            // still fades into the page.
+            .background(page, in: .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             // The menu lifts the plate by this shape too; by the frame it would lift the square corners around the glass.
             .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .gesture(TapGesture().onEnded { reader.send(.plate(.toggle(index))) }, isEnabled: isTicking)
             .gesture(TapGesture().onEnded { reader.send(.plate(.done)) }, isEnabled: noting)
             .contextMenu { if mode == .reading { menu } }
-            // Inside the system's swipe, which places the row itself and would undo an offset put around it.
-            .offset(x: offset)
-            // Leftward belongs to the note; rightward to the system's swipe, or to closing an open note.
-            .gesture(HorizontalPan(starts: { noting ? $0 > 0 : $0 < 0 }, changed: dragged, ended: released))
-            .swipeActions(edge: .leading) {
-                if mode == .reading {
-                    Button(markedReadThrough ? "Unmark" : "Read to Here", systemImage: markedReadThrough ? "arrow.uturn.backward" : "checkmark") {
-                        reader.send(.readThrough(markedReadThrough ? nil : index))
-                    }
-                    .tint(.accentColor)
-                }
-            }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
             .sensoryFeedback(.selection, trigger: markedReadThrough)
     }

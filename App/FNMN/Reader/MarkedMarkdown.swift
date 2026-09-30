@@ -10,6 +10,7 @@ struct MarkedMarkdown: MarkupParser {
 
     func attributedString(for input: String) throws -> AttributedString {
         var text = try Self.parse(input, baseURL: baseURL)
+        Self.placePictures(&text)
         Self.markEqualsHighlights(&text)
         for mark in marks {
             Self.apply(mark, to: &text)
@@ -54,6 +55,18 @@ struct MarkedMarkdown: MarkupParser {
         return out
     }
 
+    /// A picture on disk takes its size from the file's header as the paragraph is parsed. Textual's own loader
+    /// reads the file only after the paragraph appears, so the paragraph grew by the picture's height and pushed
+    /// the column while it scrolled up.
+    private static func placePictures(_ text: inout AttributedString) {
+        for run in text.runs {
+            guard let url = run.imageURL, url.isFileURL, let size = ImageFiles.headerSize(of: url) else { continue }
+            let picture = ParagraphPicture(url: url, width: size.width, height: size.height, description: String(text[run.range].characters))
+            text[run.range].textual.attachment = AnyAttachment(picture)
+            text[run.range].imageURL = nil
+        }
+    }
+
     private static func apply(_ mark: ParagraphQuoteMark, to text: inout AttributedString) {
         var searchStart = text.startIndex
         while searchStart < text.endIndex, let found = text[searchStart...].range(of: mark.quote) {
@@ -86,6 +99,24 @@ struct MarkedMarkdown: MarkupParser {
 
     private static func isCode(_ run: AttributedSubstring) -> Bool {
         run.runs.contains { $0.inlinePresentationIntent?.contains(.code) == true }
+    }
+}
+
+/// A picture inside a paragraph, as wide as the file in pixels or the paragraph, whichever is narrower.
+private struct ParagraphPicture: Attachment {
+    let url: URL
+    let width: CGFloat
+    let height: CGFloat
+    /// The picture's alt text.
+    let description: String
+
+    var body: some View {
+        FileImage(url: url, contentMode: .fit)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, in _: TextEnvironmentValues) -> CGSize {
+        let shown = min(proposal.width ?? width, width)
+        return CGSize(width: shown, height: shown * height / width)
     }
 }
 

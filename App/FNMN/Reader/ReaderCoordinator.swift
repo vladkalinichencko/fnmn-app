@@ -8,7 +8,7 @@ struct ReaderState: Equatable {
     var fold = ReadingFold.open
     /// The paragraph at the top of the open text when reading stopped.
     var place: Int?
-    /// The block the column shows at the top.
+    /// The block at the top of the column: the one the person scrolled to, or the one an action moves the column to.
     var scrollID: Int?
     /// Opened at a note rather than to read on: scrolling looks around and leaves the place where reading stopped.
     var keepsPlace = false
@@ -20,8 +20,8 @@ struct ReaderState: Equatable {
 enum ReaderAction {
     /// The column is laid out and can go to where it opens.
     case opened
-    /// The person scrolled the column to this block.
-    case scrolled(Int?)
+    /// The person scrolled this block to the top of the column.
+    case scrolled(Int)
     case plate(PlateAction)
     /// Two fingers let go at this scale.
     case pinched(CGFloat)
@@ -46,7 +46,7 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
     case let .scrolled(index):
         guard state.opening == nil else { return state }
         state.scrollID = index
-        if let index, document.blocks.indices.contains(index), state.fold == .open, !state.keepsPlace {
+        if document.blocks.indices.contains(index), state.fold == .open, !state.keepsPlace {
             state.place = index
         }
     case let .plate(action):
@@ -80,6 +80,9 @@ final class ReaderCoordinator {
     let source: SourceRef?
     let baseURL: URL
     private(set) var state: ReaderState
+    /// Where the column is sent. Only actions move it; the person's own scrolling comes back as `.scrolled`
+    /// and is never written here, so the column is not pulled to a block's top while the finger moves it.
+    var position = ScrollPosition(idType: Int.self)
     @ObservationIgnored private let library: LibraryModel
 
     /// The column opens at the note it was opened at, or else at the place reading stopped.
@@ -97,13 +100,9 @@ final class ReaderCoordinator {
     func send(_ action: ReaderAction) {
         let before = state
         let next = readerReduce(state, action, document: document)
-        withAnimation(animation(for: action)) { state = next }
+        // A row entering at the bottom changes nothing here; writing the same state would still redraw the reader.
+        if next != before { withAnimation(animation(for: action)) { state = next } }
         perform(action, from: before, to: next)
-    }
-
-    /// The column scrolls through this binding: what the scroll view writes comes back as an action.
-    var scrollPosition: Binding<Int?> {
-        Binding(get: { self.state.scrollID }, set: { self.send(.scrolled($0)) })
     }
 
     /// The blocks the fold leaves on the page, without the title the header already shows and the cover above it.
@@ -151,7 +150,10 @@ final class ReaderCoordinator {
             ChatGPTHandoff.copyAndOpen(title: title, passage: passage)
         case let .copyPrompt(passage):
             _ = ChatGPTHandoff.remember(title: title, passage: passage)
-        case .opened, .plate, .pinched, .openSection:
+        case .opened, .pinched, .openSection:
+            guard next != before, let target = next.scrollID else { return }
+            withAnimation(animation(for: action)) { position.scrollTo(id: target, anchor: .top) }
+        case .plate:
             break
         }
     }
