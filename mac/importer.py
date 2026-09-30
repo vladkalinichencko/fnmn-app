@@ -23,7 +23,7 @@ def import_link(url: str, folders: list[str], web: Web, report: Report = lambda 
     if kind is None:
         raise ImportFailure("fetchingPage", "link must be an absolute HTTP or HTTPS address")
     if kind not in ADAPTERS:
-        raise ImportFailure("saving", f"{NAMES[kind]} is recognized, but the Mac service does not prepare it yet.")
+        raise ImportFailure("saving", f"{NAMES[kind]} is recognized, but the server does not prepare it yet.")
     try:
         content = ADAPTERS[kind](url, web, report)
     except ImportFailure:

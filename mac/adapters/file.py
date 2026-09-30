@@ -31,7 +31,7 @@ def read(name: str, data: bytes, web: Web, report: Report) -> Document:
         # A picture beside the page on the phone did not come with it, so its address fails and it leaves the text.
         markdown, assets = article_markdown(source, f"file:///{quote(name)}")
         return article.document(source, markdown, assets, web, report)
-    raise ImportFailure("saving", f"the Mac does not read {suffix or 'these'} files, so the file is kept as it is")
+    raise ImportFailure("saving", f"the server does not read {suffix or 'these'} files, so the file is kept as it is")
 
 
 def _text(data: bytes) -> str:

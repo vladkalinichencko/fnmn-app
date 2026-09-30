@@ -64,7 +64,7 @@ private let paperLink = ImportPackage(
     sections: [], blocks: [], folders: ["HCI"]
 )
 
-@Test func aLinkTheMacCouldNotPrepareIsADeliveryInItsAlbum() async throws {
+@Test func aLinkTheServerCouldNotPrepareIsADeliveryInItsAlbum() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let delivery = root.appending(path: "link.tar")
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -267,13 +267,13 @@ private let laterArticle = ImportPackage(
     #expect(loaded.catalog.continuedID(loaded.progress) == nil)
 }
 
-@Test func aFileKeptWithoutTheMacIsKnownByItsBytesLikeOneTheMacMade() async throws {
+@Test func aFileKeptWithoutTheServerIsKnownByItsBytesLikeOneTheServerMade() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let slides = directory.appending(path: "slides.key")
     try Data("keynote".utf8).write(to: slides)
     let package = try ImportPackage.file(slides)
-    // hashlib.sha256(b"keynote").hexdigest(), as `package.file_id` names it on the Mac.
+    // hashlib.sha256(b"keynote").hexdigest(), as `package.file_id` names it on the server.
     #expect(package.material.id == "file:cae9d3b20ba8a78238099f47745d060f9be0f3812b9711d6ff27ce0f134a38fa")
     #expect(package.material.kind == .link)
     #expect(package.material.title == "slides")
@@ -281,7 +281,7 @@ private let laterArticle = ImportPackage(
     #expect(library.item(package.material.id)?.kind == .link)
 }
 
-@Test func aLinkKeptWithoutTheMacHasTheIDTheMacGivesIt() {
+@Test func aLinkKeptWithoutTheServerHasTheIDTheServerGivesIt() {
     let link = ImportPackage.link(URL(string: "https://dl.acm.org/doi/1/")!)
     #expect(link.material.id == "link:https://dl.acm.org/doi/1/")
     #expect(link.material.title == "dl.acm.org/doi/1")

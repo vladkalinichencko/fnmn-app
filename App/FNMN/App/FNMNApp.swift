@@ -5,22 +5,22 @@ import SwiftUI
 @main
 struct FNMNApp: App {
     @State private var library: LibraryModel
-    @State private var mac: MacLink
+    @State private var server: ServerLink
     @State private var imports: ImportJobs
 
     init() {
         let library = LibraryModel()
-        let mac = MacLink()
+        let server = ServerLink()
         _library = State(initialValue: library)
-        _mac = State(initialValue: mac)
-        _imports = State(initialValue: ImportJobs(library: library, mac: mac))
+        _server = State(initialValue: server)
+        _imports = State(initialValue: ImportJobs(library: library, server: server))
     }
 
     var body: some Scene {
         WindowGroup {
             WindowRoot()
                 .environment(library)
-                .environment(mac)
+                .environment(server)
                 .environment(imports)
         }
     }

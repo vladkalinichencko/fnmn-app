@@ -1,6 +1,6 @@
 import Foundation
 
-/// One prepared material as the Mac delivers it: an uncompressed USTAR archive whose first entry is
+/// One prepared material as the server delivers it: an uncompressed USTAR archive whose first entry is
 /// `package.json` and whose other entries are the files its Markdown names, by their relative paths.
 /// It is read in one pass with a fixed buffer, so a delivery never sits in memory whole.
 public struct DeliveryArchive: Sendable {
@@ -31,7 +31,7 @@ public struct DeliveryArchive: Sendable {
         return package
     }
 
-    /// Writes a delivery the way the Mac does: `package.json` first, then each file, copied from disk in
+    /// Writes a delivery the way the server does: `package.json` first, then each file, copied from disk in
     /// chunks. A path USTAR cannot hold is refused rather than written in a form the reader cannot read.
     public static func write(_ package: ImportPackage, files: [(path: String, source: URL)], to url: URL) throws {
         guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
@@ -114,7 +114,7 @@ public struct DeliveryArchive: Sendable {
         case UInt8(ascii: "5"):
             return Entry(name: name, size: size, isFile: false)
         case let kind:
-            // PAX and GNU long-name headers are not written by the Mac, which fails on a path USTAR cannot hold.
+            // PAX and GNU long-name headers are not written by the server, which fails on a path USTAR cannot hold.
             throw DeliveryArchiveError.unsupportedEntry(String(UnicodeScalar(kind)))
         }
     }

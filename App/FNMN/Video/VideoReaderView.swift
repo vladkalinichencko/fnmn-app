@@ -7,7 +7,7 @@ import WebKit
 /// The second the viewer stopped at is saved exactly and survives restarts.
 struct VideoReaderView: View {
     @Environment(LibraryModel.self) private var library
-    @Environment(MacLink.self) private var mac
+    @Environment(ServerLink.self) private var server
     @Environment(ImportJobs.self) private var imports
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
@@ -109,7 +109,7 @@ struct VideoReaderView: View {
             .aspectRatio(16 / 9, contentMode: .fit)
         } else {
             ZStack {
-                if let videoID, let origin = mac.connection?.endpoint {
+                if let videoID, let origin = server.connection?.endpoint {
                     YouTubeEmbedView(
                         videoID: videoID,
                         origin: origin,
@@ -144,11 +144,11 @@ struct VideoReaderView: View {
         }
     }
 
-    /// The embed needs a page address of our own for YouTube to accept it; it is the Mac's.
+    /// The embed needs a page address of our own for YouTube to accept it; it is the server's.
     /// The original and the download stay in the `···` menu, so the message only says what is missing.
     private var embedState: EmbedPhase {
         guard videoID != nil else { return .failed("Not a YouTube video") }
-        guard mac.connection != nil else { return .failed("Connect the Mac in Settings to play here") }
+        guard server.connection != nil else { return .failed("Connect the server in Settings to play here") }
         return video.state.embed
     }
 
@@ -289,7 +289,7 @@ private struct SystemPlayer: UIViewControllerRepresentable {
     }
 }
 
-/// YouTube's player on a local page whose address is the Mac's: YouTube requires an embedding page it can identify.
+/// YouTube's player on a local page whose address is the server's: YouTube requires an embedding page it can identify.
 private struct YouTubeEmbedView: UIViewRepresentable {
     let videoID: String
     let origin: URL

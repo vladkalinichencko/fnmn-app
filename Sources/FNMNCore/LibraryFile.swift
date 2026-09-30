@@ -278,7 +278,7 @@ public actor LibraryFile {
 
     /// The first time the FNMN folder is linked, what an older version kept inside the app moves there: each
     /// article becomes an archive in `deliveries/`, each saved video an original in `originals/`. The app's
-    /// copies then go; books come from the Mac as deliveries of their own.
+    /// copies then go; books come from the server as deliveries of their own.
     public func moveIntoCloud(_ snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let cloud = try requireCloudFolder()
         var next = snapshot

@@ -1,4 +1,4 @@
-"""Everything the Mac reads from the internet goes through one Web value.
+"""Everything the server reads from the internet goes through one Web value.
 
 Adapters receive a Web and never import httpx or Chrome themselves, so tests
 pass a Web made of plain functions.

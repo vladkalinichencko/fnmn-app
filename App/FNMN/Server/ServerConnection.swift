@@ -2,7 +2,7 @@ import FNMNCore
 import Foundation
 import Security
 
-struct MacConnection {
+struct ServerConnection {
     let endpoint: URL
     let token: String
 
@@ -12,16 +12,16 @@ struct MacConnection {
               endpoint.user == nil, endpoint.password == nil,
               endpoint.query == nil, endpoint.fragment == nil,
               CaptureRoute.acceptsService(endpoint) else {
-            throw MacConnectionError.invalidAddress
+            throw ServerConnectionError.invalidAddress
         }
         let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else { throw MacConnectionError.missingToken }
+        guard !token.isEmpty else { throw ServerConnectionError.missingToken }
         self.endpoint = endpoint
         self.token = token
     }
 }
 
-enum MacConnectionError: LocalizedError {
+enum ServerConnectionError: LocalizedError {
     case invalidAddress
     case missingToken
     case notConfigured
@@ -29,30 +29,31 @@ enum MacConnectionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidAddress: "Enter the HTTPS address of the Mac service."
-        case .missingToken: "Enter the Mac service token."
-        case .notConfigured: "Set up the Mac connection first."
-        case .keychain: "Couldn't save the Mac service token in Keychain."
+        case .invalidAddress: "Enter the HTTPS address of the server."
+        case .missingToken: "Enter the server token."
+        case .notConfigured: "Set up the server connection first."
+        case .keychain: "Couldn't save the server token in Keychain."
         }
     }
 }
 
-protocol MacConnectionStorage {
-    func load() -> MacConnection?
-    func save(_ connection: MacConnection) throws
+protocol ServerConnectionStorage {
+    func load() -> ServerConnection?
+    func save(_ connection: ServerConnection) throws
 }
 
-struct KeychainMacConnectionStore: MacConnectionStorage {
+struct KeychainServerConnectionStore: ServerConnectionStorage {
+    // Devices already hold a connection under these keys; a new name would lose it.
     private let addressKey = "macServiceAddress"
     private let account = "macServiceToken"
 
-    func load() -> MacConnection? {
+    func load() -> ServerConnection? {
         guard let address = UserDefaults.standard.string(forKey: addressKey),
               let token = readToken() else { return nil }
-        return try? MacConnection(address: address, token: token)
+        return try? ServerConnection(address: address, token: token)
     }
 
-    func save(_ connection: MacConnection) throws {
+    func save(_ connection: ServerConnection) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Bundle.main.bundleIdentifier ?? "local.fnmn.reader",
@@ -65,9 +66,9 @@ struct KeychainMacConnectionStore: MacConnectionStorage {
             item[kSecValueData as String] = data
             item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             let added = SecItemAdd(item as CFDictionary, nil)
-            guard added == errSecSuccess else { throw MacConnectionError.keychain(added) }
+            guard added == errSecSuccess else { throw ServerConnectionError.keychain(added) }
         } else if status != errSecSuccess {
-            throw MacConnectionError.keychain(status)
+            throw ServerConnectionError.keychain(status)
         }
         UserDefaults.standard.set(connection.endpoint.absoluteString, forKey: addressKey)
     }

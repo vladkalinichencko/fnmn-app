@@ -2,25 +2,25 @@ import FNMNCore
 import Foundation
 
 @MainActor
-protocol MacServicePort {
-    func check(connection: MacConnection) async throws
-    func startJob(url: URL, connection: MacConnection) async throws -> MacJob
-    /// Sends a file for the Mac to make a material of by its type.
-    func startFileJob(file: URL, connection: MacConnection) async throws -> MacJob
-    func job(_ id: String, connection: MacConnection) async throws -> MacJob
+protocol ServerPort {
+    func check(connection: ServerConnection) async throws
+    func startJob(url: URL, connection: ServerConnection) async throws -> ServerJob
+    /// Sends a file for the server to make a material of by its type.
+    func startFileJob(file: URL, connection: ServerConnection) async throws -> ServerJob
+    func job(_ id: String, connection: ServerConnection) async throws -> ServerJob
     /// Downloads the finished delivery archive to a temporary file.
-    func delivery(of id: String, connection: MacConnection) async throws -> URL
-    func startVideoDownload(url: URL, connection: MacConnection) async throws -> MacJob
+    func delivery(of id: String, connection: ServerConnection) async throws -> URL
+    func startVideoDownload(url: URL, connection: ServerConnection) async throws -> ServerJob
     /// Downloads the finished video file to a temporary location.
-    func videoFile(of id: String, connection: MacConnection) async throws -> URL
-    /// Tells the Mac the result is stored, so it removes the file and forgets the job.
-    func forget(_ id: String, connection: MacConnection) async throws
+    func videoFile(of id: String, connection: ServerConnection) async throws -> URL
+    /// Tells the server the result is stored, so it removes the file and forgets the job.
+    func forget(_ id: String, connection: ServerConnection) async throws
 }
 
-extension MacServicePort {
+extension ServerPort {
     /// Polls a job until it stops waiting. The pause grows from one to five seconds while the step
     /// stays the same and starts over when it changes.
-    func finished(_ job: MacJob, connection: MacConnection, onStep: (ImportStep) -> Void) async throws -> MacJob {
+    func finished(_ job: ServerJob, connection: ServerConnection, onStep: (ImportStep) -> Void) async throws -> ServerJob {
         var job = job
         var pause = 1
         while job.isWaiting {
@@ -34,7 +34,7 @@ extension MacServicePort {
     }
 }
 
-struct MacJob: Decodable, Equatable {
+struct ServerJob: Decodable, Equatable {
     enum Phase: String, Decodable { case queued, running, done, failed }
 
     let id: String
@@ -54,7 +54,7 @@ struct MacJob: Decodable, Equatable {
     private var text: String {
         let count = total.map { " \(done ?? 0) of \($0)" } ?? ""
         switch phase == .queued ? "queued" : stage ?? "" {
-        case "queued": return "Waiting for the Mac"
+        case "queued": return "Waiting for the server"
         case "fetchingPage": return "Fetching the page"
         case "fetchingAssets": return "Downloading files" + count
         case "waitingForOCR": return "Waiting for another PDF to finish"
@@ -74,8 +74,8 @@ struct ImportStep: Equatable {
     let fraction: Double?
 }
 
-struct MacServiceClient: MacServicePort {
-    func check(connection: MacConnection) async throws {
+struct ServerClient: ServerPort {
+    func check(connection: ServerConnection) async throws {
         var request = authorizedRequest(path: "health", connection: connection)
         request.timeoutInterval = 10
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -84,15 +84,15 @@ struct MacServiceClient: MacServicePort {
         guard health.status == "ok" else { throw URLError(.badServerResponse) }
     }
 
-    func startJob(url: URL, connection: MacConnection) async throws -> MacJob {
+    func startJob(url: URL, connection: ServerConnection) async throws -> ServerJob {
         var request = authorizedRequest(path: "jobs", connection: connection)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(JobRequest(url: url, folders: []))
-        return try await decoded(MacJob.self, for: request)
+        return try await decoded(ServerJob.self, for: request)
     }
 
-    func startFileJob(file: URL, connection: MacConnection) async throws -> MacJob {
+    func startFileJob(file: URL, connection: ServerConnection) async throws -> ServerJob {
         var request = authorizedRequest(path: "files", connection: connection)
         request.url?.append(queryItems: [URLQueryItem(name: "name", value: file.lastPathComponent)])
         request.httpMethod = "POST"
@@ -100,14 +100,14 @@ struct MacServiceClient: MacServicePort {
         request.timeoutInterval = 600
         let (data, response) = try await URLSession.shared.upload(for: request, fromFile: file)
         try accept(response, data: data)
-        return try JSONDecoder().decode(MacJob.self, from: data)
+        return try JSONDecoder().decode(ServerJob.self, from: data)
     }
 
-    func job(_ id: String, connection: MacConnection) async throws -> MacJob {
-        try await decoded(MacJob.self, for: authorizedRequest(path: "jobs/\(id)", connection: connection))
+    func job(_ id: String, connection: ServerConnection) async throws -> ServerJob {
+        try await decoded(ServerJob.self, for: authorizedRequest(path: "jobs/\(id)", connection: connection))
     }
 
-    func delivery(of id: String, connection: MacConnection) async throws -> URL {
+    func delivery(of id: String, connection: ServerConnection) async throws -> URL {
         var request = authorizedRequest(path: "jobs/\(id)/package", connection: connection)
         request.timeoutInterval = 600
         let (file, response) = try await URLSession.shared.download(for: request)
@@ -115,27 +115,27 @@ struct MacServiceClient: MacServicePort {
         return file
     }
 
-    func forget(_ id: String, connection: MacConnection) async throws {
+    func forget(_ id: String, connection: ServerConnection) async throws {
         var request = authorizedRequest(path: "jobs/\(id)", connection: connection)
         request.httpMethod = "DELETE"
         let (data, response) = try await URLSession.shared.data(for: request)
         try accept(response, data: data)
     }
 
-    func startVideoDownload(url: URL, connection: MacConnection) async throws -> MacJob {
+    func startVideoDownload(url: URL, connection: ServerConnection) async throws -> ServerJob {
         var request = authorizedRequest(path: "videos", connection: connection)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(VideoRequest(url: url))
-        return try await decoded(MacJob.self, for: request)
+        return try await decoded(ServerJob.self, for: request)
     }
 
-    func videoFile(of id: String, connection: MacConnection) async throws -> URL {
+    func videoFile(of id: String, connection: ServerConnection) async throws -> URL {
         var request = authorizedRequest(path: "jobs/\(id)/file", connection: connection)
         request.timeoutInterval = 600
         let (download, response) = try await URLSession.shared.download(for: request)
         try accept(response, data: Data())
-        // The download lands as a `.tmp`; the file keeps the extension the Mac gave it, which names the original.
+        // The download lands as a `.tmp`; the file keeps the extension the server gave it, which names the original.
         let name = response.suggestedFilename.map { URL(filePath: $0).pathExtension } ?? ""
         let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
             .appendingPathExtension(name.isEmpty ? "mp4" : name)
@@ -149,7 +149,7 @@ struct MacServiceClient: MacServicePort {
         return try JSONDecoder().decode(type, from: data)
     }
 
-    private func authorizedRequest(path: String, connection: MacConnection) -> URLRequest {
+    private func authorizedRequest(path: String, connection: ServerConnection) -> URLRequest {
         var request = URLRequest(url: connection.endpoint.appending(path: path))
         request.setValue("Bearer \(connection.token)", forHTTPHeaderField: "Authorization")
         return request
@@ -159,7 +159,7 @@ struct MacServiceClient: MacServicePort {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard 200 ..< 300 ~= http.statusCode else {
             let detail = (try? JSONDecoder().decode(FailureBody.self, from: data))?.detail
-            throw MacServiceError.rejected(detail ?? "Mac service returned HTTP \(http.statusCode).")
+            throw ServerError.rejected(detail ?? "The server returned HTTP \(http.statusCode).")
         }
     }
 
@@ -169,7 +169,7 @@ struct MacServiceClient: MacServicePort {
     private struct FailureBody: Decodable { let detail: String }
 }
 
-enum MacServiceError: Error, LocalizedError {
+enum ServerError: Error, LocalizedError {
     case rejected(String)
 
     var errorDescription: String? {

@@ -2,7 +2,7 @@ import ActivityKit
 import BackgroundTasks
 
 /// Shows one import outside the app: a Live Activity, and a continued-processing task
-/// that keeps the app polling the Mac while it is in the background.
+/// that keeps the app polling the server while it is in the background.
 @MainActor
 enum ImportActivity {
     private static var activity: LiveActivity?
@@ -44,7 +44,7 @@ enum ImportActivity {
         ImportActivityAttributes.ContentState(status: step.text, fraction: step.fraction)
     }
 
-    /// iOS grants continued runtime only while the task reports progress; the Mac job runs either way.
+    /// iOS grants continued runtime only while the task reports progress; the server job runs either way.
     private static func requestBackgroundTime(title: String, step: ImportStep) {
         let identifier = "local.fnmn.reader.import.\(UUID().uuidString)"
         backgroundID = identifier
@@ -54,7 +54,7 @@ enum ImportActivity {
         guard registered else { return }
         let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: title, subtitle: step.text)
         request.strategy = .fail
-        // The Mac job runs whether or not iOS grants the time, so a refused request only loses the background progress.
+        // The server job runs whether or not iOS grants the time, so a refused request only loses the background progress.
         Task { try? await BGTaskScheduler.shared.submitTaskRequest(request) }
     }
 
@@ -64,7 +64,7 @@ enum ImportActivity {
             task.setTaskCompleted(success: true)
             return
         }
-        // The Mac job keeps running while the app is suspended.
+        // The server job keeps running while the app is suspended.
         task.expirationHandler = {
             MainActor.assumeIsolated {
                 background?.setTaskCompleted(success: false)

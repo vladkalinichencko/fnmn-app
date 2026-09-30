@@ -2,7 +2,7 @@
 import Foundation
 import Testing
 
-/// Writes a delivery the way the Mac's `write_delivery` does: USTAR, `package.json` first, then the files.
+/// Writes a delivery the way the server's `write_delivery` does: USTAR, `package.json` first, then the files.
 func writeDelivery(_ package: ImportPackage, files: [(String, Data)] = [], to url: URL) throws {
     var archive = Data()
     func add(_ name: String, _ data: Data) {

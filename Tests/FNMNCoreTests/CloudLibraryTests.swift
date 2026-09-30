@@ -56,7 +56,7 @@ private let illustrated = ImportPackage(
     #expect(!FileManager.default.fileExists(atPath: LibraryFile.coverFile(root: file.root, materialID: "article:cloud").path))
 }
 
-@Test func aMaterialTheMacPreparesForThePhoneJoinsTheFolderInICloud() async throws {
+@Test func aMaterialTheServerPreparesForThePhoneJoinsTheFolderInICloud() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let cloud = root.appending(path: "FNMN")
     try FileManager.default.createDirectory(at: cloud, withIntermediateDirectories: true)

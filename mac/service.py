@@ -1,4 +1,4 @@
-"""HTTP boundary of the Mac service. Every request needs the bearer token.
+"""HTTP boundary of the server. Every request needs the bearer token.
 
     POST /jobs            {"url", "folders"} -> {"id", ...status}
     POST /files?name=     the file's bytes as the body -> a job that makes a material of it by its type
@@ -37,7 +37,7 @@ def require_token(authorization: str | None = Header(default=None)) -> None:
         raise HTTPException(401, "invalid bearer token")
 
 
-app = FastAPI(title="FNMN Mac service", dependencies=[Depends(require_token)])
+app = FastAPI(title="FNMN server", dependencies=[Depends(require_token)])
 
 
 @app.get("/health")

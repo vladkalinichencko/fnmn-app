@@ -69,7 +69,7 @@ public struct ImportPackage: Codable, Equatable, Sendable {
 }
 
 extension ImportPackage {
-    /// A link kept as it is, when the Mac cannot be reached; the Mac makes the same one (`package.link_delivery`)
+    /// A link kept as it is, when the server cannot be reached; the server makes the same one (`package.link_delivery`)
     /// when it cannot read the page, and a material made later from the page takes its place.
     public static func link(_ url: URL) -> ImportPackage {
         let path = ((url.host() ?? "") + url.path(percentEncoded: true))
@@ -80,8 +80,8 @@ extension ImportPackage {
         )
     }
 
-    /// A file kept as it is, known by its bytes like everything the Mac makes of a file (`package.file_delivery`),
-    /// so sending the same file to the Mac later replaces it.
+    /// A file kept as it is, known by its bytes like everything the server makes of a file (`package.file_delivery`),
+    /// so sending the same file to the server later replaces it.
     public static func file(_ file: URL) throws -> ImportPackage {
         let name = file.deletingPathExtension().lastPathComponent
         return ImportPackage(

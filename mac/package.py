@@ -69,7 +69,7 @@ def package(url: str, content: Document | Video, folders: list[str]) -> Delivery
 
 def file_id(data: bytes) -> str:
     """A material made from a file is known by the file's bytes, so the same file sent again replaces it.
-    The phone names a file it keeps without the Mac the same way."""
+    The phone names a file it keeps without the server the same way."""
     return "file:" + hashlib.sha256(data).hexdigest()
 
 

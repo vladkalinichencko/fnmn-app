@@ -145,7 +145,7 @@ struct ItemActions: View {
     }
 }
 
-/// A material still on its way from the Mac or from a file.
+/// A material still on its way from the server or from a file.
 struct PreparingTile: View {
     let job: ImportJob
     @Environment(ImportJobs.self) private var imports

@@ -1,6 +1,6 @@
 """A YouTube video with its captions as timed transcript cues.
 
-yt-dlp reads the title, the channel and one caption track on the Mac. A video
+yt-dlp reads the title, the channel and one caption track on the server. A video
 without any caption track still plays; a caption track that fails to download
 stops the import instead of silently leaving the transcript empty.
 """

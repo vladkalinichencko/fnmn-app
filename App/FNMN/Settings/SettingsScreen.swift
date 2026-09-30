@@ -7,10 +7,10 @@ enum ConnectionCheck: Equatable {
     case failed(String)
 }
 
-/// The library folder, and the Mac service address and token, saved once and checked with an authorized request.
+/// The library folder, and the server address and token, saved once and checked with an authorized request.
 struct SettingsScreen: View {
     @Environment(LibraryModel.self) private var library
-    @Environment(MacLink.self) private var mac
+    @Environment(ServerLink.self) private var server
     @Environment(LibraryDialogs.self) private var dialogs
     @State private var address = ""
     @State private var token = ""
@@ -35,7 +35,7 @@ struct SettingsScreen: View {
                         .autocorrectionDisabled()
                     SecureField("Token", text: $token)
                 } header: {
-                    Text("Mac")
+                    Text("Server")
                 } footer: {
                     status
                 }
@@ -53,8 +53,8 @@ struct SettingsScreen: View {
             }
         }
         .onAppear {
-            address = mac.connection?.endpoint.absoluteString ?? ""
-            token = mac.connection?.token ?? ""
+            address = server.connection?.endpoint.absoluteString ?? ""
+            token = server.connection?.token ?? ""
         }
         .onChange(of: address) { check = .editing }
         .onChange(of: token) { check = .editing }
@@ -72,7 +72,7 @@ struct SettingsScreen: View {
 
     private func saveAndCheck() {
         do {
-            try mac.save(MacConnection(address: address, token: token))
+            try server.save(ServerConnection(address: address, token: token))
         } catch {
             check = .failed(error.localizedDescription)
             return
@@ -80,7 +80,7 @@ struct SettingsScreen: View {
         check = .checking
         Task {
             do {
-                try await mac.check()
+                try await server.check()
                 check = .connected
             } catch {
                 check = .failed(error.localizedDescription)

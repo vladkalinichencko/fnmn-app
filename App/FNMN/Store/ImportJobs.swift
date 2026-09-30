@@ -9,7 +9,7 @@ struct ImportJob: Identifiable, Equatable {
         case file(URL)
         /// The FNMN folder in iCloud Drive, chosen as the library's home and read.
         case libraryFolder(URL)
-        /// A YouTube video the Mac downloads so the system player can play it offline.
+        /// A YouTube video the server downloads so the system player can play it offline.
         case videoFile(itemID: String, url: URL)
     }
 
@@ -68,13 +68,13 @@ func importReduce(_ jobs: [ImportJob], _ action: ImportAction) -> [ImportJob] {
 final class ImportJobs {
     private(set) var jobs: [ImportJob] = []
     private let library: LibraryModel
-    private let mac: MacLink
+    private let server: ServerLink
     private var shownJobID: UUID?
     @ObservationIgnored private var running: [UUID: Task<Void, Never>] = [:]
 
-    init(library: LibraryModel, mac: MacLink) {
+    init(library: LibraryModel, server: ServerLink) {
         self.library = library
-        self.mac = mac
+        self.server = server
     }
 
     func send(_ action: ImportAction) {
@@ -108,18 +108,18 @@ final class ImportJobs {
 
     private func prepare(_ url: URL, jobID: UUID) async throws {
         guard CaptureRoute.source(for: url) != nil else { throw CaptureError.notAWebLink }
-        if try await storedFromMac(jobID: jobID, start: { try await self.mac.port.startJob(url: url, connection: $0) }) == nil {
+        if try await storedFromServer(jobID: jobID, start: { try await self.server.port.startJob(url: url, connection: $0) }) == nil {
             try await library.storeMade(.link(url))
         }
     }
 
-    /// The file goes to the Mac, which makes a material of it, and the file itself to `originals/`.
+    /// The file goes to the server, which makes a material of it, and the file itself to `originals/`.
     private func importFile(_ url: URL, jobID: UUID) async throws {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         try await CloudFolder.download(url)
         send(.progressed(jobID, .sending))
-        let made = try await storedFromMac(jobID: jobID) { try await self.mac.port.startFileJob(file: url, connection: $0) }
+        let made = try await storedFromServer(jobID: jobID) { try await self.server.port.startFileJob(file: url, connection: $0) }
         send(.progressed(jobID, .saving))
         let materialID = if let made { made } else { try await keep(url) }
         try await library.storeOriginal(url, of: materialID)
@@ -131,18 +131,18 @@ final class ImportJobs {
         return package.material.id
     }
 
-    /// Runs a job on the Mac and stores the delivery it made, even a link or file it could not read.
-    /// Nil when the Mac is not set up, cannot be reached or failed, and the phone keeps the link or file itself;
-    /// sending it again once the Mac answers replaces that material.
-    private func storedFromMac(jobID: UUID, start: (MacConnection) async throws -> MacJob) async throws -> String? {
-        guard let connection = try? mac.configured() else { return nil }
-        let job: MacJob
+    /// Runs a job on the server and stores the delivery it made, even a link or file it could not read.
+    /// Nil when the server is not set up, cannot be reached or failed, and the phone keeps the link or file itself;
+    /// sending it again once the server answers replaces that material.
+    private func storedFromServer(jobID: UUID, start: (ServerConnection) async throws -> ServerJob) async throws -> String? {
+        guard let connection = try? server.configured() else { return nil }
+        let job: ServerJob
         let archive: URL
         do {
-            job = try await mac.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
+            job = try await server.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
             guard job.phase == .done else { return nil }
             send(.progressed(jobID, .saving))
-            archive = try await mac.port.delivery(of: job.id, connection: connection)
+            archive = try await server.port.delivery(of: job.id, connection: connection)
         } catch where !Task.isCancelled {
             return nil
         }
@@ -152,21 +152,21 @@ final class ImportJobs {
         return materialID
     }
 
-    /// The material is in the library whether or not the Mac hears this; a Mac that does not keeps the
-    /// job's file until the service restarts, so a lost confirmation does not fail the import.
-    private func confirmStored(_ id: String, connection: MacConnection) async {
-        try? await mac.port.forget(id, connection: connection)
+    /// The material is in the library whether or not the server hears this; a server that does not keeps the
+    /// job's file until it restarts, so a lost confirmation does not fail the import.
+    private func confirmStored(_ id: String, connection: ServerConnection) async {
+        try? await server.port.forget(id, connection: connection)
     }
 
     private func downloadVideo(_ url: URL, itemID: String, jobID: UUID) async throws {
-        let connection = try mac.configured()
-        let started = try await mac.port.startVideoDownload(url: url, connection: connection)
-        let job = try await mac.port.finished(started, connection: connection) { send(.progressed(jobID, $0)) }
+        let connection = try server.configured()
+        let started = try await server.port.startVideoDownload(url: url, connection: connection)
+        let job = try await server.port.finished(started, connection: connection) { send(.progressed(jobID, $0)) }
         guard job.phase == .done else {
-            throw MacServiceError.rejected(job.error ?? "The Mac could not download this video.")
+            throw ServerError.rejected(job.error ?? "The server could not download this video.")
         }
         send(.progressed(jobID, .saving))
-        let video = try await mac.port.videoFile(of: job.id, connection: connection)
+        let video = try await server.port.videoFile(of: job.id, connection: connection)
         defer { try? FileManager.default.removeItem(at: video) }
         try await library.storeOriginal(video, of: itemID)
         await confirmStored(job.id, connection: connection)
@@ -212,7 +212,7 @@ extension ImportJob.Input {
 }
 
 extension ImportStep {
-    static let sending = ImportStep(text: "Sending to the Mac", fraction: nil)
+    static let sending = ImportStep(text: "Sending to the server", fraction: nil)
     static let saving = ImportStep(text: "Saving", fraction: nil)
     static let downloadingFromCloud = ImportStep(text: "Downloading from iCloud", fraction: nil)
 
