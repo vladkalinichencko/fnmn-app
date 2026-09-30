@@ -74,7 +74,8 @@ struct ReadingSession: View {
     @State private var pinch = PinchScale()
     /// Resets the pinch when the gesture ends or is cancelled.
     @GestureState private var pinching = false
-    private static let column = "column"
+    /// Read in `onGeometryChange`'s transform, which runs off the main actor.
+    private nonisolated static let column = "column"
 
     var body: some View {
         let document = reader.document
