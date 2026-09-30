@@ -47,22 +47,24 @@ extension AnnotationCommand {
     }
 }
 
-/// How far two fingers have pinched. Only the blocks' fold effect reads it, so a frame of the gesture
-/// redraws that effect and not the whole reader.
+/// How far two fingers have pinched. Only the blocks the pinch moves read it, so a frame of the gesture redraws
+/// those blocks and not the whole reader.
 @MainActor @Observable
 final class PinchScale {
+    /// The scale of the fingers: 1 at rest, below 1 while they come together, above 1 while they spread.
     var value: CGFloat = 1
-    /// Where each block lies in the column. Nothing is drawn from it directly, so it is not observed; a fold
-    /// reads it when fingers move.
-    @ObservationIgnored var frames: [Int: CGRect] = [:]
+    /// Fingers have spread: the blocks the next fold out brings back are in the column, closed, until they let go.
+    var spreading = false
+    /// Fingers have let go and the blocks are finishing what the pinch began; a cancelled gesture must not begin again.
+    @ObservationIgnored var settling = false
 
-    /// How far a block rises to reach the lower edge of the block it folds into; to the top of the column
-    /// when nothing above it stays.
-    func rise(of index: Int, into parent: Int?) -> CGFloat {
-        guard let frame = frames[index] else { return 0 }
-        let floor = parent.flatMap { frames[$0]?.maxY } ?? 0
-        return max(frame.minY - floor, 0)
-    }
+    /// The scale change that carries a block fully away or fully back.
+    static let span: CGFloat = 0.35
+
+    /// How far the blocks that leave have gone, 0 to 1.
+    var leaving: CGFloat { min(max((1 - value) / Self.span, 0), 1) }
+    /// How far the blocks that arrive have come, 0 to 1.
+    var arriving: CGFloat { min(max((value - 1) / Self.span, 0), 1) }
 }
 
 /// One open document drawn from its coordinator: the column of blocks, the header and the pinch between sections.
@@ -72,25 +74,25 @@ struct ReadingSession: View {
     @Environment(LibraryModel.self) private var library
     let reader: ReaderCoordinator
     @State private var pinch = PinchScale()
-    /// Resets the pinch when the gesture ends or is cancelled.
+    /// Tells a cancelled pinch, which never ends, from one that was let go.
     @GestureState private var pinching = false
-    /// Read in `onGeometryChange`'s transform, which runs off the main actor.
-    private nonisolated static let column = "column"
 
     var body: some View {
         let document = reader.document
         let visible = reader.visible
         let current = reader.current(in: visible)
+        let leaving = readingFoldLeaving(reader.state.fold, blocks: document.blocks)
+        let arriving = pinch.spreading ? readingFoldArriving(reader.state.fold, blocks: document.blocks) : []
         let marks = Dictionary(grouping: library.snapshot.annotations.filter { $0.materialID == reader.materialID }, by: \.piece)
         let progress = library.progress
-        let foldParents = readingFoldParents(reader.state.fold, blocks: document.blocks)
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Tokens.gap) {
+            // The gap under a block belongs to the block, so it closes up with it.
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if let lead = document.lead, case let .image(_, path) = document.blocks[lead] {
-                    LeadImage(url: reader.baseURL.appending(path: path))
+                    LeadImage(url: reader.baseURL.appending(path: path)).padding(.bottom, Tokens.gap)
                 }
-                MaterialHeader(title: reader.title, source: reader.source).padding(.bottom, Tokens.gap)
-                ForEach(visible, id: \.self) { index in
+                MaterialHeader(title: reader.title, source: reader.source).padding(.bottom, 2 * Tokens.gap)
+                ForEach(pinch.spreading ? reader.visibleWhileSpreading : visible, id: \.self) { index in
                     let section = document.sections[index]
                     BlockView(
                         block: document.blocks[index],
@@ -104,18 +106,15 @@ struct ReadingSession: View {
                         sectionRead: section.map { progress.isPieceRead($0.end - 1, of: reader.materialID, current: reader.state.place) } ?? false
                     )
                     .equatable()
-                    .modifier(PinchFold(index: index, folding: foldParents.keys.contains(index), parent: foldParents[index] ?? nil))
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.column)) } action: { pinch.frames[index] = $0 }
+                    .padding(.bottom, Tokens.gap)
+                    .modifier(PinchFold(role: leaving.contains(index) ? .leaves : arriving.contains(index) ? .arrives : .stays))
                     .id(index)
-                    .transition(.fold(index, into: foldParents[index] ?? nil))
                 }
             }
-            .coordinateSpace(.named(Self.column))
             .scrollTargetLayout()
             .padding(.horizontal, Tokens.gutter)
             .padding(.bottom, 80)
         }
-        .swipeActionsContainer()
         .scrollPosition(Bindable(reader).position, anchor: .top)
         // The place is read off the rows the person sees, never through the position that moves the column:
         // a position written back on each step made the column pull the next block to its top while scrolling up.
@@ -123,7 +122,7 @@ struct ReadingSession: View {
             if let top = shown.min() { reader.send(.scrolled(top)) }
         }
         // The column is laid out unseen at the top and shows only once it stands where it opens, so the jump there is never seen.
-        .animation(.easeOut(duration: 0.3)) { $0.opacity(reader.state.opening == nil ? 1 : 0) }
+        .animation(.easeOut(duration: 0.3)) { $0.opacity(reader.state.hidesColumn ? 0 : 1) }
         // After the first layout, when the lazy column knows its rows and can go to one far down.
         .task {
             await Task.yield()
@@ -132,15 +131,38 @@ struct ReadingSession: View {
         .simultaneousGesture(
             MagnifyGesture()
                 .updating($pinching) { _, state, _ in state = true }
-                .onChanged { pinch.value = $0.magnification }
-                .onEnded { reader.send(.pinched($0.magnification)) }
+                .onChanged { fingers in
+                    pinch.value = fingers.magnification
+                    if fingers.magnification > 1.03 { pinch.spreading = true }
+                }
+                .onEnded { settle($0.magnification) }
         )
         .onChange(of: pinching) { _, now in
-            if !now { pinch.value = 1 }
+            if !now, !pinch.settling { settle(1) }
         }
         .environment(pinch)
         .environment(reader)
         .toolbar { selectionToolbar }
+    }
+
+    /// Fingers let go: the blocks finish closing or opening, or go back if the pinch did not reach a fold, and only
+    /// then does the fold change, so nothing jumps.
+    private func settle(_ scale: CGFloat) {
+        let folds = readingFoldPinched(reader.state.fold, scale: Double(scale), blocks: reader.document.blocks) != reader.state.fold
+        pinch.settling = true
+        let end = !folds ? 1 : scale < 1 ? 1 - PinchScale.span : 1 + PinchScale.span
+        withAnimation(.smooth(duration: 0.3)) {
+            pinch.value = end
+        } completion: {
+            var still = Transaction()
+            still.disablesAnimations = true
+            withTransaction(still) {
+                if folds { reader.send(.pinched(scale)) }
+                pinch.value = 1
+                pinch.spreading = false
+                pinch.settling = false
+            }
+        }
     }
 
     @ToolbarContentBuilder

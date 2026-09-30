@@ -39,23 +39,34 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var starts: (CGFloat) -> Bool = { _ in true }
+        private static let backEdge: CGFloat = 24
 
+        /// A formula that scrolls sideways keeps the finger for itself, and so does the screen's left edge, where a
+        /// rightward pan is the navigation stack's swipe back.
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
-            let velocity = pan.velocity(in: pan.view)
-            return abs(velocity.x) > abs(velocity.y) * 1.5 && starts(velocity.x)
+            guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
+            let velocity = pan.velocity(in: view)
+            guard abs(velocity.x) > abs(velocity.y) * 1.5, starts(velocity.x) else { return false }
+            if velocity.x > 0, pan.location(in: view.window).x < Self.backEdge { return false }
+            var touched = view.hitTest(pan.location(in: view), with: nil)
+            while let current = touched, current !== view {
+                if let scroll = current as? UIScrollView, scroll.contentSize.width > scroll.bounds.width + 1 { return false }
+                touched = current.superview
+            }
+            return true
         }
 
-        /// The system's swipe actions watch the same plate; they have nothing on the side this pan takes, so both may run.
-        /// Only the page's own scrolling stays exclusive.
+        /// Taps, presses and the pinch run alongside; anything a scroll view owns, the page's scrolling, does not.
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
             !(other.view is UIScrollView)
         }
 
-        /// Another sideways pan on the plate, the system's swipe among them, starts only once this one has declined,
-        /// so the plate never moves under two gestures at once. Scrolling, taps and presses do not wait.
+        /// Every other sideways pan waits until this one declines, the navigation stack's swipe back among them, so
+        /// a finger that moves a plate never also leaves the screen. Only scrolling itself does not wait.
         func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            other is UIPanGestureRecognizer && !(other.view is UIScrollView)
+            guard other is UIPanGestureRecognizer else { return false }
+            guard let scroll = other.view as? UIScrollView else { return true }
+            return other !== scroll.panGestureRecognizer
         }
     }
 }

@@ -15,31 +15,9 @@ struct ItemScreen: View {
                 ContentUnavailableView("This material is no longer in the library", systemImage: "questionmark.folder")
             }
         }
-        .background(HidesTabBarWhenPushed())
+        // The reader needs no tabs: the bar leaves with the screen below as this one is pushed and returns on the way back.
+        .toolbarVisibility(.hidden, for: .tabBar)
         .task { library.apply(.open(itemID: itemID)) }
-    }
-}
-
-/// The tab bar leaves with the screen below as the reader slides in, and comes back with it on the way back, as
-/// UIKit does for a pushed screen. SwiftUI's `.toolbar(.hidden, for: .tabBar)` drops it at once and brings it
-/// back only after the pop has ended. The flag is set on the screen the navigation stack pushes, which UIKit
-/// reads while it loads that screen, before the slide begins.
-private struct HidesTabBarWhenPushed: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> Marker { Marker() }
-    func updateUIViewController(_: Marker, context: Context) {}
-
-    final class Marker: UIViewController {
-        override func willMove(toParent parent: UIViewController?) {
-            super.willMove(toParent: parent)
-            var screen = parent
-            while let current = screen, let above = current.parent {
-                if above is UINavigationController {
-                    current.hidesBottomBarWhenPushed = true
-                    return
-                }
-                screen = above
-            }
-        }
     }
 }
 

@@ -68,12 +68,12 @@ extension LibrarySnapshot {
         allItems.first { $0.id == id }
     }
 
-    public func continueItems(_ progress: ReadingProgress, limit: Int = 4) -> [LibraryItem] {
+    public func continueItems(_ progress: ReadingProgress) -> [LibraryItem] {
         let opened = items.compactMap { item -> (LibraryItem, Date)? in
             guard let reading = progress.readings[item.id], !reading.isRead, let date = reading.openedAt else { return nil }
             return (item, date)
         }
-        return opened.sorted { $0.1 > $1.1 }.prefix(limit).map(\.0)
+        return opened.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
     public var unsortedItems: [LibraryItem] {

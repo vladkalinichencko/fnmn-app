@@ -9,7 +9,6 @@ struct VideoReaderView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ServerLink.self) private var server
     @Environment(ImportJobs.self) private var imports
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     let video: VideoCoordinator
     /// The saved video file once it is on this device.
@@ -29,18 +28,25 @@ struct VideoReaderView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let sideBySide = horizontalSizeClass == .regular && geometry.size.width > geometry.size.height
+            let sideBySide = geometry.size.width > geometry.size.height
             let showsCaptions = video.state.showsCaptions
             Group {
                 if sideBySide {
-                    HStack(alignment: .top, spacing: 0) {
-                        player.frame(maxWidth: showsCaptions ? geometry.size.width * 0.58 : .infinity, maxHeight: .infinity)
+                    HStack(spacing: 0) {
+                        stage
+                            .padding(Tokens.gutter)
+                            .frame(width: showsCaptions ? geometry.size.width * 0.58 : geometry.size.width, height: geometry.size.height)
                         if showsCaptions { captions.frame(width: geometry.size.width * 0.42, height: geometry.size.height) }
                     }
                 } else {
-                    VStack(spacing: 0) {
-                        player
-                        if showsCaptions { captions }
+                    // The transcript runs under the plate, which floats over it as glass.
+                    Group {
+                        if showsCaptions { captions } else { Color.clear }
+                    }
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        stage
+                            .padding(.horizontal, Tokens.gutter)
+                            .padding(.bottom, Tokens.gap)
                     }
                 }
             }
@@ -81,6 +87,24 @@ struct VideoReaderView: View {
             }
         }
         OpenOriginalButton(itemID: materialID, page: package.material.sourceURL)
+    }
+
+    /// The video inside a glass plate: the picture, or a spinner on the glass until it appears, with a refusal below it.
+    private var stage: some View {
+        VStack(spacing: Tokens.captionInset) {
+            player
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .clipShape(.rect(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: Tokens.captionInset), style: .continuous))
+            if case let .failed(message) = embedState, library.originalFile(materialID) == nil {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Tokens.captionInset)
+                    .padding(.bottom, Tokens.captionInset)
+            }
+        }
+        .padding(Tokens.captionInset)
+        .plate(cornerRadius: Tokens.plateRadius)
     }
 
     @ViewBuilder
@@ -129,18 +153,12 @@ struct VideoReaderView: View {
                     VideoPlaceholder { ProgressView() }
                 case .ready:
                     EmptyView()
-                case let .failed(message):
-                    VStack(spacing: 0) {
-                        VideoPlaceholder {
-                            Image(systemName: "play.fill").font(.largeTitle).foregroundStyle(.tertiary)
-                        }
-                        Text(message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                case .failed:
+                    VideoPlaceholder {
+                        Image(systemName: "play.fill").font(.largeTitle).foregroundStyle(.tertiary)
                     }
                 }
             }
-            .frame(maxWidth: .infinity)
         }
     }
 
@@ -172,6 +190,17 @@ struct VideoReaderView: View {
                             Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = cue.text }
                         }
                         .id(cue.id)
+                    }
+                }
+                .backgroundPreferenceValue(CurrentCueBounds.self) { bounds in
+                    GeometryReader { proxy in
+                        if let bounds {
+                            let frame = proxy[bounds]
+                            Color.clear
+                                .plate(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: 8))
+                                .frame(width: frame.width, height: frame.height)
+                                .offset(x: frame.minX, y: frame.minY)
+                        }
                     }
                 }
                 .scrollTargetLayout()
@@ -210,26 +239,28 @@ private struct CueRow: View {
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
-        .background {
-            if state == .current {
-                Color.clear.plate(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: 8))
-            }
-        }
+        .anchorPreference(key: CurrentCueBounds.self, value: .bounds) { state == .current ? $0 : nil }
         .contentShape(.rect)
     }
 }
 
-/// Where the video will be: a gray frame of the video's shape, holding a spinner or a play symbol.
+/// Where the line being spoken is, so one plate can slide from line to line instead of one appearing and one vanishing.
+private struct CurrentCueBounds: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
+/// Where the video will be: the plate's glass in the video's shape, holding a spinner or a play symbol.
 private struct VideoPlaceholder<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        RoundedRectangle(cornerRadius: Tokens.plateRadius, style: .continuous)
-            .fill(.quaternary)
+        Color.clear
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay(content: content)
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.vertical, Tokens.gap)
     }
 }
 

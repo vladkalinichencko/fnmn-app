@@ -30,7 +30,7 @@ import Testing
     #expect(visiblePieceIndexes(in: pieces, fold: opened).count == pieces.count)
 }
 
-@Test func eachPinchFoldsBlocksIntoTheNearestBlockAboveThatStays() {
+@Test func eachPinchTakesTheBlocksOfTheDeepestLevelOffThePageAndTheNextPinchOutBringsThemBack() {
     let pieces = ArticleBody.blocks(in: """
     Before any heading.
 
@@ -42,10 +42,22 @@ import Testing
 
     Another paragraph.
     """)
-    #expect(readingFoldParents(.open, blocks: pieces) == [0: nil, 2: 1, 4: 3])
+    #expect(readingFoldLeaving(.open, blocks: pieces) == [0, 2, 4])
     let once = readingFoldPinchIn(.open, blocks: pieces)
-    #expect(readingFoldParents(once, blocks: pieces) == [3: 1])
-    #expect(readingFoldParents(readingFoldPinchIn(once, blocks: pieces), blocks: pieces).isEmpty)
+    #expect(readingFoldLeaving(once, blocks: pieces) == [3])
+    let twice = readingFoldPinchIn(once, blocks: pieces)
+    #expect(readingFoldLeaving(twice, blocks: pieces).isEmpty)
+    #expect(readingFoldArriving(twice, blocks: pieces) == [3])
+    #expect(readingFoldArriving(once, blocks: pieces) == [0, 2, 4])
+    #expect(readingFoldArriving(.open, blocks: pieces).isEmpty)
+}
+
+@Test func aPinchLetGoNearTheStartChangesNothing() {
+    let pieces = ArticleBody.blocks(in: "# One\n\nText.\n\n## Two\n\nMore.")
+    #expect(readingFoldPinched(.open, scale: 0.95, blocks: pieces) == .open)
+    #expect(readingFoldPinched(.open, scale: 0.8, blocks: pieces) == readingFoldPinchIn(.open, blocks: pieces))
+    let folded = readingFoldPinchIn(.open, blocks: pieces)
+    #expect(readingFoldPinched(folded, scale: 1.2, blocks: pieces) == readingFoldPinchOut(folded, blocks: pieces))
 }
 
 @Test func pinchOnAPageWithoutHeadingsStaysOpen() {

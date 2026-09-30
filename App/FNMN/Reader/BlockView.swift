@@ -45,44 +45,48 @@ struct BlockView: View, Equatable {
     }
 }
 
-/// While fingers pinch in, the blocks the pinch will fold away, paragraphs or headings, begin to rise into
-/// the block they fold into, as far as the fingers have gone.
+/// What a pinch does to a block: stays as it is, leaves the page (pinching in) or arrives on it (pinching out).
+enum PinchRole {
+    case stays, leaves, arrives
+}
+
+/// A block that leaves closes up and fades as the fingers come together; one that arrives opens and fades in as they
+/// spread. The same effect serves every fold level, and the column below follows the fingers because the block's
+/// height is what changes.
 struct PinchFold: ViewModifier {
-    let index: Int
-    /// Whether the next pinch in folds this block away, and the block above it that stays, which it folds into.
-    let folding: Bool
-    let parent: Int?
+    let role: PinchRole
     @Environment(PinchScale.self) private var pinch
 
     func body(content: Content) -> some View {
-        let amount = folding ? min(max(1 - pinch.value, 0), 0.6) / 0.6 * 0.5 : 0
-        content.modifier(FoldIntoHeading(index: index, parent: parent, amount: amount))
+        // Only the blocks the pinch moves read the pinch, so a frame of it does not touch the rest.
+        let presence: CGFloat = switch role {
+        case .stays: 1
+        case .leaves: 1 - pinch.leaving
+        case .arrives: pinch.arriving
+        }
+        Reveal(presence: presence) { content.opacity(presence) }
+            // Exact while the block is closing; roomy at rest, so nothing it draws past its frame is cut.
+            .clipShape(Rectangle().inset(by: presence < 1 ? 0 : -120))
     }
 }
 
-/// A block folding into the one above it that stays: it rises toward that block's lower edge, flattening and
-/// fading as it goes, so a whole section gathers under its heading. At 1 it is folded away; the same effect
-/// carries the fold's transition and the pinch that leads to it.
-struct FoldIntoHeading: ViewModifier {
-    let index: Int
-    let parent: Int?
-    let amount: Double
-    @Environment(PinchScale.self) private var pinch
+/// Lays its one child out at full size and reports only `presence` of its height.
+private struct Reveal: Layout {
+    var presence: CGFloat
 
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(x: 1 - 0.06 * amount, y: 1 - 0.4 * amount, anchor: .top)
-            .offset(y: -pinch.rise(of: index, into: parent) * amount)
-            .opacity(1 - amount)
+    var animatableData: CGFloat {
+        get { presence }
+        set { presence = newValue }
     }
-}
 
-extension AnyTransition {
-    static func fold(_ index: Int, into parent: Int?) -> AnyTransition {
-        .modifier(
-            active: FoldIntoHeading(index: index, parent: parent, amount: 1),
-            identity: FoldIntoHeading(index: index, parent: parent, amount: 0)
-        )
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let size = child.sizeThatFits(proposal)
+        return CGSize(width: size.width, height: size.height * presence)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: nil))
     }
 }
 
@@ -152,7 +156,8 @@ struct LeadImage: View {
 }
 
 /// A paragraph, list, quote, table or code block on its own rounded plate.
-/// Dragging it left uncovers its margin note, which lies under the plate all along; the system's leading swipe marks "read to here".
+/// Dragging it left uncovers its margin note, which lies under the plate all along; dragging it right far enough
+/// marks "read to here", with a tap of feedback where the mark takes hold.
 struct PlateView: View {
     @Environment(ReaderCoordinator.self) private var reader
     let markdown: String
@@ -174,13 +179,18 @@ struct PlateView: View {
     /// The mode alone says where the plate rests, aside exactly while its note is open; the finger only adds to it.
     private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
     private static let slide = Animation.spring(duration: 0.35, bounce: 0.2)
+    /// How far the plate is pulled right before letting go marks "read to here".
+    private static let commit: CGFloat = 96
+    /// The gap between the plate and the mark's button as the plate is pulled.
+    private static let pullGap: CGFloat = 8
 
     /// The note lies under the glass plate, blurred by it, and the plate slides off it; touches on the uncovered note
-    /// reach the note. The system's swipe moves the two together. The note is editable only while the plate stands
-    /// aside: an editor is a UIKit view, which draws over SwiftUI's own drawing, so under a moving plate it would
-    /// show on top of the glass.
+    /// reach the note. The note is editable only while the plate stands aside: an editor is a UIKit view, which
+    /// draws over SwiftUI's own drawing, so under a moving plate it would show on top of the glass. Pulled right,
+    /// the plate uncovers the "read to here" button instead.
     var body: some View {
         ZStack(alignment: .trailing) {
+            readButton
             MarginNote(saved: paragraphNote, active: noting && drag == 0, save: saveNote) { noteHeight = $0 }
                 .frame(width: max(noteWidth - Tokens.gap, 0), height: size.height)
                 // At rest the note's corners would show past the plate's rounded ones.
@@ -189,29 +199,52 @@ struct PlateView: View {
             plate
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
                 .offset(x: offset)
-                // Leftward opens the note while reading, rightward closes it; every other swipe is the system's.
-                .gesture(HorizontalPan(starts: { noting ? $0 > 0 : mode == .reading && $0 < 0 }, changed: dragged, ended: released))
+                // Leftward opens the note while reading and rightward closes it; rightward while reading pulls
+                // out the "read to here" button.
+                .gesture(HorizontalPan(starts: { noting ? $0 > 0 : mode == .reading }, changed: dragged, ended: released))
         }
         .animation(Self.slide, value: noting)
-        .swipeActions(edge: .leading) {
-            if mode == .reading {
-                Button(markedReadThrough ? "Unmark" : "Read to Here", systemImage: markedReadThrough ? "arrow.uturn.backward" : "checkmark") {
-                    reader.send(.readThrough(markedReadThrough ? nil : index))
-                }
-                .tint(.accentColor)
+    }
+
+    /// The button the plate uncovers as it is pulled right, as wide as the pull; it takes hold, with a tap of
+    /// feedback, once the plate has gone far enough for letting go to mark.
+    private var readButton: some View {
+        let pull = max(offset, 0)
+        let label = markedReadThrough ? "Unmark" : "Read to Here"
+        return Color.accentColor
+            .overlay(alignment: .leading) {
+                Label(label, systemImage: markedReadThrough ? "arrow.uturn.backward" : "checkmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize()
+                    .padding(.leading, 20)
+                    .opacity(min(pull / 60, 1))
+                    .scaleEffect(pull >= Self.commit ? 1.06 : 1, anchor: .leading)
+                    .animation(.snappy, value: pull >= Self.commit)
             }
+            .frame(width: max(pull - Self.pullGap, 0), height: size.height)
+            .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(pull > 0 ? 1 : 0)
+            .allowsHitTesting(false)
+            .sensoryFeedback(.impact(weight: .medium), trigger: pull >= Self.commit) { _, taken in taken }
+    }
+
+    /// The plate follows the finger: left up to a little past the note's edge, right with growing resistance once the
+    /// mark would take hold, and back toward the note's side while it is open, never past where it rests.
+    private func dragged(_ translation: CGFloat) {
+        if noting {
+            drag = min(max(translation, 0), noteWidth)
+        } else if translation < 0 {
+            drag = max(translation, -noteWidth - 20)
+        } else {
+            drag = translation < Self.commit ? translation : Self.commit + (translation - Self.commit) * 0.35
         }
     }
 
-    /// The plate follows the finger toward the other side, a little past the note's edge when opening, and never
-    /// back past where it rests.
-    private func dragged(_ translation: CGFloat) {
-        drag = noting ? min(max(translation, 0), noteWidth) : max(min(translation, 0), -noteWidth - 20)
-    }
-
-    /// The plate changes sides only when it has gone, or is thrown, past half the note's width; otherwise it goes
-    /// back to where the mode keeps it. The drag and the mode change in one animation, so the plate goes straight
-    /// from under the finger to its place.
+    /// The plate changes sides only when it has gone, or is thrown, past half the note's width, and marks only past
+    /// the pull; otherwise it goes back to where the mode keeps it. The drag and the mode change in one animation,
+    /// so the plate goes straight from under the finger to its place.
     private func released(_ translation: CGFloat, _ velocity: CGFloat) {
         let thrown = translation + velocity * 0.2
         withAnimation(Self.slide) {
@@ -220,6 +253,8 @@ struct PlateView: View {
                 reader.send(.plate(.done))
             } else if !noting, thrown < -noteWidth / 2 {
                 reader.send(.plate(.note(index)))
+            } else if !noting, thrown > Self.commit {
+                reader.send(.readThrough(markedReadThrough ? nil : index))
             }
         }
     }
@@ -235,6 +270,14 @@ struct PlateView: View {
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .plate(cornerRadius: Tokens.plateRadius)
+            .overlay {
+                // Over the text, which would otherwise take the touch: the whole plate is the button.
+                if isTicking {
+                    Color.clear
+                        .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+                        .onTapGesture { reader.send(.plate(.toggle(index))) }
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if let tick { tick } else { noteMark }
             }
@@ -242,7 +285,6 @@ struct PlateView: View {
             .animation(.easeInOut(duration: 0.4), value: read)
             // The menu lifts the plate by this shape too; by the frame it would lift the square corners around the glass.
             .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-            .gesture(TapGesture().onEnded { reader.send(.plate(.toggle(index))) }, isEnabled: isTicking)
             .gesture(TapGesture().onEnded { reader.send(.plate(.done)) }, isEnabled: noting)
             .contextMenu { if mode == .reading { menu } }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
@@ -295,6 +337,7 @@ struct PlateView: View {
                 .font(.title3)
                 .foregroundStyle(picked.contains(index) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .padding(10)
+                .allowsHitTesting(false)
         )
     }
 

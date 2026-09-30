@@ -184,8 +184,9 @@ private struct AnnotationCard: View {
         return String(cut[..<(cut.lastIndex(of: " ") ?? cut.endIndex)]) + "…"
     }
 
-    /// The note has no frame: a thick blur keeps it readable over the quote. The blur is drawn well past the
-    /// text, so its soft edge has faded out completely before the drawing ends and no rectangle shows.
+    /// The note has no frame: a blur toned to the page color keeps it readable over the quote and disappears into
+    /// the page beside it. The blur is drawn well past the text, so its soft edge has faded out completely before
+    /// the drawing ends and no rectangle shows.
     private var note: some View {
         Text(annotation.note)
             .font(.callout.weight(.semibold))
@@ -194,6 +195,7 @@ private struct AnnotationCard: View {
             .background {
                 Rectangle()
                     .fill(.thickMaterial)
+                    .overlay(Tokens.canvas.opacity(0.85))
                     .mask { RoundedRectangle(cornerRadius: Tokens.plateRadius, style: .continuous).padding(30).blur(radius: 12) }
                     .padding(-24)
             }

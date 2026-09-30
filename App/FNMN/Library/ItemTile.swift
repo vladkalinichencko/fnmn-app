@@ -157,6 +157,7 @@ struct ItemActions: View {
             let isRead = library.progress.readings[item.id]?.isRead ?? false
             Button(isRead ? "Mark as Unread" : "Mark as Read", systemImage: isRead ? "circle" : "checkmark.circle") {
                 library.apply(.setRead(!isRead, itemID: item.id))
+                Task { await library.apply(.setArchived(!isRead, itemID: item.id)) }
             }
         }
         if let url = item.originalURL {

@@ -15,6 +15,9 @@ struct ReaderState: Equatable {
     /// The block the column goes to once it is laid out. A lazy column drops a position given before its rows
     /// exist and opens at the top, so the jump waits for `.opened`, and until then the top is not taken as the place.
     var opening: Int?
+    /// The column stays unseen until it has gone to `opening`: at the first opening and when a heading opens the text,
+    /// where the jump would show. A pinch that has already played out shows the column as it is.
+    var hidesColumn = false
 }
 
 enum ReaderAction {
@@ -42,6 +45,7 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
     case .opened:
         guard let opening = state.opening else { return state }
         state.opening = nil
+        state.hidesColumn = false
         state.scrollID = opening
     case let .scrolled(index):
         guard state.opening == nil else { return state }
@@ -52,16 +56,15 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
     case let .plate(action):
         state.mode = plateReduce(state.mode, action)
     case let .pinched(scale):
-        let next = scale < 0.9 ? readingFoldPinchIn(state.fold, blocks: document.blocks)
-            : scale > 1.1 ? readingFoldPinchOut(state.fold, blocks: document.blocks)
-            : state.fold
+        let next = readingFoldPinched(state.fold, scale: Double(scale), blocks: document.blocks)
         guard next != state.fold else { return state }
         state.fold = next
-        state.scrollID = readingPlaceTarget(place: state.place, visible: visiblePieceIndexes(in: document.blocks, fold: next)) ?? state.scrollID
+        state.opening = readingPlaceTarget(place: state.place, visible: visiblePieceIndexes(in: document.blocks, fold: next))
     case let .openSection(index):
         guard state.fold != .open else { return state }
         state.fold = .open
-        state.scrollID = index
+        state.opening = index
+        state.hidesColumn = true
     case .mark, .note, .readThrough, .ask, .copyPrompt:
         break
     }
@@ -95,6 +98,7 @@ final class ReaderCoordinator {
         state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library
         state.opening = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
+        state.hidesColumn = state.opening != nil
     }
 
     func send(_ action: ReaderAction) {
@@ -106,8 +110,14 @@ final class ReaderCoordinator {
     }
 
     /// The blocks the fold leaves on the page, without the title the header already shows and the cover above it.
-    var visible: [Int] {
-        visiblePieceIndexes(in: document.blocks, fold: state.fold).filter { $0 != document.repeatedTitle && $0 != document.lead }
+    var visible: [Int] { shown(in: state.fold) }
+
+    /// The column while fingers spread: the blocks the next fold out brings back are in it already, so they can
+    /// open under the fingers.
+    var visibleWhileSpreading: [Int] { shown(in: readingFoldPinchOut(state.fold, blocks: document.blocks)) }
+
+    private func shown(in fold: ReadingFold) -> [Int] {
+        visiblePieceIndexes(in: document.blocks, fold: fold).filter { $0 != document.repeatedTitle && $0 != document.lead }
     }
 
     func current(in visible: [Int]) -> Int? {
@@ -125,8 +135,7 @@ final class ReaderCoordinator {
     private func animation(for action: ReaderAction) -> Animation? {
         switch action {
         case .plate: .snappy
-        case .pinched, .openSection: .spring(duration: 0.45, bounce: 0.15)
-        case .opened, .scrolled, .mark, .note, .readThrough, .ask, .copyPrompt: nil
+        case .opened, .scrolled, .pinched, .openSection, .mark, .note, .readThrough, .ask, .copyPrompt: nil
         }
     }
 
@@ -134,8 +143,7 @@ final class ReaderCoordinator {
         switch action {
         case .scrolled:
             guard let place = next.place, place != before.place else { return }
-            let total = document.blocks.count
-            library.apply(.savePosition(.piece(place), itemID: materialID, progress: Double(place + 1) / Double(total)))
+            savePlace(place)
         case let .mark(command, target):
             let change: LibraryChange = switch command {
             case let .mark(mark): .mark(mark, target)
@@ -146,15 +154,31 @@ final class ReaderCoordinator {
             Task { await library.apply(.note(text, target)) }
         case let .readThrough(piece):
             library.apply(.readThrough(piece: piece, itemID: materialID))
+            savePlace(next.place)
         case let .ask(passage):
             ChatGPTHandoff.copyAndOpen(title: title, passage: passage)
         case let .copyPrompt(passage):
             _ = ChatGPTHandoff.remember(title: title, passage: passage)
-        case .opened, .pinched, .openSection:
+        case .opened:
             guard next != before, let target = next.scrollID else { return }
-            withAnimation(animation(for: action)) { position.scrollTo(id: target, anchor: .top) }
+            position.scrollTo(id: target, anchor: .top)
+        case .pinched, .openSection:
+            // The rows of the new fold are not laid out yet; the column goes to its place once they are.
+            guard next.opening != nil else { return }
+            Task {
+                await Task.yield()
+                send(.opened)
+            }
         case .plate:
             break
         }
+    }
+
+    /// The share read follows the plates shown as read: those above the place and those up to the
+    /// "read through here" mark, whichever reaches further.
+    private func savePlace(_ place: Int?) {
+        let read = [place, library.progress.readThrough[materialID]].compactMap { $0 }.max() ?? -1
+        let position = place.map(ReadingPosition.piece) ?? library.position(of: materialID) ?? .piece(0)
+        library.apply(.savePosition(position, itemID: materialID, progress: Double(read + 1) / Double(document.blocks.count)))
     }
 }

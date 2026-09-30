@@ -40,20 +40,23 @@ public func visiblePieceIndexes(in blocks: [DocumentBlock], fold: ReadingFold) -
     }
 }
 
-/// The blocks the next pinch in folds away, each with the block it folds into: the nearest one above it that
-/// stays on the page, nil when nothing above stays.
-public func readingFoldParents(_ fold: ReadingFold, blocks: [DocumentBlock]) -> [Int: Int?] {
-    let staying = Set(visiblePieceIndexes(in: blocks, fold: readingFoldPinchIn(fold, blocks: blocks)))
-    var parents: [Int: Int?] = [:]
-    var parent: Int?
-    for index in visiblePieceIndexes(in: blocks, fold: fold) {
-        if staying.contains(index) {
-            parent = index
-        } else {
-            parents[index] = parent
-        }
-    }
-    return parents
+/// The blocks the next pinch in takes off the page.
+public func readingFoldLeaving(_ fold: ReadingFold, blocks: [DocumentBlock]) -> Set<Int> {
+    Set(visiblePieceIndexes(in: blocks, fold: fold))
+        .subtracting(visiblePieceIndexes(in: blocks, fold: readingFoldPinchIn(fold, blocks: blocks)))
+}
+
+/// The blocks the next pinch out brings back onto the page.
+public func readingFoldArriving(_ fold: ReadingFold, blocks: [DocumentBlock]) -> Set<Int> {
+    Set(visiblePieceIndexes(in: blocks, fold: readingFoldPinchOut(fold, blocks: blocks)))
+        .subtracting(visiblePieceIndexes(in: blocks, fold: fold))
+}
+
+/// The fold two fingers leave when they let go at this scale: a step in below 0.9, a step out above 1.1.
+public func readingFoldPinched(_ fold: ReadingFold, scale: Double, blocks: [DocumentBlock]) -> ReadingFold {
+    if scale < 0.9 { return readingFoldPinchIn(fold, blocks: blocks) }
+    if scale > 1.1 { return readingFoldPinchOut(fold, blocks: blocks) }
+    return fold
 }
 
 public func readingPlaceTarget(place: Int?, visible: [Int]) -> Int? {
