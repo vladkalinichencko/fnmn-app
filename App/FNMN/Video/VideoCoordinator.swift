@@ -43,6 +43,16 @@ enum VideoAction {
     case left
 }
 
+private extension VideoAction {
+    /// The video reached another line, or a line was tapped.
+    var movesTheLine: Bool {
+        switch self {
+        case .played, .jumped: true
+        default: false
+        }
+    }
+}
+
 /// Pure: the next screen state for an action, given the transcript's lines in time order.
 func videoReduce(_ state: VideoState, _ action: VideoAction, cues: [VideoCue]) -> VideoState {
     var state = state
@@ -120,9 +130,19 @@ final class VideoCoordinator {
 
     func send(_ action: VideoAction) {
         let next = videoReduce(state, action, cues: cues)
-        if next != state { state = next }
+        if next != state {
+            if action.movesTheLine {
+                // The plate, the line colors and the scroll to the line all move in one animation, so the plate
+                // glides with the transcript instead of the transcript jumping under a plate that slides alone.
+                withAnimation(Self.follow) { state = next }
+            } else {
+                state = next
+            }
+        }
         perform(action)
     }
+
+    private static let follow = Animation.snappy(duration: 0.3)
 
     func binding<Value>(_ value: KeyPath<VideoState, Value>, send action: @escaping (Value) -> VideoAction) -> Binding<Value> {
         Binding(get: { self.state[keyPath: value] }, set: { self.send(action($0)) })

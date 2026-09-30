@@ -200,13 +200,13 @@ struct VideoReaderView: View {
                                 .plate(cornerRadius: Tokens.concentric(Tokens.plateRadius, inset: 8))
                                 .frame(width: frame.width, height: frame.height)
                                 .offset(x: frame.minX, y: frame.minY)
+                                .transition(.opacity)
                         }
                     }
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, Tokens.gutter)
                 .padding(.vertical, Tokens.gap)
-                .animation(.snappy, value: active)
             }
             .background(Tokens.canvas)
             .scrollPosition(id: video.binding(\.pinnedCue, send: VideoAction.pinned), anchor: .center)
