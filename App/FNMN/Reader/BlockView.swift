@@ -179,12 +179,16 @@ struct PlateView: View {
         drag = noting ? max(translation, 0) : max(min(translation, 0), -noteWidth - 20)
     }
 
+    /// The drag and the mode change in one animation, so the plate goes straight from under the finger to where
+    /// the mode puts it instead of springing back to its place and out again.
     private func released(_ translation: CGFloat, _ velocity: CGFloat) {
-        withAnimation(.spring(duration: 0.35, bounce: 0.2)) { drag = 0 }
-        if noting {
-            if translation > 60 || velocity > 500 { reader.send(.plate(.done)) }
-        } else if translation < -60 || velocity < -500 {
-            reader.send(.plate(.note(index)))
+        withAnimation(.spring(duration: 0.35, bounce: 0.2)) {
+            drag = 0
+            if noting {
+                if translation > 60 || velocity > 500 { reader.send(.plate(.done)) }
+            } else if translation < -60 || velocity < -500 {
+                reader.send(.plate(.note(index)))
+            }
         }
     }
 

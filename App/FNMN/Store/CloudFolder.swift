@@ -76,7 +76,11 @@ enum CloudFolder {
         file.deletingLastPathComponent().appending(path: ".\(file.lastPathComponent).icloud")
     }
 
+    /// A URL keeps the values it read until the run loop turns, and a check off the main thread has no run loop,
+    /// so each check reads them afresh; otherwise a file that has since downloaded would stay missing.
     private static func isLocal(_ url: URL) -> Bool {
+        var url = url
+        url.removeAllCachedResourceValues()
         let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
         guard values?.isUbiquitousItem == true else { return FileManager.default.fileExists(atPath: url.path) }
         return values?.ubiquitousItemDownloadingStatus == .current

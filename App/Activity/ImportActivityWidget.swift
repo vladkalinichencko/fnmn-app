@@ -2,41 +2,80 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
+/// One row, the way a system activity reads: an icon, the title over the stage, and under them a thin bar once
+/// the share done is known. A widget never animates, so a stage with no share shows no spinner at all.
 struct ImportActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ImportActivityAttributes.self) { context in
-            VStack(alignment: .leading) {
-                Text(context.attributes.title)
-                Text(context.state.status)
-                ImportProgress(fraction: context.state.fraction)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.down.doc")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.attributes.title)
+                            .font(.headline)
+                        Text(context.state.status)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Ring(fraction: context.state.fraction)
+                        .frame(width: 28, height: 28)
+                }
+                if let fraction = context.state.fraction {
+                    ProgressView(value: fraction)
+                }
             }
-            .padding()
+            .padding(16)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(context.state.status)
-                    ImportProgress(fraction: context.state.fraction)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(context.state.status)
+                            .font(.subheadline)
+                            .lineLimit(1)
+                        if let fraction = context.state.fraction {
+                            ProgressView(value: fraction)
+                        }
+                    }
                 }
             } compactLeading: {
                 Image(systemName: "arrow.down.doc")
             } compactTrailing: {
-                ImportProgress(fraction: context.state.fraction)
+                ShareDone(fraction: context.state.fraction)
             } minimal: {
-                ImportProgress(fraction: context.state.fraction)
+                ShareDone(fraction: context.state.fraction)
             }
         }
     }
 }
 
-private struct ImportProgress: View {
+/// A small ring in the Dynamic Island, the size of the icon beside it.
+private struct ShareDone: View {
     let fraction: Double?
 
     var body: some View {
-        if let fraction {
-            ProgressView(value: fraction)
-        } else {
-            ProgressView()
+        Ring(fraction: fraction)
+            .frame(width: 18, height: 18)
+    }
+}
+
+/// The share done as a ring that fills; empty while the share is unknown. It takes exactly the frame it is given.
+private struct Ring: View {
+    let fraction: Double?
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(.secondary.opacity(0.3), lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: fraction ?? 0)
+                .stroke(.tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
         }
+        .padding(1.5)
     }
 }
 
