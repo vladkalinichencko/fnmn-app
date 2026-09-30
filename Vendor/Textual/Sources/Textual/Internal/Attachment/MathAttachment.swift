@@ -32,13 +32,23 @@ struct MathAttachment: Attachment {
     MathView(latex: latex, style: displayStyle)
   }
 
+  /// SwiftUI lowers an inline picture by its descent but still counts its whole height above the baseline, so
+  /// the line grows by the descent on top. A block has a line to itself and stands on the baseline, since a
+  /// formula centered on the math axis, such as a table of aligned rows, has half its height as descent.
   func baselineOffset(in environment: TextEnvironmentValues) -> CGFloat {
-    -typographicBounds(in: environment).descent
+    switch displayStyle {
+    case .inline:
+      return -typographicBounds(in: environment).descent
+    case .block:
+      return 0
+    }
   }
 
-  /// A display formula keeps one line at its own width; its block scrolls sideways when it is wider than the page.
+  /// A formula keeps one line at its own width, so its size never depends on the width the text is laid out at:
+  /// a size that changed after the first layout changed the row's height once the row was on screen, and a lazy
+  /// column scrolling up moved everything under it. A block scrolls sideways when it is wider than the page.
   func sizeThatFits(_ proposal: ProposedViewSize, in environment: TextEnvironmentValues) -> CGSize {
-    typographicBounds(fitting: displayStyle == .block ? .unspecified : proposal, in: environment).size
+    typographicBounds(in: environment).size
   }
 
   private func typographicBounds(

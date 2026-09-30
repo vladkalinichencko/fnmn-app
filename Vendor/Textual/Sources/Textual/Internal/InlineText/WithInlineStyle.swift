@@ -19,7 +19,7 @@ struct WithInlineStyle<Content: View>: View {
   @Environment(\.inlineStyle) private var style
   @Environment(\.textEnvironment) private var environment
 
-  @State private var output: AttributedString?
+  @State private var resolved = Resolved()
 
   private let input: AttributedString
   private let content: (AttributedString) -> Content
@@ -33,21 +33,34 @@ struct WithInlineStyle<Content: View>: View {
   }
 
   var body: some View {
-    content(output ?? AttributedString())
-      .onChange(of: Tuple(input, style, environment), initial: true) { _, newValue in
-        resolve(
-          attributedString: newValue.values.0,
-          style: newValue.values.1,
-          in: newValue.values.2
-        )
-      }
+    // Styled while the body runs, so the first layout already has the text: styled after it, the view first
+    // came up empty and grew a frame later, which moved a scroll view whose rows appear above what it shows.
+    content(resolved.output(for: Tuple(input, style, environment)))
+  }
+}
+
+/// The last input styled and its result; a new pass only when the input, style or environment changes.
+@MainActor private final class Resolved {
+  private var key: Tuple<AttributedString, InlineStyle, TextEnvironmentValues>?
+  private var result = AttributedString()
+
+  func output(for key: Tuple<AttributedString, InlineStyle, TextEnvironmentValues>) -> AttributedString {
+    if key != self.key {
+      self.key = key
+      result = Self.resolve(
+        attributedString: key.values.0,
+        style: key.values.1,
+        in: key.values.2
+      )
+    }
+    return result
   }
 
-  private func resolve(
+  private static func resolve(
     attributedString: AttributedString,
     style: InlineStyle,
     in environment: TextEnvironmentValues
-  ) {
+  ) -> AttributedString {
     var output = attributedString
 
     for run in attributedString.runs {
@@ -78,6 +91,6 @@ struct WithInlineStyle<Content: View>: View {
       output[run.range].mergeAttributes(attributes, mergePolicy: .keepNew)
     }
 
-    self.output = output
+    return output
   }
 }
