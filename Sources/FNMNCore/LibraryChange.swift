@@ -13,7 +13,6 @@ public enum LibraryChange: Codable, Equatable, Sendable {
     case unmark(TextMark, AnnotationTarget)
     case note(String, AnnotationTarget)
     case removeAnnotation(UUID)
-    case removeVideoFile(itemID: String)
     case delete(itemID: String)
 }
 
@@ -51,8 +50,6 @@ extension LibrarySnapshot {
             next.annotations = next.annotations.noting(text, at: target, date: date)
         case let .removeAnnotation(id):
             next.annotations.removeAll { $0.id == id }
-        case let .removeVideoFile(itemID):
-            next.videoFiles[itemID] = nil
         case let .delete(itemID):
             next.articles.removeAll { $0.material.id == itemID }
             next.forgetMarks(of: itemID)
@@ -60,7 +57,6 @@ extension LibrarySnapshot {
             next.archived.removeAll { $0 == itemID }
             next.addedAt[itemID] = nil
             next.articleRevisions[itemID] = nil
-            next.videoFiles[itemID] = nil
             if let catalog = next.browserCatalog, itemID.hasPrefix("link:") {
                 next.browserCatalog = catalog.removing(url: String(itemID.dropFirst(5)))
             }

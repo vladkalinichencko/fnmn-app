@@ -13,11 +13,12 @@ import filecmp
 import hashlib
 import io
 import json
+import shutil
 import tarfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 from markdown import first_heading, normalize, page_title
 
@@ -67,8 +68,9 @@ def package(url: str, content: Document | Video, folders: list[str]) -> Delivery
 
 def book_delivery(folder: Path) -> Delivery:
     """A book the PDF pipeline exported (`content.md`, `metadata.json`, `assets/`) as a delivery like any other:
-    its text is the body, whose headings are its table of contents, and its authors the byline. The id stays
-    `book:<source name>`, as the app has always called the book."""
+    its text is the body, whose headings are its table of contents, and its authors the byline. It has no page
+    on the web: its original is the PDF, kept beside the delivery. The id stays `book:<source name>`, as the app
+    has always called the book."""
     metadata = json.loads((folder / "metadata.json").read_text(encoding="utf-8"))
     body = (folder / metadata["content_file"]).read_text(encoding="utf-8")
     files = {
@@ -83,7 +85,6 @@ def book_delivery(folder: Path) -> Delivery:
                 "id": f"book:{metadata['source_name']}",
                 "kind": "book",
                 "title": metadata["title"],
-                "sourceURL": f"book:{quote(metadata['source_name'])}",
                 "byline": ", ".join(metadata.get("authors", [])) or None,
             },
             "sections": [],
@@ -99,6 +100,16 @@ def delivery_name(material_id: str) -> str:
     """The archive's name in `deliveries/` for a material that has no link of its own; the app names the
     materials it adds the same way."""
     return hashlib.sha256(material_id.encode()).hexdigest() + ".tar"
+
+
+def place_original(library: Path, delivery: str, original: Path) -> None:
+    """The file a material was made from goes to `originals/`, named like its delivery with its own extension,
+    where the app finds it for Open Original."""
+    path = library / "originals" / (Path(delivery).stem + original.suffix.lower())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    incoming = path.with_name(path.name + ".incoming")
+    shutil.copyfile(original, incoming)
+    replace_if_changed(incoming, path)
 
 
 def write_delivery(path: Path, delivery: Delivery) -> None:

@@ -97,8 +97,12 @@ struct ItemTile: View {
     }
 
     private func open() {
-        if item.kind == .link, let url = item.originalURL {
-            openURL(url)
+        if item.kind == .link {
+            switch library.original(of: item.id, page: item.originalURL) {
+            case let .web(url)?: openURL(url)
+            case let .file(url)?: Task { await library.preview(url) }
+            case nil: break
+            }
         } else {
             navigation.open(.item(item.id))
         }
@@ -129,8 +133,8 @@ struct ItemActions: View {
         }
         if let url = item.originalURL {
             ShareLink(item: url)
-            Link(destination: url) { Label("Open Original", systemImage: "arrow.up.right") }
         }
+        OpenOriginalButton(itemID: item.id, page: item.originalURL)
         let archived = library.snapshot.isArchived(item.id)
         Button(archived ? "Unarchive" : "Archive", systemImage: "archivebox") {
             Task { await library.apply(.setArchived(!archived, itemID: item.id)) }

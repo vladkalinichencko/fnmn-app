@@ -35,12 +35,12 @@ enum CloudFolder {
         FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)
     }
 
-    /// The folder's files with the extension, by the names they have once downloaded, in name order.
+    /// The folder's files, or those with the extension, by the names they have once downloaded, in name order.
     @concurrent
-    static func files(in folder: URL, withExtension pathExtension: String) async throws -> [URL] {
+    static func files(in folder: URL, withExtension pathExtension: String? = nil) async throws -> [URL] {
         try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
             .map(downloadedName)
-            .filter { $0.pathExtension == pathExtension }
+            .filter { pathExtension == nil ? !$0.lastPathComponent.hasPrefix(".") : $0.pathExtension == pathExtension }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 

@@ -84,10 +84,12 @@ public struct Material: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let kind: Kind
     public let title: String
-    public let sourceURL: URL
+    /// The page the material was made from; a material made from a file has none, and its original is that
+    /// file, kept in `originals/`.
+    public let sourceURL: URL?
     public let byline: String?
 
-    public init(id: String, kind: Kind, title: String, sourceURL: URL, byline: String? = nil) {
+    public init(id: String, kind: Kind, title: String, sourceURL: URL?, byline: String? = nil) {
         self.id = id
         self.kind = kind
         self.title = title

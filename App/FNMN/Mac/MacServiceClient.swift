@@ -120,8 +120,13 @@ struct MacServiceClient: MacServicePort {
     func videoFile(of id: String, connection: MacConnection) async throws -> URL {
         var request = authorizedRequest(path: "jobs/\(id)/file", connection: connection)
         request.timeoutInterval = 600
-        let (file, response) = try await URLSession.shared.download(for: request)
+        let (download, response) = try await URLSession.shared.download(for: request)
         try accept(response, data: Data())
+        // The download lands as a `.tmp`; the file keeps the extension the Mac gave it, which names the original.
+        let name = response.suggestedFilename.map { URL(filePath: $0).pathExtension } ?? ""
+        let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            .appendingPathExtension(name.isEmpty ? "mp4" : name)
+        try FileManager.default.moveItem(at: download, to: file)
         return file
     }
 

@@ -135,7 +135,9 @@ final class ImportJobs {
             throw MacServiceError.rejected(job.error ?? "The Mac could not download this video.")
         }
         send(.progressed(jobID, .saving))
-        try await library.storeVideoFile(itemID, from: try await mac.port.videoFile(of: job.id, connection: connection))
+        let video = try await mac.port.videoFile(of: job.id, connection: connection)
+        defer { try? FileManager.default.removeItem(at: video) }
+        try await library.storeOriginal(video, of: itemID)
         await confirmStored(job.id, connection: connection)
     }
 

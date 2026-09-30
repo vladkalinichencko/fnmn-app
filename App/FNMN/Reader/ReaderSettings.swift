@@ -90,9 +90,10 @@ enum ReaderAppearance {
     static let defaultSize = 3
 }
 
-/// The reader's one `···` button: text size and background right inside the menu, and the original page.
+/// The reader's one `···` button: text size and background right inside the menu, and the original.
 struct ReaderMenu: View {
-    let sourceURL: URL?
+    let itemID: String
+    let page: URL?
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.system
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
@@ -121,9 +122,7 @@ struct ReaderMenu: View {
                 Text(font.name)
             }
             .pickerStyle(.menu)
-            if let sourceURL {
-                Link(destination: sourceURL) { Label("Open Original", systemImage: "arrow.up.right") }
-            }
+            OpenOriginalButton(itemID: itemID, page: page)
         }
     }
 }

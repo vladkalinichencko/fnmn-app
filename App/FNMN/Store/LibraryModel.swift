@@ -8,6 +8,12 @@ enum Signposts {
     static let library = OSSignposter(subsystem: "local.fnmn.reader", category: .pointsOfInterest)
 }
 
+/// Where a material came from: the page it was made from, or else the file, kept in the FNMN folder.
+enum Original: Equatable {
+    case web(URL)
+    case file(URL)
+}
+
 enum LibraryLoadState: Equatable {
     case idle
     case loading
@@ -25,6 +31,11 @@ final class LibraryModel {
     /// The FNMN folder in iCloud Drive, where every material lives; until the reader points to it once,
     /// the app asks for it instead of showing the library.
     private(set) var cloudFolder: URL?
+    /// The files materials were made from and saved videos, in the FNMN folder's `originals/`, by the name of
+    /// the delivery each belongs to; read again with the other devices' changes.
+    private(set) var originals: [String: URL] = [:]
+    /// An original file being shown in Quick Look.
+    var previewedOriginal: URL?
     var failure: String?
     let storageURL: URL
     private let file: LibraryFile
@@ -130,6 +141,7 @@ final class LibraryModel {
 
     /// Takes in the other devices' changes: at launch, when the app comes back, and when the FNMN folder is linked.
     func syncWithOtherDevices() async {
+        await readOriginals()
         guard let folder = await file.journalFolder(), FileManager.default.fileExists(atPath: folder.path) else { return }
         do {
             try await CloudFolder.download(folder, timeout: .seconds(60))
@@ -234,12 +246,50 @@ final class LibraryModel {
         try await write(saving: false) { [file] snapshot in try await file.moveIntoCloud(snapshot) }
     }
 
-    func storeVideoFile(_ itemID: String, from download: URL) async throws {
-        try await write(saving: false) { [file] snapshot in try await file.storeVideoFile(itemID, from: download, into: snapshot) }
+    // MARK: Originals
+
+    /// What Open Original shows: the page the material was made from, or else its file in `originals/`.
+    func original(of itemID: String, page: URL?) -> Original? {
+        if let page { return .web(page) }
+        return originalFile(itemID).map(Original.file)
     }
 
-    func videoFile(_ itemID: String) -> URL? {
-        snapshot.videoFiles[itemID].map { LibraryFile.videoFile(root: storageURL, name: $0) }
+    /// A video saved for the system player is the video's original file.
+    func originalFile(_ itemID: String) -> URL? {
+        entry(itemID)?.originalStem.flatMap { originals[$0] }
+    }
+
+    /// Copies a file the material was made from, or a downloaded video, into `originals/`.
+    func storeOriginal(_ download: URL, of itemID: String) async throws {
+        guard let entry = entry(itemID) else { throw LibraryError.cloudFolderMissing }
+        try await file.storeOriginal(download, of: entry)
+        await readOriginals()
+    }
+
+    func removeOriginal(of itemID: String) async {
+        guard let original = originalFile(itemID) else { return }
+        do {
+            try await file.removeOriginal(original)
+        } catch {
+            failure = error.localizedDescription
+        }
+        await readOriginals()
+    }
+
+    /// Brings the file down from iCloud, then shows it in Quick Look.
+    func preview(_ original: URL) async {
+        do {
+            try await CloudFolder.download(original, timeout: .seconds(300))
+            previewedOriginal = original
+        } catch {
+            failure = error.localizedDescription
+        }
+    }
+
+    private func readOriginals() async {
+        guard let folder = cloudFolder?.appending(path: "originals"),
+              let files = try? await CloudFolder.files(in: folder) else { return }
+        originals = Dictionary(files.map { ($0.deletingPathExtension().lastPathComponent, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     func coverFile(_ materialID: String) -> URL {

@@ -255,7 +255,7 @@ private let laterArticle = ImportPackage(
     await #expect(throws: CaptureError.unprepared(.pdf)) { try await file.storePicked(pdf, into: library) }
 }
 
-@Test func aBookIsADeliveryWhoseAuthorsStandForItsSource() throws {
+@Test func aMaterialMadeFromAFileHasItsAuthorsForASource() throws {
     var library = LibrarySnapshot()
     try library.importPackage(namedBook, at: .now)
     let item = try #require(library.item(namedBook.material.id))
@@ -286,7 +286,7 @@ private let namedBook = ImportPackage(
         id: "book:principles-of-deep-learning-theory.pdf",
         kind: .book,
         title: "The Principles of Deep Learning Theory",
-        sourceURL: URL(string: "book:principles-of-deep-learning-theory.pdf")!,
+        sourceURL: nil,
         byline: "Daniel A. Roberts"
     ),
     sections: [],
@@ -453,20 +453,25 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(try await file.load().progress == moved)
 }
 
-@Test func aDownloadedVideoLeavesWithItsMaterial() async throws {
+@Test func aVideoAnOlderVersionSavedInTheAppBecomesTheOriginalBesideItsDelivery() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    let file = LibraryFile(url: directory)
-    let download = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".mp4")
-    try Data("mp4".utf8).write(to: download)
-    var library = LibrarySnapshot()
-    try library.importPackage(article, at: .now)
-    try await file.save(library)
-    let stored = try await file.storeVideoFile(article.material.id, from: download, into: library)
-    let saved = LibraryFile.videoFile(root: directory, name: try #require(stored.videoFiles[article.material.id]))
-    #expect(FileManager.default.fileExists(atPath: saved.path))
-    let deleted = try stored.applying(.delete(itemID: article.material.id))
-    try await file.save(deleted, previous: stored)
-    #expect(!FileManager.default.fileExists(atPath: saved.path))
+    let app = directory.appending(path: "library")
+    try FileManager.default.createDirectory(at: app.appending(path: "videos"), withIntermediateDirectories: true)
+    try Data("mp4".utf8).write(to: app.appending(path: "videos/a.mp4"))
+    try Data(#"{"videoFiles":{"\#(article.material.id)":"a.mp4"}}"#.utf8).write(to: app.appending(path: "state.json"))
+    let file = await libraryFile(directory)
+    _ = try await file.load()
+    let picked = directory.appending(path: "a.tar")
+    try writeDelivery(article, to: picked)
+    let library = try await file.storePicked(picked, into: LibrarySnapshot())
+    #expect(await file.holdsMaterialsInApp(library))
+    _ = try await file.moveIntoCloud(library)
+    let entry = try #require(library.articles.first)
+    let original = directory.appending(path: "FNMN/originals").appending(path: try #require(entry.originalName(pathExtension: "mp4")))
+    #expect(try String(contentsOf: original, encoding: .utf8) == "mp4")
+    #expect(entry.originalStem.map { "\($0).tar" } == entry.delivery)
+    #expect(!FileManager.default.fileExists(atPath: app.appending(path: "videos").path))
+    #expect(await !file.holdsMaterialsInApp(library))
 }
 
 @Test func stateWithInlinePackagesMovesThemToTheirOwnFile() async throws {

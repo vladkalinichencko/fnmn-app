@@ -39,7 +39,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(read_delivery(path).package["material"]["title"], "B")
         self.assertEqual([file.name for file in self.folder.iterdir()], ["a.tar"])
 
-    def test_an_exported_book_becomes_a_delivery_named_by_its_id(self):
+    def test_an_exported_book_becomes_a_delivery_with_its_pdf_beside_it(self):
         book = self.folder / "book"
         (book / "assets").mkdir(parents=True)
         (book / "assets" / "p.png").write_bytes(b"png")
@@ -48,13 +48,17 @@ class DeliveryTests(unittest.TestCase):
             "title": "Notes", "authors": ["Ada", "Bob"], "source_name": "notes one.pdf",
             "content_file": "content.md", "assets_directory": "assets", "toc": [],
         }))
-        publish([book], self.folder / "FNMN")
-        path = self.folder / "FNMN" / "deliveries" / (hashlib.sha256(b"book:notes one.pdf").hexdigest() + ".tar")
-        delivery = read_delivery(path)
+        pdfs = self.folder / "pdfs"
+        pdfs.mkdir()
+        (pdfs / "notes one.pdf").write_bytes(b"%PDF")
+        publish([book], self.folder / "FNMN", pdfs)
+        stem = hashlib.sha256(b"book:notes one.pdf").hexdigest()
+        delivery = read_delivery(self.folder / "FNMN" / "deliveries" / f"{stem}.tar")
         self.assertEqual(delivery.package["material"]["kind"], "book")
-        self.assertEqual(delivery.package["material"]["sourceURL"], "book:notes%20one.pdf")
+        self.assertNotIn("sourceURL", delivery.package["material"])
         self.assertEqual(delivery.package["material"]["byline"], "Ada, Bob")
         self.assertEqual(delivery.files, {"assets/p.png": b"png"})
+        self.assertEqual((self.folder / "FNMN" / "originals" / f"{stem}.pdf").read_bytes(), b"%PDF")
 
     def test_repackage_turns_an_old_json_delivery_into_an_archive(self):
         url = "https://example.com/a"

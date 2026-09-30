@@ -26,7 +26,9 @@ public actor LibraryFile {
         var archived: [String] = []
         var addedAt: [String: Date] = [:]
         var articleRevisions: [String: String] = [:]
-        var videoFiles: [String: String] = [:]
+        /// Videos an older version saved inside the app, item id → file name in `videos/`, until they move
+        /// into the FNMN folder's `originals/`.
+        var legacyVideoFiles: [String: String] = [:]
         var browserCatalog: BrowserCatalog?
         var legacyNotes: [Note] = []
         var legacyPackages: [ImportPackage]?
@@ -45,7 +47,6 @@ public actor LibraryFile {
             archived = snapshot.archived
             addedAt = snapshot.addedAt
             articleRevisions = snapshot.articleRevisions
-            videoFiles = snapshot.videoFiles
             browserCatalog = snapshot.browserCatalog
         }
 
@@ -66,7 +67,7 @@ public actor LibraryFile {
             archived = try container.decodeIfPresent([String].self, forKey: .archived) ?? []
             addedAt = try container.decodeIfPresent([String: Date].self, forKey: .addedAt) ?? [:]
             articleRevisions = try container.decodeIfPresent([String: String].self, forKey: .articleRevisions) ?? [:]
-            videoFiles = try container.decodeIfPresent([String: String].self, forKey: .videoFiles) ?? [:]
+            legacyVideoFiles = try container.decodeIfPresent([String: String].self, forKey: .videoFiles) ?? [:]
             browserCatalog = try container.decodeIfPresent(BrowserCatalog.self, forKey: .browserCatalog)
             legacyNotes = try container.decodeIfPresent([Note].self, forKey: .notes) ?? []
             legacyPackages = try container.decodeIfPresent([ImportPackage].self, forKey: .packages)
@@ -80,7 +81,7 @@ public actor LibraryFile {
             try container.encode(archived, forKey: .archived)
             try container.encode(addedAt, forKey: .addedAt)
             try container.encode(articleRevisions, forKey: .articleRevisions)
-            try container.encode(videoFiles, forKey: .videoFiles)
+            if !legacyVideoFiles.isEmpty { try container.encode(legacyVideoFiles, forKey: .videoFiles) }
             try container.encodeIfPresent(browserCatalog, forKey: .browserCatalog)
         }
 
@@ -91,7 +92,6 @@ public actor LibraryFile {
             snapshot.archived = archived
             snapshot.addedAt = addedAt
             snapshot.articleRevisions = articleRevisions
-            snapshot.videoFiles = videoFiles
             snapshot.browserCatalog = browserCatalog
         }
     }
@@ -102,6 +102,7 @@ public actor LibraryFile {
     /// The FNMN folder in iCloud Drive, once the app has access to it.
     public private(set) var cloudFolder: URL?
     public private(set) var corruptPackageNames: [String] = []
+    private var legacyVideoFiles: [String: String] = [:]
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -137,6 +138,7 @@ public actor LibraryFile {
             legacyNotes = state.legacyNotes
             legacyPackages = state.legacyPackages
             legacyProgress = state.legacyProgress
+            legacyVideoFiles = state.legacyVideoFiles
         }
         corruptPackageNames = []
         var packages: [ImportPackage] = []
@@ -192,39 +194,31 @@ public actor LibraryFile {
         if previous?.articles != snapshot.articles {
             try encoder.encode(snapshot.articles).write(to: articlesURL, options: .atomic)
         }
-        try encoder.encode(UserState(snapshot)).write(to: stateURL, options: .atomic)
+        var state = UserState(snapshot)
+        state.legacyVideoFiles = legacyVideoFiles
+        try encoder.encode(state).write(to: stateURL, options: .atomic)
         guard let previous else { return }
         if previous.articles != snapshot.articles || previous.articleRevisions != snapshot.articleRevisions {
             try sweepArticleRevisions(snapshot)
         }
-        if previous.videoFiles != snapshot.videoFiles { try sweepVideoFiles(snapshot) }
     }
 
-    // MARK: Videos downloaded for this device
+    // MARK: Originals
 
-    /// Moves a downloaded video into the library and records it for the item.
-    public func storeVideoFile(_ itemID: String, from download: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let folder = root.appending(path: "videos")
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let name = UUID().uuidString + ".mp4"
-        try FileManager.default.moveItem(at: download, to: folder.appending(path: name))
-        var next = snapshot
-        next.videoFiles[itemID] = name
-        try save(next, previous: snapshot)
-        return next
+    /// Keeps a copy of the file a material was made from, or of a video saved for the system player, in the
+    /// FNMN folder's `originals/`, named like the material's delivery with the file's own extension.
+    public func storeOriginal(_ file: URL, of entry: ArticleEntry) throws {
+        guard let name = entry.originalName(pathExtension: file.pathExtension) else { throw LibraryError.cloudFolderMissing }
+        try placeInCloud(file, at: try requireCloudFolder().appending(path: "originals").appending(path: name))
     }
 
-    public static func videoFile(root: URL, name: String) -> URL {
-        root.appending(path: "videos").appending(path: name)
-    }
-
-    private func sweepVideoFiles(_ snapshot: LibrarySnapshot) throws {
-        let folder = root.appending(path: "videos")
-        guard let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
-        let kept = Set(snapshot.videoFiles.values)
-        for file in files where !kept.contains(file.lastPathComponent) {
-            try FileManager.default.removeItem(at: file)
+    public func removeOriginal(_ file: URL) throws {
+        var coordination: NSError?
+        var failure: Error?
+        NSFileCoordinator().coordinate(writingItemAt: file, options: .forDeleting, error: &coordination) { url in
+            do { try FileManager.default.removeItem(at: url) } catch { failure = error }
         }
+        if let error = coordination ?? failure { throw error }
     }
 
     // MARK: Adding materials
@@ -322,8 +316,8 @@ public actor LibraryFile {
     }
 
     /// The first time the FNMN folder is linked, what an older version kept inside the app moves there: each
-    /// article becomes an archive in `deliveries/`. The app's copies then go; books come from the Mac as
-    /// deliveries of their own.
+    /// article becomes an archive in `deliveries/`, each saved video an original in `originals/`. The app's
+    /// copies then go; books come from the Mac as deliveries of their own.
     public func moveIntoCloud(_ snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let cloud = try requireCloudFolder()
         var next = snapshot
@@ -346,6 +340,17 @@ public actor LibraryFile {
         if FileManager.default.fileExists(atPath: appBooks.path) {
             try FileManager.default.removeItem(at: appBooks)
         }
+        let appVideos = root.appending(path: "videos")
+        for (itemID, name) in legacyVideoFiles {
+            let video = appVideos.appending(path: name)
+            guard let entry = next.articles.first(where: { $0.material.id == itemID }),
+                  FileManager.default.fileExists(atPath: video.path) else { continue }
+            try storeOriginal(video, of: entry)
+        }
+        legacyVideoFiles = [:]
+        if FileManager.default.fileExists(atPath: appVideos.path) {
+            try FileManager.default.removeItem(at: appVideos)
+        }
         try save(next, previous: snapshot)
         let appArticles = root.appending(path: "articles")
         if FileManager.default.fileExists(atPath: appArticles.path) {
@@ -358,6 +363,7 @@ public actor LibraryFile {
     public func holdsMaterialsInApp(_ snapshot: LibrarySnapshot) -> Bool {
         snapshot.articles.contains { $0.delivery == nil }
             || FileManager.default.fileExists(atPath: root.appending(path: "books").path)
+            || FileManager.default.fileExists(atPath: root.appending(path: "videos").path)
     }
 
     private static func deliveryName(_ materialID: String) -> String {

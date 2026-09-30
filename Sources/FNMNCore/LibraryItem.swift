@@ -30,7 +30,7 @@ extension LibraryItem.Kind {
 }
 
 extension Material {
-    /// A book has no site behind it, so its authors stand where an article's site does.
+    /// A material made from a file has no site behind it, so its authors stand where an article's site does.
     var authors: SourceRef? {
         byline.map { SourceRef(name: $0, homepage: nil) }
     }
@@ -92,13 +92,13 @@ extension LibrarySnapshot {
     /// The source of one material without building every tile, for the reader's header.
     public func source(of itemID: String) -> SourceRef? {
         guard let article = articles.first(where: { $0.material.id == itemID }) else { return nil }
-        if article.material.kind == .book { return article.material.authors }
-        let key = SourceIndex.key(article.material.sourceURL)
+        guard let sourceURL = article.material.sourceURL else { return article.material.authors }
+        let key = SourceIndex.key(sourceURL)
         let saved = browserCatalog?.sources.first { source in
             source.materials.contains { ([$0.url] + $0.savedURLs).map(SourceIndex.key).contains(key) }
         }
         var sites = SourceIndex(catalog: nil)
-        return saved.map { SourceRef(name: $0.name, homepage: URL(string: $0.url)) } ?? sites.source(for: article.material.sourceURL)
+        return saved.map { SourceRef(name: $0.name, homepage: URL(string: $0.url)) } ?? sites.source(for: sourceURL)
     }
 
     public func items(inAlbum name: String) -> [LibraryItem] {
@@ -153,19 +153,18 @@ extension LibrarySnapshot {
         var sources = SourceIndex(catalog: browserCatalog)
         let prepared = articles.map { article in
             let material = article.material
-            let isBook = material.kind == .book
             return LibraryItem(
                 id: material.id,
                 kind: LibraryItem.Kind(material.kind),
                 title: material.title,
-                source: isBook ? material.authors : sources.source(for: material.sourceURL),
-                originalURL: isBook ? nil : material.sourceURL,
+                source: material.sourceURL.map { sources.source(for: $0) } ?? material.authors,
+                originalURL: material.sourceURL,
                 addedAt: addedAt[material.id],
                 excerpt: article.excerpt,
                 cover: article.cover
             )
         }
-        let preparedKeys = Set(articles.map { SourceIndex.key($0.material.sourceURL) })
+        let preparedKeys = Set(articles.compactMap { $0.material.sourceURL.map(SourceIndex.key) })
         let links = (browserCatalog?.sources ?? []).flatMap { source in
             source.materials.compactMap { material -> LibraryItem? in
                 let keys = ([material.url] + material.savedURLs).map(SourceIndex.key)

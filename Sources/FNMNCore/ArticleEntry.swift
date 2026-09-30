@@ -26,7 +26,7 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
         case let (cover, _): cover
         }
         let markdown = ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks)
-        let fields = [package.material.title, package.material.sourceURL.absoluteString, package.material.byline ?? ""]
+        let fields = [package.material.title, package.material.sourceURL?.absoluteString ?? "", package.material.byline ?? ""]
             + package.sections.map(\.title) + ArticleBody.headings(in: markdown).map(\.title)
         searchText = Self.folded(fields.joined(separator: "\n"))
         textDigest = Self.digest(package)
@@ -47,10 +47,22 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
     }
 }
 
+extension ArticleEntry {
+    /// What the material's original is called in `originals/` without its extension: the delivery's name,
+    /// so a file and the material made from it sit side by side.
+    public var originalStem: String? {
+        delivery.map { ($0 as NSString).deletingPathExtension }
+    }
+
+    public func originalName(pathExtension: String) -> String? {
+        originalStem.map { pathExtension.isEmpty ? $0 : "\($0).\(pathExtension)" }
+    }
+}
+
 extension ImportPackage {
     var cover: Cover? {
         if material.kind == .video {
-            return YouTube.videoID(in: material.sourceURL)
+            return material.sourceURL.flatMap(YouTube.videoID(in:))
                 .flatMap { URL(string: "https://i.ytimg.com/vi/\($0)/hqdefault.jpg") }
                 .map(Cover.remote)
         }

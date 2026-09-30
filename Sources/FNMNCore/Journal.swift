@@ -18,13 +18,11 @@ public struct JournalEvent: Codable, Equatable, Sendable {
     }
 
     /// The events a change becomes in the journal. Adding several materials to an album is one event per
-    /// material, so each placement has its own latest word; a downloaded video file belongs to one device only.
+    /// material, so each placement has its own latest word.
     public static func events(for change: Change, at time: Date) -> [JournalEvent] {
         switch change {
         case let .library(.addToAlbum(name, itemIDs)):
             itemIDs.map { JournalEvent(time: time, change: .library(.addToAlbum(name, itemIDs: [$0]))) }
-        case .library(.removeVideoFile):
-            []
         default:
             [JournalEvent(time: time, change: change)]
         }

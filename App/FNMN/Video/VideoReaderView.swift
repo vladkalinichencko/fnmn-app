@@ -12,6 +12,8 @@ struct VideoReaderView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     let video: VideoCoordinator
+    /// The saved video file once it is on this device.
+    @State private var playable: URL?
 
     private var package: ImportPackage { video.package }
     private var materialID: String { package.material.id }
@@ -61,9 +63,9 @@ struct VideoReaderView: View {
 
     @ViewBuilder
     private var videoMenu: some View {
-        if library.videoFile(materialID) != nil {
+        if library.originalFile(materialID) != nil {
             Button("Remove Download", systemImage: "trash") {
-                Task { await library.apply(.removeVideoFile(itemID: materialID)) }
+                Task { await library.removeOriginal(of: materialID) }
             }
         } else if let download {
             switch download.phase {
@@ -73,18 +75,29 @@ struct VideoReaderView: View {
                 Button("Try Download Again", systemImage: "arrow.clockwise") { imports.send(.retry(download.id)) }
                 Text(message)
             }
-        } else if videoID != nil {
+        } else if videoID != nil, let page = package.material.sourceURL {
             Button("Download", systemImage: "arrow.down.circle") {
-                imports.send(.submit(.videoFile(itemID: materialID, url: package.material.sourceURL), id: UUID()))
+                imports.send(.submit(.videoFile(itemID: materialID, url: page), id: UUID()))
             }
         }
-        Link(destination: package.material.sourceURL) { Label("Open Original", systemImage: "arrow.up.right") }
+        OpenOriginalButton(itemID: materialID, page: package.material.sourceURL)
     }
 
     @ViewBuilder
     private var player: some View {
         let video = video
-        if let file = library.videoFile(materialID) {
+        if let file = library.originalFile(materialID), file != playable {
+            // The file saved on another device, or let go by this one, comes down from iCloud before it plays.
+            VideoPlaceholder { ProgressView("Downloading from iCloud") }
+                .task(id: file) {
+                    do {
+                        try await CloudFolder.download(file, timeout: .seconds(1800))
+                        playable = file
+                    } catch {
+                        library.failure = error.localizedDescription
+                    }
+                }
+        } else if let file = library.originalFile(materialID) {
             SystemPlayer(
                 url: file,
                 start: video.start,

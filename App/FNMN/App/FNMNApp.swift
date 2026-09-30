@@ -1,4 +1,5 @@
 import FNMNCore
+import QuickLook
 import SwiftUI
 
 @main
@@ -54,6 +55,7 @@ private struct WindowRoot: View {
         }
         .environment(navigation)
         .environment(dialogs)
+        .quickLookPreview(Bindable(library).previewedOriginal)
         .task { await library.load() }
         .onChange(of: scenePhase) { _, phase in
             switch phase {

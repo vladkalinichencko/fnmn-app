@@ -11,8 +11,6 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var archived: [String] = []
     public var addedAt: [String: Date] = [:]
     public var articleRevisions: [String: String] = [:]
-    /// Videos saved on the device for the system player: item id → file name in `videos/`.
-    public var videoFiles: [String: String] = [:]
 
     public init() {}
 

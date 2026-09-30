@@ -77,7 +77,7 @@ private struct ArticleOpener: View {
             start: startPiece ?? library.position(of: itemID)?.pieceIndex,
             library: library
         )
-        return .article(reader, sourceURL: package.material.kind == .book ? nil : package.material.sourceURL)
+        return .article(reader, sourceURL: package.material.sourceURL)
     }
 
     @concurrent
