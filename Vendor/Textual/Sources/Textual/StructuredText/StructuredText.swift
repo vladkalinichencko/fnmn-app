@@ -102,7 +102,7 @@ import SwiftUI
 /// When you need to parse something other than Markdown, use ``init(_:parser:)`` with a custom
 /// ``MarkupParser`` implementation.
 public struct StructuredText: View {
-  @State private var attributedString = AttributedString()
+  @State private var parsed = ParsedMarkup()
 
   private let markup: String
   private let parser: any MarkupParser
@@ -116,21 +116,30 @@ public struct StructuredText: View {
   }
 
   public var body: some View {
-    WithAttachments(attributedString) {
+    // Parsed while the body runs, so the first layout already has the text: parsed after it, the view first
+    // came up empty and grew a frame later, which moved a scroll view whose rows appear above what it shows.
+    WithAttachments(parsed.attributedString(for: markup, parser: parser)) {
       BlockContent(content: $0)
         .modifier(TextSelectionInteraction())
         .modifier(TextSelectionCoordination())
     }
     .coordinateSpace(.textContainer)
-    .onChange(of: markup, initial: true) {
-      markupDidChange(markup)
-    }
     // Disable line limit to avoid per-fragment truncation
     .lineLimit(nil)
   }
+}
 
-  private func markupDidChange(_ markup: String) {
-    self.attributedString = (try? parser.attributedString(for: markup)) ?? .init()
+/// The last markup parsed and its result; a new parse only when the markup changes.
+@MainActor private final class ParsedMarkup {
+  private var markup: String?
+  private var attributedString = AttributedString()
+
+  func attributedString(for markup: String, parser: any MarkupParser) -> AttributedString {
+    if markup != self.markup {
+      self.markup = markup
+      attributedString = (try? parser.attributedString(for: markup)) ?? .init()
+    }
+    return attributedString
   }
 }
 

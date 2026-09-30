@@ -261,11 +261,25 @@ def _absolute(page_url: str, src: str) -> str:
 
 
 def _inline(node, page_url: str, downloads: dict[str, str]) -> str:
+    return _inline_spaced(node, page_url, downloads).strip()
+
+
+def _inline_spaced(node, page_url: str, downloads: dict[str, str]) -> str:
     parts = [node.text or ""]
     for child in node:
         parts.append(_piece(child, page_url, downloads))
         parts.append(child.tail or "")
-    return "".join(parts).strip()
+    return "".join(parts)
+
+
+def _emphasis(node, mark: str, page_url: str, downloads: dict[str, str]) -> str:
+    """Spaces at the edges of `<b>word </b>` stay outside the marks: Markdown takes `**word **` for plain text,
+    and a stripped space glues the word to the next one. Bold inside bold adds no marks of its own."""
+    text = _inline_spaced(node, page_url, downloads)
+    inner = text.strip()
+    if not inner or any(outer.tag == node.tag for outer in node.iterancestors()):
+        return text
+    return text[: len(text) - len(text.lstrip())] + mark + inner + mark + text[len(text.rstrip()) :]
 
 
 def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
@@ -279,9 +293,9 @@ def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
     if node.tag in {"style", "script"}:
         return ""
     if node.tag in {"em", "i"}:
-        return f"*{_inline(node, page_url, downloads)}*"
+        return _emphasis(node, "*", page_url, downloads)
     if node.tag in {"strong", "b"}:
-        return f"**{_inline(node, page_url, downloads)}**"
+        return _emphasis(node, "**", page_url, downloads)
     if node.tag == "code":
         return f"`{_inline(node, page_url, downloads)}`"
     if node.tag == "a":

@@ -22,6 +22,10 @@ extension Math {
       }
     }
 
+    /// Set by `\big`, `\Big`, `\bigg` and `\Bigg`: the delimiter's height as a multiple of the font size,
+    /// whatever the content. Such an inner has only a left boundary and no content.
+    var delimiterScale: CGFloat?
+
     override var description: String {
       [
         "\\inner",
@@ -49,6 +53,7 @@ extension Math {
       self.innerList = inner.innerList.map { AtomList($0) }
       self.leftBoundary = inner.leftBoundary.map { $0.copy() }
       self.rightBoundary = inner.rightBoundary.map { $0.copy() }
+      self.delimiterScale = inner.delimiterScale
 
       super.init(inner)
     }

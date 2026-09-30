@@ -33,17 +33,39 @@ struct MarkedMarkdown: MarkupParser {
     /// Markdown runs before the math extension, so it would eat `\,`, turn `_` into emphasis and split a
     /// formula at its line breaks. Escaping punctuation inside `$…$` and `$$…$$` and joining the lines
     /// hands the LaTeX through unchanged.
-    /// A display formula also gets hard line breaks around it, so it stands on its own line inside its paragraph.
+    /// A display formula also becomes a paragraph of its own, so Textual draws it as a math block: one line
+    /// at its own width, which scrolls sideways when it is wider than the plate.
+    /// `\[…\]` and `\(…\)` are math too, and a `$…$` inside them would end them early, so those dollars go.
+    /// A line break inside `$…$` is a space; a price such as `$5 and $10` is text, not a formula.
     static func protectingMath(_ markdown: String) -> String {
-        var text = markdown.replacing(/(?s)[ \t]*\n?[ \t]*\$\$(.+?)\$\$[ \t]*\n?|\$(?!\$)([^$\n]+?)\$/) { match in
-            if let display = match.output.1 {
-                return "\\\n$$" + escaped(String(display).replacing(/\s*\n\s*/, with: " ")) + "$$\\\n"
+        // Code, a `\\` line break and an escaped dollar come first, so they are passed over whole.
+        markdown.replacing(/(?s)(```.+?```|`[^`\n]+`|\\\\|\\\$)|\\\[(.+?)\\\]|\\\((.+?)\\\)|[ \t]*\n?[ \t]*\$\$(.+?)\$\$[ \t]*\n?|\$(?!\$)((?:[^$\n]|\n(?![ \t]*\n))+?)\$/) { match in
+            if let code = match.output.1 { return String(code) }
+            if let display = match.output.2 ?? match.output.4 {
+                return "\n\n$$" + escaped(flattened(String(display))) + "$$\n\n"
             }
-            return "$" + escaped(match.output.2.map(String.init) ?? "") + "$"
+            if let inline = match.output.3 ?? match.output.5 {
+                let latex = flattened(String(inline))
+                if isPrice(latex) { return "\\$" + latex + "\\$" }
+                // A formula this long would run past the line's end, where a line of text cannot scroll.
+                if latex.count > Self.longestInline { return "\n\n$$" + escaped(latex) + "$$\n\n" }
+                return "$" + escaped(latex) + "$"
+            }
+            return String(match.output.0)
         }
-        if text.hasPrefix("\\\n") { text.removeFirst(2) }
-        if text.hasSuffix("\\\n") { text.removeLast(2) }
-        return text
+        .trimmingCharacters(in: .newlines)
+    }
+
+    private static let longestInline = 56
+
+    /// One line, and no dollar signs inside: a formula ends at the first one.
+    private static func flattened(_ latex: String) -> String {
+        latex.replacing(/\s*\n\s*/, with: " ").replacing(/(\\\$)|\$/) { $0.output.1.map(String.init) ?? "" }
+    }
+
+    /// Between two dollar signs of a sentence: words, no TeX.
+    private static func isPrice(_ text: String) -> Bool {
+        !text.contains(/[\\^_{}=+<>]/) && text.contains(/\p{L}{3,}/)
     }
 
     private static func escaped(_ latex: String) -> String {

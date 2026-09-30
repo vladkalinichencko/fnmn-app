@@ -2515,7 +2515,7 @@ extension Math {
       let d2 = 2 * delta - Typesetter.kDelimiterShortfallPoints  // This represents a shortfall of 5pt
       // The size of the delimiter glyph should cover at least 90% of the formula or
       // be at most 5pt short.
-      let glyphHeight = max(d1, d2)
+      let glyphHeight = inner!.delimiterScale.map { $0 * styleFont.font.size } ?? max(d1, d2)
 
       var innerElements = [DisplayNode]()
       var position = CGPoint.zero

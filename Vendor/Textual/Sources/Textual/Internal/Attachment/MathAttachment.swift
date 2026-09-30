@@ -36,8 +36,9 @@ struct MathAttachment: Attachment {
     -typographicBounds(in: environment).descent
   }
 
+  /// A display formula keeps one line at its own width; its block scrolls sideways when it is wider than the page.
   func sizeThatFits(_ proposal: ProposedViewSize, in environment: TextEnvironmentValues) -> CGSize {
-    typographicBounds(fitting: proposal, in: environment).size
+    typographicBounds(fitting: displayStyle == .block ? .unspecified : proposal, in: environment).size
   }
 
   private func typographicBounds(

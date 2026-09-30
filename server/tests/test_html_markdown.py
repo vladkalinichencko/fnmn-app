@@ -54,6 +54,11 @@ class HtmlMarkdownTests(unittest.TestCase):
             ],
         )
 
+    def test_spaces_at_the_edges_of_bold_stay_outside_its_marks(self):
+        page = "<html><body><article><p><b>Eyes: </b>green, <b>and </b>a long enough sentence of the article prose.</p></article></body></html>"
+        markdown, _ = article_markdown(page, PAGE)
+        self.assertIn("**Eyes:** green, **and** a long", markdown)
+
     def test_text_stays_markdown_and_figures_point_at_the_live_page(self):
         markdown, downloads = article_markdown(SAMPLE, PAGE)
         self.assertIn("# Momentum", markdown)

@@ -16,8 +16,97 @@ SITE_HEADER = re.compile(r"\A\s*#{1,6} \[[^\]]+\]\([^)]*\)[ \t]*\n+")
 BYLINE = re.compile(r"\A((?:\s*#{1,6} .+\n+|\s*!\[[^\]]*\]\([^)]*\)\n+)*)\s*[*_]?By [^\n]{1,60}?[*_]?\n\n", re.I)
 
 
+HEADING = re.compile(r"^(#{1,6}) (.+)$", re.M)
+LONG_HEADING = 200
+CODE = re.compile(r"(```.*?```)", re.S)
+INLINE_CODE_OR_MATH = re.compile(r"`[^`\n]*`|\$\$.*?\$\$|(?<!\\)\$[^$\n]+?\$", re.S)
+BOLD = re.compile(r"(?<!\*)\*\*(?!\*)")
+STARS = re.compile(r"\*{3,}")
+JOINED_BOLD = re.compile(r"([^\s*])\*{4}(?=[^\s*])")
+OPENING_PUNCTUATION = "«„“‘([{—–-"
+CLOSING_PUNCTUATION = "»”’)]}.,:;!?…"
+
+
 def normalize(markdown: str) -> str:
-    return join_display_math(tex_delimiters(without_page_chrome(markdown)))
+    return join_display_math(tex_delimiters(_outside_code(without_page_chrome(markdown), lambda text: bold_runs(headings(text)))))
+
+
+def _outside_code(markdown: str, change) -> str:
+    pieces = CODE.split(markdown)
+    return "".join(piece if index % 2 else change(piece) for index, piece in enumerate(pieces))
+
+
+def headings(markdown: str) -> str:
+    """A heading is bold already, so bold marks inside it go. One as long as a paragraph is a paragraph:
+    sites set a lead in `<h4>` for its size."""
+
+    def plain(match: re.Match) -> str:
+        text = match.group(2).replace("**", "")
+        text = re.sub(r"\s{2,}", " ", text).strip()
+        return text if len(plain_title(text)) > LONG_HEADING else f"{match.group(1)} {text}"
+
+    return HEADING.sub(plain, markdown)
+
+
+def bold_runs(markdown: str) -> str:
+    """Repairs `**` the way HTML leaves it: `**a****b**` from two `<b>` in a row becomes one run, and a run gets
+    its space back where Markdown would not read its marks, as in `**Eyes:**green`, or where it follows a link."""
+    return "\n\n".join(_spaced_bold(paragraph) for paragraph in re.split(r"\n[ \t]*\n", markdown))
+
+
+def _spaced_bold(paragraph: str) -> str:
+    """A paragraph with any other run of three or more stars is left as it came: `****X****` may be a `<b>` inside
+    a `<b>` or two empty ones, and its marks cannot be paired."""
+    if any(not _joins_bold(paragraph, run) for run in STARS.finditer(paragraph)):
+        return paragraph
+    paragraph = JOINED_BOLD.sub(
+        lambda m: m.group(1) + ("" if m.group(1) in "«„“‘([{" or paragraph[m.end()] in CLOSING_PUNCTUATION else " "),
+        paragraph,
+    )
+    marks = _bold_marks(paragraph)
+    if len(marks) % 2:
+        return paragraph
+    empty = [(marks[k], marks[k + 1]) for k in range(0, len(marks), 2) if not paragraph[marks[k] + 2 : marks[k + 1]].strip()]
+    for start, end in reversed(empty):
+        paragraph = paragraph[:start] + paragraph[start + 2 : end] + paragraph[end + 2 :]
+    marks = _bold_marks(paragraph)
+    for k in reversed(range(len(marks))):
+        i = marks[k]
+        before = paragraph[i - 1] if i > 0 else " "
+        after = paragraph[i + 2] if i + 2 < len(paragraph) else " "
+        if k % 2 == 0:
+            if (before.isalnum() and _punctuation(after) and after not in CLOSING_PUNCTUATION) or (
+                before in ")]" and (after.isalnum() or after in "«—–")
+            ):
+                paragraph = paragraph[:i] + " " + paragraph[i:]
+        elif _punctuation(before) and before not in OPENING_PUNCTUATION and after.isalnum():
+            paragraph = paragraph[: i + 2] + " " + paragraph[i + 2 :]
+    return paragraph
+
+
+def _joins_bold(paragraph: str, run: re.Match) -> bool:
+    """`****` between two characters inside a bold run: one `<b>` closing right where the next opens."""
+    start, end = run.span()
+    if end - start != 4 or start == 0 or end == len(paragraph) or paragraph[start - 1].isspace() or paragraph[end].isspace():
+        return False
+    marks = len([i for i in _bold_marks(paragraph) if i < start]) + 2 * len([r for r in STARS.finditer(paragraph, 0, start)])
+    return marks % 2 == 1
+
+
+def _punctuation(character: str) -> bool:
+    return not character.isalnum() and not character.isspace()
+
+
+def _bold_marks(paragraph: str) -> list[int]:
+    """Every `**` outside code and math that can open or close a run: one with spaces on both sides is text."""
+    spans = [match.span() for match in INLINE_CODE_OR_MATH.finditer(paragraph)]
+    return [
+        match.start()
+        for match in BOLD.finditer(paragraph)
+        if not any(a <= match.start() < b for a, b in spans)
+        and not ((paragraph[match.start() - 1] if match.start() else " ").isspace() and (paragraph[match.end()] if match.end() < len(paragraph) else " ").isspace())
+    ]
+
 
 
 def without_page_chrome(markdown: str) -> str:
@@ -48,12 +137,17 @@ def first_heading(markdown: str) -> str | None:
 
 def tex_delimiters(markdown: str) -> str:
     """Turns `\\[ … \\]` into `$$ … $$` and `\\( … \\)` into `$ … $`, leaving code and existing `$` math untouched.
-    A line break `\\\\[4pt]` inside LaTeX is not an opening bracket."""
-    pieces = re.split(r"(```.*?```|`[^`\n]*`|\$\$.*?\$\$|(?<!\\)\$[^$\n]+?\$)", markdown, flags=re.S)
+    A line break `\\\\[4pt]` inside LaTeX is not an opening bracket. A `$…$` written inside the brackets, as in
+    `\\text{for $x$}`, would end the formula early, so its dollars go and the text stays."""
+    pieces = re.split(r"(```.*?```|`[^`\n]*`|\$\$.*?\$\$)", markdown, flags=re.S)
     for index in range(0, len(pieces), 2):
-        piece = re.sub(r"(?<!\\)\\\[(.+?)(?<!\\)\\\]", lambda m: f"$${m.group(1)}$$", pieces[index], flags=re.S)
-        pieces[index] = re.sub(r"(?<!\\)\\\((.+?)(?<!\\)\\\)", lambda m: f"${m.group(1).strip()}$", piece, flags=re.S)
+        piece = re.sub(r"(?<!\\)\\\[(.+?)(?<!\\)\\\]", lambda m: f"$${_without_dollars(m.group(1))}$$", pieces[index], flags=re.S)
+        pieces[index] = re.sub(r"(?<!\\)\\\((.+?)(?<!\\)\\\)", lambda m: f"${_without_dollars(m.group(1)).strip()}$", piece, flags=re.S)
     return "".join(pieces)
+
+
+def _without_dollars(formula: str) -> str:
+    return re.sub(r"(?<!\\)\$", "", formula)
 
 
 def join_display_math(markdown: str) -> str:

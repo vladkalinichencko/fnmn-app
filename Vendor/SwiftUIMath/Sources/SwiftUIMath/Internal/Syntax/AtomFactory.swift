@@ -162,12 +162,14 @@ extension Math {
       "lfloor": Atom(type: .open, nucleus: "\u{230A}"),
       "langle": Atom(type: .open, nucleus: "\u{27E8}"),
       "lgroup": Atom(type: .open, nucleus: "\u{27EE}"),
+      "llparenthesis": Atom(type: .open, nucleus: "\u{2987}"),
 
       // Close
       "rceil": Atom(type: .close, nucleus: "\u{2309}"),
       "rfloor": Atom(type: .close, nucleus: "\u{230B}"),
       "rangle": Atom(type: .close, nucleus: "\u{27E9}"),
       "rgroup": Atom(type: .close, nucleus: "\u{27EF}"),
+      "rrparenthesis": Atom(type: .close, nucleus: "\u{2988}"),
 
       // Arrows
       "leftarrow": Atom(type: .relation, nucleus: "\u{2190}"),
@@ -213,6 +215,10 @@ extension Math {
       "equiv": Atom(type: .relation, nucleus: "\u{2261}"),
       "gg": Atom(type: .relation, nucleus: "\u{226B}"),
       "ll": Atom(type: .relation, nucleus: "\u{226A}"),
+      "lll": Atom(type: .relation, nucleus: "\u{22D8}"),
+      "ggg": Atom(type: .relation, nucleus: "\u{22D9}"),
+      "lesssim": Atom(type: .relation, nucleus: "\u{2272}"),
+      "gtrsim": Atom(type: .relation, nucleus: "\u{2273}"),
       "prec": Atom(type: .relation, nucleus: "\u{227A}"),
       "succ": Atom(type: .relation, nucleus: "\u{227B}"),
       "subset": Atom(type: .relation, nucleus: "\u{2282}"),
@@ -346,6 +352,14 @@ extension Math {
       "ldots": Atom(type: .ordinary, nucleus: "\u{2026}"),
       "prime": Atom(type: .ordinary, nucleus: "\u{2032}"),
       "hbar": Atom(type: .ordinary, nucleus: "\u{210F}"),
+      "S": Atom(type: .ordinary, nucleus: "\u{00A7}"),
+      "varnothing": Atom(type: .ordinary, nucleus: "\u{2205}"),
+      "P": Atom(type: .ordinary, nucleus: "\u{00B6}"),
+      "sharp": Atom(type: .ordinary, nucleus: "\u{266F}"),
+      "flat": Atom(type: .ordinary, nucleus: "\u{266D}"),
+      "natural": Atom(type: .ordinary, nucleus: "\u{266E}"),
+      "blacklozenge": Atom(type: .ordinary, nucleus: "\u{29EB}"),
+      "lozenge": Atom(type: .ordinary, nucleus: "\u{25CA}"),
       "lbar": Atom(type: .ordinary, nucleus: "\u{019B}"),
       "Im": Atom(type: .ordinary, nucleus: "\u{2111}"),
       "ell": Atom(type: .ordinary, nucleus: "\u{2113}"),
@@ -420,6 +434,7 @@ extension Math {
     private static let fontStyles: [String: Atom.FontStyle] = [
       "mathnormal": .default,
       "mathrm": .roman,
+      "operatorname": .roman,
       "textrm": .roman,
       "rm": .roman,
       "mathbf": .bold,
@@ -450,6 +465,7 @@ extension Math {
       "vmatrix": ["vert", "vert"],
       "Vmatrix": ["Vert", "Vert"],
       "smallmatrix": [],
+      "array": [],
       "matrix*": [],
       "pmatrix*": ["(", ")"],
       "bmatrix*": ["[", "]"],
@@ -708,27 +724,21 @@ extension Math {
             return table
           }
         } else if env == "eqalign" || env == "split" || env == "aligned" {
-          if table.numberOfColumns != 2 {
-            let message = "\(env) environment can only have 2 columns"
-            if error == nil {
-              error = ParserError(code: .invalidNumberOfColumns, message: message)
-            }
-            return nil
-          }
-
           let spacer = Atom(type: .ordinary, nucleus: "")
 
+          // Columns pair up right-left, as in amsmath; each left column starts after its `&`.
           for i in 0..<table.cells.count {
-            if table.cells[i].count >= 2 {
-              table.cells[i][1].insert(spacer, at: 0)
+            for column in stride(from: 1, to: table.cells[i].count, by: 2) {
+              table.cells[i][column].insert(spacer, at: 0)
             }
           }
 
           table.interRowAdditionalSpacing = 1
           table.interColumnSpacing = 0
 
-          table.setAlignment(.right, forColumn: 0)
-          table.setAlignment(.left, forColumn: 1)
+          for column in 0..<table.numberOfColumns {
+            table.setAlignment(column.isMultiple(of: 2) ? .right : .left, forColumn: column)
+          }
 
           return table
         } else if env == "displaylines" || env == "gather" {

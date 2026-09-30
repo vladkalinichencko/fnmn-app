@@ -253,18 +253,27 @@ extension Math {
     }
 
     static func build(fromString string: String) -> AtomList? {
-      var builder = Parser(string: string)
-      return builder.build()
+      var error: ParserError?
+      return build(fromString: string, error: &error)
     }
 
-    static func build(fromString string: String, error: inout ParserError?) -> AtomList? {
+    /// A `\left` closed in another row of an environment, or a `\right` opened in one, is an error in TeX too;
+    /// OCR makes it often. Such a formula is read again with fixed-size delimiters, which pair with nothing.
+    static func build(fromString original: String, error: inout ParserError?) -> AtomList? {
+      let string = normalized(original)
       var builder = Parser(string: string)
       let output = builder.build()
-      if builder.error != nil {
-        error = builder.error
-        return nil
+      guard let failure = builder.error else { return output }
+      if failure.code == .missingRight || failure.code == .missingLeft {
+        let unpaired = string
+          .replacing(/\\left(?![a-zA-Z])/, with: "\\Bigl")
+          .replacing(/\\right(?![a-zA-Z])/, with: "\\Bigr")
+        var retry = Parser(string: unpaired)
+        let output = retry.build()
+        if retry.error == nil { return output }
       }
-      return output
+      error = failure
+      return nil
     }
 
     mutating func buildInternal(_ oneCharOnly: Bool) -> AtomList? {
@@ -768,8 +777,12 @@ extension Math {
         // \substack reads ONE braced argument containing rows separated by \\
         // Similar to how \frac reads {numerator}{denominator}
 
-        // Read the braced content using standard pattern
+        // Read the braced content using standard pattern. Its \\ splits the substack, not the rows of an
+        // environment around it.
+        let outerEnvironment = self.currentEnvironment
+        self.currentEnvironment = nil
         let content = self.buildInternal(true)
+        self.currentEnvironment = outerEnvironment
 
         if content == nil {
           return nil
@@ -798,8 +811,25 @@ extension Math {
         if env == nil {
           return nil
         }
+        // `array` names its columns' alignment, as in `{lcr}`; rules between columns are not drawn.
+        let columns = env == "array" ? self.readArrayColumns() : []
         let table = self.buildTable(environment: env, firstList: nil, isRow: false)
+        if let table = table as? Table {
+          for (column, alignment) in columns.enumerated() where column < table.numberOfColumns {
+            table.setAlignment(alignment, forColumn: column)
+          }
+        }
         return table
+      } else if command == "overset" || command == "stackrel" || command == "underset" {
+        // Set as a script on the base: close to KaTeX for short marks over a symbol.
+        let mark = self.buildInternal(true)
+        let base = Inner(innerList: self.buildInternal(true) ?? AtomList())
+        if command == "underset" {
+          base.`subscript` = mark
+        } else {
+          base.superscript = mark
+        }
+        return base
       } else if command == "color" {
         // A color command has 2 arguments
         let mathColor = Color()
@@ -854,6 +884,35 @@ extension Math {
 
         inner.innerList = innerList
         return inner
+      } else if let scale = Self.delimiterScales[command] {
+        // \big( and its kin: one delimiter at a fixed size, spaced by the side it stands on.
+        let inner = Inner(innerList: AtomList())
+        inner.leftBoundary = self.getBoundaryAtom(command)
+        if inner.leftBoundary == nil {
+          return nil
+        }
+        inner.delimiterScale = scale
+        return inner
+      } else if command == "middle" {
+        // Drawn at \Big size: the height of the \left…\right around it is not known yet.
+        let inner = Inner(innerList: AtomList())
+        inner.leftBoundary = self.getBoundaryAtom(command)
+        if inner.leftBoundary == nil {
+          return nil
+        }
+        inner.delimiterScale = Self.delimiterScales["Big"]
+        return inner
+      } else if command == "tag" {
+        // An equation number, set a quad after the formula.
+        let tag = AtomList()
+        tag.append(Space(amount: 18))
+        tag.append(AtomFactory.atom(forCharacter: "(")!)
+        if let label = self.buildInternal(true) {
+          tag.append(contentsOf: label)
+        }
+        tag.append(AtomFactory.atom(forCharacter: ")")!)
+        let inner = Inner(innerList: tag)
+        return inner
       } else if command == "not" {
         // Handle \not command with lookahead for comprehensive negation support
         let nextCommand = self.peekNextCommand()
@@ -866,11 +925,51 @@ extension Math {
           self.setError(.invalidCommand, message: errorMessage)
           return nil
         }
+      } else if let (symbol, rest) = Self.joinedSymbol(command) {
+        // OCR drops the space after a symbol: `\inD` is `\in D`. Read the letters again as math.
+        for _ in rest { self.unlookCharacter() }
+        return symbol
       } else {
         let errorMessage = "Invalid command \\\(command)"
         self.setError(.invalidCommand, message: errorMessage)
         return nil
       }
+    }
+
+    /// KaTeX's delimiter heights for the \big family (1.2, 1.8, 2.4 and 3 times the font size), taken 2% lower:
+    /// Latin Modern's variants fall a hair short of them, and the exact height would skip to the next, larger one.
+    static let delimiterScales: [String: CGFloat] = [
+      "big": 1.18, "bigl": 1.18, "bigr": 1.18, "bigm": 1.18,
+      "Big": 1.76, "Bigl": 1.76, "Bigr": 1.76, "Bigm": 1.76,
+      "bigg": 2.35, "biggl": 2.35, "biggr": 2.35, "biggm": 2.35,
+      "Bigg": 2.94, "Biggl": 2.94, "Biggr": 2.94, "Biggm": 2.94,
+    ]
+
+    /// A known symbol command followed by capital letters, such as `\inD` or `\cupB`.
+    static func joinedSymbol(_ command: String) -> (Atom, Substring)? {
+      for split in command.indices.dropFirst().reversed() {
+        let rest = command[split...]
+        guard rest.allSatisfy(\.isUppercase),
+          let symbol = AtomFactory.atom(forLatexSymbol: String(command[..<split]))
+        else { continue }
+        return (symbol, rest)
+      }
+      return nil
+    }
+
+    mutating func readArrayColumns() -> [Table.ColumnAlignment] {
+      guard self.expectCharacter("{") else { return [] }
+      var columns: [Table.ColumnAlignment] = []
+      while self.hasCharacters {
+        switch self.nextCharacter() {
+        case "}": return columns
+        case "l": columns.append(.left)
+        case "c": columns.append(.center)
+        case "r": columns.append(.right)
+        default: continue
+        }
+      }
+      return columns
     }
 
     mutating func readColor() -> String? {

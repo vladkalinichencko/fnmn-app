@@ -29,6 +29,7 @@ struct LiveCropView: View {
             }
         }
         .frame(height: height)
+        .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
     }
 
     private var isShown: Bool {
@@ -65,8 +66,14 @@ private struct LiveCropWebView: UIViewRepresentable {
         ))
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
-        view.scrollView.isScrollEnabled = false
+        // A figure wider or taller than its frame is moved by the finger; one that fits stays still.
+        view.scrollView.bounces = false
+        view.scrollView.isDirectionalLockEnabled = true
+        view.scrollView.contentInsetAdjustmentBehavior = .never
         view.isOpaque = false
+        // The phase starts as `.loading`, so the first load needs no state change from the update pass.
+        context.coordinator.loaded = url
+        view.load(URLRequest(url: url))
         return view
     }
 
@@ -74,8 +81,9 @@ private struct LiveCropWebView: UIViewRepresentable {
         context.coordinator.onPhase = { phase = $0 }
         guard context.coordinator.loaded != url else { return }
         context.coordinator.loaded = url
-        phase = .loading
         view.load(URLRequest(url: url))
+        // A view update must not write state; the new page's phase is set right after it.
+        Task { @MainActor in phase = .loading }
     }
 
     static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
