@@ -23,7 +23,7 @@ struct LibraryFolderScreen: View {
     }
 }
 
-/// Picks the library folder and reads it as an import, so its progress shows under the library's title and
+/// Picks the library folder and reads it as an import: its materials show as cards one by one, and its progress
 /// outside the app.
 struct ChooseLibraryFolderButton: View {
     let title: LocalizedStringKey

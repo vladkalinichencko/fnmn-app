@@ -221,7 +221,8 @@ struct PlateView: View {
             }
             .opacity(read && mode == .reading ? 0.55 : 1)
             .animation(.easeInOut(duration: 0.4), value: read)
-            .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+            // The menu lifts the plate by this shape too; by the frame it would lift the square corners around the glass.
+            .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .gesture(TapGesture().onEnded { reader.send(.plate(.toggle(index))) }, isEnabled: isTicking)
             .gesture(TapGesture().onEnded { reader.send(.plate(.done)) }, isEnabled: noting)
             .contextMenu { if mode == .reading { menu } }

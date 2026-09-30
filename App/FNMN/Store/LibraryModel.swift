@@ -240,8 +240,8 @@ final class LibraryModel {
 
     /// Takes in the deliveries this device has not read as they are now: all of them on the first read, later the
     /// ones other devices added or rewrote. The device that asked the server for a material stores it first; the
-    /// others get it here from iCloud. They are read a few at a time, and each few are saved and show as cards
-    /// at once, so a read that stops goes on from there the next time.
+    /// others get it here from iCloud. Each one is saved as soon as it is read, so it shows as a card at once and
+    /// a read that stops goes on from there the next time.
     private func readChangedDeliveries(onStep: @MainActor (ImportStep) -> Void = { _ in }) async throws {
         let deliveries = try await deliveryFiles()
         var changed: [URL] = []
@@ -250,33 +250,16 @@ final class LibraryModel {
             changed = found.deliveries
             return found.snapshot
         }
-        for start in stride(from: 0, to: changed.count, by: Self.deliveriesAtOnce) {
-            let few = Array(changed[start ..< min(start + Self.deliveriesAtOnce, changed.count)])
-            onStep(.reading(start, of: changed.count))
-            try await take(few)
+        for (index, delivery) in changed.enumerated() {
+            onStep(.reading(index, of: changed.count))
+            try await CloudFolder.download(delivery)
+            try await write(saving: true) { [file] snapshot in try await file.addCloudDelivery(delivery, into: snapshot) }
         }
     }
-
-    private static let deliveriesAtOnce = 20
 
     private func deliveryFiles() async throws -> [URL] {
         guard let folder = cloudFolder?.appending(path: "deliveries"), CloudFolder.contains(folder) else { return [] }
         return try await CloudFolder.files(in: folder, withExtension: "tar")
-    }
-
-    /// Deliveries still only in iCloud come down together to be read and are let go again, so the phone never
-    /// holds the whole folder; the ones it already kept stay.
-    private func take(_ deliveries: [URL]) async throws {
-        let fetched = await CloudFolder.notOnDevice(deliveries)
-        try await CloudFolder.download(fetched)
-        try await write(saving: true) { [file] snapshot in
-            var next = snapshot
-            for delivery in deliveries {
-                next = try await file.addCloudDelivery(delivery, into: next)
-            }
-            return next
-        }
-        fetched.forEach(CloudFolder.evict)
     }
 
     private func moveIntoCloudIfNeeded() async throws {

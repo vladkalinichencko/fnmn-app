@@ -56,19 +56,20 @@ struct ItemTile: View {
             }
         }
         .buttonStyle(.plain)
+        .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
         .draggable(item.id)
         .contextMenu { ItemActions(item: item, album: album) }
     }
 
-    /// A tile with a picture has no frame: the picture fills it, fades into the page toward its lower half, and the
-    /// title sits on glass that bends it.
+    /// A tile with a picture has no frame: the picture fills it, its lower half eases into the plate color under the
+    /// title, and the title sits on glass that bends it.
     private func coverTile(_ cover: Cover, job: ImportJob?) -> some View {
         let progress = job?.fraction ?? progress
         return Color.clear
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             .overlay { CoverImage(cover: cover, cornerRadius: 0) }
             .overlay {
-                LinearGradient(colors: [.clear, Tokens.canvas], startPoint: .center, endPoint: .bottom)
+                LinearGradient(stops: Self.fade, startPoint: .center, endPoint: .bottom)
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .bottom) {
@@ -86,6 +87,13 @@ struct ItemTile: View {
             }
             .clipShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+    }
+
+    /// From clear at the tile's middle to the plate color at its bottom along an ease-in-out curve, so the picture
+    /// has no visible line where the fade starts.
+    private static let fade: [Gradient.Stop] = (0 ... 12).map { step in
+        let t = Double(step) / 12
+        return Gradient.Stop(color: Tokens.plateTint.opacity(t * t * (3 - 2 * t)), location: t)
     }
 
     private var title: some View {
@@ -245,7 +253,7 @@ struct TileCard<Content: View>: View {
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.tileRadius, color: color) }
             .plate(cornerRadius: Tokens.tileRadius)
-            .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+            .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
 

@@ -9,13 +9,7 @@ enum CloudFolder {
     /// waits longer each time nothing new has arrived: from half a second up to five.
     @concurrent
     static func download(_ item: URL, timeout: Duration = .seconds(600)) async throws {
-        try await download([item], timeout: timeout)
-    }
-
-    /// Asks iCloud for all the files at once, so they come down side by side rather than one after another.
-    @concurrent
-    static func download(_ items: [URL], timeout: Duration = .seconds(600)) async throws {
-        var pending = items.flatMap(missing(in:))
+        var pending = missing(in: item)
         for file in pending {
             try? FileManager.default.startDownloadingUbiquitousItem(at: file)
         }
@@ -36,12 +30,6 @@ enum CloudFolder {
         missing(in: item).isEmpty
     }
 
-    /// The files of these that are still only in iCloud.
-    @concurrent
-    static func notOnDevice(_ files: [URL]) async -> [URL] {
-        files.filter { !isLocal($0) }
-    }
-
     /// Whether the file is in the folder, on the device or still only in iCloud.
     static func contains(_ file: URL) -> Bool {
         FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)
@@ -54,13 +42,6 @@ enum CloudFolder {
             .map(downloadedName)
             .filter { pathExtension == nil ? !$0.lastPathComponent.hasPrefix(".") : $0.pathExtension == pathExtension }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-    }
-
-    /// Drops the device's copy of an imported file; iCloud keeps it. A folder on the device itself has
-    /// nothing to drop, and a copy that stays only takes space, so neither stops the import.
-    static func evict(_ file: URL) {
-        guard (try? file.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) == true else { return }
-        try? FileManager.default.evictUbiquitousItem(at: file)
     }
 
     /// Files under the item that are still only in iCloud, by the names they will have once downloaded.

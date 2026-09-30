@@ -40,7 +40,7 @@ struct ImportJob: Identifiable, Equatable {
         if case let .preparing(step) = phase { step.fraction } else { nil }
     }
 
-    /// Reading the library folder shows as the library's subtitle, not as a tile, until it fails.
+    /// Reading the library folder shows as the cards it adds, not as a tile, until it fails.
     var readsLibraryFolder: Bool {
         if case .libraryFolder = input { true } else { false }
     }

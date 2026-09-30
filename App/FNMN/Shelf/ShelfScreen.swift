@@ -15,7 +15,7 @@ struct ShelfScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
                     if !annotations.isEmpty {
-                        ShelfSection("Annotations", count: annotations.count, route: .annotations, preview: 3) {
+                        ShelfSection("Annotations", route: .annotations) {
                             VStack(spacing: Tokens.sectionGap) {
                                 ForEach(annotations.prefix(3), id: \.1.id) { item, annotation in
                                     AnnotationCard(item: item, annotation: annotation)
@@ -24,7 +24,7 @@ struct ShelfScreen: View {
                         }
                     }
                     if !archived.isEmpty {
-                        ShelfSection("Archive", count: archived.count, route: .archive, preview: 4) {
+                        ShelfSection("Archive", route: .archive) {
                             ItemGrid(items: Array(archived.prefix(4)))
                         }
                     }
@@ -43,20 +43,16 @@ struct ShelfScreen: View {
     }
 }
 
-/// A large section title; when there is more than the preview holds, it leads to the full list.
+/// A large section title that leads to the full list.
 private struct ShelfSection<Content: View>: View {
     let title: String
-    let count: Int
     let route: Route
-    let preview: Int
     let content: Content
     @Environment(WindowNavigation.self) private var navigation
 
-    init(_ title: String, count: Int, route: Route, preview: Int, @ViewBuilder content: () -> Content) {
+    init(_ title: String, route: Route, @ViewBuilder content: () -> Content) {
         self.title = title
-        self.count = count
         self.route = route
-        self.preview = preview
         self.content = content()
     }
 
@@ -64,12 +60,11 @@ private struct ShelfSection<Content: View>: View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
             // A symbol inside the text sits on the letters' middle, where a separate image would sink to the baseline.
             Button { navigation.open(route) } label: {
-                Text(count > preview ? "\(title) \(Image(systemName: "chevron.forward"))" : "\(title)")
+                Text("\(title) \(Image(systemName: "chevron.forward"))")
                     .font(Tokens.sectionTitle)
                     .foregroundStyle(.primary)
             }
             .buttonStyle(.plain)
-            .disabled(count <= preview)
             content
         }
     }
@@ -129,6 +124,8 @@ private struct AnnotationCard: View {
             }
         }
         .buttonStyle(.plain)
+        // Lifted by the frame, the card would show the menu's own plate behind the quote and the note.
+        .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .contextMenu {
             Button("Copy", systemImage: "doc.on.doc") {
                 UIPasteboard.general.string = [annotation.quote, annotation.note].filter { !$0.isEmpty }.joined(separator: "\n\n")

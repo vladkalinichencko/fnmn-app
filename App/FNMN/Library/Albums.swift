@@ -19,11 +19,11 @@ struct AlbumTile: View {
     }
 
     /// The fan takes a whole tile's shape, so an album never looks smaller than what it holds; the name goes under it.
-    /// The fan's cards are shrunk inside that shape, which leaves about ten points under them, so the name sits
-    /// close enough that the space above it matches the grid's gap below it. The whole tile takes the tap, so a
-    /// finger between the turned cards still opens the album.
+    /// The fan's cards are shrunk inside that shape, which leaves about twelve points under them, so the name moves
+    /// up into that space: the gap from the fan to its name stays smaller than the grid's gap below the name, and the
+    /// name reads as the fan's. The whole tile takes the tap, so a finger between the turned cards still opens the album.
     private var label: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: -4) {
             AlbumFan(front: album.front)
                 .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             HStack(alignment: .firstTextBaseline) {
@@ -100,7 +100,7 @@ private struct AlbumFan: View {
                 .font(.headline.weight(.black))
                 .lineLimit(5)
                 .padding(Tokens.tilePadding)
-                .padding(.top, 8)
+                .padding(.top, 4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .scaleEffect(place.scale)
                 .rotationEffect(.degrees(place.degrees))
@@ -127,6 +127,7 @@ private struct AlbumTileBehavior: ViewModifier {
                 return !ids.isEmpty
             }
             .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
             .contextMenu {
                 Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(album.name)) }
                 Button("Delete Album", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(album.name)) }
