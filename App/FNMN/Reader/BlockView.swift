@@ -145,11 +145,17 @@ struct PlateView: View {
     /// The height of the note's text, which the tab on the plate's edge follows.
     @State private var noteHeight: CGFloat = 0
 
+    /// Where the last swipe left the plate, until the mode catches up with it.
+    @State private var side: Bool?
+
     private var noting: Bool { mode == .noting(index) }
+    /// Whether the plate stands aside. The swipe decides this at once and the mode follows a moment later, so a
+    /// finger always moves the plate from where it is on the screen, however far behind the mode is.
+    private var open: Bool { side ?? noting }
     /// How far the plate moves aside for its note: a little over half its width.
     private var noteWidth: CGFloat { size.width * 0.58 }
-    /// The mode alone says where the plate rests, aside exactly while its note is open; the finger only adds to it.
-    private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
+    /// The plate rests aside exactly while it is open; the finger only adds to it.
+    private var offset: CGFloat { (open ? -noteWidth : 0) + drag }
     private static let slide = Animation.spring(duration: 0.35, bounce: 0.2)
     /// How far the plate is pulled right before letting go marks "read to here".
     private static let commit: CGFloat = 96
@@ -173,9 +179,10 @@ struct PlateView: View {
                 .offset(x: offset)
                 // Leftward opens the note while reading and rightward closes it; rightward while reading pulls
                 // out the "read to here" button.
-                .gesture(HorizontalPan(starts: { noting ? $0 > 0 : mode == .reading }, changed: dragged, ended: released))
+                .gesture(HorizontalPan(starts: { open ? $0 > 0 : swipesOpen }, changed: dragged, ended: released))
         }
-        .animation(Self.slide, value: noting)
+        .animation(Self.slide, value: open)
+        .onChange(of: noting) { side = nil }
     }
 
     /// The button the plate uncovers as it is pulled right, as wide as the pull; it takes hold, with a tap of
@@ -205,7 +212,7 @@ struct PlateView: View {
     /// The plate follows the finger: left up to a little past the note's edge, right with growing resistance once the
     /// mark would take hold, and back toward the note's side while it is open, never past where it rests.
     private func dragged(_ translation: CGFloat) {
-        if noting {
+        if open {
             drag = min(max(translation, 0), noteWidth)
         } else if translation < 0 {
             drag = max(translation, -noteWidth - 20)
@@ -221,13 +228,23 @@ struct PlateView: View {
         let thrown = translation + velocity * 0.2
         withAnimation(Self.slide) {
             drag = 0
-            if noting, thrown > noteWidth / 2 {
+            if open, thrown > noteWidth / 2 {
+                side = false
                 reader.send(.plate(.done))
-            } else if !noting, thrown < -noteWidth / 2 {
+            } else if !open, thrown < -noteWidth / 2 {
+                side = true
                 reader.send(.plate(.note(index)))
-            } else if !noting, thrown > Self.commit {
+            } else if !open, thrown > Self.commit {
                 reader.send(.readThrough(markedReadThrough ? nil : index))
             }
+        }
+    }
+
+    /// A plate opens its note while text is not being selected or ticked; another plate's open note gives way.
+    private var swipesOpen: Bool {
+        switch mode {
+        case .reading, .noting: true
+        case .selectingText, .selectingParagraphs: false
         }
     }
 
@@ -257,7 +274,7 @@ struct PlateView: View {
             .animation(.easeInOut(duration: 0.4), value: read)
             // The menu lifts the plate by this shape too; by the frame it would lift the square corners around the glass.
             .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-            .gesture(TapGesture().onEnded { reader.send(.plate(.done)) }, isEnabled: noting)
+            .gesture(TapGesture().onEnded { side = false; reader.send(.plate(.done)) }, isEnabled: open)
             .contextMenu { if mode == .reading { menu } }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
             .sensoryFeedback(.selection, trigger: markedReadThrough)
