@@ -2,43 +2,38 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
-/// One row, the way a system activity reads: an icon, the title over the stage, and under them a thin bar once
-/// the share done is known. A widget never animates, so a stage with no share shows no spinner at all.
+/// A wait outside the app, such as a Mac copying materials in: one row the way a system activity reads, with
+/// an icon, the title over the stage, and one ring for the share done. Imports show the system's own
+/// continued-processing view instead, so nothing starts this activity for them.
 struct ImportActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ImportActivityAttributes.self) { context in
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.down.doc")
-                        .font(.title3)
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.down.doc")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(context.attributes.title)
+                        .font(.headline)
+                    Text(context.state.status)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(context.attributes.title)
-                            .font(.headline)
-                        Text(context.state.status)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Ring(fraction: context.state.fraction)
-                        .frame(width: 28, height: 28)
                 }
-                if let fraction = context.state.fraction {
-                    ProgressView(value: fraction)
-                }
+                .lineLimit(1)
+                Spacer(minLength: 0)
+                Ring(fraction: context.state.fraction)
+                    .frame(width: 28, height: 28)
             }
             .padding(16)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack {
                         Text(context.state.status)
                             .font(.subheadline)
                             .lineLimit(1)
-                        if let fraction = context.state.fraction {
-                            ProgressView(value: fraction)
-                        }
+                        Spacer(minLength: 0)
+                        ShareDone(fraction: context.state.fraction)
                     }
                 }
             } compactLeading: {

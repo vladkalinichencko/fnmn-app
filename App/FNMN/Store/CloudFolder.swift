@@ -9,7 +9,13 @@ enum CloudFolder {
     /// waits longer each time nothing new has arrived: from half a second up to five.
     @concurrent
     static func download(_ item: URL, timeout: Duration = .seconds(600)) async throws {
-        var pending = missing(in: item)
+        try await download([item], timeout: timeout)
+    }
+
+    /// Asks iCloud for all the files at once, so they come down side by side rather than one after another.
+    @concurrent
+    static func download(_ items: [URL], timeout: Duration = .seconds(600)) async throws {
+        var pending = items.flatMap(missing(in:))
         for file in pending {
             try? FileManager.default.startDownloadingUbiquitousItem(at: file)
         }
@@ -28,6 +34,12 @@ enum CloudFolder {
     @concurrent
     static func isOnDevice(_ item: URL) async -> Bool {
         missing(in: item).isEmpty
+    }
+
+    /// The files of these that are still only in iCloud.
+    @concurrent
+    static func notOnDevice(_ files: [URL]) async -> [URL] {
+        files.filter { !isLocal($0) }
     }
 
     /// Whether the file is in the folder, on the device or still only in iCloud.

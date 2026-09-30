@@ -38,7 +38,7 @@ struct ItemTile: View {
             if let cover = item.cover {
                 coverTile(cover, job: job)
             } else {
-                TileCard(progress: progress) {
+                TileCard(progress: job?.fraction ?? progress, color: job == nil ? .accentColor : .secondary) {
                     VStack(alignment: .leading, spacing: 8) {
                         header(job)
                         title
@@ -62,7 +62,8 @@ struct ItemTile: View {
 
     /// A tile with a picture has no frame: the picture fills it and the title sits on glass that bends it.
     private func coverTile(_ cover: Cover, job: ImportJob?) -> some View {
-        Color.clear
+        let progress = job?.fraction ?? progress
+        return Color.clear
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             .overlay { CoverImage(cover: cover, cornerRadius: 0) }
             .overlay(alignment: .bottom) {
@@ -74,7 +75,7 @@ struct ItemTile: View {
                 .padding(Tokens.tilePadding - 2)
                 .padding(.bottom, (progress ?? 0) > 0 ? ProgressLine.clearance - (Tokens.tilePadding - 2) : 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.captionRadius) }
+                .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.captionRadius, color: job == nil ? .accentColor : .secondary) }
                 .glassEffect(.regular, in: .rect(cornerRadius: Tokens.captionRadius, style: .continuous))
                 .padding(Tokens.captionInset)
             }
@@ -164,7 +165,7 @@ struct PreparingTile: View {
     let job: ImportJob
 
     var body: some View {
-        TileCard {
+        TileCard(progress: job.fraction, color: .secondary) {
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: job.symbol)
                     .font(.subheadline.weight(.semibold))
@@ -181,24 +182,19 @@ struct PreparingTile: View {
     }
 }
 
-/// What a card's job is doing: a caption over a bar of its own, grey so it never reads as the accent line of
-/// reading progress along the edge. A stage with no known share shows a spinner; a failure shows its reason.
+/// What a card's job is doing, in words; its share done runs as a grey line along the card's edge, where the
+/// accent line of reading progress would be. A stage with no known share shows a spinner; a failure shows its reason.
 struct JobStatus: View {
     let phase: ImportJob.Phase
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 6) {
             switch phase {
             case let .preparing(step):
-                if let fraction = step.fraction {
-                    Text(step.text).lineLimit(1)
-                    ProgressView(value: fraction)
-                } else {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.mini)
-                        Text(step.text).lineLimit(1)
-                    }
+                if step.fraction == nil {
+                    ProgressView().controlSize(.mini)
                 }
+                Text(step.text).lineLimit(1)
             case let .failed(message):
                 Text(message).lineLimit(3)
             }
@@ -228,10 +224,12 @@ struct JobActions: View {
 /// The rounded glass card every tile without a picture is drawn on.
 struct TileCard<Content: View>: View {
     let progress: Double?
+    let color: Color
     let content: Content
 
-    init(progress: Double? = nil, @ViewBuilder content: () -> Content) {
+    init(progress: Double? = nil, color: Color = .accentColor, @ViewBuilder content: () -> Content) {
         self.progress = progress
+        self.color = color
         self.content = content()
     }
 
@@ -240,17 +238,18 @@ struct TileCard<Content: View>: View {
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
-            .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.tileRadius) }
+            .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.tileRadius, color: color) }
             .plate(cornerRadius: Tokens.tileRadius)
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
 
-/// How far a material is read: a straight line inside the glass along its bottom edge. It spans the edge's
-/// flat part, so its rounded ends sit where the corners start to curve.
+/// How far a material is read, or in grey how far its job is done: a straight line inside the glass along its
+/// bottom edge. It spans the edge's flat part, so its rounded ends sit where the corners start to curve.
 struct ProgressLine: View {
     let progress: Double?
     let cornerRadius: CGFloat
+    var color: Color = .accentColor
 
     /// How far the line stays from the bottom edge, and the room text above it keeps.
     static let inset: CGFloat = 9
@@ -264,7 +263,7 @@ struct ProgressLine: View {
                     .fill(.quaternary)
                     .overlay(alignment: .leading) {
                         Capsule()
-                            .fill(Color.accentColor)
+                            .fill(color)
                             .frame(width: max(geometry.size.width * min(progress, 1), Self.thickness))
                     }
             }

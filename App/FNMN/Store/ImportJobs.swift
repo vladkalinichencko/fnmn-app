@@ -29,9 +29,20 @@ struct ImportJob: Identifiable, Equatable {
     var title: String {
         switch input {
         case let .link(url): url.host() ?? url.absoluteString
-        case let .file(url), let .libraryFolder(url): url.lastPathComponent
+        case let .file(url): url.lastPathComponent
+        case let .libraryFolder(url): "The \(url.lastPathComponent) folder"
         case let .videoFile(_, url): url.absoluteString
         }
+    }
+
+    /// The share done, when the stage knows it.
+    var fraction: Double? {
+        if case let .preparing(step) = phase { step.fraction } else { nil }
+    }
+
+    /// Reading the library folder shows as the library's subtitle, not as a tile, until it fails.
+    var readsLibraryFolder: Bool {
+        if case .libraryFolder = input { true } else { false }
     }
 }
 
@@ -233,7 +244,7 @@ extension ImportStep {
     static let downloadingFromCloud = ImportStep(text: "Downloading from iCloud", fraction: nil, symbol: "icloud.and.arrow.down")
     static let readingLibraryFolder = ImportStep(text: "Reading the FNMN folder", fraction: nil, symbol: "folder")
 
-    static func importing(_ index: Int, of count: Int) -> ImportStep {
-        ImportStep(text: "Importing \(index + 1) of \(count)", fraction: Double(index) / Double(max(count, 1)), symbol: "tray.and.arrow.down")
+    static func reading(_ done: Int, of count: Int) -> ImportStep {
+        ImportStep(text: "\(done) of \(count) read", fraction: Double(done) / Double(max(count, 1)), symbol: "folder")
     }
 }

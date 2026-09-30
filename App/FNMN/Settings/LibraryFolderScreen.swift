@@ -23,13 +23,8 @@ struct LibraryFolderScreen: View {
     }
 }
 
-private extension ImportJob {
-    var readsLibraryFolder: Bool {
-        if case .libraryFolder = input { true } else { false }
-    }
-}
-
-/// Picks the library folder and reads it as an import, so its progress shows on a tile and in the Live Activity.
+/// Picks the library folder and reads it as an import, so its progress shows under the library's title and
+/// outside the app.
 struct ChooseLibraryFolderButton: View {
     let title: LocalizedStringKey
     @Environment(ImportJobs.self) private var imports

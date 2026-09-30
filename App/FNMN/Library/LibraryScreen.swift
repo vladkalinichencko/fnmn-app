@@ -18,7 +18,7 @@ struct LibraryScreen: View {
                     }
                     LibrarySection("Unsorted") {
                         LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                            ForEach(imports.jobs.filter { $0.itemID == nil }) { PreparingTile(job: $0) }
+                            ForEach(imports.jobs.filter { $0.itemID == nil && !($0.readsLibraryFolder && $0.isPreparing) }) { PreparingTile(job: $0) }
                             ForEach(library.snapshot.unsortedItems) { ItemTile(item: $0) }
                         }
                     }
@@ -33,6 +33,7 @@ struct LibraryScreen: View {
             }
             .background(Tokens.canvas)
             .navigationTitle("Library")
+            .navigationSubtitle(folderReading ?? "")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Settings", systemImage: "gearshape") { dialogs.send(.openSettings) }
@@ -46,6 +47,12 @@ struct LibraryScreen: View {
                 }
             }
         }
+    }
+
+    /// How far the FNMN folder is read; its materials show as cards while it goes.
+    private var folderReading: String? {
+        guard case let .preparing(step)? = imports.jobs.first(where: \.readsLibraryFolder)?.phase else { return nil }
+        return step.text
     }
 }
 
