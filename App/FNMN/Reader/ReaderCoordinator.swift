@@ -12,9 +12,14 @@ struct ReaderState: Equatable {
     var scrollID: Int?
     /// Opened at a note rather than to read on: scrolling looks around and leaves the place where reading stopped.
     var keepsPlace = false
+    /// The block the column goes to once it is laid out. A lazy column drops a position given before its rows
+    /// exist and opens at the top, so the jump waits for `.opened`, and until then the top is not taken as the place.
+    var opening: Int?
 }
 
 enum ReaderAction {
+    /// The column is laid out and can go to where it opens.
+    case opened
     /// The person scrolled the column to this block.
     case scrolled(Int?)
     case plate(PlateAction)
@@ -34,7 +39,12 @@ enum ReaderAction {
 func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: ReaderDocument) -> ReaderState {
     var state = state
     switch action {
+    case .opened:
+        guard let opening = state.opening else { return state }
+        state.opening = nil
+        state.scrollID = opening
     case let .scrolled(index):
+        guard state.opening == nil else { return state }
         state.scrollID = index
         if let index, document.blocks.indices.contains(index), state.fold == .open, !state.keepsPlace {
             state.place = index
@@ -72,8 +82,7 @@ final class ReaderCoordinator {
     private(set) var state: ReaderState
     @ObservationIgnored private let library: LibraryModel
 
-    /// The column starts at the note it was opened at, or else at the place reading stopped; it is there on its
-    /// first frame, before it could report the top of the text as a new place.
+    /// The column opens at the note it was opened at, or else at the place reading stopped.
     init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, place: Int?, note: Int?, library: LibraryModel) {
         self.document = document
         self.materialID = materialID
@@ -82,7 +91,7 @@ final class ReaderCoordinator {
         self.baseURL = baseURL
         state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library
-        state.scrollID = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
+        state.opening = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
     }
 
     func send(_ action: ReaderAction) {
@@ -118,7 +127,7 @@ final class ReaderCoordinator {
         switch action {
         case .plate: .snappy
         case .pinched, .openSection: .spring(duration: 0.45, bounce: 0.15)
-        case .scrolled, .mark, .note, .readThrough, .ask, .copyPrompt: nil
+        case .opened, .scrolled, .mark, .note, .readThrough, .ask, .copyPrompt: nil
         }
     }
 
@@ -142,7 +151,7 @@ final class ReaderCoordinator {
             ChatGPTHandoff.copyAndOpen(title: title, passage: passage)
         case let .copyPrompt(passage):
             _ = ChatGPTHandoff.remember(title: title, passage: passage)
-        case .plate, .pinched, .openSection:
+        case .opened, .plate, .pinched, .openSection:
             break
         }
     }

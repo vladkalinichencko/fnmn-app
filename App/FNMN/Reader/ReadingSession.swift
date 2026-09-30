@@ -117,6 +117,11 @@ struct ReadingSession: View {
         }
         .swipeActionsContainer()
         .scrollPosition(id: reader.scrollPosition, anchor: .top)
+        // After the first layout, when the lazy column knows its rows and can go to one far down.
+        .task {
+            await Task.yield()
+            reader.send(.opened)
+        }
         .simultaneousGesture(
             MagnifyGesture()
                 .updating($pinching) { _, state, _ in state = true }

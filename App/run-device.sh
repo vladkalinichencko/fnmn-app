@@ -3,7 +3,7 @@
 #   App/run-device.sh            the first connected physical device
 #   App/run-device.sh <UDID>     a specific one
 set -e
-DEVICE=${1:-$(xcrun devicectl list devices | grep -E 'connected +.*physical' | grep -Eo '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)}
+DEVICE=${1:-$(xcrun devicectl list devices | grep -E '(connected|available).*physical' | grep -Eo '[0-9A-F]{8}-[0-9A-F]{16}' | head -1)}
 if [[ -z $DEVICE ]]; then
   echo "No iPhone or iPad is connected. Plug it in by cable, unlock it and trust this Mac; 'xcrun devicectl list devices' should show it as connected." >&2
   xcrun devicectl list devices | grep physical >&2
