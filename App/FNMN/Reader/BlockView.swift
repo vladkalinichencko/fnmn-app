@@ -16,15 +16,13 @@ struct BlockView: View, Equatable {
     let markedReadThrough: Bool
     /// Highlights and notes on this block.
     let annotations: [Annotation]
-    /// The number of blocks under this heading when the document is folded; nil while it is open.
-    let folded: Int?
-    /// A heading whose section is read to its last block, by the reading place or the "read through here" mark.
-    let sectionRead: Bool
+    /// What a heading does when tapped; `.none` for every other block.
+    let fold: HeadingFold
 
     var body: some View {
         switch block {
         case let .heading(level, title):
-            SectionHeading(index: index, level: level, title: title, folded: folded, read: sectionRead)
+            SectionHeading(index: index, level: level, title: title, fold: fold, read: read)
         case let .text(markdown):
             PlateView(
                 markdown: markdown, index: index, baseURL: baseURL, mode: mode,
@@ -45,72 +43,37 @@ struct BlockView: View, Equatable {
     }
 }
 
-/// What a pinch does to a block: stays as it is, leaves the page (pinching in) or arrives on it (pinching out).
-enum PinchRole {
-    case stays, leaves, arrives
+/// Whether a heading has a section under it to close up, and whether it has.
+enum HeadingFold: Equatable {
+    case none
+    case open
+    /// Closed, with the number of blocks it hides.
+    case closed(hidden: Int)
 }
 
-/// A block that leaves closes up and fades as the fingers come together; one that arrives opens and fades in as they
-/// spread. The same effect serves every fold level, and the column below follows the fingers because the block's
-/// height is what changes.
-struct PinchFold: ViewModifier {
-    let role: PinchRole
-    @Environment(PinchScale.self) private var pinch
-
-    func body(content: Content) -> some View {
-        // Only the blocks the pinch moves read the pinch, so a frame of it does not touch the rest.
-        let presence: CGFloat = switch role {
-        case .stays: 1
-        case .leaves: 1 - pinch.leaving
-        case .arrives: pinch.arriving
-        }
-        Reveal(presence: presence) { content.opacity(presence) }
-            // Exact while the block is closing; roomy at rest, so nothing it draws past its frame is cut.
-            .clipShape(Rectangle().inset(by: presence < 1 ? 0 : -120))
-    }
-}
-
-/// Lays its one child out at full size and reports only `presence` of its height.
-private struct Reveal: Layout {
-    var presence: CGFloat
-
-    var animatableData: CGFloat {
-        get { presence }
-        set { presence = newValue }
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
-        guard let child = subviews.first else { return .zero }
-        let size = child.sizeThatFits(proposal)
-        return CGSize(width: size.width, height: size.height * presence)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
-        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: nil))
-    }
-}
-
-/// Tapping a heading in the folded document opens the text at it.
+/// A heading whose tap closes its section up under it or opens it again.
 private struct SectionHeading: View {
     let index: Int
     let level: Int
     let title: String
-    let folded: Int?
+    let fold: HeadingFold
     let read: Bool
     @Environment(ReaderCoordinator.self) private var reader
 
     var body: some View {
-        HeadingView(level: level, title: title, folded: folded, read: read)
-            .onTapGesture { reader.send(.openSection(index)) }
+        HeadingView(level: level, title: title, fold: fold, read: read)
+            .onTapGesture {
+                if fold != .none { reader.send(.toggleSection(index)) }
+            }
     }
 }
 
-/// A heading on the page. Open and folded it is the same view, so it slides to its place in the outline
-/// instead of fading out and in; folded, it sits closer and shows how many blocks it holds. It grays once its section is read.
+/// A heading on the page. A heading with a section under it shows a chevron that turns when the section opens, and
+/// how many blocks it hides while it is closed. It grays once it is read, as a paragraph does.
 struct HeadingView: View {
     let level: Int
     let title: String
-    var folded: Int?
+    var fold = HeadingFold.none
     var read = false
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
 
@@ -119,17 +82,21 @@ struct HeadingView: View {
             InlineText(markdown: title, syntaxExtensions: [.math])
                 .font(font)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let folded, folded > 0 {
-                Text(folded, format: .number)
+            if case let .closed(hidden) = fold {
+                Text(hidden, format: .number)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
-                    .transition(.opacity)
+            }
+            if fold != .none {
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(fold == .open ? 90 : 0))
             }
         }
-        .foregroundStyle(read ? .secondary : .primary)
+        .opacity(read ? 0.55 : 1)
         .animation(.easeInOut(duration: 0.4), value: read)
-        .padding(.top, folded == nil ? (level <= 2 ? Tokens.gap : 4) : 4)
-        .padding(.bottom, folded == nil ? 0 : 4)
+        .padding(.top, level <= 2 ? Tokens.gap : 4)
         .contentShape(.rect)
     }
 

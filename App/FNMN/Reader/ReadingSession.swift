@@ -47,42 +47,17 @@ extension AnnotationCommand {
     }
 }
 
-/// How far two fingers have pinched. Only the blocks the pinch moves read it, so a frame of the gesture redraws
-/// those blocks and not the whole reader.
-@MainActor @Observable
-final class PinchScale {
-    /// The scale of the fingers: 1 at rest, below 1 while they come together, above 1 while they spread.
-    var value: CGFloat = 1
-    /// Fingers have spread: the blocks the next fold out brings back are in the column, closed, until they let go.
-    var spreading = false
-    /// Fingers have let go and the blocks are finishing what the pinch began; a cancelled gesture must not begin again.
-    @ObservationIgnored var settling = false
-
-    /// The scale change that carries a block fully away or fully back.
-    static let span: CGFloat = 0.35
-
-    /// How far the blocks that leave have gone, 0 to 1.
-    var leaving: CGFloat { min(max((1 - value) / Self.span, 0), 1) }
-    /// How far the blocks that arrive have come, 0 to 1.
-    var arriving: CGFloat { min(max((value - 1) / Self.span, 0), 1) }
-}
-
-/// One open document drawn from its coordinator: the column of blocks, the header and the pinch between sections.
+/// One open document drawn from its coordinator: the column of blocks, the header and the headings that fold their sections.
 /// Each block gets only values, so when the place moves one paragraph, SwiftUI redraws just the blocks
 /// whose read state changed.
 struct ReadingSession: View {
     @Environment(LibraryModel.self) private var library
     let reader: ReaderCoordinator
-    @State private var pinch = PinchScale()
-    /// Tells a cancelled pinch, which never ends, from one that was let go.
-    @GestureState private var pinching = false
 
     var body: some View {
         let document = reader.document
         let visible = reader.visible
         let current = reader.current(in: visible)
-        let leaving = readingFoldLeaving(reader.state.fold, blocks: document.blocks)
-        let arriving = pinch.spreading ? readingFoldArriving(reader.state.fold, blocks: document.blocks) : []
         let marks = Dictionary(grouping: library.snapshot.annotations.filter { $0.materialID == reader.materialID }, by: \.piece)
         let progress = library.progress
         ScrollView {
@@ -92,8 +67,7 @@ struct ReadingSession: View {
                     LeadImage(url: reader.baseURL.appending(path: path)).padding(.bottom, Tokens.gap)
                 }
                 MaterialHeader(title: reader.title, source: reader.source).padding(.bottom, 2 * Tokens.gap)
-                ForEach(pinch.spreading ? reader.visibleWhileSpreading : visible, id: \.self) { index in
-                    let section = document.sections[index]
+                ForEach(visible, id: \.self) { index in
                     BlockView(
                         block: document.blocks[index],
                         index: index,
@@ -102,12 +76,10 @@ struct ReadingSession: View {
                         read: progress.isPieceRead(index, of: reader.materialID, current: current),
                         markedReadThrough: progress.readThrough[reader.materialID] == index,
                         annotations: marks[index] ?? [],
-                        folded: reader.state.fold == .open ? nil : section?.size ?? 0,
-                        sectionRead: section.map { progress.isPieceRead($0.end - 1, of: reader.materialID, current: reader.state.place) } ?? false
+                        fold: fold(of: index, in: document)
                     )
                     .equatable()
                     .padding(.bottom, Tokens.gap)
-                    .modifier(PinchFold(role: leaving.contains(index) ? .leaves : arriving.contains(index) ? .arrives : .stays))
                     .id(index)
                 }
             }
@@ -128,41 +100,13 @@ struct ReadingSession: View {
             await Task.yield()
             reader.send(.opened)
         }
-        .simultaneousGesture(
-            MagnifyGesture()
-                .updating($pinching) { _, state, _ in state = true }
-                .onChanged { fingers in
-                    pinch.value = fingers.magnification
-                    if fingers.magnification > 1.03 { pinch.spreading = true }
-                }
-                .onEnded { settle($0.magnification) }
-        )
-        .onChange(of: pinching) { _, now in
-            if !now, !pinch.settling { settle(1) }
-        }
-        .environment(pinch)
         .environment(reader)
         .toolbar { selectionToolbar }
     }
 
-    /// Fingers let go: the blocks finish closing or opening, or go back if the pinch did not reach a fold, and only
-    /// then does the fold change, so nothing jumps.
-    private func settle(_ scale: CGFloat) {
-        let folds = readingFoldPinched(reader.state.fold, scale: Double(scale), blocks: reader.document.blocks) != reader.state.fold
-        pinch.settling = true
-        let end = !folds ? 1 : scale < 1 ? 1 - PinchScale.span : 1 + PinchScale.span
-        withAnimation(.smooth(duration: 0.3)) {
-            pinch.value = end
-        } completion: {
-            var still = Transaction()
-            still.disablesAnimations = true
-            withTransaction(still) {
-                if folds { reader.send(.pinched(scale)) }
-                pinch.value = 1
-                pinch.spreading = false
-                pinch.settling = false
-            }
-        }
+    private func fold(of index: Int, in document: ReaderDocument) -> HeadingFold {
+        guard document.holdsBlocks(index), let section = document.sections[index] else { return .none }
+        return reader.state.folded.contains(index) ? .closed(hidden: section.size) : .open
     }
 
     @ToolbarContentBuilder
