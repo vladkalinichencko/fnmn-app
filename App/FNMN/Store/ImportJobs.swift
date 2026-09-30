@@ -147,7 +147,9 @@ final class ImportJobs {
             send(.placed(job.id, itemID: try await library.storeFile(url)))
         }
         send(.progressed(job.id, .sending))
-        try await prepareOnServer(jobID: job.id) { try await self.server.port.startFileJob(file: url, connection: $0) }
+        try await prepareOnServer(jobID: job.id) { connection in
+            try await self.server.port.startFileJob(file: url, connection: connection) { self.send(.progressed(job.id, $0)) }
+        }
     }
 
     /// Runs a job on the server and stores the delivery it made in the card's place. A server that is not set up,
@@ -159,9 +161,9 @@ final class ImportJobs {
             await forget(job.id, connection: connection)
             throw ServerError.rejected(job.error ?? "The server could not prepare this material.")
         }
-        send(.progressed(jobID, .saving))
-        let archive = try await server.port.delivery(of: job.id, connection: connection)
+        let archive = try await server.port.delivery(of: job.id, connection: connection) { self.send(.progressed(jobID, $0)) }
         defer { try? FileManager.default.removeItem(at: archive) }
+        send(.progressed(jobID, .saving))
         try await library.store(archive: archive)
         await forget(job.id, connection: connection)
     }
@@ -179,9 +181,9 @@ final class ImportJobs {
         guard job.phase == .done else {
             throw ServerError.rejected(job.error ?? "The server could not download this video.")
         }
-        send(.progressed(jobID, .saving))
-        let video = try await server.port.videoFile(of: job.id, connection: connection)
+        let video = try await server.port.videoFile(of: job.id, connection: connection) { self.send(.progressed(jobID, $0)) }
         defer { try? FileManager.default.removeItem(at: video) }
+        send(.progressed(jobID, .saving))
         try await library.storeOriginal(video, of: itemID)
         await forget(job.id, connection: connection)
     }

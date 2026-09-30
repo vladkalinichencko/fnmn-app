@@ -5,14 +5,14 @@ import Foundation
 protocol ServerPort {
     func check(connection: ServerConnection) async throws
     func startJob(url: URL, connection: ServerConnection) async throws -> ServerJob
-    /// Sends a file for the server to make a material of by its type.
-    func startFileJob(file: URL, connection: ServerConnection) async throws -> ServerJob
+    /// Sends a file for the server to make a material of by its type, reporting how much of it is sent.
+    func startFileJob(file: URL, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> ServerJob
     func job(_ id: String, connection: ServerConnection) async throws -> ServerJob
-    /// Downloads the finished delivery archive to a temporary file.
-    func delivery(of id: String, connection: ServerConnection) async throws -> URL
+    /// Downloads the finished delivery archive to a temporary file, reporting how much of it has arrived.
+    func delivery(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL
     func startVideoDownload(url: URL, connection: ServerConnection) async throws -> ServerJob
-    /// Downloads the finished video file to a temporary location.
-    func videoFile(of id: String, connection: ServerConnection) async throws -> URL
+    /// Downloads the finished video file to a temporary location, reporting how much of it has arrived.
+    func videoFile(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL
     /// Tells the server to remove the job and its file.
     func forget(_ id: String, connection: ServerConnection) async throws
 }
@@ -95,13 +95,13 @@ struct ServerClient: ServerPort {
         return try await decoded(ServerJob.self, for: request)
     }
 
-    func startFileJob(file: URL, connection: ServerConnection) async throws -> ServerJob {
+    func startFileJob(file: URL, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> ServerJob {
         var request = authorizedRequest(path: "files", connection: connection)
         request.url?.append(queryItems: [URLQueryItem(name: "name", value: file.lastPathComponent)])
         request.httpMethod = "POST"
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 600
-        let (data, response) = try await URLSession.shared.upload(for: request, fromFile: file)
+        let (data, response) = try await URLSession.shared.upload(for: request, fromFile: file, delegate: Transfer(.sending, onStep: onStep))
         try accept(response, data: data)
         return try JSONDecoder().decode(ServerJob.self, from: data)
     }
@@ -110,10 +110,10 @@ struct ServerClient: ServerPort {
         try await decoded(ServerJob.self, for: authorizedRequest(path: "jobs/\(id)", connection: connection))
     }
 
-    func delivery(of id: String, connection: ServerConnection) async throws -> URL {
+    func delivery(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL {
         var request = authorizedRequest(path: "jobs/\(id)/package", connection: connection)
         request.timeoutInterval = 600
-        let (file, response) = try await URLSession.shared.download(for: request)
+        let (file, response) = try await URLSession.shared.download(for: request, delegate: Transfer(.receiving, onStep: onStep))
         try accept(response, data: Data())
         return file
     }
@@ -133,10 +133,10 @@ struct ServerClient: ServerPort {
         return try await decoded(ServerJob.self, for: request)
     }
 
-    func videoFile(of id: String, connection: ServerConnection) async throws -> URL {
+    func videoFile(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL {
         var request = authorizedRequest(path: "jobs/\(id)/file", connection: connection)
         request.timeoutInterval = 600
-        let (download, response) = try await URLSession.shared.download(for: request)
+        let (download, response) = try await URLSession.shared.download(for: request, delegate: Transfer(.receiving, onStep: onStep))
         try accept(response, data: Data())
         // The download lands as a `.tmp`; the file keeps the extension the server gave it, which names the original.
         let name = response.suggestedFilename.map { URL(filePath: $0).pathExtension } ?? ""
@@ -170,6 +170,51 @@ struct ServerClient: ServerPort {
     private struct JobRequest: Encodable { let url: URL; let folders: [String] }
     private struct VideoRequest: Encodable { let url: URL }
     private struct FailureBody: Decodable { let detail: String }
+}
+
+/// How far a file sent to the server or downloaded from it has got, as an import step once per whole percent.
+/// URLSession counts the bytes on its own thread; the steps go to the main thread in the order they were counted,
+/// so the last one arrives before the code awaiting the transfer goes on.
+private final class Transfer: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    enum Direction { case sending, receiving }
+
+    private let direction: Direction
+    private let onStep: @MainActor (ImportStep) -> Void
+    private var observation: NSKeyValueObservation?
+    /// Read and written only on the main thread.
+    private var percent = -1
+
+    init(_ direction: Direction, onStep: @escaping @MainActor (ImportStep) -> Void) {
+        self.direction = direction
+        self.onStep = onStep
+    }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        observation = switch direction {
+        case .sending: task.observe(\.countOfBytesSent) { [weak self] task, _ in self?.moved(task.countOfBytesSent, of: task.countOfBytesExpectedToSend) }
+        case .receiving: task.observe(\.countOfBytesReceived) { [weak self] task, _ in self?.moved(task.countOfBytesReceived, of: task.countOfBytesExpectedToReceive) }
+        }
+    }
+
+    private func moved(_ done: Int64, of total: Int64) {
+        guard total > 0 else { return }
+        DispatchQueue.main.async { [self] in
+            MainActor.assumeIsolated {
+                let now = Int(done * 100 / total)
+                guard now != percent else { return }
+                percent = now
+                onStep(step(done, of: total))
+            }
+        }
+    }
+
+    private func step(_ done: Int64, of total: Int64) -> ImportStep {
+        let count = "\(done.formatted(.byteCount(style: .file))) of \(total.formatted(.byteCount(style: .file)))"
+        return switch direction {
+        case .sending: ImportStep(text: "Sending to the server \(count)", fraction: Double(done) / Double(total), symbol: "arrow.up.circle")
+        case .receiving: ImportStep(text: "Downloading \(count)", fraction: Double(done) / Double(total), symbol: "arrow.down.circle")
+        }
+    }
 }
 
 enum ServerError: Error, LocalizedError {
