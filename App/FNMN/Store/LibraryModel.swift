@@ -140,8 +140,14 @@ final class LibraryModel {
     }
 
     /// Takes in the other devices' changes: at launch, when the app comes back, and when the FNMN folder is linked.
+    /// Their new materials come first, so their journals can place them in albums.
     func syncWithOtherDevices() async {
         await readOriginals()
+        do {
+            try await readChangedDeliveries()
+        } catch {
+            failure = error.localizedDescription
+        }
         guard let folder = await file.journalFolder(), FileManager.default.fileExists(atPath: folder.path) else { return }
         do {
             try await CloudFolder.download(folder, timeout: .seconds(60))
@@ -219,29 +225,51 @@ final class LibraryModel {
         await syncWithOtherDevices()
     }
 
-    /// Reads the FNMN folder: its catalog, then each delivery, which comes down from iCloud once to be read
-    /// and is let go again, so the phone never holds the whole folder.
+    /// Reads the FNMN folder: its catalog, then every delivery.
     private func readLibraryFolder(onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
         guard let folder = cloudFolder else { throw LibraryError.cloudFolderMissing }
         onStep(.downloadingFromCloud)
         let catalog = folder.appending(path: "catalog.json")
         let hasCatalog = CloudFolder.contains(catalog)
         if hasCatalog { try await CloudFolder.download(catalog) }
-        let deliveryFolder = folder.appending(path: "deliveries")
-        let deliveries = CloudFolder.contains(deliveryFolder)
-            ? try await CloudFolder.files(in: deliveryFolder, withExtension: "tar") : []
-        try await write(saving: false) { [file] snapshot in
-            var next = hasCatalog ? try await file.applyBrowserCatalog(from: folder, into: snapshot) : snapshot
-            for (index, delivery) in deliveries.enumerated() {
-                onStep(.importing(index, of: deliveries.count))
-                try await CloudFolder.download(delivery)
-                next = try await file.addCloudDelivery(delivery, into: next)
-                CloudFolder.evict(delivery)
-            }
+        let deliveries = try await deliveryFiles()
+        try await write(saving: false) { [self] snapshot in
+            let sources = hasCatalog ? try await file.applyBrowserCatalog(from: folder, into: snapshot) : snapshot
+            let next = try await take(deliveries, into: sources, onStep: onStep)
             try await file.save(next, previous: snapshot)
             return next
         }
         await readOriginals()
+    }
+
+    /// Takes in the deliveries other devices added to the FNMN folder or rewrote since this device read them.
+    /// The device that asked the server for a material stores it first; the others get it here from iCloud.
+    private func readChangedDeliveries() async throws {
+        let deliveries = try await deliveryFiles()
+        try await write(saving: false) { [self] snapshot in
+            let (changed, known) = try await file.changedDeliveries(deliveries, in: snapshot)
+            let next = try await take(changed, into: known) { _ in }
+            if next != snapshot { try await file.save(next, previous: snapshot) }
+            return next
+        }
+    }
+
+    private func deliveryFiles() async throws -> [URL] {
+        guard let folder = cloudFolder?.appending(path: "deliveries"), CloudFolder.contains(folder) else { return [] }
+        return try await CloudFolder.files(in: folder, withExtension: "tar")
+    }
+
+    /// Each delivery comes down from iCloud once to be read and is let go again, so the phone never holds
+    /// the whole folder.
+    private func take(_ deliveries: [URL], into snapshot: LibrarySnapshot, onStep: @MainActor (ImportStep) -> Void) async throws -> LibrarySnapshot {
+        var next = snapshot
+        for (index, delivery) in deliveries.enumerated() {
+            onStep(.importing(index, of: deliveries.count))
+            try await CloudFolder.download(delivery)
+            next = try await file.addCloudDelivery(delivery, into: next)
+            CloudFolder.evict(delivery)
+        }
+        return next
     }
 
     private func moveIntoCloudIfNeeded() async throws {

@@ -14,11 +14,14 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
     /// The archive's name in the FNMN folder's `deliveries/` in iCloud Drive, where the material lives;
     /// nil for a material kept inside the app.
     public let delivery: String?
+    /// When the archive last changed as this device read it; a file with another date was rewritten since.
+    public let deliveredAt: Date?
 
     /// A material that lives in iCloud keeps its cover as a small picture in the app, so a tile never
     /// downloads the whole archive.
-    public init(_ package: ImportPackage, delivery: String? = nil) {
+    public init(_ package: ImportPackage, delivery: String? = nil, deliveredAt: Date? = nil) {
         material = package.material
+        self.deliveredAt = deliveredAt
         excerpt = switch package.material.kind {
         case .video: package.material.byline
         case .link: package.material.sourceURL?.host()

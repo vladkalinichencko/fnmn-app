@@ -73,3 +73,50 @@ private let illustrated = ImportPackage(
     #expect(FileManager.default.fileExists(atPath: download.path))
     #expect(try await file.openCloudArticle(entry) == illustrated)
 }
+
+private let page = ImportPackage.link(URL(string: "https://example.com/page")!)
+
+/// Two devices on one FNMN folder: the phone stores a delivery, and the pad finds it by looking at the folder.
+private func twoDevices() async throws -> (phone: LibraryFile, pad: LibraryFile, deliveries: [URL], root: URL) {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let phone = LibraryFile(url: root.appending(path: "phone"), cache: root.appending(path: "phone-cache"))
+    let pad = LibraryFile(url: root.appending(path: "pad"), cache: root.appending(path: "pad-cache"))
+    await phone.useCloudFolder(cloud)
+    await pad.useCloudFolder(cloud)
+    let source = root.appending(path: "page.tar")
+    try writeDelivery(page, to: source)
+    _ = try await phone.storeArticle(archive: source, into: LibrarySnapshot())
+    let deliveries = try FileManager.default.contentsOfDirectory(at: cloud.appending(path: "deliveries"), includingPropertiesForKeys: nil)
+    return (phone, pad, deliveries, root)
+}
+
+@Test func anotherDevicesDeliveryIsTakenWhenNewOrRewrittenAndNotOnceDeleted() async throws {
+    let (_, pad, deliveries, _) = try await twoDevices()
+    let found = try await pad.changedDeliveries(deliveries, in: LibrarySnapshot())
+    #expect(found.deliveries == deliveries)
+    var library = try await pad.addCloudDelivery(deliveries[0], into: found.snapshot)
+    #expect(try await pad.changedDeliveries(deliveries, in: library).deliveries.isEmpty)
+
+    try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(60)], ofItemAtPath: deliveries[0].path)
+    #expect(try await pad.changedDeliveries(deliveries, in: library).deliveries == deliveries)
+
+    library = try library.applying(.delete(itemID: page.material.id), at: .now.addingTimeInterval(120))
+    #expect(try await pad.changedDeliveries(deliveries, in: library).deliveries.isEmpty)
+}
+
+@Test func aCatalogFromBeforeDeletionsWereKeptLearnsThemFromTheJournals() async throws {
+    let (phone, _, deliveries, root) = try await twoDevices()
+    try await phone.appendJournal([JournalEvent(time: .now.addingTimeInterval(60), change: .library(.delete(itemID: page.material.id)))], device: "phone")
+    let older = root.appending(path: "older")
+    try FileManager.default.createDirectory(at: older, withIntermediateDirectories: true)
+    try Data("{}".utf8).write(to: older.appending(path: "state.json"))
+    let device = LibraryFile(url: older, cache: root.appending(path: "older-cache"))
+    await device.useCloudFolder(root.appending(path: "FNMN"))
+    let (library, _) = try await device.load()
+
+    let found = try await device.changedDeliveries(deliveries, in: library)
+    #expect(found.deliveries.isEmpty)
+    #expect(found.snapshot.deletedAt[page.material.id] != nil)
+}

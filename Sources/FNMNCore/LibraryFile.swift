@@ -26,6 +26,8 @@ public actor LibraryFile {
         var archived: [String] = []
         var addedAt: [String: Date] = [:]
         var articleRevisions: [String: String] = [:]
+        /// Nil in a file written before deletions were kept.
+        var deletedAt: [String: Date]?
         /// Videos an older version saved inside the app, item id → file name in `videos/`, until they move
         /// into the FNMN folder's `originals/`.
         var legacyVideoFiles: [String: String] = [:]
@@ -36,7 +38,7 @@ public actor LibraryFile {
         /// Older files called albums `folders` and annotations `highlights`, and kept packages, block notes
         /// and reading progress inline.
         enum CodingKeys: String, CodingKey {
-            case albums, placements, annotations, archived, addedAt, articleRevisions, videoFiles, browserCatalog
+            case albums, placements, annotations, archived, addedAt, articleRevisions, deletedAt, videoFiles, browserCatalog
             case folders, highlights, notes, packages, positions, readThrough, readings
         }
 
@@ -47,6 +49,7 @@ public actor LibraryFile {
             archived = snapshot.archived
             addedAt = snapshot.addedAt
             articleRevisions = snapshot.articleRevisions
+            deletedAt = snapshot.deletedAt
             browserCatalog = snapshot.browserCatalog
         }
 
@@ -67,6 +70,7 @@ public actor LibraryFile {
             archived = try container.decodeIfPresent([String].self, forKey: .archived) ?? []
             addedAt = try container.decodeIfPresent([String: Date].self, forKey: .addedAt) ?? [:]
             articleRevisions = try container.decodeIfPresent([String: String].self, forKey: .articleRevisions) ?? [:]
+            deletedAt = try container.decodeIfPresent([String: Date].self, forKey: .deletedAt)
             legacyVideoFiles = try container.decodeIfPresent([String: String].self, forKey: .videoFiles) ?? [:]
             browserCatalog = try container.decodeIfPresent(BrowserCatalog.self, forKey: .browserCatalog)
             legacyNotes = try container.decodeIfPresent([Note].self, forKey: .notes) ?? []
@@ -81,6 +85,7 @@ public actor LibraryFile {
             try container.encode(archived, forKey: .archived)
             try container.encode(addedAt, forKey: .addedAt)
             try container.encode(articleRevisions, forKey: .articleRevisions)
+            try container.encodeIfPresent(deletedAt, forKey: .deletedAt)
             if !legacyVideoFiles.isEmpty { try container.encode(legacyVideoFiles, forKey: .videoFiles) }
             try container.encodeIfPresent(browserCatalog, forKey: .browserCatalog)
         }
@@ -92,6 +97,7 @@ public actor LibraryFile {
             snapshot.archived = archived
             snapshot.addedAt = addedAt
             snapshot.articleRevisions = articleRevisions
+            snapshot.deletedAt = deletedAt ?? [:]
             snapshot.browserCatalog = browserCatalog
         }
     }
@@ -103,6 +109,9 @@ public actor LibraryFile {
     public private(set) var cloudFolder: URL?
     public private(set) var corruptPackageNames: [String] = []
     private var legacyVideoFiles: [String: String] = [:]
+    /// False for state written before deletions were kept: the deliveries of materials deleted then are still in
+    /// the FNMN folder, and the journals, which hold those deletions, are read once to fill them in.
+    private var deletionsKnown = true
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -139,6 +148,7 @@ public actor LibraryFile {
             legacyPackages = state.legacyPackages
             legacyProgress = state.legacyProgress
             legacyVideoFiles = state.legacyVideoFiles
+            deletionsKnown = state.deletedAt != nil
         }
         corruptPackageNames = []
         var packages: [ImportPackage] = []
@@ -271,9 +281,45 @@ public actor LibraryFile {
             try writeThumbnail(of: cover, to: Self.coverFile(root: root, materialID: package.material.id))
         }
         var next = snapshot
-        try next.importPackage(package, at: .now, delivery: archive.lastPathComponent)
+        try next.importPackage(package, at: .now, delivery: archive.lastPathComponent, deliveredAt: Self.changeDate(of: archive))
         next.articleRevisions[package.material.id] = nil
         return next
+    }
+
+    /// Deliveries in the FNMN folder this device has not read as they are now: ones another device added, and
+    /// ones it rewrote with a prepared material. A delivery whose material was deleted after the file last changed
+    /// stays out. A file still only in iCloud has no date here yet, so a rewrite of it waits until it is on the device.
+    /// Returns the catalog too, with the deletions it learned from the journals.
+    public func changedDeliveries(_ files: [URL], in snapshot: LibrarySnapshot) throws -> (deliveries: [URL], snapshot: LibrarySnapshot) {
+        var snapshot = snapshot
+        if !deletionsKnown {
+            // An empty device name reads every device's journal, this one's too.
+            for event in try unreadJournalEvents(except: "", sync: JournalSync()).events {
+                guard case let .library(.delete(itemID)) = event.change else { continue }
+                snapshot.deletedAt[itemID] = max(snapshot.deletedAt[itemID] ?? .distantPast, event.time)
+            }
+            deletionsKnown = true
+        }
+        let read = Dictionary(snapshot.articles.compactMap { entry in entry.delivery.map { ($0, entry.deliveredAt) } }, uniquingKeysWith: { first, _ in first })
+        let deleted = Dictionary(snapshot.deletedAt.map { (Self.deliveryName($0.key), $0.value) }, uniquingKeysWith: max)
+        let changed = files.filter { file in
+            let changedAt = Self.changeDate(of: file)
+            switch read[file.lastPathComponent] {
+            case let readAt??: return changedAt.map { $0 != readAt } ?? false
+            case .some(nil): return false // read before this device kept the dates
+            case nil:
+                guard let deletedAt = deleted[file.lastPathComponent] else { return true }
+                return changedAt.map { $0 > deletedAt } ?? false
+            }
+        }
+        return (changed, snapshot)
+    }
+
+    /// Read fresh: a URL keeps the values it read before, which would hide a rewrite.
+    private static func changeDate(of file: URL) -> Date? {
+        var file = file
+        file.removeAllCachedResourceValues()
+        return try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
     /// The first time the FNMN folder is linked, what an older version kept inside the app moves there: each

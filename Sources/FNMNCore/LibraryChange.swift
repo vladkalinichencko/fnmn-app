@@ -57,6 +57,7 @@ extension LibrarySnapshot {
             next.archived.removeAll { $0 == itemID }
             next.addedAt[itemID] = nil
             next.articleRevisions[itemID] = nil
+            next.deletedAt[itemID] = date
         }
         return next
     }

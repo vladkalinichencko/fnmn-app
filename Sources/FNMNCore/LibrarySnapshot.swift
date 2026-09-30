@@ -11,6 +11,8 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var archived: [String] = []
     public var addedAt: [String: Date] = [:]
     public var articleRevisions: [String: String] = [:]
+    /// When each material was deleted, so its delivery, which stays in the FNMN folder, is not taken in again.
+    public var deletedAt: [String: Date] = [:]
 
     public init() {}
 
@@ -31,13 +33,14 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
 
     /// Adds or replaces a prepared article or video. A material that is in no album yet lands in the albums
     /// the package names; otherwise the reader's albums stay. A changed text drops the old marks.
-    public mutating func importPackage(_ package: ImportPackage, at date: Date, delivery: String? = nil) throws {
+    public mutating func importPackage(_ package: ImportPackage, at date: Date, delivery: String? = nil, deliveredAt: Date? = nil) throws {
         guard package.version == 1 else { throw LibraryError.unsupportedVersion(package.version) }
         let hasBody = !(package.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasBody || !package.blocks.isEmpty || package.material.kind == .link else { throw LibraryError.emptyDocument }
         let id = package.material.id
         if try !replaceLinks(to: package.material) { return }
-        let entry = ArticleEntry(package, delivery: delivery)
+        deletedAt[id] = nil
+        let entry = ArticleEntry(package, delivery: delivery, deliveredAt: deliveredAt)
         if let index = articles.firstIndex(where: { $0.material.id == id }) {
             if articles[index].textDigest != entry.textDigest {
                 forgetMarks(of: id)
