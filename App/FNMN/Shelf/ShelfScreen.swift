@@ -58,15 +58,20 @@ private struct ShelfSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
-            // A symbol inside the text sits on the letters' middle, where a separate image would sink to the baseline.
+            // A symbol inside text is centered on the capitals of its own font. The chevron's font is smaller than the
+            // title's, so it is raised by half the difference of their capital heights to sit on the title's middle.
             Button { navigation.open(route) } label: {
-                Text("\(title) \(Text(Image(systemName: "chevron.forward")).font(.title3.weight(.semibold)).foregroundStyle(.secondary))")
+                Text("\(title) \(Text(Image(systemName: "chevron.forward")).font(.title3.weight(.semibold)).foregroundStyle(.secondary).baselineOffset(Self.chevronRise))")
                     .font(Tokens.sectionTitle)
                     .foregroundStyle(.primary)
             }
             .buttonStyle(.plain)
             content
         }
+    }
+
+    private static var chevronRise: CGFloat {
+        (UIFont.preferredFont(forTextStyle: .title1).capHeight - UIFont.preferredFont(forTextStyle: .title3).capHeight) / 2
     }
 }
 

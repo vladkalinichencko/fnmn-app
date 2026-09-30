@@ -117,6 +117,8 @@ struct ReadingSession: View {
         }
         .swipeActionsContainer()
         .scrollPosition(id: reader.scrollPosition, anchor: .top)
+        // The column is laid out unseen at the top and shows only once it stands where it opens, so the jump there is never seen.
+        .animation(.easeOut(duration: 0.3)) { $0.opacity(reader.state.opening == nil ? 1 : 0) }
         // After the first layout, when the lazy column knows its rows and can go to one far down.
         .task {
             await Task.yield()

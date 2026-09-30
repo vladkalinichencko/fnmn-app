@@ -166,45 +166,34 @@ struct PlateView: View {
     @State private var size = CGSize.zero
     /// The height of the note's text, which the tab on the plate's edge follows.
     @State private var noteHeight: CGFloat = 0
-    /// Whether the plate stands aside for the note. It follows the mode in its own animation, whose end tells
-    /// when the note may come up for touches or hide again.
-    @State private var open = false
-    /// The note shows under the plate from the first move of a swipe until the plate is back over it.
-    @State private var uncovered = false
-    /// Once the plate has moved aside, the note is lifted above the row so touches reach it.
-    @State private var raised = false
 
     private var noting: Bool { mode == .noting(index) }
     /// How far the plate moves aside for its note: a little over half its width.
     private var noteWidth: CGFloat { size.width * 0.58 }
-    private var offset: CGFloat { (open ? -noteWidth : 0) + drag }
+    /// Where the plate stands follows only the mode and the finger, so an open note always has the plate aside.
+    private var offset: CGFloat { (noting ? -noteWidth : 0) + drag }
     private static let slide = Animation.spring(duration: 0.35, bounce: 0.2)
 
-    /// The note lies under the plate, and the plate slides off it. The note is laid out even while hidden, so the
-    /// tab on the plate knows its height.
+    /// The note lies under the plate, and the plate slides off it. The plate is glass, so the note shows only while
+    /// the plate is off its place and fades as the plate comes back over it. The plate is moved inside the system's
+    /// swipe, whose frame stays where the plate was; its touch area is moved with the plate, so touches on the
+    /// uncovered note reach the note under it.
     var body: some View {
         ZStack(alignment: .trailing) {
+            MarginNote(saved: paragraphNote, active: noting, save: saveNote) { noteHeight = $0 }
+                .frame(width: max(noteWidth - Tokens.gap, 0), height: size.height)
+                .opacity(offset < 0 ? 1 : 0)
+                .allowsHitTesting(noting)
             plate
                 .frame(maxWidth: .infinity)
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
-                .zIndex(1)
-            MarginNote(saved: paragraphNote, active: noting, save: saveNote) { noteHeight = $0 }
-                .frame(width: max(noteWidth - Tokens.gap, 0), height: size.height)
-                .opacity(uncovered ? 1 : 0)
-                .allowsHitTesting(raised)
-                .zIndex(raised ? 2 : 0)
+                .contentShape(.interaction, Rectangle().offset(x: offset))
         }
-        // A plate scrolled back into view while its note is open is built aside at once.
-        .onAppear { open = noting; uncovered = noting; raised = noting }
-        .onChange(of: noting) { _, now in
-            if now { withoutAnimation { uncovered = true } } else { raised = false }
-            withAnimation(Self.slide) { open = now } completion: { settled() }
-        }
+        .animation(Self.slide, value: noting)
     }
 
     private func dragged(_ translation: CGFloat) {
         guard mode == .reading || noting else { return }
-        uncovered = true
         drag = noting ? max(translation, 0) : max(min(translation, 0), -noteWidth - 20)
     }
 
@@ -218,22 +207,7 @@ struct PlateView: View {
             } else if translation < -60 || velocity < -500 {
                 reader.send(.plate(.note(index)))
             }
-        } completion: {
-            settled()
         }
-    }
-
-    /// Where the plate came to rest: aside, the note comes up for touches; back in place, it hides.
-    private func settled() {
-        guard drag == 0 else { return }
-        raised = open
-        uncovered = open
-    }
-
-    private func withoutAnimation(_ change: () -> Void) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction, change)
     }
 
     private var plate: some View {
@@ -326,7 +300,7 @@ struct PlateView: View {
     /// itself shows when the plate is pulled aside.
     @ViewBuilder
     private var noteMark: some View {
-        if !paragraphNote.isEmpty, !uncovered {
+        if !paragraphNote.isEmpty, offset == 0 {
             Capsule()
                 .fill(.tint)
                 .frame(width: 4, height: min(max(noteHeight, 22), max(size.height - 2 * Tokens.tilePadding - 4, 22)))
