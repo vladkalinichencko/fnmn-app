@@ -17,17 +17,29 @@ enum Route: Hashable {
     case archive
 }
 
-/// The window's own place in the app: its tab, the stack of each tab and the search text.
+/// The window's own place in the app: its tab, the stack of each tab, the stack above all the tabs and the search text.
 @MainActor @Observable
 final class WindowNavigation {
     var tab = ShellTab.library
     var library: [Route] = []
     var shelf: [Route] = []
     var search: [Route] = []
+    /// What is pushed over the whole tab view: a material and whatever it opens. The tab bar is part of the screen
+    /// below, so it slides away with it on the way in and comes back with it on the way out.
+    var covering: [Route] = []
     var query = ""
 
-    /// Pushes onto the stack of the visible tab.
+    /// Pushes a material, or anything opened from a screen above the tabs, over the tabs; everything else goes
+    /// onto the stack of the visible tab.
     func open(_ route: Route) {
+        if case .item = route {
+            covering.append(route)
+            return
+        }
+        if !covering.isEmpty {
+            covering.append(route)
+            return
+        }
         switch tab {
         case .library: library.append(route)
         case .shelf: shelf.append(route)
@@ -38,7 +50,8 @@ final class WindowNavigation {
     /// Opens a route from outside the app on a fresh Library stack.
     func show(_ route: Route) {
         tab = .library
-        library = [route]
+        library = []
+        covering = [route]
     }
 }
 
@@ -47,18 +60,24 @@ struct AppShell: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        TabView(selection: $navigation.tab) {
-            Tab("Library", systemImage: "books.vertical", value: ShellTab.library) {
-                LibraryScreen()
+        NavigationStack(path: $navigation.covering) {
+            TabView(selection: $navigation.tab) {
+                Tab("Library", systemImage: "books.vertical", value: ShellTab.library) {
+                    LibraryScreen()
+                }
+                Tab("Shelf", systemImage: "bookmark", value: ShellTab.shelf) {
+                    ShelfScreen()
+                }
+                Tab(value: ShellTab.search, role: .search) {
+                    SearchScreen()
+                }
             }
-            Tab("Shelf", systemImage: "bookmark", value: ShellTab.shelf) {
-                ShelfScreen()
-            }
-            Tab(value: ShellTab.search, role: .search) {
-                SearchScreen()
+            .tabViewSearchActivation(.searchTabSelection)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Route.self) { route in
+                RouteScreen(route: route)
             }
         }
-        .tabViewSearchActivation(.searchTabSelection)
         .scrollEdgeEffectStyle(.soft, for: .all)
         .libraryDialogs()
     }

@@ -15,8 +15,6 @@ struct ItemScreen: View {
                 ContentUnavailableView("This material is no longer in the library", systemImage: "questionmark.folder")
             }
         }
-        // The reader needs no tabs: the bar leaves with the screen below as this one is pushed and returns on the way back.
-        .toolbarVisibility(.hidden, for: .tabBar)
         .task { library.apply(.open(itemID: itemID)) }
     }
 }
