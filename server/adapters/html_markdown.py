@@ -332,7 +332,8 @@ def _render(node, page_url: str, downloads: dict[str, str]) -> str:
     if tag in {"ul", "ol"}:
         return _list(node, ordered=tag == "ol", page_url=page_url, downloads=downloads)
     if tag == "blockquote":
-        return "\n".join(f"> {line}" for line in _inline(node, page_url, downloads).splitlines())
+        # Its paragraphs and lists stay apart, under one mark that keeps the quote one block.
+        return "\n".join(f"> {line}".rstrip() for line in _flow(node, page_url, downloads).splitlines())
     if tag == "pre":
         code = node.find("code")
         body = code.text_content() if code is not None else node.text_content()
@@ -496,8 +497,13 @@ def _selector(node) -> str:
 
 
 def _list(node, ordered: bool, page_url: str, downloads: dict[str, str]) -> str:
-    items = [_inline(child, page_url, downloads) for child in node if child.tag == "li"]
-    lines = [f"{index}. {item}" if ordered else f"- {item}" for index, item in enumerate(filter(None, items), 1)]
+    """An item's paragraphs and inner lists go on lines of their own, set in under its marker, so they stay apart
+    and in the item. A blank line between them would end the list."""
+    items = [_flow(child, page_url, downloads) for child in node if child.tag == "li"]
+    lines = []
+    for index, item in enumerate(filter(None, items), 1):
+        marker = f"{index}. " if ordered else "- "
+        lines.append(marker + ("\n" + " " * len(marker)).join(line for line in item.splitlines() if line.strip()))
     return "\n".join(lines)
 
 
@@ -590,6 +596,18 @@ def _wrapped(text: str, opening: str, closing: str) -> str:
     return text[: len(text) - len(text.lstrip())] + opening + inner + closing + text[len(text.rstrip()) :]
 
 
+def _code(text: str) -> str:
+    """Code shows its text as it is, so a link or bold inside it gets no marks. Its fence is longer than any run of
+    backticks in it, with a space inside when the code starts or ends with one, and the spaces at the edges of
+    `<code>word </code>` stay outside it, between the code and the next word."""
+    inner = text.strip()
+    if not inner:
+        return text
+    fence = "`" * (max((len(run) for run in re.findall(r"`+", inner)), default=0) + 1)
+    pad = " " if inner.startswith("`") or inner.endswith("`") else ""
+    return _wrapped(text, fence + pad, pad + fence)
+
+
 def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
     """One inline element as Markdown, without the text that follows it."""
     if not isinstance(node.tag, str):
@@ -605,7 +623,7 @@ def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
     if node.tag in _BOLD_TAGS:
         return _emphasis(node, "**", page_url, downloads)
     if node.tag == "code":
-        return f"`{_inline(node, page_url, downloads)}`"
+        return _code(node.text_content())
     if node.tag == "a":
         label = _inline_spaced(node, page_url, downloads)
         return _wrapped(label, "[", f"]({_absolute(page_url, node.get('href') or '')})") if label.strip() else label

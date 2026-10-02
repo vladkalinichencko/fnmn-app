@@ -19,7 +19,7 @@ BYLINE = re.compile(r"\A((?:\s*#{1,6} .+\n+|\s*!\[[^\]]*\]\([^)]*\)\n+)*)\s*[*_]
 HEADING = re.compile(r"^(#{1,6}) (.+)$", re.M)
 LONG_HEADING = 200
 CODE = re.compile(r"(```.*?```)", re.S)
-INLINE_CODE_OR_MATH = re.compile(r"`[^`\n]*`|\$\$.*?\$\$|(?<!\\)\$[^$\n]+?\$", re.S)
+INLINE_CODE_OR_MATH = re.compile(r"(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)|\$\$.*?\$\$|(?<!\\)\$[^$\n]+?\$", re.S)
 BOLD = re.compile(r"(?<!\*)\*\*(?!\*)")
 STARS = re.compile(r"\*{3,}")
 JOINED_BOLD = re.compile(r"([^\s*])\*{4}(?=[^\s*])")

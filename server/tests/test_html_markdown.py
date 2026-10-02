@@ -136,6 +136,30 @@ class HtmlMarkdownTests(unittest.TestCase):
         self.assertNotIn("fnmn-interactive", markdown)
         self.assertIn("gold standard", markdown)
 
+    def test_code_keeps_its_text_and_the_spaces_around_it(self):
+        source = """
+        <html><body><article><h1>Shell</h1>
+          <p>Transformers are the gold standard of neural networks today, and of large language models above all.</p>
+          <p>Call <code>foo </code>then <code><a href="/fetch">fetch</a></code> with <code><b>x</b>=1</code>.</p>
+          <p>Type <code>a`b</code> or <code>`x`</code> here.</p>
+        </article></body></html>
+        """
+        markdown, _ = article_markdown(source, PAGE)
+        self.assertIn("Call `foo` then `fetch` with `x=1`.", markdown)
+        self.assertIn("Type ``a`b`` or `` `x` `` here.", markdown)
+
+    def test_a_quote_and_a_list_item_keep_their_paragraphs_and_inner_lists_apart(self):
+        source = """
+        <html><body><article><h1>Primer</h1>
+          <p>Transformers are the gold standard of neural networks today, and of large language models above all.</p>
+          <blockquote><p><em><strong>Cell Complex</strong></em></p>
+            <ul><li><p><strong>Field:</strong> Topology.</p></li><li><p>One</p><p>Two</p><ul><li>Inner</li></ul></li></ul>
+          </blockquote>
+        </article></body></html>
+        """
+        markdown, _ = article_markdown(source, PAGE)
+        self.assertIn("> ***Cell Complex***\n>\n> - **Field:** Topology.\n> - One\n>   Two\n>   - Inner", markdown)
+
     def test_article_wins_by_score_and_formula_comes_from_the_annotation(self):
         source = """
         <html><body>
