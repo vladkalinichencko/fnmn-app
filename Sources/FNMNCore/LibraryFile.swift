@@ -231,6 +231,14 @@ public actor LibraryFile {
         if let error = coordination ?? failure { throw error }
     }
 
+    /// The archive of a deleted material leaves the FNMN folder, so no device is left a file to read it in again.
+    public func removeDelivery(of entry: ArticleEntry) throws {
+        guard let archive = deliveryURL(of: entry) else { return }
+        do {
+            try removeOriginal(archive)
+        } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {}
+    }
+
     // MARK: Adding materials
 
     /// A link or file kept as it is, made on this phone, becomes a delivery like any other.

@@ -138,8 +138,9 @@ final class ImportJobs {
 
     /// The link is a card at once; the server's material from the page takes its place. A page the library
     /// already holds a material of keeps that card, and the server prepares it again.
-    private func addLink(_ url: URL, job: ImportJob) async throws {
-        guard CaptureRoute.source(for: url) != nil else { throw CaptureError.notAWebLink }
+    private func addLink(_ link: URL, job: ImportJob) async throws {
+        guard CaptureRoute.source(for: link) != nil else { throw CaptureError.notAWebLink }
+        let url = link.withoutFragment
         if job.itemID == nil {
             try await library.storeLink(url)
             send(.placed(job.id, itemID: library.snapshot.materialID(forPage: url) ?? ImportPackage.link(url).material.id))

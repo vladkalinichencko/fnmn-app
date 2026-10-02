@@ -24,12 +24,6 @@ enum CloudFolder {
         }
     }
 
-    /// Whether a file, or every file under a folder, is already on the device.
-    @concurrent
-    static func isOnDevice(_ item: URL) async -> Bool {
-        missing(in: item).isEmpty
-    }
-
     /// Whether the file is in the folder, on the device or still only in iCloud.
     static func contains(_ file: URL) -> Bool {
         FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)

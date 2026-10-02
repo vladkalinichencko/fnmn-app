@@ -2,18 +2,6 @@ import Foundation
 
 public enum CaptureSource: String, Codable, Equatable, Sendable {
     case web, arxiv, youtube, x, substack, chatgpt, pdf
-
-    public var folderName: String {
-        switch self {
-        case .web: "Web"
-        case .arxiv: "arXiv"
-        case .youtube: "YouTube"
-        case .x: "X"
-        case .substack: "Substack"
-        case .chatgpt: "ChatGPT"
-        case .pdf: "PDF"
-        }
-    }
 }
 
 public enum CaptureRoute {

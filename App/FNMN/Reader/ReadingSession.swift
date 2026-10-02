@@ -53,6 +53,7 @@ extension AnnotationCommand {
 struct ReadingSession: View {
     @Environment(LibraryModel.self) private var library
     let reader: ReaderCoordinator
+    @State private var width: CGFloat = 0
 
     var body: some View {
         let document = reader.document
@@ -86,7 +87,11 @@ struct ReadingSession: View {
             .scrollTargetLayout()
             .padding(.horizontal, Tokens.gutter)
             .padding(.bottom, 80)
+            // A wide screen reads in a narrower column in the middle; the scroll view itself keeps the whole width.
+            .frame(maxWidth: width > 0 ? Tokens.readingWidth(in: width) : .infinity)
+            .frame(maxWidth: .infinity)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .scrollPosition(Bindable(reader).position, anchor: .top)
         // The place is read off the rows the person sees, never through the position that moves the column:
         // a position written back on each step made the column pull the next block to its top while scrolling up.

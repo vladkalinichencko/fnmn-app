@@ -312,6 +312,82 @@ private let laterArticle = ImportPackage(
     #expect(library.source(of: item.id)?.name == "Daniel A. Roberts")
 }
 
+private func page(_ address: String, source: PageSource? = nil) -> ImportPackage {
+    ImportPackage(
+        material: Material(id: "article:\(address)", kind: .article, title: address, sourceURL: URL(string: address)!, source: source),
+        sections: [],
+        blocks: [Block(id: "b1", sectionID: nil, kind: .paragraph, html: "<p>Text</p>")]
+    )
+}
+
+private func blog(_ name: String?, _ address: String) -> PageSource {
+    PageSource(name: name, homepage: URL(string: address)!)
+}
+
+@Test func aLinkAddedLaterJoinsTheBlogTheBrowserCatalogNames() throws {
+    var library = LibrarySnapshot()
+    let catalog = #"{"collections":[],"sources":[{"name":"Hugh Zhang · Blog","url":"https://hughbzhang.com/blog/","kind":"blog","saved_in":[],"found_in":[],"materials":[{"title":"A","url":"https://hughbzhang.com/blog/a.html","saved_in":[],"found_in":[]}]}]}"#
+    library.browserCatalog = try JSONDecoder().decode(BrowserCatalog.self, from: Data(catalog.utf8))
+    try library.importPackage(page("https://hughbzhang.com/blog/a.html"), at: .now)
+    try library.importPackage(page("https://www.hughbzhang.com/blog/b.html", source: blog(nil, "https://hughbzhang.com/")), at: .now)
+    try library.importPackage(page("https://hughbzhang.com/about"), at: .now)
+    let names = Dictionary(uniqueKeysWithValues: library.items.map { ($0.originalURL!.path, $0.source?.name) })
+    #expect(names["/blog/a.html"] == "Hugh Zhang · Blog")
+    #expect(names["/blog/b.html"] == "Hugh Zhang · Blog")
+    #expect(names["/about"] == "hughbzhang")
+}
+
+@Test func articlesOfOneBlogShareThePublisherTheServerFoundForAnyOfThem() throws {
+    var library = LibrarySnapshot()
+    let zhang = blog("Alex L. Zhang", "https://alexzhang13.github.io/blog/")
+    try library.importPackage(page("https://alexzhang13.github.io/blog/2026/shape/", source: zhang), at: .now)
+    try library.importPackage(page("https://alexzhang13.github.io/blog/2025/older/"), at: .now)
+    try library.importPackage(page("https://alexzhang13.github.io/projects/rlm/"), at: .now)
+    let shape = try #require(library.item("article:https://alexzhang13.github.io/blog/2026/shape/")?.source)
+    #expect(shape.name == "Alex L. Zhang")
+    #expect(shape.homepage == zhang.homepage)
+    #expect(library.items(fromSource: shape.id).count == 2)
+    let older = try #require(library.item("article:https://alexzhang13.github.io/blog/2025/older/")?.source)
+    #expect(older == shape)
+    #expect(library.source(of: "article:https://alexzhang13.github.io/blog/2025/older/") == shape)
+    #expect(library.item("article:https://alexzhang13.github.io/projects/rlm/")?.source?.name == "alexzhang13")
+}
+
+@Test func publishersThatCallThemselvesTheSameAreToldApartByTheirPage() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(page("https://medium.com/@ann/one", source: blog("Medium", "https://medium.com/@ann/")), at: .now)
+    try library.importPackage(page("https://medium.com/@bob/two", source: blog("Medium", "https://medium.com/@bob/")), at: .now)
+    let ann = try #require(library.item("article:https://medium.com/@ann/one")?.source)
+    let bob = try #require(library.item("article:https://medium.com/@bob/two")?.source)
+    #expect(ann.name == bob.name)
+    #expect(ann.id != bob.id)
+    #expect(library.items(fromSource: ann.id).map(\.id) == ["article:https://medium.com/@ann/one"])
+}
+
+@Test func aPublisherWithoutAFoundNameIsNamedAfterItsSite() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(page("https://alexzhang13.github.io/blog/2026/shape/", source: blog(nil, "https://alexzhang13.github.io/blog/")), at: .now)
+    let source = try #require(library.items.first?.source)
+    #expect(source.name == "alexzhang13")
+    #expect(source.homepage == URL(string: "https://alexzhang13.github.io/blog/"))
+}
+
+@Test func aLinkToAHeadingNamesTheSameMaterialAsTheLinkToThePage() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(page("https://huggingface.co/spaces/t-tech/manifolds"), at: .now)
+    let heading = try #require(URL(string: "https://huggingface.co/spaces/t-tech/manifolds#what-we-reproduced"))
+    #expect(library.materialID(forPage: heading) == "article:https://huggingface.co/spaces/t-tech/manifolds")
+    #expect(heading.withoutFragment.absoluteString == "https://huggingface.co/spaces/t-tech/manifolds")
+    #expect(URL(string: "https://example.com/a?x=1")!.withoutFragment.absoluteString == "https://example.com/a?x=1")
+}
+
+@Test func aPackageWithoutAPublisherStillDecodes() throws {
+    let bare = #"{"version":1,"material":{"id":"a","kind":"article","title":"T","sourceURL":"https://example.com/a"},"sections":[],"blocks":[],"folders":[]}"#
+    #expect(try JSONDecoder().decode(ImportPackage.self, from: Data(bare.utf8)).material.source == nil)
+    let named = #"{"version":1,"material":{"id":"a","kind":"article","title":"T","sourceURL":"https://example.com/a","source":{"name":"Example","homepage":"https://example.com/blog/"}},"sections":[],"blocks":[],"folders":[]}"#
+    #expect(try JSONDecoder().decode(ImportPackage.self, from: Data(named.utf8)).material.source == blog("Example", "https://example.com/blog/"))
+}
+
 @Test func stateThatStillListsBooksLoads() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -590,4 +666,32 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(CaptureRoute.acceptsService(URL(string: "http://127.0.0.1:8787")!))
     #expect(!CaptureRoute.acceptsService(URL(string: "http://192.168.1.20:8787")!))
     #expect(!CaptureRoute.acceptsService(URL(string: "http://example.com")!))
+}
+
+private func prepared(_ id: String, kind: Material.Kind = .article, source: String, at date: TimeInterval) throws -> (ImportPackage, Date) {
+    let url = URL(string: "https://\(source).com/\(id)")!
+    let material = Material(id: id, kind: kind, title: id, sourceURL: url, source: PageSource(name: source, homepage: URL(string: "https://\(source).com")!))
+    let package = ImportPackage(
+        material: material,
+        sections: [Section(id: "s", parentID: nil, title: "S", level: 1, firstBlockID: "b")],
+        blocks: [Block(id: "b", sectionID: "s", kind: .paragraph, html: "<p>\(id)</p>")],
+        folders: []
+    )
+    return (package, Date(timeIntervalSince1970: date))
+}
+
+@Test func collectionsGatherTheSameMaterialsByPublisherTypeAndMonth() throws {
+    var library = LibrarySnapshot()
+    for (id, kind, source, date) in [("a", Material.Kind.article, "alpha", 1_000_000.0), ("b", .video, "alpha", 1_000_020), ("c", .article, "beta", 90_000_000)] {
+        let (package, delivered) = try prepared(id, kind: kind, source: source, at: date)
+        try library.importPackage(package, at: delivered)
+    }
+    let publishers = library.groups(by: .publishers, sortedBy: .standard)
+    #expect(publishers.map(\.name) == ["alpha", "beta"])
+    #expect(publishers.map(\.count) == [2, 1])
+    #expect(library.groups(by: .publishers, sortedBy: .size).first?.name == "alpha")
+    #expect(library.groups(by: .types, sortedBy: .name).map(\.name) == ["Articles", "Videos"])
+    #expect(library.groups(by: .months, sortedBy: .standard).count == 2)
+    let articles = library.items(in: .types, key: "article")
+    #expect(articles.map(\.id) == ["c", "a"])
 }

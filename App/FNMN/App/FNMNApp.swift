@@ -29,6 +29,7 @@ struct FNMNApp: App {
 /// One window: its own tab, navigation and dialogs over the shared library.
 private struct WindowRoot: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(ImportJobs.self) private var imports
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigation = WindowNavigation()
     @State private var dialogs = LibraryDialogs()
@@ -60,12 +61,16 @@ private struct WindowRoot: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background: Task { await library.saveProgress() }
-            case .active where library.loadState == .ready: Task { await library.syncWithOtherDevices() }
+            case .active where library.loadState == .ready:
+                takeSharedItems()
+                Task { await library.syncWithOtherDevices() }
             default: break
             }
         }
         .onChange(of: library.loadState) { _, state in
-            guard state == .ready, pendingContinue else { return }
+            guard state == .ready else { return }
+            takeSharedItems()
+            guard pendingContinue else { return }
             pendingContinue = false
             continueReading()
         }
@@ -83,6 +88,17 @@ private struct WindowRoot: View {
             Button("OK") { library.failure = nil }
         } message: {
             Text(library.failure ?? "")
+        }
+    }
+
+    /// Links and PDFs the Share extension left are imported like the ones added inside the app.
+    private func takeSharedItems() {
+        guard let inbox = CaptureInbox() else { return }
+        for entry in inbox.take() {
+            switch entry {
+            case let .link(url): imports.send(.submit(.link(url), id: UUID()))
+            case let .file(url): imports.send(.submit(.file(url), id: UUID()))
+            }
         }
     }
 

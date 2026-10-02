@@ -28,7 +28,7 @@ Keychain             (взаимодействие)        ▲
 | `FNMN` (приложение) | Хранилище `LibraryModel`, порт сервера, координаторы и вью. | FNMNCore, Textual |
 | `Textual` (`Vendor/Textual`) | Отрисовка Markdown, формул (swiftui-math), кода с подсветкой Prism и таблиц в SwiftUI. Копия библиотеки Guille Gonzalez (MIT) с одной добавкой: `textualSelectionMenu` кладёт пункты приложения в меню выделенного текста. | SwiftUIMath, swift-concurrency-extras |
 | `SwiftUIMath` (`Vendor/SwiftUIMath`) | Вёрстка формул. Копия swiftui-math (MIT) с одной добавкой: `\underbrace{…}` рисует скобку под основанием, как KaTeX. В `mathFonts.bundle` оставлен только Latin Modern, шрифт формул Textual по умолчанию. | — |
-| `Share` | Передаёт ссылку в приложение через `CaptureHandoff`. | FNMNCore |
+| `Share` | Без экрана кладёт ссылку или PDF в `CaptureInbox` общей группы и открывает приложение через `fnmn://inbox`. | FNMNCore |
 | `Activity` | Live Activity подготовки. | — |
 
 Приложение подключает FNMNCore как локальный пакет, а не компилирует его файлы у себя: граница модуля становится проверяемой (`public` — это интерфейс), тесты и приложение собирают один и тот же код. Папка `App/FNMN` — синхронизируемая группа Xcode: новый файл попадает в сборку без правки проекта.

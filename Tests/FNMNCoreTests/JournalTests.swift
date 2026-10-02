@@ -127,3 +127,28 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
     let merged = merge([late], into: try library(), ReadingProgress(), sync: sync)
     #expect(merged.progress.positions[id] == nil)
 }
+
+@Test func anAnnotationDeletedOnOneDeviceIsGoneOnTheOther() throws {
+    let target = AnnotationTarget(materialID: paper.material.id, piece: 0, text: "First paragraph.")
+    let marked = JournalEvent(time: stamp(1), change: .library(.mark(.highlight, target)))
+    // The tablet took the phone's mark in and deletes what it now holds.
+    let onTablet = merge([marked], into: try library(), ReadingProgress(), sync: JournalSync())
+    let removed = JournalEvent(time: stamp(2), change: .library(.removeAnnotation(onTablet.catalog.annotations[0].id)))
+    // The phone made the mark itself and takes the tablet's deletion in.
+    let onPhone = try library().applying(.mark(.highlight, target), at: stamp(1))
+    let merged = merge([removed], into: onPhone, ReadingProgress(), sync: JournalSync())
+    #expect(merged.catalog.annotations.isEmpty)
+}
+
+@Test func aMarkThatArrivesLateDoesNotBringBackAnAnnotationDeletedHere() throws {
+    let target = AnnotationTarget(materialID: paper.material.id, piece: 0, text: "First paragraph.")
+    // The tablet marked the paragraph at 1; its journal reaches this device only after the annotation was deleted at 2.
+    let marked = JournalEvent(time: stamp(1), change: .library(.mark(.highlight, target)))
+    var catalog = try library().applying(.mark(.highlight, target), at: stamp(0.5))
+    var sync = JournalSync()
+    let id = catalog.annotations[0].id
+    catalog = try catalog.applying(.removeAnnotation(id), at: stamp(2))
+    sync.record(JournalEvent(time: stamp(2), change: .library(.removeAnnotation(id))))
+    let merged = merge([marked], into: catalog, ReadingProgress(), sync: sync)
+    #expect(merged.catalog.annotations.isEmpty)
+}

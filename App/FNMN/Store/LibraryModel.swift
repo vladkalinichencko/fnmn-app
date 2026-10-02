@@ -87,10 +87,16 @@ final class LibraryModel {
     }
 
     func apply(_ change: LibraryChange) async {
+        let deleted = deletedMaterial(in: change)
         do {
             try await write(saving: true) { snapshot in try snapshot.applying(change) }
             record(.library(change))
             scheduleSave()
+            if let deleted {
+                try? await file.removeDelivery(of: deleted.entry)
+                if let original = deleted.original { try? await file.removeOriginal(original) }
+                await readOriginals()
+            }
         } catch {
             failure = error.localizedDescription
         }
@@ -337,6 +343,12 @@ final class LibraryModel {
             try await CloudFolder.download(archive, timeout: .seconds(120))
         }
         return try await file.openCloudArticle(entry)
+    }
+
+    /// The entry and saved original of the material a change deletes, taken before it goes from the catalog.
+    private func deletedMaterial(in change: LibraryChange) -> (entry: ArticleEntry, original: URL?)? {
+        guard case let .delete(itemID) = change, let entry = entry(itemID) else { return nil }
+        return (entry, originalFile(itemID))
     }
 
     private func entry(_ materialID: String) -> ArticleEntry? {

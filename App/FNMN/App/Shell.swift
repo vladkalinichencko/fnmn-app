@@ -13,6 +13,8 @@ enum Route: Hashable {
     case item(String, piece: Int? = nil)
     case album(String)
     case source(String)
+    /// A type or a month of the Collections section; albums and publishers have routes of their own.
+    case group(LibraryGrouping, String)
     case annotations
     case archive
 }
@@ -43,26 +45,32 @@ final class WindowNavigation {
 }
 
 extension EnvironmentValues {
-    /// The namespace a material's tile and the material's screen share, so the screen grows out of the tile.
+    /// The namespace a tile and the screen it opens share, so the screen grows out of the tile.
     @Entry var zoomNamespace: Namespace.ID?
 }
 
 extension View {
-    /// Makes a tile the place its material's screen opens from and closes back to.
+    /// Makes a tile the place its screen opens from and closes back to. A material's tile is named by the
+    /// material's id, an album's or a publisher's by the route it opens.
     @ViewBuilder
-    func zoomSource(of itemID: String, cornerRadius: CGFloat) -> some View {
-        modifier(ZoomSourceModifier(itemID: itemID, cornerRadius: cornerRadius))
+    func zoomSource(of id: some Hashable & Sendable, cornerRadius: CGFloat) -> some View {
+        modifier(ZoomSourceModifier(id: id, cornerRadius: cornerRadius))
     }
 }
 
 private struct ZoomSourceModifier: ViewModifier {
-    let itemID: String
+    let id: AnyHashable
     let cornerRadius: CGFloat
     @Environment(\.zoomNamespace) private var namespace
 
+    init(id: some Hashable & Sendable, cornerRadius: CGFloat) {
+        self.id = AnyHashable(id)
+        self.cornerRadius = cornerRadius
+    }
+
     func body(content: Content) -> some View {
         if let namespace {
-            content.matchedTransitionSource(id: itemID, in: namespace) {
+            content.matchedTransitionSource(id: id, in: namespace) {
                 $0.clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
             }
         } else {
@@ -72,12 +80,16 @@ private struct ZoomSourceModifier: ViewModifier {
 }
 
 private struct ZoomDestinationModifier: ViewModifier {
-    let itemID: String
+    let id: AnyHashable
     @Environment(\.zoomNamespace) private var namespace
+
+    init(id: some Hashable & Sendable) {
+        self.id = AnyHashable(id)
+    }
 
     func body(content: Content) -> some View {
         if let namespace {
-            content.navigationTransition(.zoom(sourceID: itemID, in: namespace))
+            content.navigationTransition(.zoom(sourceID: id, in: namespace))
         } else {
             content
         }
@@ -113,10 +125,14 @@ struct RouteStack<Root: View>: View {
     @Binding var path: [Route]
     @ViewBuilder let root: () -> Root
 
-    /// A material needs no tabs, so the bar is hidden while one is the top of the stack; it follows the path,
-    /// not the screen's own appearance, which a swipe back with the zoom transition does not always report.
+    /// A material, an album, a publisher or a type grows out of its tile and needs no tabs, so the bar is hidden
+    /// while one is the top of the stack; it follows the path, not the screen's own appearance, which a swipe
+    /// back with the zoom transition does not always report.
     private var showsMaterial: Bool {
-        if case .item? = path.last { true } else { false }
+        switch path.last {
+        case .item?, .album?, .source?, .group?: true
+        case .annotations?, .archive?, nil: false
+        }
     }
 
     var body: some View {
@@ -130,7 +146,7 @@ struct RouteStack<Root: View>: View {
     }
 }
 
-/// A material grows out of its tile.
+/// A material, an album, a publisher or a type grows out of its tile.
 private struct RouteScreen: View {
     let route: Route
 
@@ -138,11 +154,16 @@ private struct RouteScreen: View {
         switch route {
         case let .item(id, piece):
             ItemScreen(itemID: id, startPiece: piece)
-                .modifier(ZoomDestinationModifier(itemID: id))
+                .modifier(ZoomDestinationModifier(id: id))
         case let .album(name):
             AlbumScreen(name: name)
-        case let .source(name):
-            SourceScreen(name: name)
+                .modifier(ZoomDestinationModifier(id: route))
+        case let .source(id):
+            SourceScreen(id: id)
+                .modifier(ZoomDestinationModifier(id: route))
+        case let .group(grouping, key):
+            GroupScreen(grouping: grouping, key: key)
+                .modifier(ZoomDestinationModifier(id: route))
         case .annotations:
             AnnotationsScreen()
         case .archive:

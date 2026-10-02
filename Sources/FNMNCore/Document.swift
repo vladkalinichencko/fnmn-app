@@ -111,13 +111,28 @@ public struct Material: Codable, Equatable, Identifiable, Sendable {
     /// file, kept in `originals/`.
     public let sourceURL: URL?
     public let byline: String?
+    /// The site or section the server found the page under; absent for a material made before it looked.
+    public let source: PageSource?
 
-    public init(id: String, kind: Kind, title: String, sourceURL: URL?, byline: String? = nil) {
+    public init(id: String, kind: Kind, title: String, sourceURL: URL?, byline: String? = nil, source: PageSource? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
         self.sourceURL = sourceURL
         self.byline = byline
+        self.source = source
+    }
+}
+
+/// The page above an article that stands for its publisher: the blog's index, the author's profile or the
+/// site's front page, and the name the site gives itself when its pages say one.
+public struct PageSource: Codable, Equatable, Sendable {
+    public let name: String?
+    public let homepage: URL
+
+    public init(name: String?, homepage: URL) {
+        self.name = name
+        self.homepage = homepage
     }
 }
 

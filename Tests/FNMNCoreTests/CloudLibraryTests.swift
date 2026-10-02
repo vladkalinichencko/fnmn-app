@@ -120,3 +120,19 @@ private func twoDevices() async throws -> (phone: LibraryFile, pad: LibraryFile,
     #expect(found.deliveries.isEmpty)
     #expect(found.snapshot.deletedAt[page.material.id] != nil)
 }
+
+@Test func aDeletedMaterialTakesItsArchiveOutOfTheFolderSoNothingReadsItBackIn() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let archive = cloud.appending(path: "deliveries/a.tar")
+    try writeDelivery(illustrated, files: [("assets/cover.png", try png()), ("assets/diagram.png", try png())], to: archive)
+    let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
+    await file.useCloudFolder(cloud)
+    let library = try await file.addCloudDelivery(archive, into: LibrarySnapshot())
+
+    try await file.removeDelivery(of: try #require(library.articles.first))
+    #expect(!FileManager.default.fileExists(atPath: archive.path))
+    // A second delete, or a file already gone, is not an error.
+    try await file.removeDelivery(of: try #require(library.articles.first))
+}

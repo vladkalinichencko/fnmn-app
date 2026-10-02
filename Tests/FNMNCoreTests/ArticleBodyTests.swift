@@ -33,6 +33,14 @@ import Testing
     ])
 }
 
+@Test func rulesBetweenParagraphsAreDroppedAndAnArticlesOwnPageIsInteractive() {
+    #expect(ArticleBody.blocks(in: "One.\n\n---\n\n* * *\n\nTwo.\n\n```fnmn-interactive\nassets/app.html\n```") == [
+        .text("One."),
+        .text("Two."),
+        .interactive(url: URL(string: "assets/app.html")!, selector: nil),
+    ])
+}
+
 @Test func picturesAndCodeJoinTheirParagraphAndOnlyTheOpeningPictureStandsAlone() {
     let blocks = ArticleBody.blocks(in: """
     ![cover](assets/cover.png)

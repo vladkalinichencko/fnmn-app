@@ -39,6 +39,8 @@ class Document:
     title: str | None = None
     author: str | None = None
     files: dict[str, bytes] = field(default_factory=dict)
+    publisher: dict | None = None
+    """The app's `PageSource`: the page that stands for the publisher, and its name when the site gives one."""
 
 
 @dataclass
@@ -207,15 +209,18 @@ def _document_package(material_id: str, url: str | None, document: Document, fol
         raise ValueError("article markdown is empty")
     body = normalize(document.markdown)
     heading = first_heading(body) or (document.title and page_title(document.title))
+    material = {
+        "id": material_id,
+        "kind": "article",
+        "title": heading or fallback,
+        "sourceURL": url,
+        "byline": document.author,
+    }
+    if document.publisher:
+        material["source"] = document.publisher
     return {
         "version": 1,
-        "material": {
-            "id": material_id,
-            "kind": "article",
-            "title": heading or fallback,
-            "sourceURL": url,
-            "byline": document.author,
-        },
+        "material": material,
         "sections": [],
         "blocks": [],
         "folders": folders,

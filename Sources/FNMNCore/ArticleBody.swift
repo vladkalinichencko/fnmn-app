@@ -67,6 +67,8 @@ public enum ArticleBody {
                 blocks.append(heading)
                 continue
             }
+            // A rule between paragraphs would be a plate with a line on it; under a line of text it is that line's mark.
+            if lines.isEmpty, isThematicBreak(trimmed) { continue }
             lines.append(line)
             if trimmed.components(separatedBy: "$$").count.isMultiple(of: 2) { inMath = true }
         }
@@ -184,6 +186,12 @@ public enum ArticleBody {
         return nil
     }
 
+    private static func isThematicBreak(_ line: String) -> Bool {
+        let marks = line.filter { !$0.isWhitespace }
+        guard marks.count >= 3, let first = marks.first, "-*_".contains(first) else { return false }
+        return marks.allSatisfy { $0 == first }
+    }
+
     private static func heading(_ line: String) -> DocumentBlock? {
         guard let match = line.prefixMatch(of: /(#{1,6})[ \t]+(.+)/) else { return nil }
         let title = String(match.2).trimmingCharacters(in: .whitespaces)
@@ -194,7 +202,9 @@ public enum ArticleBody {
         if let fence {
             let kind = fence.trimmingCharacters(in: .whitespaces).dropFirst(3)
             let body = text.split(separator: "\n").dropFirst().dropLast().map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            if kind == "fnmn-interactive", let address = body.first, let url = URL(string: address), url.scheme == "http" || url.scheme == "https" {
+            // A page of the article's own, shipped in its folder, has no scheme; a page of the web is http(s).
+            if kind == "fnmn-interactive", let address = body.first, let url = URL(string: address),
+               url.scheme == "http" || url.scheme == "https" || (url.scheme == nil && url.pathExtension == "html") {
                 return .interactive(url: url, selector: body.dropFirst().first)
             }
             if kind == "fnmn-video", let path = body.first {

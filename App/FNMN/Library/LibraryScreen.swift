@@ -6,6 +6,8 @@ struct LibraryScreen: View {
     @Environment(ImportJobs.self) private var imports
     @Environment(WindowNavigation.self) private var navigation
     @Environment(LibraryDialogs.self) private var dialogs
+    @AppStorage("collectionGrouping") private var grouping = LibraryGrouping.albums
+    @AppStorage("collectionSort") private var sort = GroupSort.standard
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -22,9 +24,11 @@ struct LibraryScreen: View {
                             ForEach(library.snapshot.unsortedItems) { ItemTile(item: $0) }
                         }
                     }
-                    LibrarySection("Albums") {
+                    LibrarySection("Collections") {
+                        CollectionOptions(grouping: $grouping, sort: $sort)
+                    } content: {
                         LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                            ForEach(library.snapshot.albumSummaries) { AlbumTile(album: $0) }
+                            ForEach(library.snapshot.groups(by: grouping, sortedBy: sort)) { AlbumTile(album: $0) }
                         }
                     }
                 }
@@ -41,7 +45,7 @@ struct LibraryScreen: View {
                     Menu("Add", systemImage: "plus") {
                         Button("Link", systemImage: "link") { dialogs.send(.addLink("")) }
                         Button("File", systemImage: "doc") { dialogs.send(.pickFile) }
-                        Button("New Album", systemImage: "rectangle.stack.badge.plus") { dialogs.send(.nameAlbum(adding: nil)) }
+                        Button("New Collection", systemImage: "rectangle.stack.badge.plus") { dialogs.send(.nameAlbum(adding: nil)) }
                     }
                 }
             }
@@ -50,19 +54,84 @@ struct LibraryScreen: View {
 }
 
 /// A titled part of a screen with a large header, used by Library, Shelf and search.
-struct LibrarySection<Content: View>: View {
+struct LibrarySection<Content: View, Accessory: View>: View {
     let title: String
+    let accessory: Accessory
     let content: Content
 
-    init(_ title: String, @ViewBuilder content: () -> Content) {
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.accessory = accessory()
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
-            Text(title).font(Tokens.sectionTitle)
+            HStack {
+                Text(title).font(Tokens.sectionTitle)
+                Spacer(minLength: 4)
+                accessory
+            }
             content
+        }
+    }
+}
+
+extension LibrarySection where Accessory == EmptyView {
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.init(title, accessory: { EmptyView() }, content: content)
+    }
+}
+
+/// What the Collections section gathers materials by, and in which order; the choice is kept.
+private struct CollectionOptions: View {
+    @Binding var grouping: LibraryGrouping
+    @Binding var sort: GroupSort
+
+    var body: some View {
+        Menu {
+            Section("Group By") {
+                Picker("Group By", selection: $grouping) {
+                    ForEach(LibraryGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
+            Section("Sort By") {
+                Picker("Sort By", selection: $sort) {
+                    ForEach(GroupSort.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
+        } label: {
+            Image(systemName: "eye")
+                .font(.title3)
+                .foregroundStyle(.primary)
+                .frame(width: 31, height: 31)
+        }
+        .accessibilityLabel("View Options")
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+    }
+}
+
+private extension LibraryGrouping {
+    var title: String {
+        switch self {
+        case .albums: "My Collections"
+        case .publishers: "Publishers"
+        case .types: "Types"
+        case .months: "Month Added"
+        }
+    }
+}
+
+private extension GroupSort {
+    var title: String {
+        switch self {
+        case .standard: "Default"
+        case .name: "Name"
+        case .size: "Most Items"
+        case .recent: "Recently Added"
         }
     }
 }

@@ -133,7 +133,9 @@ private struct ParagraphPicture: Attachment {
     let description: String
 
     var body: some View {
+        // Its edge is the plate's padding in, like a code block's, so the corners share the plate's center.
         FileImage(url: url, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: Tokens.codeRadius, style: .continuous))
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, in _: TextEnvironmentValues) -> CGSize {

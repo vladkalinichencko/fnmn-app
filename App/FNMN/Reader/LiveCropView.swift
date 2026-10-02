@@ -73,7 +73,7 @@ private struct LiveCropWebView: UIViewRepresentable {
         view.isOpaque = false
         // The phase starts as `.loading`, so the first load needs no state change from the update pass.
         context.coordinator.loaded = url
-        view.load(URLRequest(url: url))
+        load(url, in: view)
         return view
     }
 
@@ -81,9 +81,18 @@ private struct LiveCropWebView: UIViewRepresentable {
         context.coordinator.onPhase = { phase = $0 }
         guard context.coordinator.loaded != url else { return }
         context.coordinator.loaded = url
-        view.load(URLRequest(url: url))
+        load(url, in: view)
         // A view update must not write state; the new page's phase is set right after it.
         Task { @MainActor in phase = .loading }
+    }
+
+    /// A page the article carries is read from its own folder, which it may read from; a page of the web is fetched.
+    private func load(_ url: URL, in view: WKWebView) {
+        if url.isFileURL {
+            view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        } else {
+            view.load(URLRequest(url: url))
+        }
     }
 
     static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
@@ -131,7 +140,10 @@ private struct LiveCropWebView: UIViewRepresentable {
                 window.webkit.messageHandlers.crop.postMessage({kind: "height", height: height});
               }
               if (!selector) {
-                report(document.documentElement.scrollHeight);
+                // A whole page, such as an app the article carries, grows as its styles and scripts arrive.
+                const page = () => report(Math.ceil(document.body.getBoundingClientRect().height));
+                page();
+                if (window.ResizeObserver) new ResizeObserver(page).observe(document.body);
                 return;
               }
               const target = document.querySelector(selector);

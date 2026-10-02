@@ -12,10 +12,23 @@ struct AlbumTile: View {
         }
         .buttonStyle(.plain)
         .modifier(AlbumTileBehavior(album: album))
+        .modifier(AlbumZoomSource(route: pick == nil ? route : nil))
+    }
+
+    private var route: Route {
+        switch album.grouping {
+        case .albums: .album(album.name)
+        case .publishers: .source(album.key)
+        case .types, .months: .group(album.grouping, album.key)
+        }
     }
 
     private func open() {
-        if let pick { pick() } else { navigation.open(.album(album.name)) }
+        if let pick {
+            pick()
+            return
+        }
+        navigation.open(route)
     }
 
     /// The fan takes a whole tile's shape, so an album never looks smaller than what it holds; the name goes under it.
@@ -114,24 +127,59 @@ private struct AlbumFan: View {
     private static let shifts: [CGFloat] = [0, -10, 10]
 }
 
+/// The tile its screen grows out of; the picker's tiles only choose an album, so they open nothing.
+private struct AlbumZoomSource: ViewModifier {
+    let route: Route?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let route {
+            content.zoomSource(of: route, cornerRadius: Tokens.tileRadius)
+        } else {
+            content
+        }
+    }
+}
+
 /// Dropping a tile adds the material to the album; the context menu renames or deletes it.
 private struct AlbumTileBehavior: ViewModifier {
     let album: AlbumSummary
     @Environment(LibraryModel.self) private var library
     @Environment(LibraryDialogs.self) private var dialogs
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .dropDestination(for: String.self) { ids, _ in
-                Task { await library.apply(.addToAlbum(album.name, itemIDs: ids)) }
-                return !ids.isEmpty
-            }
-            .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
-            .contextMenu {
-                Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(album.name)) }
-                Button("Delete Album", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(album.name)) }
-            }
+        if album.grouping == .albums {
+            content
+                .dropDestination(for: String.self) { ids, _ in
+                    Task { await library.apply(.addToAlbum(album.name, itemIDs: ids)) }
+                    return !ids.isEmpty
+                }
+                .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
+                .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+                .contextMenu {
+                    Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(album.name)) }
+                    Button("Delete Collection", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(album.name)) }
+                }
+        } else {
+            content
+        }
+    }
+}
+
+/// The materials of one type or month of the Collections section.
+struct GroupScreen: View {
+    let grouping: LibraryGrouping
+    let key: String
+    @Environment(LibraryModel.self) private var library
+
+    var body: some View {
+        ScrollView {
+            ArrangedItems(items: library.snapshot.items(in: grouping, key: key), scope: "group:\(grouping.rawValue):\(key)")
+                .padding(.horizontal, Tokens.gutter)
+        }
+        .background(Tokens.canvas)
+        .navigationTitle(library.snapshot.groupName(grouping, key: key))
     }
 }
 
@@ -142,7 +190,7 @@ struct AlbumScreen: View {
 
     var body: some View {
         ScrollView {
-            ItemGrid(items: library.snapshot.items(inAlbum: name), album: name)
+            ArrangedItems(items: library.snapshot.items(inAlbum: name), album: name, scope: "album:\(name)")
                 .padding(.horizontal, Tokens.gutter)
         }
         .background(Tokens.canvas)
@@ -150,7 +198,7 @@ struct AlbumScreen: View {
         .toolbar {
             Menu("More", systemImage: "ellipsis") {
                 Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(name)) }
-                Button("Delete Album", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(name)) }
+                Button("Delete Collection", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(name)) }
             }
         }
     }
@@ -175,14 +223,14 @@ struct AlbumPicker: View {
                 }
                 .padding(.horizontal, Tokens.gutter)
             }
-            .navigationTitle("Add to Album")
+            .navigationTitle("Add to Collection")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", systemImage: "xmark") { dialogs.send(.dismiss) }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("New Album", systemImage: "plus") { dialogs.send(.nameAlbum(adding: itemID)) }
+                    Button("New Collection", systemImage: "plus") { dialogs.send(.nameAlbum(adding: itemID)) }
                 }
             }
         }
@@ -192,16 +240,16 @@ struct AlbumPicker: View {
 
 /// Everything saved from one author, blog or channel, and the way to its home page.
 struct SourceScreen: View {
-    let name: String
+    let id: String
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
-        let items = library.snapshot.items(fromSource: name)
+        let items = library.snapshot.items(fromSource: id)
         ScrollView {
-            ItemGrid(items: items).padding(.horizontal, Tokens.gutter)
+            ArrangedItems(items: items, scope: "source:\(id)").padding(.horizontal, Tokens.gutter)
         }
         .background(Tokens.canvas)
-        .navigationTitle(name)
+        .navigationTitle(items.first?.source?.name ?? "")
         .toolbar {
             if let homepage = items.lazy.compactMap(\.source?.homepage).first {
                 Link(destination: homepage) { Label("Open Site", systemImage: "arrow.up.right") }

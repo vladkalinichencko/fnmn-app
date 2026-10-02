@@ -62,6 +62,11 @@ class MarkdownTests(unittest.TestCase):
         text = "```\n# **not a heading**\na****b\n```"
         self.assertEqual(normalize(text), text)
 
+    def test_horizontal_rules_go_but_a_heading_underline_and_code_stay(self):
+        self.assertEqual(normalize("One.\n\n---\n\nTwo.\n\n* * *\n\nThree."), "One.\n\nTwo.\n\nThree.")
+        self.assertEqual(normalize("Title\n---\n\nText."), "Title\n---\n\nText.")
+        self.assertEqual(normalize("```\n---\n```"), "```\n---\n```")
+
     def test_normalize_leaves_plain_prose_alone(self):
         text = "# Title\n\nOne paragraph.\n\nTwo paragraph."
         self.assertEqual(normalize(text), text)

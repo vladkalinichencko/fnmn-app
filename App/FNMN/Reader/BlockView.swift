@@ -33,7 +33,7 @@ struct BlockView: View, Equatable {
         case let .video(path):
             ArticleVideo(url: resolve(path))
         case let .interactive(url, selector):
-            LiveCropView(url: url, selector: selector)
+            LiveCropView(url: resolve(url.absoluteString), selector: selector)
         }
     }
 
@@ -294,7 +294,8 @@ struct PlateView: View {
         Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { reader.send(.ask(text)) }
         Button("Copy as Prompt", systemImage: "text.quote") { reader.send(.copyPrompt(text)) }
         let pictures = ArticleBody.imagePaths(in: markdown).map { baseURL.appending(path: $0) }
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+            // Only pictures the reader can show: a site's SVG icons are files too, but they are not images here.
+            .filter { ImageFiles.headerSize(of: $0) != nil }
         ForEach(Array(pictures.enumerated()), id: \.offset) { number, picture in
             Button(pictures.count == 1 ? "Save Picture to Photos" : "Save Picture \(number + 1) to Photos", systemImage: "square.and.arrow.down") {
                 guard let image = UIImage(contentsOfFile: picture.path) else { return }

@@ -88,12 +88,12 @@ private struct LibraryDialogsModifier: ViewModifier {
             .sheet(isPresented: dialogs.isShowing { $0 == .settings }) {
                 SettingsScreen()
             }
-            .alert("New Album", isPresented: dialogs.isShowing { if case .namingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.albumTarget) { itemID in
+            .alert("New Collection", isPresented: dialogs.isShowing { if case .namingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.albumTarget) { itemID in
                 TextField("Name", text: $albumName)
                 Button("Create") { createAlbum(adding: itemID) }
                 Button("Cancel", role: .cancel) { albumName = "" }
             }
-            .alert("Rename Album", isPresented: dialogs.isShowing { if case .renamingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.renamedAlbum) { name in
+            .alert("Rename Collection", isPresented: dialogs.isShowing { if case .renamingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.renamedAlbum) { name in
                 TextField("Name", text: $albumName)
                 Button("Rename") { rename(name) }
                 Button("Cancel", role: .cancel) { albumName = "" }
@@ -112,12 +112,12 @@ private struct LibraryDialogsModifier: ViewModifier {
                 Text("Its place, highlights and notes are deleted too.")
             }
             .confirmationDialog(
-                "Delete this album?",
+                "Delete this collection?",
                 isPresented: dialogs.isShowing { if case .confirmingAlbumDelete = $0 { true } else { false } },
                 titleVisibility: .visible,
                 presenting: dialogs.dialog.deletedAlbum
             ) { name in
-                Button("Delete Album", role: .destructive) { Task { await library.apply(.deleteAlbum(name)) } }
+                Button("Delete Collection", role: .destructive) { Task { await library.apply(.deleteAlbum(name)) } }
             } message: { _ in
                 Text("Materials stay in the library.")
             }

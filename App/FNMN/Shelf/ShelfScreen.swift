@@ -9,18 +9,14 @@ struct ShelfScreen: View {
     var body: some View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.shelf) {
-            let annotations = library.snapshot.annotationGroups.flatMap { group in group.annotations.map { (group.item, $0) } }
-                .sorted { ($0.1.updatedAt ?? .distantPast) > ($1.1.updatedAt ?? .distantPast) }
+            let annotations = library.snapshot.annotationGroups.flatMap { group in group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) } }
+                .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }
             let archived = library.snapshot.archivedItems
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
                     if !annotations.isEmpty {
                         ShelfSection("Annotations", route: .annotations) {
-                            VStack(spacing: Tokens.sectionGap) {
-                                ForEach(annotations.prefix(3), id: \.1.id) { item, annotation in
-                                    AnnotationCard(item: item, annotation: annotation)
-                                }
-                            }
+                            AnnotationColumns(entries: annotations, preview: true)
                         }
                     }
                     if !archived.isEmpty {
@@ -81,13 +77,9 @@ struct AnnotationsScreen: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Tokens.sectionGap) {
-                ForEach(library.snapshot.annotationGroups) { group in
-                    ForEach(group.annotations) { annotation in
-                        AnnotationCard(item: group.item, annotation: annotation)
-                    }
-                }
-            }
+            AnnotationColumns(entries: library.snapshot.annotationGroups.flatMap { group in
+                group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) }
+            })
             .padding(.horizontal, Tokens.gutter)
             .padding(.vertical, Tokens.gap)
         }
@@ -105,6 +97,54 @@ struct ArchiveScreen: View {
         }
         .background(Tokens.canvas)
         .navigationTitle("Archive")
+    }
+}
+
+private struct AnnotationEntry: Identifiable {
+    let item: LibraryItem
+    let annotation: Annotation
+    var id: UUID { annotation.id }
+
+    /// How much room the card takes, judged by its text, so the columns come out about equally tall.
+    var weight: Int {
+        60 + min(annotation.quote.count, 260) + annotation.note.count + item.title.count / 4
+    }
+}
+
+/// Annotation cards in as many columns as the width holds. Each card goes under the column that is shortest so
+/// far, so the newest lie along the top; a phone has one column.
+private struct AnnotationColumns: View {
+    let entries: [AnnotationEntry]
+    /// The shelf's preview shows two rows, or three in a single column, instead of every card.
+    var preview = false
+    /// Until the width is known the cards stay unseen, so a wide screen never shows one column for a frame.
+    @State private var width: CGFloat = 0
+
+    var body: some View {
+        let count = Tokens.annotationColumns(forWidth: width)
+        let shown = preview ? Array(entries.prefix(count == 1 ? 3 : 2 * count)) : entries
+        HStack(alignment: .top, spacing: Tokens.sectionGap) {
+            ForEach(Array(Self.split(shown, into: count).enumerated()), id: \.offset) { _, column in
+                LazyVStack(spacing: Tokens.sectionGap) {
+                    ForEach(column) { AnnotationCard(item: $0.item, annotation: $0.annotation) }
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .opacity(width > 0 ? 1 : 0)
+    }
+
+    private static func split(_ entries: [AnnotationEntry], into count: Int) -> [[AnnotationEntry]] {
+        var columns = Array(repeating: [AnnotationEntry](), count: count)
+        var heights = Array(repeating: 0, count: count)
+        for entry in entries {
+            let shortest = heights.indices.min { heights[$0] < heights[$1] } ?? 0
+            columns[shortest].append(entry)
+            heights[shortest] += entry.weight
+        }
+        return columns
     }
 }
 

@@ -250,6 +250,28 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn("\\(", body)
         self.assertNotIn("\ue200", body)
 
+    def test_chatgpt_share_drops_interface_entities_and_keeps_generated_apps_as_pages(self):
+        app = {"app_block": {"language": "html", "title": "Demo", "content": '<div id="d" class="p-2">1 < 2</div><script>1</script>'}}
+        text = (
+            "message_reaction👍Look: image_group{\"query\":[\"a\"]}\n\n"
+            "In entity[\"city\",\"Paris\",\"capital\"].\n\n---\n\n"
+            f"genui{json.dumps(app)}\n\nDone."
+        )
+        payload = {
+            "title": "T",
+            "linear_conversation": [{"message": {"author": {"role": "assistant"}, "content": {"content_type": "text", "parts": [text]}}}],
+        }
+        delivery = import_link("https://chatgpt.com/share/abc-2", [], fakes.web(lambda url: json.dumps(payload), lambda url: b""))
+        body = delivery.package["body"]
+        self.assertNotIn("", body)
+        self.assertNotIn("image_group", body)
+        self.assertNotIn("---", body)
+        self.assertIn("In Paris.", body)
+        (path,) = delivery.files
+        self.assertRegex(path, r"^assets/interactive-[0-9a-f]{16}\.html$")
+        self.assertIn(f"```fnmn-interactive\n{path}\n```", body)
+        self.assertIn('<div id="d" class="p-2">1 < 2</div>', delivery.files[path].decode())
+
     def test_youtube_prepares_video_cues_from_timedtext(self):
         payload = """
         WEBVTT

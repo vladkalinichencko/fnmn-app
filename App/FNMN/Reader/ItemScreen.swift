@@ -96,7 +96,7 @@ struct MaterialHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let source {
-                Button(source.name) { navigation.open(.source(source.name)) }
+                Button(source.name) { navigation.open(.source(source.id)) }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .buttonStyle(.plain)

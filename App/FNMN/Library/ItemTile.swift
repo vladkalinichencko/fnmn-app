@@ -146,11 +146,11 @@ struct ItemActions: View {
             JobActions(job: job)
             Divider()
         }
-        Button("Add to Album…", systemImage: "rectangle.stack.badge.plus") {
+        Button("Add to Collection…", systemImage: "rectangle.stack.badge.plus") {
             dialogs.send(.pickAlbum(itemID: item.id))
         }
         if let album {
-            Button("Remove from Album", systemImage: "rectangle.stack.badge.minus") {
+            Button("Remove from Collection", systemImage: "rectangle.stack.badge.minus") {
                 Task { await library.apply(.removeFromAlbum(album, itemID: item.id)) }
             }
         }

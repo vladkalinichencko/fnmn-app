@@ -27,8 +27,22 @@ OPENING_PUNCTUATION = "«„“‘([{—–-"
 CLOSING_PUNCTUATION = "»”’)]}.,:;!?…"
 
 
+RULE = re.compile(r"[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*")
+
+
 def normalize(markdown: str) -> str:
-    return join_display_math(tex_delimiters(_outside_code(without_page_chrome(markdown), lambda text: bold_runs(headings(text)))))
+    return join_display_math(
+        tex_delimiters(_outside_code(without_page_chrome(markdown), lambda text: bold_runs(headings(without_rules(text)))))
+    )
+
+
+def without_rules(markdown: str) -> str:
+    """A horizontal rule would be a paragraph of its own, a plate with a line on it, so it goes. A `---` right under
+    a line of text is that line's heading mark and stays."""
+
+    lines = markdown.split("\n")
+    kept = [line for index, line in enumerate(lines) if not (RULE.fullmatch(line) and (index == 0 or not lines[index - 1].strip()))]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept))
 
 
 def _outside_code(markdown: str, change) -> str:

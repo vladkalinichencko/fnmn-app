@@ -19,6 +19,24 @@ enum Tokens {
     /// The title of a screen's section: Continue, Unsorted, Albums, Annotations, Archive.
     static let sectionTitle = Font.title.bold()
 
+    /// How many columns of annotation cards a width holds: one on a phone, two on a tablet upright, four lying down.
+    /// A card is never narrower than about 270 points nor wider than about 600.
+    static func annotationColumns(forWidth width: CGFloat) -> Int {
+        switch width {
+        case ..<640: 1
+        case ..<1100: 2
+        default: 4
+        }
+    }
+
+    /// The width of the column a text is read in: 60% of a wide screen, centered, but never narrower than
+    /// `minReading`, and the whole width where the screen is no wider than that.
+    static let readingFraction: CGFloat = 0.6
+    static let minReading: CGFloat = 560
+    static func readingWidth(in width: CGFloat) -> CGFloat {
+        min(width, max(width * readingFraction, minReading))
+    }
+
     /// The radius of a shape set `inset` inside one of radius `outer`, so both curves share a center.
     static func concentric(_ outer: CGFloat, inset: CGFloat) -> CGFloat {
         max(outer - inset, 0)

@@ -113,8 +113,8 @@ extension LibraryError: LocalizedError {
         case let .unsupportedVersion(version): "Unsupported package version \(version)."
         case .emptyDocument: "The document has no text."
         case .escapedPath: "A file path points outside the library."
-        case let .albumNameTaken(name): "An album named “\(name)” already exists."
-        case .emptyAlbumName: "Enter an album name."
+        case let .albumNameTaken(name): "A collection named “\(name)” already exists."
+        case .emptyAlbumName: "Enter a collection name."
         case .cloudFolderMissing: "This material lives in the FNMN folder in iCloud Drive. Choose that folder again with + → File."
         }
     }

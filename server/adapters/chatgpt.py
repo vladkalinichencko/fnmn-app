@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from urllib.parse import urlparse
@@ -9,11 +10,41 @@ from web import Web
 
 _SHARE = re.compile(r"/share/([A-Za-z0-9-]+)")
 _LABELS = {"user": "User", "assistant": "Assistant"}
-_CITE = re.compile("\ue200cite\ue202.*?\ue201")
+_ENTITY = re.compile("\ue200([a-z_]+)\ue202(.*?)\ue201", re.S)
 _WIKI = re.compile(r"\[\[([^\[\]]+)\]\]")
 _DISPLAY = re.compile(r"\\\[(.*?)\\\]", re.S)
 _INLINE = re.compile(r"\\\((.+?)\\\)")
 _FENCE = re.compile(r"(```[\s\S]*?```)")
+
+# A generated app is written for ChatGPT's own page: Tailwind classes and `--viz-*` colors that page defines.
+_APP_PAGE = """<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root {
+  color-scheme: light dark;
+  --viz-text: #1c1c1e; --viz-muted: #6c6c70; --viz-border: rgba(60,60,67,.22); --viz-card: rgba(120,120,128,.08);
+  --viz-accent: #0a84ff; --viz-accent-bg: rgba(10,132,255,.14);
+  --viz-series-1: #0a84ff; --viz-series-2: #30b0c7; --viz-series-3: #ff9f0a; --viz-series-4: #bf5af2;
+  --viz-series-5: #30d158; --viz-series-6: #ff453a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --viz-text: #f2f2f7; --viz-muted: #98989f; --viz-border: rgba(235,235,245,.22); --viz-card: rgba(120,120,128,.18);
+  }
+}
+html, body { margin: 0; background: transparent; color: var(--viz-text); font: 16px/1.4 -apple-system, system-ui, sans-serif; }
+body { padding: 16px; }
+</style>
+</head>
+<body>
+{content}
+</body>
+</html>
+"""
 
 
 def read(url: str, web: Web, report: Report) -> Document:
@@ -27,10 +58,11 @@ def read(url: str, web: Web, report: Report) -> Document:
     if payload is None:
         raise ValueError("ChatGPT did not return the conversation")
     title = (payload.get("title") or "").strip() or "ChatGPT"
-    parts = [text for message in _messages(payload) if (text := _visible(message))]
+    files: dict[str, bytes] = {}
+    parts = [text for message in _messages(payload) if (text := _visible(message, files))]
     if not parts:
         raise ValueError("ChatGPT share has no messages")
-    return Document(f"# {title}\n\n" + "\n\n".join(parts) + "\n", title, "ChatGPT")
+    return Document(f"# {title}\n\n" + "\n\n".join(parts) + "\n", title, "ChatGPT", files=files)
 
 
 def normalize_copied_math(text: str) -> str:
@@ -72,7 +104,7 @@ def _messages(payload: dict) -> list:
     return [message for message in chain if message]
 
 
-def _visible(message) -> str | None:
+def _visible(message, files: dict[str, bytes]) -> str | None:
     if not isinstance(message, dict):
         return None
     author = ((message.get("author") or {}).get("role") or "").strip()
@@ -88,14 +120,50 @@ def _visible(message) -> str | None:
     if not texts:
         return None
     label = _LABELS.get(author, author or "Message")
-    body = normalize_copied_math("\n\n".join(texts)).strip()
+    body = normalize_copied_math(_entities("\n\n".join(texts), files)).strip()
     if not body:
         return None
     return f"## {label}\n\n{body}"
 
 
+def _entities(text: str, files: dict[str, bytes]) -> str:
+    """ChatGPT marks what its own interface draws with private-use brackets: `\\ue200 kind \\ue202 json \\ue201`.
+    A generated app becomes a figure that the reader opens as a page, an entity keeps its name, and citations,
+    reactions and image galleries, which cannot be shown, go."""
+
+    def replace(match: re.Match[str]) -> str:
+        kind, payload = match.groups()
+        if kind == "genui":
+            return _app(payload, files)
+        if kind == "entity":
+            return _entity_name(payload)
+        return ""
+
+    return _ENTITY.sub(replace, text)
+
+
+def _entity_name(payload: str) -> str:
+    try:
+        value = json.loads(payload)
+    except json.JSONDecodeError:
+        return ""
+    return str(value[1]) if isinstance(value, list) and len(value) > 1 else ""
+
+
+def _app(payload: str, files: dict[str, bytes]) -> str:
+    try:
+        block = json.loads(payload).get("app_block") or {}
+    except (json.JSONDecodeError, AttributeError):
+        return ""
+    content = block.get("content")
+    if block.get("language") != "html" or not isinstance(content, str) or not content.strip():
+        return ""
+    path = f"assets/interactive-{hashlib.sha256(content.encode()).hexdigest()[:16]}.html"
+    files[path] = _APP_PAGE.replace("{content}", content).encode()
+    return f"\n\n```fnmn-interactive\n{path}\n```\n\n"
+
+
 def _normalize_chunk(text: str) -> str:
-    text = _CITE.sub("", text)
     text = _WIKI.sub(_wiki_label, text)
     pieces: list[str] = []
     cursor = 0

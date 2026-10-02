@@ -33,6 +33,79 @@ class ArticleTests(unittest.TestCase):
         self.assertIn("![A figure](assets/", package["body"])
         self.assertTrue(any(path.endswith(".png") for path in package["files"]))
 
+    def test_the_material_names_its_publisher_from_the_section_and_the_sites_own_name(self):
+        page = """
+        <html><head><meta property="og:site_name" content="Alex L. Zhang"></head>
+        <body><article><h1>Shape</h1><p>Some prose about language models.</p></article></body></html>
+        """
+
+        def fetch_text(url):
+            if url not in {"https://example.github.io/blog/2026/shape/", "https://example.github.io/blog/"}:
+                raise OSError(url)
+            return page
+
+        package = imported_article("https://example.github.io/blog/2026/shape/", fetch_text, lambda url: b"", [])
+        self.assertEqual(
+            package["material"]["source"],
+            {"homepage": "https://example.github.io/blog/", "name": "Alex L. Zhang"},
+        )
+
+    def test_a_page_that_is_only_a_frame_is_the_page_inside_it(self):
+        shell = """
+        <html><head><title>A Space</title></head><body>
+          <iframe src="https://stripe.example/m.html" aria-hidden="true" style="display:none"></iframe>
+          <iframe src="https://www.youtube.com/embed/abc"></iframe>
+          <iframe class="space-iframe" src="https://owner-name.hf.space/?__theme=system"></iframe>
+        </body></html>
+        """
+        inside = """
+        <html><head><title>Counting</title></head><body><article>
+          <h1>Counting</h1><p>Models track line breaks, and we ask where that signal lives.</p>
+          <div id="plot"></div><script>draw()</script>
+        </article></body></html>
+        """
+        seen = []
+
+        def fetch_text(url):
+            seen.append(url)
+            return {"https://huggingface.co/spaces/owner/name": shell, "https://owner-name.hf.space/?__theme=system": inside}[url]
+
+        package = imported_article("https://huggingface.co/spaces/owner/name", fetch_text, lambda url: b"", [])
+        self.assertEqual(package["material"]["sourceURL"], "https://huggingface.co/spaces/owner/name")
+        self.assertEqual(package["material"]["title"], "Counting")
+        self.assertIn("Models track line breaks", package["body"])
+        self.assertIn("```fnmn-interactive\nhttps://owner-name.hf.space/?__theme=system\n#plot\n```", package["body"])
+        self.assertEqual(package["material"]["source"], {"homepage": "https://huggingface.co/owner", "name": "owner"})
+        self.assertNotIn("https://stripe.example/m.html", seen)
+
+    def test_a_page_with_prose_is_not_replaced_by_its_frames(self):
+        page = '<html><body><article><h1>T</h1><p>Plenty of prose here, with commas, to count as text.</p><iframe src="https://other.example/x"></iframe></article></body></html>'
+        seen = []
+
+        def fetch_text(url):
+            seen.append(url)
+            return page
+
+        package = imported_article("https://example.com/a", fetch_text, lambda url: b"", [])
+        self.assertIn("Plenty of prose", package["body"])
+        self.assertNotIn("https://other.example/x", seen)
+
+    def test_a_frame_that_cannot_be_read_leaves_the_page_as_it_was(self):
+        shell = '<html><head><title>Shell</title></head><body><iframe src="https://gone.example/"></iframe></body></html>'
+
+        def fetch_text(url):
+            if url == "https://example.com/shell":
+                return shell
+            raise OSError(url)
+
+        def browser(url):
+            if url == "https://example.com/shell":
+                return shell
+            raise OSError("no browser")
+
+        package = imported_article("https://example.com/shell", fetch_text, lambda url: b"", [], rendered=browser)
+        self.assertEqual(package["material"]["title"], "Shell")
+
     def test_import_downloads_picture_files_and_leaves_the_figure_on_the_live_page(self):
         source = """
         <html><head><script src="https://cdn.example/app.js"></script></head>
