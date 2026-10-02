@@ -4,7 +4,8 @@ from urllib.parse import urljoin
 import httpx
 from lxml import html
 
-from adapters.html_markdown import _picture, _selector, article_markdown
+from adapters.html_markdown import article_markdown
+from adapters.page_article import picture, selector
 from tests.test_article import imported_article
 from markdown import normalize
 
@@ -89,17 +90,17 @@ class DistillTests(unittest.TestCase):
         figures = [node for node in root.xpath(".//figure") if not node.xpath("ancestor::figure")]
         self.assertGreater(len(figures), 0)
         crops = _crops(markdown)
-        figure_crops = [selector for _, selector in crops if selector]
+        figure_crops = [css for _, css in crops if css]
         for figure in figures:
-            selector = _selector(figure)
-            if _picture(figure):
-                self.assertNotIn(selector, figure_crops)
+            css = selector(figure)
+            if picture(figure):
+                self.assertNotIn(css, figure_crops)
             else:
-                self.assertIn(selector, figure_crops)
-        for page, selector in crops:
+                self.assertIn(css, figure_crops)
+        for page, css in crops:
             self.assertEqual(page.rstrip("/"), url.rstrip("/"))
-            found = _select(document, selector)
-            self.assertEqual([node.tag for node in found], ["figure"], selector)
+            found = _select(document, css)
+            self.assertEqual([node.tag for node in found], ["figure"], css)
 
         scripts = {urljoin(url, src) for src in document.xpath("//script[@src]/@src")}
         styles = {urljoin(url, href) for href in document.xpath('//link[@rel="stylesheet"]/@href')}
