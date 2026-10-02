@@ -439,15 +439,13 @@ private struct MarginNote: View {
 }
 
 /// A picture that stands on its own between paragraphs, never wider than the picture itself. A tap opens it on the
-/// whole screen, growing out of its place in the text.
+/// whole screen.
 private struct StandaloneImage: View {
     let url: URL
     let alt: String
     /// The picture's own size, read from its file header before the block is laid out: a picture that took its
     /// height only after it appeared would push the text below it down while scrolling up.
     @State private var natural: CGSize?
-    @State private var enlarged = false
-    @Namespace private var zoom
 
     init(url: URL, alt: String) {
         self.url = url
@@ -476,22 +474,8 @@ private struct StandaloneImage: View {
             }
         }
         .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-        .onTapGesture { enlarged = true }
-        .matchedTransitionSource(id: url, in: zoom)
+        .opensMedia(url)
         .frame(maxWidth: .infinity)
-        .fullScreenCover(isPresented: $enlarged) {
-            ImageViewer(url: url).navigationTransition(.zoom(sourceID: url, in: zoom))
-        }
-        .contextMenu {
-            Button("Save to Photos", systemImage: "square.and.arrow.down") {
-                guard let image = UIImage(contentsOfFile: url.path) else { return }
-                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-            }
-            Button("Copy", systemImage: "doc.on.doc") {
-                if let image = UIImage(contentsOfFile: url.path) { UIPasteboard.general.image = image }
-            }
-            ShareLink(item: url)
-        }
     }
 }
 
@@ -499,8 +483,6 @@ private struct StandaloneImage: View {
 struct ArticleVideo: View {
     let url: URL
     @State private var poster = Poster.loading
-    @State private var playing = false
-    @Namespace private var zoom
 
     /// The first frame, shown before the video plays; a video whose frame cannot be read plays all the same.
     private enum Poster {
@@ -530,20 +512,8 @@ struct ArticleVideo: View {
             }
             .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .plate(cornerRadius: Tokens.plateRadius)
-            .onTapGesture { playing = true }
-            .matchedTransitionSource(id: url, in: zoom)
-            .fullScreenCover(isPresented: $playing) {
-                VideoViewer(url: url).navigationTransition(.zoom(sourceID: url, in: zoom))
-            }
+            .opensMedia(url)
             .task { poster = await Self.firstFrame(of: url).map(Poster.frame) ?? .none }
-            .contextMenu {
-                if url.isFileURL {
-                    Button("Save to Photos", systemImage: "square.and.arrow.down") {
-                        UISaveVideoAtPathToSavedPhotosAlbum(url.path, nil, nil, nil)
-                    }
-                }
-                ShareLink(item: url)
-            }
     }
 
     @concurrent

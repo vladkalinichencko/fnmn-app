@@ -79,13 +79,15 @@ struct MarkedMarkdown: MarkupParser {
 
     /// A picture on disk takes its size from the file's header as the paragraph is parsed. Textual's own loader
     /// reads the file only after the paragraph appears, so the paragraph grew by the picture's height and pushed
-    /// the column while it scrolled up.
+    /// the column while it scrolled up. Textual draws a picture without taking touches, so the picture is also a link
+    /// to its own file, and a tap on it opens it on the whole screen like a link.
     private static func placePictures(_ text: inout AttributedString) {
         for run in text.runs {
             guard let url = run.imageURL, url.isFileURL, let size = ImageFiles.headerSize(of: url) else { continue }
             let picture = ParagraphPicture(url: url, width: size.width, height: size.height, description: String(text[run.range].characters))
             text[run.range].textual.attachment = AnyAttachment(picture)
             text[run.range].imageURL = nil
+            text[run.range].link = url
         }
     }
 
@@ -136,6 +138,7 @@ private struct ParagraphPicture: Attachment {
         // Its edge is the plate's padding in, like a code block's, so the corners share the plate's center.
         FileImage(url: url, contentMode: .fit)
             .clipShape(.rect(cornerRadius: Tokens.codeRadius, style: .continuous))
+            .opensMedia(url)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, in _: TextEnvironmentValues) -> CGSize {

@@ -1,6 +1,33 @@
 import AVKit
 import SwiftUI
 
+extension EnvironmentValues {
+    /// The reader's namespace a picture or video on the whole screen grows out of.
+    @Entry var mediaZoom: Namespace.ID?
+}
+
+extension View {
+    /// Every picture and video of the text opens the same way: a tap sends it to the reader, and the viewer grows
+    /// out of this view. Over a picture inside a paragraph the text takes the tap and sends it as a link instead.
+    func opensMedia(_ url: URL) -> some View {
+        modifier(MediaSource(url: url))
+    }
+}
+
+private struct MediaSource: ViewModifier {
+    let url: URL
+    @Environment(ReaderCoordinator.self) private var reader: ReaderCoordinator?
+    @Environment(\.mediaZoom) private var zoom
+
+    func body(content: Content) -> some View {
+        if let reader, let zoom {
+            content.contentShape(.rect).onTapGesture { reader.send(.openMedia(url)) }.matchedTransitionSource(id: url, in: zoom)
+        } else {
+            content
+        }
+    }
+}
+
 /// A picture on the whole screen, as in Photos: pinching enlarges it, a finger moves it, a double tap zooms into
 /// the tapped point and back out.
 struct ImageViewer: View {
@@ -55,7 +82,8 @@ struct VideoViewer: View {
     }
 }
 
-/// Close on the left; saving to Photos and sharing on the right.
+/// Close on the left; saving to Photos and sharing on the right. Each icon is laid in a fixed square, so the glass
+/// circle around it is as large as a toolbar's.
 private struct MediaBar: View {
     let url: URL
     let save: () -> Void
@@ -63,17 +91,25 @@ private struct MediaBar: View {
 
     var body: some View {
         HStack {
-            Button("Close", systemImage: "xmark") { dismiss() }
+            Button { dismiss() } label: { icon("xmark") }
+                .accessibilityLabel("Close")
             Spacer()
-            Button("Save to Photos", systemImage: "square.and.arrow.down", action: save)
-            ShareLink(item: url) { Label("Share", systemImage: "square.and.arrow.up") }
+            Button(action: save) { icon("square.and.arrow.down") }
+                .accessibilityLabel("Save to Photos")
+            ShareLink(item: url) { icon("square.and.arrow.up") }
+                .accessibilityLabel("Share")
         }
-        .labelStyle(.iconOnly)
-        .font(.title3)
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
         .padding(.horizontal, Tokens.gutter)
         .padding(.vertical, 8)
+    }
+
+    private func icon(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.title2)
+            .foregroundStyle(.primary)
+            .frame(width: 44, height: 44)
     }
 }
 

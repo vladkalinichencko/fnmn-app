@@ -21,6 +21,8 @@ struct ReaderState: Equatable {
     /// The reader moves a line down the text instead of each block graying once it scrolls past the top.
     var showsLine = false
     var line: ReadingLine?
+    /// The picture or video open on the whole screen.
+    var media: URL?
 }
 
 enum ReaderAction {
@@ -43,6 +45,8 @@ enum ReaderAction {
     case settleLine
     case ask(String)
     case copyPrompt(String)
+    case openMedia(URL)
+    case closeMedia
 }
 
 /// Pure: the next screen state for an action. A heading folds or opens below itself, so the column stays where it is.
@@ -84,6 +88,10 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         }
     case let .moveLine(line):
         state.line = line
+    case let .openMedia(media):
+        state.media = media
+    case .closeMedia:
+        state.media = nil
     case .mark, .note, .settleLine, .ask, .copyPrompt:
         break
     }
@@ -223,7 +231,7 @@ final class ReaderCoordinator {
     private func animation(for action: ReaderAction) -> Animation? {
         switch action {
         case .plate, .toggleSection, .foldAll: .snappy
-        case .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt: nil
+        case .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia: nil
         }
     }
 
@@ -264,7 +272,7 @@ final class ReaderCoordinator {
         case .opened:
             guard next != before, let target = next.scrollID else { return }
             position.scrollTo(id: target, anchor: .top)
-        case .plate:
+        case .plate, .openMedia, .closeMedia:
             break
         case .toggleSection, .foldAll:
             guard next.folded != before.folded else { return }

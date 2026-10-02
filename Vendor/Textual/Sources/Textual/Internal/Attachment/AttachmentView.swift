@@ -30,33 +30,25 @@ struct AttachmentView: View {
     self.layout = layout
   }
 
+  // Each attachment is a view of its own at its run's bounds rather than a symbol drawn into a canvas, so
+  // modifiers that need a live view, such as a zoom transition's source, work on it. Touches go to the text.
   var body: some View {
-    Canvas { context, _ in
-      context.translateBy(x: origin.x, y: origin.y)
-      for (lineIndex, line) in zip(layout.indices, layout) {
-        for (runIndex, run) in zip(line.indices, line) {
-          guard
-            let attachment = run.attachment,
-            let symbol = context.resolveSymbol(id: attachment)
-          else {
-            continue
-          }
-
-          context.opacity = opacity(
-            for: attachment,
-            lineIndex: lineIndex,
-            runIndex: runIndex
-          )
-
-          context.draw(symbol, in: run.typographicBounds.rect)
-        }
-      }
-    } symbols: {
-      ForEach(Array(attachments), id: \.self) { attachment in
-        attachment.body
-          .tag(attachment)
+    let placed = zip(layout.indices, layout).flatMap { lineIndex, line in
+      zip(line.indices, line).compactMap { runIndex, run in
+        run.attachment.map { ($0, run.typographicBounds.rect, opacity(for: $0, lineIndex: lineIndex, runIndex: runIndex)) }
       }
     }
+    ZStack(alignment: .topLeading) {
+      ForEach(placed.indices, id: \.self) { index in
+        let (attachment, rect, opacity) = placed[index]
+        attachment.body
+          .frame(width: rect.width, height: rect.height)
+          .opacity(opacity)
+          .offset(x: origin.x + rect.minX, y: origin.y + rect.minY)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .allowsHitTesting(false)
   }
 
   private func opacity(

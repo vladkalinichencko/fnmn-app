@@ -1,6 +1,7 @@
 import FNMNCore
 import SwiftUI
 import Textual
+import UniformTypeIdentifiers
 
 /// What the reader is doing with its plates: just reading, or writing a margin note.
 enum PlateMode: Equatable {
@@ -46,6 +47,7 @@ struct ReadingSession: View {
     let reader: ReaderCoordinator
     @State private var width: CGFloat = 0
     @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
+    @Namespace private var mediaZoom
 
     var body: some View {
         let document = reader.document
@@ -64,7 +66,10 @@ struct ReadingSession: View {
             // The gap under a block belongs to the block, so it closes up with it.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if let lead = document.lead, case let .image(_, path) = document.blocks[lead] {
-                    LeadImage(url: reader.baseURL.appending(path: path)).padding(.bottom, Tokens.gap)
+                    let cover = reader.baseURL.appending(path: path)
+                    LeadImage(url: cover)
+                        .opensMedia(cover)
+                        .padding(.bottom, Tokens.gap)
                 }
                 MaterialHeader(title: reader.title, source: reader.source)
                     .padding(.bottom, 2 * Tokens.gap)
@@ -115,6 +120,21 @@ struct ReadingSession: View {
             reader.send(.opened)
         }
         .environment(reader)
+        .environment(\.mediaZoom, mediaZoom)
+        // A picture inside a paragraph is a link to its own file, since the text takes the touches over it.
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.isFileURL, ImageFiles.headerSize(of: url) != nil else { return .systemAction }
+            reader.send(.openMedia(url))
+            return .handled
+        })
+        .fullScreenCover(isPresented: Binding(get: { reader.state.media != nil }, set: { if !$0 { reader.send(.closeMedia) } })) {
+            if let media = reader.state.media {
+                Group {
+                    if UTType(filenameExtension: media.pathExtension)?.conforms(to: .movie) == true { VideoViewer(url: media) } else { ImageViewer(url: media) }
+                }
+                .navigationTransition(.zoom(sourceID: media, in: mediaZoom))
+            }
+        }
         .toolbar {
             if reader.state.mode != .reading {
                 ToolbarItem(placement: .confirmationAction) {
