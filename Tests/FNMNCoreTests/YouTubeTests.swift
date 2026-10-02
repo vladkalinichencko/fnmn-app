@@ -47,6 +47,13 @@ import Testing
     #expect(ending.lowestHeadings == [1, 3])
 }
 
+@Test func sectionsReadAboveThePlaceCloseWithTheirSubsections() {
+    let document = ReaderDocument(markdown: "# Book\n\nIntro.\n\n# One\n\n## Inner\n\nText.\n\n# Two\n\nMore.", title: "Book")
+    #expect(document.headings(endingAbove: 6) == [2, 3])
+    #expect(document.headings(endingAbove: 5) == [2, 3])
+    #expect(document.headings(endingAbove: 4) == [])
+}
+
 @Test func foldedHeadingsAreKeptPerMaterialAndForgottenWithItsText() {
     var progress = ReadingProgress().applying(.fold([1, 4], itemID: "a"))
     #expect(progress.folded["a"] == [1, 4])

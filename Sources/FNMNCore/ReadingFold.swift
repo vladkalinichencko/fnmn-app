@@ -31,6 +31,12 @@ extension ReaderDocument {
         Set(sections.filter { $0.key < block && $0.value.end > block }.keys)
     }
 
+    /// The headings whose whole sections lie above this block, read before it. Closed when the material opens again,
+    /// they leave what came before as contents, down to the subsections of the section the block stands in.
+    public func headings(endingAbove block: Int) -> Set<Int> {
+        Set(sections.filter { $0.key != repeatedTitle && $0.value.end <= block }.keys)
+    }
+
     /// Whether a heading holds anything to fold away.
     public func holdsBlocks(_ heading: Int) -> Bool {
         (sections[heading]?.end ?? 0) > heading + 1

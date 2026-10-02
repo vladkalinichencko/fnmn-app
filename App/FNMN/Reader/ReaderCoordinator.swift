@@ -138,9 +138,12 @@ final class ReaderCoordinator {
         self.baseURL = baseURL
         state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library
-        // A material nobody has folded by hand opens with its lowest sections closed up, the contents showing. The block the reader opens at stays on the page.
+        // A material nobody has folded by hand opens with its lowest sections closed up, the contents showing. The block
+        // the reader opens at stays on the page, the sections read above it close, and those below stay as they were.
         let saved = library.progress.folded[materialID].map(Set.init) ?? document.lowestHeadings
-        state.folded = (note ?? place).map { saved.subtracting(document.headings(holding: $0)) } ?? saved
+        state.folded = (note ?? place).map {
+            saved.subtracting(document.headings(holding: $0)).union(document.headings(endingAbove: $0))
+        } ?? saved
         state.opening = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
         state.hidesColumn = state.opening != nil
         state.line = library.progress.lines[materialID]
