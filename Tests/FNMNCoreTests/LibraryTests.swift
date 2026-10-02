@@ -171,7 +171,7 @@ private let paperLink = ImportPackage(
     try Data(text.utf8).write(to: stateURL)
     let loaded = try await file.load()
     #expect(loaded.progress.positions[article.material.id]?.blockID == "b1")
-    #expect(loaded.catalog.annotations.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.note == "Remember this" && $0.piece == 4 && $0.mark == nil })
+    #expect(loaded.catalog.annotations.contains { $0.id == UUID(uuidString: "00000000-0000-0000-0000-000000000009") && $0.note == "Remember this" && $0.piece == 4 && $0.marks.isEmpty })
     let saved = try String(contentsOf: stateURL, encoding: .utf8)
     #expect(!saved.contains("\"notes\""))
 }
@@ -440,6 +440,77 @@ private let namedBook = ImportPackage(
     try library.importPackage(headed, at: .now)
     #expect(ids("Kernel Trick") == ["article:headed"])
     #expect(ids("hidden body text").isEmpty)
+    let book = library.items.filter { $0.id == namedBook.material.id }
+    #expect(library.items(matching: "kernel", among: book).isEmpty)
+    #expect(library.items(matching: "roberts", among: book).map(\.id) == [namedBook.material.id])
+}
+
+@Test func annotationSearchKeepsAFoundMaterialWholeAndElsewhereOnlyMatchingAnnotations() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(namedArticle, at: .now)
+    try library.importPackage(namedBook, at: .now)
+    let article = namedArticle.material.id, book = namedBook.material.id
+    library = try library.applying(.mark(.highlight, AnnotationTarget(materialID: article, piece: 0, text: "first quote")))
+    library = try library.applying(.mark(.highlight, AnnotationTarget(materialID: article, piece: 1, text: "second quote")))
+    library = try library.applying(.mark(.highlight, AnnotationTarget(materialID: book, piece: 0, text: "an effective quote")))
+    library = try library.applying(.note("worth a Kernel look", AnnotationTarget(materialID: book, piece: 1, text: "plain")))
+    func found(_ query: String) -> [String: Int] {
+        Dictionary(uniqueKeysWithValues: library.annotationGroups(matching: query).map { ($0.id, $0.annotations.count) })
+    }
+    #expect(found("") == [article: 2, book: 2])
+    #expect(found("kernel") == [article: 2, book: 1])
+    #expect(found("second") == [article: 1])
+    #expect(found("xyzzy").isEmpty)
+}
+
+@Test func aParagraphHoldsEveryMarkAndItsNoteInOneRecord() throws {
+    var library = LibrarySnapshot()
+    library = try library.applying(.mark(.highlight, span("one phrase")))
+    library = try library.applying(.mark(.highlight, span("end here")))
+    library = try library.applying(.mark(.strikethrough, span("another")))
+    library = try library.applying(.note("  a thought ", paragraph))
+    let record = try #require(library.annotations.first)
+    #expect(library.annotations.count == 1)
+    #expect(record.text == paragraph.text)
+    #expect(record.marks == [
+        QuoteMark(quote: "one phrase", mark: .highlight),
+        QuoteMark(quote: "end here", mark: .highlight),
+        QuoteMark(quote: "another", mark: .strikethrough),
+    ])
+    #expect(record.note == "a thought")
+}
+
+@Test func theExcerptOpensAtTheFirstMarkOfALongParagraph() {
+    let words = (0..<80).map { "word\($0)" }.joined(separator: " ")
+    let record = Annotation(materialID: "article:1", piece: 0, text: words, marks: [QuoteMark(quote: "word60 word61", mark: .highlight)])
+    let excerpt = record.excerpt(limit: 100)
+    #expect(excerpt.text.hasPrefix("…") && excerpt.text.hasSuffix("…") && excerpt.text.count <= 104)
+    let run = excerpt.runs[0]
+    #expect((excerpt.text as NSString).substring(with: run.range) == "word60 word61")
+    let short = Annotation(materialID: "article:1", piece: 0, text: " one two ", marks: [QuoteMark(quote: "two", mark: .strikethrough)])
+    #expect(short.excerpt().text == "one two")
+    #expect((short.excerpt().text as NSString).substring(with: short.excerpt().runs[0].range) == "two")
+}
+
+@Test func filesFromBeforeParagraphRecordsMergeIntoOneRecordPerParagraph() throws {
+    let material = "article:1"
+    let paragraphText = "one phrase and another phrase end here"
+    let json = """
+    [{"id":"00000000-0000-0000-0000-000000000001","materialID":"\(material)","piece":2,"quote":"one phrase","mark":"highlight","updatedAt":1000},
+     {"id":"00000000-0000-0000-0000-000000000002","materialID":"\(material)","piece":2,"quote":"\(paragraphText)","note":"kept","mark":null},
+     {"id":"00000000-0000-0000-0000-000000000003","materialID":"\(material)","piece":3,"quote":"old quote","caption":"from a caption","mark":null},
+     {"id":"00000000-0000-0000-0000-000000000004","materialID":"\(material)","piece":7,"quote":"second","mark":"highlight","updatedAt":1000.5},
+     {"id":"00000000-0000-0000-0000-000000000005","materialID":"\(material)","piece":8,"quote":"third","mark":"highlight","updatedAt":1001}]
+    """
+    let records = try JSONDecoder().decode(StoredAnnotations.self, from: Data(json.utf8)).records
+    #expect(records.map(\.piece) == [2, 3, 7, 8])
+    #expect(records[0].text == paragraphText)
+    #expect(records[0].marks == [QuoteMark(quote: "one phrase", mark: .highlight)])
+    #expect(records[0].note == "kept")
+    #expect(records[1].marks.isEmpty && records[1].note == "from a caption")
+    #expect(records[2].marks == [QuoteMark(quote: "second", mark: .highlight)])
+    let current = try JSONEncoder().encode(records)
+    #expect(try JSONDecoder().decode(StoredAnnotations.self, from: current).records == records)
 }
 
 @Test func captureRouteNamesSourceFromLinkOrPDF() throws {
@@ -468,10 +539,10 @@ private struct CaptureSourceRow: Decodable {
 }
 
 @Test func oldHighlightWithoutMarkDecodesAsHighlight() throws {
-    let data = Data(#"{"id":"00000000-0000-0000-0000-000000000001","materialID":"article:1","piece":2,"quote":"old quote","caption":"kept"}"#.utf8)
-    let annotation = try JSONDecoder().decode(Annotation.self, from: data)
-    #expect(annotation.mark == .highlight)
-    #expect(annotation.quote == "old quote")
+    let data = Data(#"[{"id":"00000000-0000-0000-0000-000000000001","materialID":"article:1","piece":2,"quote":"old quote","caption":"kept"}]"#.utf8)
+    let annotation = try #require(JSONDecoder().decode(StoredAnnotations.self, from: data).records.first)
+    #expect(annotation.marks == [QuoteMark(quote: "old quote", mark: .highlight)])
+    #expect(annotation.text == "old quote")
     #expect(annotation.note == "kept")
 }
 
@@ -482,13 +553,14 @@ private func span(_ quote: String) -> AnnotationTarget {
     return AnnotationTarget(materialID: paragraph.materialID, piece: paragraph.piece, text: paragraph.text, span: TextSpan(start: range.location, length: range.length))
 }
 
-@Test func touchingHighlightsBecomeOneRecord() throws {
+@Test func touchingHighlightsBecomeOneRun() throws {
     var library = LibrarySnapshot()
     library = try library.applying(.mark(.highlight, span("one phrase")))
     library = try library.applying(.mark(.highlight, span("phrase and another")))
-    #expect(library.annotations.map(\.quote) == ["one phrase and another"])
+    #expect(library.annotations.flatMap(\.marks).map(\.quote) == ["one phrase and another"])
     library = try library.applying(.mark(.strikethrough, span("end")))
-    #expect(library.annotations.count == 2)
+    #expect(library.annotations.count == 1)
+    #expect(library.annotations[0].marks.count == 2)
 }
 
 @Test func theMenuOffersRemovalOnlyWhereAMarkIs() throws {
@@ -507,13 +579,13 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(library.annotations.count == 1)
     library = try library.applying(.unmark(.highlight, span("one phrase")))
     #expect(library.annotations.map(\.note) == ["a thought"])
-    #expect(library.annotations[0].mark == nil)
+    #expect(library.annotations[0].marks.isEmpty)
     library = try library.applying(.note("", span("one phrase")))
     #expect(library.annotations.isEmpty)
 }
 
-@Test func noteOnlyAnnotationRoundTripsWithNilMark() throws {
-    let note = Annotation(materialID: "article:1", piece: 0, quote: "", note: "my note")
+@Test func noteOnlyAnnotationRoundTripsWithoutMarks() throws {
+    let note = Annotation(materialID: "article:1", piece: 0, text: "", note: "my note")
     let decoded = try JSONDecoder().decode(Annotation.self, from: JSONEncoder().encode(note))
     #expect(decoded == note)
 }
@@ -544,6 +616,47 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(progress.isPieceRead(5, of: "a", current: 0))
     #expect(!progress.isPieceRead(6, of: "a", current: 3))
     #expect(progress.isPieceRead(7, of: "a", current: 8))
+}
+
+@Test func aMaterialOpensAtItsFirstUnreadBlock() {
+    let marked = ReadingProgress().applying(.readThrough(piece: 5, itemID: "a"))
+    #expect(ReadingProgress().openingPiece(of: "a", place: nil, count: 10) == nil)
+    #expect(ReadingProgress().openingPiece(of: "a", place: 3, count: 10) == 3)
+    #expect(marked.openingPiece(of: "a", place: 2, count: 10) == 6)
+    #expect(marked.openingPiece(of: "a", place: nil, count: 10) == 6)
+    #expect(marked.openingPiece(of: "a", place: 8, count: 10) == 8)
+    #expect(marked.openingPiece(of: "a", place: 2, count: 6) == 5)
+    #expect(marked.applying(.setRead(true, itemID: "a")).openingPiece(of: "a", place: 2, count: 10) == 2)
+}
+
+@Test func theReadingLineStopsBetweenLinesOfTextAndNeverInsideOne() {
+    // Two lines of a paragraph, a table row of two cells side by side, a tall formula over a line beside it, and a
+    // line under a picture.
+    let lines = ReadingLine.merged([0...20, 20...40, 60...80, 61...79, 100...140, 110...125, 140...140, 400...420])
+    #expect(lines == [0...20, 20...40, 60...80, 100...140, 400...420])
+    let stops = ReadingLine.stops(between: lines)
+    #expect(stops == [0...0, 20...20, 50...50, 90...90, 148...392, 420...420])
+    #expect(ReadingLine.stops(between: []) == [])
+    // At the top of a block the line stands halfway between the text above and the block's first line, at the top
+    // of a picture, and at the top of a block with no text under it.
+    #expect(ReadingLine.stop(atTopOf: 45, lines: lines, stops: stops) == 50)
+    #expect(ReadingLine.stop(atTopOf: 95, lines: lines, stops: stops) == 90)
+    #expect(ReadingLine.stop(atTopOf: 150, lines: lines, stops: stops) == 150)
+    #expect(ReadingLine.stop(atTopOf: 500, lines: lines, stops: stops) == 500)
+    #expect(ReadingLine.nearest(to: 33, in: stops) == 20)
+    // Across the picture the line stands where it is put.
+    #expect(ReadingLine.nearest(to: 250, in: stops) == 250)
+    #expect(ReadingLine.nearest(to: 143, in: stops) == 148)
+    #expect(ReadingLine.nearest(to: 33, in: []) == nil)
+}
+
+@Test func withTheReadingLineTheBlocksAboveItAndItsOwnBlockDownToItAreRead() {
+    let progress = ReadingProgress().applying(.readThrough(piece: 8, itemID: "a"))
+    let line = ReadingLine(piece: 3, fraction: 0.5)
+    #expect(progress.readShare(of: 2, in: "a", line: line) == 1)
+    #expect(progress.readShare(of: 3, in: "a", line: line) == 0.5)
+    #expect(progress.readShare(of: 5, in: "a", line: line) == 0)
+    #expect(progress.applying(.setRead(true, itemID: "a")).readShare(of: 5, in: "a", line: ReadingLine(piece: 3, fraction: 0)) == 1)
 }
 
 @Test func deletingAnItemForgetsEverythingAboutIt() throws {
@@ -613,7 +726,7 @@ private func span(_ quote: String) -> AnnotationTarget {
 @Test func reimportKeepsMarksUntilTheBodyChanges() throws {
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
-    library.annotations.append(Annotation(materialID: article.material.id, piece: 0, quote: "Text", mark: .highlight))
+    library.annotations.append(Annotation(materialID: article.material.id, piece: 0, text: "Text", marks: [QuoteMark(quote: "Text", mark: .highlight)]))
     let first = library
     try library.importPackage(article, at: .now)
     #expect(library.annotations.count == 1)

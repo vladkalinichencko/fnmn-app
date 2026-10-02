@@ -9,6 +9,7 @@ NAMES = {
     "x": "X",
     "substack": "Substack",
     "chatgpt": "ChatGPT",
+    "claude": "Claude",
     "pdf": "PDF",
     "notebook": "Jupyter notebook",
 }
@@ -31,6 +32,8 @@ def source_kind(url: str) -> str | None:
         return "substack"
     if host == "chatgpt.com" or host.endswith(".chatgpt.com") or host == "chat.openai.com":
         return "chatgpt"
+    if host == "claude.ai" or host.endswith(".claude.ai"):
+        return "claude"
     if parsed.path.lower().endswith(".pdf"):
         return "pdf"
     if parsed.path.lower().endswith(".ipynb"):

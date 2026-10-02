@@ -36,6 +36,7 @@ public struct JournalEvent: Codable, Equatable, Sendable {
         case let .progress(.setRead(_, itemID)): "read:\(itemID)"
         case let .progress(.savePosition(_, itemID, _)): "position:\(itemID)"
         case let .progress(.readThrough(_, itemID)): "readThrough:\(itemID)"
+        case let .progress(.line(_, itemID)): "line:\(itemID)"
         case let .progress(.fold(_, itemID)): "fold:\(itemID)"
         case let .progress(.reset(itemID)): "reset:\(itemID)"
         case let .library(.setArchived(_, itemID)): "archived:\(itemID)"
@@ -102,6 +103,7 @@ public func merge(
                 progress.readings[itemID, default: MaterialReading()].progress = before.readings[itemID]?.progress
             }
             if later("readThrough") { progress.readThrough[itemID] = before.readThrough[itemID] }
+            if later("line") { progress.lines[itemID] = before.lines[itemID] }
             if later("opened") { progress.readings[itemID, default: MaterialReading()].openedAt = before.readings[itemID]?.openedAt }
             if later("read") { progress.readings[itemID, default: MaterialReading()].isRead = before.readings[itemID]?.isRead ?? false }
         case let .progress(change):
@@ -117,7 +119,7 @@ extension ProgressChange {
     /// The material a change to its reading state belongs to; nil for changes a reset does not wipe.
     fileprivate var readingItemID: String? {
         switch self {
-        case let .open(itemID), let .setRead(_, itemID), let .savePosition(_, itemID, _), let .readThrough(_, itemID): itemID
+        case let .open(itemID), let .setRead(_, itemID), let .savePosition(_, itemID, _), let .readThrough(_, itemID), let .line(_, itemID): itemID
         case .fold, .reset, .restart, .forget: nil
         }
     }

@@ -22,6 +22,15 @@ public struct ReaderDocument: Equatable, Sendable {
         sections = Self.sections(blocks)
     }
 
+    /// The heading of the innermost section a block lies in: the nearest heading before it, of whatever level, since a
+    /// section ends only at a heading.
+    public func heading(before index: Int) -> (index: Int, title: String)? {
+        for candidate in blocks.indices.prefix(min(max(index, 0), blocks.count)).reversed() {
+            if case let .heading(_, title) = blocks[candidate] { return (candidate, title) }
+        }
+        return nil
+    }
+
     /// For each heading, the blocks that follow it until a heading of the same or a higher level.
     private static func sections(_ blocks: [DocumentBlock]) -> [Int: HeadingSection] {
         var sections: [Int: HeadingSection] = [:]

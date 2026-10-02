@@ -9,6 +9,8 @@ enum Tokens {
     static let tilePadding: CGFloat = 16
     static let tileAspect: CGFloat = 0.74
     static let plateRadius: CGFloat = 28
+    /// How strongly read text shows: a read paragraph, a read heading and the text above the reading line alike.
+    static let readOpacity = 0.6
     static let grid = [GridItem(.adaptive(minimum: 158, maximum: 260), spacing: gap)]
     /// A page a little darker than white behind the glass plates; near black in dark mode.
     static let canvas = Color(uiColor: UIColor { traits in
@@ -49,8 +51,9 @@ enum Tokens {
     static var codeRadius: CGFloat { concentric(plateRadius, inset: tilePadding) }
 }
 
-/// A rounded rectangle turned, scaled and moved about its center. Glass under `rotationEffect` or
-/// `scaleEffect` draws past its own frame, so a turned plate keeps its view still and turns its glass's shape.
+/// A rounded rectangle turned and scaled about its anchor, the center unless told otherwise, and moved. Glass under
+/// `rotationEffect` or `scaleEffect` draws past its own frame, so a turned plate keeps its view still and turns its
+/// glass's shape.
 struct TurnedRectangle: Shape {
     let cornerRadius: CGFloat
     var degrees: Double = 0
@@ -72,29 +75,53 @@ struct TurnedRectangle: Shape {
 extension EnvironmentValues {
     /// The color plates are tinted toward; a reader background sets a lighter shade of itself.
     @Entry var plateTint: Color = Tokens.plateTint
+    /// The page under the plates, which a read plate fades into.
+    @Entry var page: Color = Tokens.canvas
 }
 
 extension View {
     /// The one surface of tiles, albums and text plates: Liquid Glass tinted toward the plate color.
-    func plate(cornerRadius: CGFloat) -> some View {
-        plate(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    /// The read share of a text plate, from its top, fades halfway into the page, so read glass recedes with its text.
+    func plate(cornerRadius: CGFloat, readShare: Double = 0) -> some View {
+        plate(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), readShare: readShare)
     }
 
     /// A plate of any shape; a turned plate passes a turned shape, since glass under a rotation draws past its frame.
-    func plate(in shape: some Shape) -> some View {
-        modifier(Plate(shape: shape))
+    func plate(in shape: some Shape, readShare: Double = 0) -> some View {
+        modifier(Plate(shape: shape, readShare: readShare))
     }
 }
 
 private struct Plate<S: Shape>: ViewModifier {
     let shape: S
+    let readShare: Double
     @Environment(\.plateTint) private var tint
+    @Environment(\.page) private var page
     @Environment(\.colorScheme) private var colorScheme
 
     /// Dark glass over a black page hardly shows its tint, so in the dark the plate color also lies under the text.
     func body(content: Content) -> some View {
         content
+            .background {
+                shape.fill(page.opacity(0.5))
+                    .mask {
+                        GeometryReader { geometry in
+                            VStack(spacing: 0) {
+                                Color.black.frame(height: geometry.size.height * min(max(readShare, 0), 1))
+                                Color.clear
+                            }
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.4), value: readShare == 1)
+            }
             .background { if colorScheme == .dark { shape.fill(tint.opacity(0.7)) } }
             .glassEffect(.regular.tint(tint.opacity(0.85)), in: shape)
+    }
+}
+
+/// Every spinner in the app is gray: the tint is the color of links and of reading progress, and waiting is neither.
+struct GraySpinner: ProgressViewStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        ProgressView(configuration).tint(.secondary)
     }
 }

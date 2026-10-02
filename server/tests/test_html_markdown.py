@@ -77,6 +77,24 @@ class HtmlMarkdownTests(unittest.TestCase):
         self.assertFalse(any(url.endswith("page.js") for url in downloads.values()))
         self.assertIn("```fnmn-video\n", markdown)
 
+    def test_a_widget_with_states_in_templates_is_live_and_its_states_are_not_text(self):
+        source = """
+        <html><body><article>
+          <p>Before the examples, a sentence long enough to be prose.</p>
+          <div id="swap">
+            <button>Echo</button><button>Astra</button>
+            <div class="templates"><template><p>Reply from Echo.</p></template><template><p>Reply from Astra.</p></template></div>
+          </div>
+          <p>After the examples, another sentence long enough to be prose.</p>
+        </article></body></html>
+        """
+        markdown, _ = article_markdown(source, PAGE)
+        self.assertIn("```fnmn-interactive\nhttps://example.com/post/\n#swap\n```", markdown)
+        self.assertNotIn("Reply from", markdown)
+        self.assertNotIn("Echo", markdown)
+        self.assertIn("Before the examples", markdown)
+        self.assertIn("After the examples", markdown)
+
     def test_a_captioned_figure_is_live_and_a_picture_figure_stays_a_file(self):
         source = """
         <html><body><article>

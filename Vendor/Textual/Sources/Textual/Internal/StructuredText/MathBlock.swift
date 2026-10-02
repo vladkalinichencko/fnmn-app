@@ -37,6 +37,7 @@ extension StructuredText {
             }
         }
         .scrollIndicators(.hidden)
+        .anchorPreference(key: SidewaysTextKey.self, value: .bounds) { [$0] }
         .background(
           GeometryReader { geometry in
             Color.clear

@@ -1,3 +1,4 @@
+import html
 import io
 import json
 import tarfile
@@ -74,6 +75,9 @@ class SourceTests(unittest.TestCase):
         rows = json.loads((Path(__file__).resolve().parents[2] / "fixtures/capture-sources.json").read_text())
         for row in rows:
             self.assertEqual(source_kind(row["url"]), row["source"], row["url"])
+
+    def test_claude_share_is_prepared_by_the_server_while_the_app_routes_it_as_a_web_link(self):
+        self.assertEqual(source_kind("https://claude.ai/share/0a1b2c3d-0000-4000-8000-000000000001"), "claude")
 
     def test_paper_id_keeps_version_and_old_category(self):
         self.assertEqual(paper_id("https://arxiv.org/abs/1706.03762v2"), "1706.03762v2")
@@ -271,6 +275,93 @@ class AdapterTests(unittest.TestCase):
         self.assertRegex(path, r"^assets/interactive-[0-9a-f]{16}\.html$")
         self.assertIn(f"```fnmn-interactive\n{path}\n```", body)
         self.assertIn('<div id="d" class="p-2">1 < 2</div>', delivery.files[path].decode())
+
+    def test_claude_share_keeps_both_sides_and_drops_thinking_and_tools(self):
+        share = "0a1b2c3d-0000-4000-8000-000000000001"
+        payload = {
+            "snapshot_name": "Ряды Фурье",
+            "chat_messages": [
+                {"sender": "human", "text": "Почему?", "content": [{"type": "text", "text": "Почему?"}]},
+                {
+                    "sender": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "private reasoning"},
+                        {"type": "tool_use", "name": "web_search", "input": {"query": "fourier"}},
+                        {"type": "tool_result", "name": "web_search", "content": [{"type": "knowledge", "title": "search hit"}]},
+                        {"type": "text", "text": "Потому что $$\\sum_n a_n e^{inx}$$ и \\(x\\).", "citations": []},
+                        {
+                            "type": "tool_use",
+                            "name": "artifacts",
+                            "input": {"id": "notes", "type": "text/markdown", "title": "Notes", "command": "create", "content": "# Конспект\n\nТекст.\n\n```py\n# not a heading\n```"},
+                        },
+                        {"type": "tool_result", "name": "artifacts", "content": [{"type": "text", "text": "OK"}]},
+                    ],
+                },
+                {"sender": "human", "text": "Legacy text only."},
+            ],
+        }
+
+        def fetch_text(url):
+            self.assertEqual(url, f"https://claude.ai/api/chat_snapshots/{share}?rendering_mode=messages&render_all_tools=true")
+            return json.dumps(payload)
+
+        delivered = import_link(f"https://claude.ai/share/{share}", [], fakes.web(fetch_text)).package
+        body = delivered["body"]
+        self.assertEqual(delivered["material"]["title"], "Ряды Фурье")
+        self.assertEqual(delivered["material"]["byline"], "Claude")
+        self.assertLess(body.index("## User"), body.index("## Assistant"))
+        self.assertIn("$$\\sum_n a_n e^{inx}$$", body)
+        self.assertIn("$x$", body)
+        self.assertIn("### Конспект", body)
+        self.assertIn("# not a heading", body)
+        self.assertIn("Legacy text only.", body)
+        for hidden in ("private reasoning", "fourier", "search hit", "OK"):
+            self.assertNotIn(hidden, body)
+
+    def test_claude_share_refused_by_cloudflare_is_read_from_chrome(self):
+        share = "0a1b2c3d-0000-4000-8000-000000000003"
+        payload = {"snapshot_name": "Chrome", "chat_messages": [{"sender": "human", "text": "a < b & c"}]}
+
+        def challenge(url):
+            raise OSError("Client error '403 Forbidden'")
+
+        def chrome(url):
+            self.assertIn(share, url)
+            return f"<html><body><pre>{html.escape(json.dumps(payload))}</pre></body></html>"
+
+        delivered = import_link(f"https://claude.ai/share/{share}", [], fakes.web(challenge, rendered=chrome)).package
+        self.assertEqual(delivered["material"]["title"], "Chrome")
+        self.assertIn("a < b & c", delivered["body"])
+
+    def test_claude_share_turns_artifacts_into_code_and_pages(self):
+        page = "<!DOCTYPE html><html><body><canvas></canvas></body></html>"
+        payload = {
+            "snapshot_name": "T",
+            "chat_messages": [
+                {
+                    "sender": "assistant",
+                    "content": [
+                        {"type": "tool_use", "name": "artifacts", "input": {"id": "f", "type": "application/vnd.ant.code", "language": "python", "command": "create", "content": "def f():\n    return 1\n"}},
+                        {"type": "tool_use", "name": "artifacts", "input": {"id": "f", "command": "update", "old_str": "return 1", "new_str": "return 2"}},
+                        {"type": "tool_use", "name": "artifacts", "input": {"id": "app", "type": "text/html", "command": "create", "content": page}},
+                        {"type": "tool_use", "name": "artifacts", "input": {"id": "pic", "type": "image/svg+xml", "command": "create", "content": "<svg><circle r='4'/></svg>"}},
+                        {"type": "tool_use", "name": "artifacts", "input": {"id": "ui", "type": "application/vnd.ant.react", "command": "create", "content": "export default () => <p>```</p>;"}},
+                    ],
+                },
+            ],
+        }
+        delivery = import_link("https://claude.ai/share/0a1b2c3d-0000-4000-8000-000000000002", [], fakes.web(lambda url: json.dumps(payload)))
+        body = delivery.package["body"]
+        self.assertIn("```python\ndef f():\n    return 1\n```", body)
+        self.assertIn("```python\ndef f():\n    return 2\n```", body)
+        self.assertIn("````jsx\nexport default () => <p>```</p>;\n````", body)
+        self.assertEqual(len(delivery.files), 2)
+        for path, blob in delivery.files.items():
+            self.assertRegex(path, r"^assets/interactive-[0-9a-f]{16}\.html$")
+            self.assertIn(f"```fnmn-interactive\n{path}\n```", body)
+        pages = sorted(blob.decode() for blob in delivery.files.values())
+        self.assertIn(page, pages)
+        self.assertTrue(any("<svg><circle r='4'/></svg>" in text and text.startswith("<!doctype html>") for text in pages))
 
     def test_youtube_prepares_video_cues_from_timedtext(self):
         payload = """

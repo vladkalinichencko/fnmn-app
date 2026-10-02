@@ -15,7 +15,10 @@
     }
 
     func editMenu(for textRange: UITextRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
-      guard let selectionMenu, let selected = text(in: textRange), !selected.isEmpty else { return nil }
+      guard let selectionMenu, let range = (textRange as? TextRangeBox)?.wrappedValue else { return nil }
+      let attributedText = model.attributedText(in: range)
+      let selected = SelectedText(text: attributedText.string, images: attributedText.images)
+      guard !selected.isEmpty else { return nil }
       return UIMenu(children: selectionMenu(selected) + suggestedActions)
     }
 

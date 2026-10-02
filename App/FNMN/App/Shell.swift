@@ -5,7 +5,7 @@ import SwiftUI
 typealias LibraryItem = FNMNCore.LibraryItem
 
 enum ShellTab: Hashable {
-    case library, shelf, search
+    case library, shelf
 }
 
 /// Where a tab's navigation stack can go.
@@ -19,21 +19,18 @@ enum Route: Hashable {
     case archive
 }
 
-/// The window's own place in the app: its tab, the stack of each tab and the search text.
+/// The window's own place in the app: its tab and the stack of each tab.
 @MainActor @Observable
 final class WindowNavigation {
     var tab = ShellTab.library
     var library: [Route] = []
     var shelf: [Route] = []
-    var search: [Route] = []
-    var query = ""
 
     /// Pushes onto the stack of the visible tab.
     func open(_ route: Route) {
         switch tab {
         case .library: library.append(route)
         case .shelf: shelf.append(route)
-        case .search: search.append(route)
         }
     }
 
@@ -109,11 +106,7 @@ struct AppShell: View {
             Tab("Shelf", systemImage: "bookmark", value: ShellTab.shelf) {
                 ShelfScreen()
             }
-            Tab(value: ShellTab.search, role: .search) {
-                SearchScreen()
-            }
         }
-        .tabViewSearchActivation(.searchTabSelection)
         .environment(\.zoomNamespace, zoom)
         .scrollEdgeEffectStyle(.soft, for: .all)
         .libraryDialogs()

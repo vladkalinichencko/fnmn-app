@@ -41,8 +41,10 @@ def _render(node, page_url: str, downloads: dict[str, str]) -> str:
         return f"$$\n{source}\n$$" if display else f"${source}$"
     if node.tag == "style" or node.get("type") == "text/front-matter":
         return ""
-    if node.tag == "script":
+    if node.tag in {"script", "template"}:
         return ""
+    if _holds_templates(node):
+        return _crop(page_url, _selector(node))
     if node.tag == "iframe":
         address = _absolute(page_url, node.get("src") or "")
         return _crop(address, None) if address else ""
@@ -151,6 +153,17 @@ def _article_root(document):
         if others > scores[winner] * 0.5:
             return parent
     return winner
+
+
+def _holds_templates(node) -> bool:
+    """A widget whose states wait in <template> elements next to its controls: the page shows one at a time,
+    so it is read in the page and not as all of them at once."""
+    children = [child for child in node if isinstance(child.tag, str)]
+    return any(map(_inert, children)) and not all(map(_inert, children))
+
+
+def _inert(node) -> bool:
+    return node.tag == "template" or (len(node) > 0 and all(child.tag == "template" for child in node))
 
 
 def _picture(node) -> bool:

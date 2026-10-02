@@ -79,6 +79,7 @@ public struct Overflow<Content: View>: View {
       .onScrollGeometryChange(for: CGFloat.self, of: \.containerSize.width) {
         containerWidth = $1
       }
+      .anchorPreference(key: SidewaysTextKey.self, value: .bounds) { [$0] }
       // Propagate gesture exclusion area
       .background(
         GeometryReader { geometry in

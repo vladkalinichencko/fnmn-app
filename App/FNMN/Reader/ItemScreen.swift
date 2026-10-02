@@ -35,6 +35,7 @@ private struct ArticleOpener: View {
     let startPiece: Int?
     @Environment(LibraryModel.self) private var library
     @State private var text = ArticleText.loading
+    @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
 
     var body: some View {
         Group {
@@ -67,14 +68,19 @@ private struct ArticleOpener: View {
         let package = try await library.article(itemID)
         guard package.material.kind != .video else { return .video(VideoCoordinator(package: package, library: library)) }
         guard let baseURL = library.articleFolder(itemID) else { throw LibraryError.cloudFolderMissing }
+        let document = await Self.document(of: package)
+        // With the reading line, the block the line stands in is the first one not read.
+        let place = (showsLine ? library.progress.lines[itemID]?.piece : nil)
+            ?? library.progress.openingPiece(of: itemID, place: library.position(of: itemID)?.pieceIndex, count: document.blocks.count)
         let reader = ReaderCoordinator(
-            document: await Self.document(of: package),
+            document: document,
             materialID: itemID,
             title: package.material.title,
             source: library.snapshot.source(of: itemID),
             baseURL: baseURL,
-            place: library.position(of: itemID)?.pieceIndex,
+            place: place,
             note: startPiece,
+            showsLine: showsLine,
             library: library
         )
         return .article(reader, sourceURL: package.material.sourceURL)
@@ -101,7 +107,11 @@ struct MaterialHeader: View {
                     .foregroundStyle(.secondary)
                     .buttonStyle(.plain)
             }
-            Text(title).font(.system(.largeTitle, design: readerFont.design).bold())
+            Text(title)
+                .font(.system(.largeTitle, design: readerFont.design).bold())
+                .contextMenu {
+                    Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = title }
+                }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

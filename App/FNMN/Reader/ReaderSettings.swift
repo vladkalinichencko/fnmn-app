@@ -14,23 +14,21 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The page. Each background has a plate color that is the same hue with more white, or more light in the dark.
-    var canvas: Color {
+    /// The page in light and in dark. Only the page is chosen; its plates and links follow from it (`PageColors`).
+    private var page: (light: UIColor, dark: UIColor) {
         switch self {
-        case .plain: Self.adaptive(light: UIColor(white: 1, alpha: 1), dark: UIColor(white: 0, alpha: 1))
-        case .gray: Self.adaptive(light: UIColor(white: 0.88, alpha: 1), dark: UIColor(white: 0.11, alpha: 1))
-        case .paper: Self.adaptive(light: UIColor(red: 0.95, green: 0.915, blue: 0.84, alpha: 1),
-                                   dark: UIColor(red: 0.11, green: 0.095, blue: 0.07, alpha: 1))
+        case .plain: (UIColor(white: 1, alpha: 1), UIColor(white: 0, alpha: 1))
+        case .gray: (UIColor(white: 0.88, alpha: 1), UIColor(white: 0.11, alpha: 1))
+        case .paper: (UIColor(red: 0.95, green: 0.915, blue: 0.84, alpha: 1), UIColor(red: 0.11, green: 0.095, blue: 0.07, alpha: 1))
         }
     }
 
+    var canvas: Color {
+        Self.adaptive(light: page.light, dark: page.dark)
+    }
+
     var plate: Color {
-        switch self {
-        case .plain: Self.adaptive(light: UIColor(white: 0.95, alpha: 1), dark: UIColor(white: 0.14, alpha: 1))
-        case .gray: Self.adaptive(light: UIColor(white: 0.965, alpha: 1), dark: UIColor(white: 0.19, alpha: 1))
-        case .paper: Self.adaptive(light: UIColor(red: 0.995, green: 0.98, blue: 0.945, alpha: 1),
-                                   dark: UIColor(red: 0.19, green: 0.17, blue: 0.13, alpha: 1))
-        }
+        Self.adaptive(light: PageColors.plate(on: page.light, dark: false), dark: PageColors.plate(on: page.dark, dark: true))
     }
 
     /// A swatch drawn as an image, so the menu shows the color itself instead of tinting a template:
@@ -55,16 +53,67 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
     /// The color of links and of the buttons that act like links: the accent on the black and white page, a
     /// shade of the page on the others; links are underlined as well.
     var link: Color {
-        switch self {
-        case .plain: .accentColor
-        case .gray: Self.adaptive(light: UIColor(white: 0.38, alpha: 1), dark: UIColor(white: 0.7, alpha: 1))
-        case .paper: Self.adaptive(light: UIColor(red: 0.78, green: 0.36, blue: 0.04, alpha: 1),
-                                   dark: UIColor(red: 0.95, green: 0.76, blue: 0.46, alpha: 1))
-        }
+        guard self != .plain else { return .accentColor }
+        return Self.adaptive(
+            light: PageColors.link(on: page.light, dark: false),
+            dark: PageColors.link(on: page.dark, dark: true)
+        )
     }
 
     private static func adaptive(light: UIColor, dark: UIColor) -> Color {
         Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
+}
+
+/// The plate and link colors of a page. A plate stands apart from its page by lightness: lighter while the page
+/// leaves room above it, darker on a white page, and lighter in the dark. A link takes the page's hue at full color,
+/// or stays gray on a gray page, and is as dark, or in the dark as light, as reading it on the plate needs: a
+/// contrast of 4.5 to 1.
+enum PageColors {
+    static func plate(on page: UIColor, dark: Bool) -> UIColor {
+        if dark { return page.mixed(with: .white, by: 0.12) }
+        return page.luminance > 0.95 ? page.mixed(with: .black, by: 0.05) : page.mixed(with: .white, by: 0.5)
+    }
+
+    static func link(on page: UIColor, dark: Bool) -> UIColor {
+        let plate = plate(on: page, dark: dark)
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        page.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        let color: CGFloat = saturation > 0.02 ? (dark ? 0.5 : 0.9) : 0
+        let brightnesses = stride(from: 0.0, through: 1.0, by: 0.01).map { CGFloat(dark ? $0 : 1 - $0) }
+        return brightnesses.lazy
+            .map { UIColor(hue: hue, saturation: color, brightness: $0, alpha: 1) }
+            .first { $0.contrast(with: plate) >= 4.5 } ?? (dark ? .white : .black)
+    }
+}
+
+private extension UIColor {
+    var rgb: (red: CGFloat, green: CGFloat, blue: CGFloat) {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return (red, green, blue)
+    }
+
+    func mixed(with other: UIColor, by share: CGFloat) -> UIColor {
+        let (a, b) = (rgb, other.rgb)
+        return UIColor(
+            red: a.red + (b.red - a.red) * share,
+            green: a.green + (b.green - a.green) * share,
+            blue: a.blue + (b.blue - a.blue) * share,
+            alpha: 1
+        )
+    }
+
+    /// The relative luminance of WCAG: the share of light the eye sees in the color, from 0 for black to 1 for white.
+    var luminance: CGFloat {
+        func linear(_ c: CGFloat) -> CGFloat { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        let (red, green, blue) = rgb
+        return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    }
+
+    func contrast(with other: UIColor) -> CGFloat {
+        let (a, b) = (luminance, other.luminance)
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
 }
 
@@ -91,6 +140,7 @@ enum ReaderAppearance {
     static let typeSizeKey = "readerTypeSize"
     static let backgroundKey = "readerBackground"
     static let fontKey = "readerFont"
+    static let lineKey = "readerLine"
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
 }
@@ -127,14 +177,16 @@ struct ReaderAppearanceControls: View {
     }
 }
 
-/// The reader's one `···` button: text size and background right inside the menu, and the original.
+/// The reader's one `···` button: text size and background right inside the menu, the reading line, and the original.
 struct ReaderMenu: View {
     let reader: ReaderCoordinator
     let page: URL?
+    @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
 
     var body: some View {
         Menu("Reading Options", systemImage: "ellipsis") {
             ReaderAppearanceControls()
+            Toggle("Reading Line", systemImage: "ruler",isOn: $showsLine)
             let lowest = reader.document.lowestHeadings
             if !lowest.isEmpty {
                 if lowest.isSubset(of: reader.state.folded) {
@@ -161,6 +213,7 @@ struct ReaderAppearanceModifier: ViewModifier {
             .font(.system(.body, design: font.design))
             .background(background.canvas)
             .environment(\.plateTint, background.plate)
+            .environment(\.page, background.canvas)
             .tint(background.link)
             // `Color.accentColor` ignores `.tint`, and Textual paints links with it, so the color is given outright.
             .textual.inlineStyle(.default.link(.foregroundColor(background.link), .underlineStyle(.single)))

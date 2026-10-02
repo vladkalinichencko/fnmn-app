@@ -54,6 +54,7 @@ private struct WindowRoot: View {
                 AppShell()
             }
         }
+        .progressViewStyle(GraySpinner())
         .environment(navigation)
         .environment(dialogs)
         .quickLookPreview(Bindable(library).previewedOriginal)

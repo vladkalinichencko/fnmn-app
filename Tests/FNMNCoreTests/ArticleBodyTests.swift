@@ -111,6 +111,11 @@ import Testing
     #expect(document.sections[2] == HeadingSection(size: 2, end: 6))
     #expect(document.sections[4] == HeadingSection(size: 1, end: 6))
     #expect(document.sections[6] == HeadingSection(size: 1, end: 8))
+    #expect(document.heading(before: 0) == nil)
+    #expect(document.heading(before: 2)?.index == 0)
+    #expect(document.heading(before: 5)?.title == "Deeper")
+    #expect(document.heading(before: 7)?.title == "Two")
+    #expect(document.heading(before: 6)?.title == "Deeper")
 }
 
 @Test func packageWithoutBodyStillDecodes() throws {

@@ -172,13 +172,17 @@ struct GroupScreen: View {
     let grouping: LibraryGrouping
     let key: String
     @Environment(LibraryModel.self) private var library
+    @State private var query = ""
 
     var body: some View {
+        let found = library.snapshot.items(matching: query, among: library.snapshot.items(in: grouping, key: key))
         ScrollView {
-            ArrangedItems(items: library.snapshot.items(in: grouping, key: key), scope: "group:\(grouping.rawValue):\(key)")
+            ArrangedItems(items: found, scope: "group:\(grouping.rawValue):\(key)")
                 .padding(.horizontal, Tokens.gutter)
         }
         .background(Tokens.canvas)
+        .noResults(for: query, when: found.isEmpty)
+        .screenSearch($query)
         .navigationTitle(library.snapshot.groupName(grouping, key: key))
     }
 }
@@ -187,13 +191,17 @@ struct AlbumScreen: View {
     let name: String
     @Environment(LibraryModel.self) private var library
     @Environment(LibraryDialogs.self) private var dialogs
+    @State private var query = ""
 
     var body: some View {
+        let found = library.snapshot.items(matching: query, among: library.snapshot.items(inAlbum: name))
         ScrollView {
-            ArrangedItems(items: library.snapshot.items(inAlbum: name), album: name, scope: "album:\(name)")
+            ArrangedItems(items: found, album: name, scope: "album:\(name)")
                 .padding(.horizontal, Tokens.gutter)
         }
         .background(Tokens.canvas)
+        .noResults(for: query, when: found.isEmpty)
+        .screenSearch($query)
         .navigationTitle(name)
         .toolbar {
             Menu("More", systemImage: "ellipsis") {
@@ -242,13 +250,17 @@ struct AlbumPicker: View {
 struct SourceScreen: View {
     let id: String
     @Environment(LibraryModel.self) private var library
+    @State private var query = ""
 
     var body: some View {
         let items = library.snapshot.items(fromSource: id)
+        let found = library.snapshot.items(matching: query, among: items)
         ScrollView {
-            ArrangedItems(items: items, scope: "source:\(id)").padding(.horizontal, Tokens.gutter)
+            ArrangedItems(items: found, scope: "source:\(id)").padding(.horizontal, Tokens.gutter)
         }
         .background(Tokens.canvas)
+        .noResults(for: query, when: found.isEmpty)
+        .screenSearch($query)
         .navigationTitle(items.first?.source?.name ?? "")
         .toolbar {
             if let homepage = items.lazy.compactMap(\.source?.homepage).first {

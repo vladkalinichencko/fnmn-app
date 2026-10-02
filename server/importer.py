@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from adapters import article, arxiv, chatgpt, file, pdf, x, youtube
+from adapters import article, arxiv, chatgpt, claude, file, pdf, x, youtube
 from package import Delivery, ImportFailure, Report, package, package_file
 from sources import NAMES, source_kind
 from web import Web
@@ -14,6 +14,7 @@ ADAPTERS = {
     "pdf": pdf.read,
     "x": x.read,
     "chatgpt": chatgpt.read,
+    "claude": claude.read,
     "youtube": youtube.read,
 }
 

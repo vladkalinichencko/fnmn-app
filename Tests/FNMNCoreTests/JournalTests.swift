@@ -41,7 +41,7 @@ private func library() throws -> LibrarySnapshot {
     let merged = merge(unread.events, into: try library(), ReadingProgress(), sync: sync)
     #expect(merged.progress.positions[paper.material.id]?.pieceIndex == 1)
     #expect(merged.catalog.albums(of: paper.material.id) == ["Later"])
-    #expect(merged.catalog.annotations.map(\.quote) == ["First paragraph."])
+    #expect(merged.catalog.annotations.map(\.text) == ["First paragraph."])
     #expect(try await tablet.unreadJournalEvents(except: "tablet", sync: merged.sync).events.isEmpty)
     #expect(try await phone.unreadJournalEvents(except: "phone", sync: JournalSync()).events.isEmpty)
 }
@@ -73,7 +73,7 @@ private func library() throws -> LibrarySnapshot {
     let caughtUp = merge(late.events, into: first.catalog, first.progress, sync: lateSync)
     let whole = merge(places + [mark], into: try library(), ReadingProgress(), sync: JournalSync())
     #expect(caughtUp.progress == whole.progress)
-    #expect(caughtUp.catalog.annotations.map(\.quote) == whole.catalog.annotations.map(\.quote))
+    #expect(caughtUp.catalog.annotations.map(\.marks) == whole.catalog.annotations.map(\.marks))
 }
 
 @Test func theLatestPlaceWinsWhicheverDeviceItCameFrom() throws {
@@ -106,6 +106,18 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
     ]
     let merged = merge(events, into: try library(), ReadingProgress(), sync: JournalSync())
     #expect(merged.progress.positions[id] == .piece(0))
+}
+
+@Test func aReadingLineFollowsTheLatestDeviceAndAResetBeforeIt() throws {
+    let id = paper.material.id
+    let line = ReadingLine(piece: 1, fraction: 0.4)
+    let events = [
+        JournalEvent(time: stamp(10), change: .progress(.line(ReadingLine(piece: 0, fraction: 0.2), itemID: id))),
+        JournalEvent(time: stamp(20), change: .progress(.reset(itemID: id))),
+        JournalEvent(time: stamp(30), change: .progress(.line(line, itemID: id))),
+    ]
+    #expect(merge(events, into: try library(), ReadingProgress(), sync: JournalSync()).progress.lines[id] == line)
+    #expect(merge(Array(events.prefix(2)), into: try library(), ReadingProgress(), sync: JournalSync()).progress.lines[id] == nil)
 }
 
 @Test func aResetFromAnotherDeviceLeavesWhatThisDeviceReadAfterIt() throws {

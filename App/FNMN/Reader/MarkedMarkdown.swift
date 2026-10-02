@@ -6,7 +6,7 @@ import Textual
 /// and strikethroughs saved for this paragraph.
 struct MarkedMarkdown: MarkupParser {
     let baseURL: URL?
-    let marks: [ParagraphQuoteMark]
+    let marks: [QuoteMark]
 
     func attributedString(for input: String) throws -> AttributedString {
         var text = try Self.parse(input, baseURL: baseURL)
@@ -89,7 +89,7 @@ struct MarkedMarkdown: MarkupParser {
         }
     }
 
-    private static func apply(_ mark: ParagraphQuoteMark, to text: inout AttributedString) {
+    private static func apply(_ mark: QuoteMark, to text: inout AttributedString) {
         var searchStart = text.startIndex
         while searchStart < text.endIndex, let found = text[searchStart...].range(of: mark.quote) {
             switch mark.mark {
@@ -142,11 +142,6 @@ private struct ParagraphPicture: Attachment {
         let shown = min(proposal.width ?? width, width)
         return CGSize(width: shown, height: shown * height / width)
     }
-}
-
-struct ParagraphQuoteMark: Hashable {
-    var quote: String
-    var mark: TextMark
 }
 
 extension Color {

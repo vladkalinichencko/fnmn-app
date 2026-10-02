@@ -126,6 +126,7 @@ public struct StructuredText: View {
     .coordinateSpace(.textContainer)
     // Disable line limit to avoid per-fragment truncation
     .lineLimit(nil)
+    .publishingTextualLayout()
   }
 }
 

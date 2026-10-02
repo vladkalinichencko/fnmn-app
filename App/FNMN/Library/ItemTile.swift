@@ -223,7 +223,6 @@ struct JobStatus: View {
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
-        .tint(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

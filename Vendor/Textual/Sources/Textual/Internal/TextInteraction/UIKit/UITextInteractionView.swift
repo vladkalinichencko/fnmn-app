@@ -20,7 +20,7 @@
     var model: TextSelectionModel
     var exclusionRects: [CGRect]
     var openURL: OpenURLAction
-    var selectionMenu: (@MainActor (String) -> [UIMenuElement])?
+    var selectionMenu: (@MainActor (SelectedText) -> [UIMenuElement])?
 
     weak var inputDelegate: (any UITextInputDelegate)?
 

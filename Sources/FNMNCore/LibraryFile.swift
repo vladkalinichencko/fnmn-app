@@ -65,8 +65,8 @@ public actor LibraryFile {
             albums = try container.decodeIfPresent([String].self, forKey: .albums)
                 ?? container.decodeIfPresent([String].self, forKey: .folders) ?? []
             placements = try container.decodeIfPresent([String: [String]].self, forKey: .placements) ?? [:]
-            annotations = try container.decodeIfPresent([Annotation].self, forKey: .annotations)
-                ?? container.decodeIfPresent([Annotation].self, forKey: .highlights) ?? []
+            annotations = try container.decodeIfPresent(StoredAnnotations.self, forKey: .annotations)?.records
+                ?? container.decodeIfPresent(StoredAnnotations.self, forKey: .highlights)?.records ?? []
             archived = try container.decodeIfPresent([String].self, forKey: .archived) ?? []
             addedAt = try container.decodeIfPresent([String: Date].self, forKey: .addedAt) ?? [:]
             articleRevisions = try container.decodeIfPresent([String: String].self, forKey: .articleRevisions) ?? [:]
@@ -640,7 +640,7 @@ public actor LibraryFile {
                 piece = 0
             }
             snapshot.annotations.append(
-                Annotation(id: note.id, materialID: note.materialID, piece: piece, quote: "", note: note.text)
+                Annotation(id: note.id, materialID: note.materialID, piece: piece, text: "", note: note.text)
             )
         }
         return true

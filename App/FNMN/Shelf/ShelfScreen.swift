@@ -2,26 +2,29 @@ import FNMNCore
 import SwiftUI
 
 /// Highlights and notes, then the archive. Each section shows its latest few; its title opens all of them.
+/// A search shows everything it found in both sections.
 struct ShelfScreen: View {
     @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
+    @State private var query = ""
 
     var body: some View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.shelf) {
-            let annotations = library.snapshot.annotationGroups.flatMap { group in group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) } }
+            let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let annotations = AnnotationEntry.all(in: library.snapshot.annotationGroups(matching: query))
                 .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }
-            let archived = library.snapshot.archivedItems
+            let archived = library.snapshot.items(matching: query, among: library.snapshot.archivedItems)
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
                     if !annotations.isEmpty {
                         ShelfSection("Annotations", route: .annotations) {
-                            AnnotationColumns(entries: annotations, preview: true)
+                            AnnotationColumns(entries: annotations, preview: !searching)
                         }
                     }
                     if !archived.isEmpty {
                         ShelfSection("Archive", route: .archive) {
-                            ItemGrid(items: Array(archived.prefix(4)))
+                            ItemGrid(items: searching ? archived : Array(archived.prefix(4)))
                         }
                     }
                 }
@@ -30,10 +33,12 @@ struct ShelfScreen: View {
             }
             .background(Tokens.canvas)
             .overlay {
-                if annotations.isEmpty && archived.isEmpty {
+                if !searching, annotations.isEmpty && archived.isEmpty {
                     ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived materials appear here."))
                 }
             }
+            .noResults(for: query, when: annotations.isEmpty && archived.isEmpty)
+            .screenSearch($query)
             .navigationTitle("Shelf")
         }
     }
@@ -74,40 +79,51 @@ private struct ShelfSection<Content: View>: View {
 /// Every highlight and note, grouped by the material they were made in, newest first.
 struct AnnotationsScreen: View {
     @Environment(LibraryModel.self) private var library
+    @State private var query = ""
 
     var body: some View {
+        let entries = AnnotationEntry.all(in: library.snapshot.annotationGroups(matching: query))
         ScrollView {
-            AnnotationColumns(entries: library.snapshot.annotationGroups.flatMap { group in
-                group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) }
-            })
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.vertical, Tokens.gap)
+            AnnotationColumns(entries: entries)
+                .padding(.horizontal, Tokens.gutter)
+                .padding(.vertical, Tokens.gap)
         }
         .background(Tokens.canvas)
+        .noResults(for: query, when: entries.isEmpty)
+        .screenSearch($query)
         .navigationTitle("Annotations")
     }
 }
 
 struct ArchiveScreen: View {
     @Environment(LibraryModel.self) private var library
+    @State private var query = ""
 
     var body: some View {
+        let found = library.snapshot.items(matching: query, among: library.snapshot.archivedItems)
         ScrollView {
-            ItemGrid(items: library.snapshot.archivedItems).padding(.horizontal, Tokens.gutter)
+            ItemGrid(items: found).padding(.horizontal, Tokens.gutter)
         }
         .background(Tokens.canvas)
+        .noResults(for: query, when: found.isEmpty)
+        .screenSearch($query)
         .navigationTitle("Archive")
     }
 }
 
+/// One card: a paragraph with its marks and its note.
 private struct AnnotationEntry: Identifiable {
     let item: LibraryItem
     let annotation: Annotation
     var id: UUID { annotation.id }
 
+    static func all(in groups: [AnnotationGroup]) -> [AnnotationEntry] {
+        groups.flatMap { group in group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) } }
+    }
+
     /// How much room the card takes, judged by its text, so the columns come out about equally tall.
     var weight: Int {
-        60 + min(annotation.quote.count, 260) + annotation.note.count + item.title.count / 4
+        60 + min(annotation.text.count, 260) + annotation.note.count + item.title.count / 4
     }
 }
 
@@ -126,7 +142,7 @@ private struct AnnotationColumns: View {
         HStack(alignment: .top, spacing: Tokens.sectionGap) {
             ForEach(Array(Self.split(shown, into: count).enumerated()), id: \.offset) { _, column in
                 LazyVStack(spacing: Tokens.sectionGap) {
-                    ForEach(column) { AnnotationCard(item: $0.item, annotation: $0.annotation) }
+                    ForEach(column) { AnnotationCard(entry: $0) }
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
             }
@@ -150,18 +166,18 @@ private struct AnnotationColumns: View {
 
 /// A quote on a plate turned slightly left, and its note on blurred glass laid over its lower right corner.
 private struct AnnotationCard: View {
-    let item: LibraryItem
-    let annotation: Annotation
+    let entry: AnnotationEntry
     @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
     @State private var quoteHeight: CGFloat = 0
 
     var body: some View {
+        let annotation = entry.annotation
         Button {
             navigation.open(.item(annotation.materialID, piece: annotation.piece))
         } label: {
             VStack(alignment: .leading, spacing: 10) {
-                Text(item.title)
+                Text(entry.item.title)
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -173,7 +189,7 @@ private struct AnnotationCard: View {
         .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .contextMenu {
             Button("Copy", systemImage: "doc.on.doc") {
-                UIPasteboard.general.string = [annotation.quote, annotation.note].filter { !$0.isEmpty }.joined(separator: "\n\n")
+                UIPasteboard.general.string = [annotation.quoted, annotation.note].filter { !$0.isEmpty }.joined(separator: "\n\n")
             }
             Button("Delete", systemImage: "trash", role: .destructive) {
                 Task { await library.apply(.removeAnnotation(annotation.id)) }
@@ -182,33 +198,35 @@ private struct AnnotationCard: View {
     }
 
     /// The note starts halfway down the quote's plate. The card is as tall as whichever reaches lower, the quote
-    /// or the note, so a short note never lets the quote run into the next card.
+    /// or the note, so a short note never lets the quote run into the next card. A note kept without its
+    /// paragraph's text stands alone.
     @ViewBuilder
     private var composition: some View {
+        let annotation = entry.annotation, note = entry.annotation.note
         ZStack(alignment: .topTrailing) {
-            if !annotation.quote.isEmpty {
-                // Alone, the quote stands in the middle; with a note, it moves left to make room for it.
-                quote
-                    .padding(annotation.note.isEmpty ? .horizontal : .trailing, annotation.note.isEmpty ? 22 : 44)
+            if !annotation.text.isEmpty {
+                // Alone, the paragraph stands in the middle; with a note, it moves left to make room for it.
+                quote(annotation)
+                    .padding(note.isEmpty ? .horizontal : .trailing, note.isEmpty ? 22 : 44)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if !annotation.note.isEmpty {
-                note
-                    .padding(.leading, annotation.quote.isEmpty ? 0 : 64)
-                    .rotationEffect(.degrees(annotation.quote.isEmpty ? 0 : 1), anchor: .topTrailing)
-                    .padding(.top, annotation.quote.isEmpty ? 0 : quoteHeight / 2)
+            if !note.isEmpty {
+                self.note(note, alone: annotation.text.isEmpty)
+                    .padding(.leading, annotation.text.isEmpty ? 0 : 64)
+                    .rotationEffect(.degrees(annotation.text.isEmpty ? 0 : 1), anchor: .topTrailing)
+                    .padding(.top, annotation.text.isEmpty ? 0 : quoteHeight / 2)
             }
         }
         .padding(.top, 10)
         .padding(.bottom, 6)
     }
 
-    private var quote: some View {
-        Text(Self.excerpt(annotation.quote))
+    private func quote(_ annotation: Annotation) -> some View {
+        Text(Self.marked(annotation))
             .font(.system(.callout, design: .serif))
-            .strikethrough(annotation.mark == .strikethrough)
             .padding(Tokens.tilePadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
             .rotationEffect(.degrees(Self.quoteTurn))
             .plate(in: TurnedRectangle(cornerRadius: Tokens.plateRadius, degrees: Self.quoteTurn))
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { quoteHeight = $0 }
@@ -216,22 +234,29 @@ private struct AnnotationCard: View {
 
     private static let quoteTurn = -1.5
 
-    /// A long quote is cut at a word near 260 characters; a line limit would leave empty space under the text.
-    private static func excerpt(_ quote: String) -> String {
-        let text = quote.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.count > 260 else { return text }
-        let cut = text.prefix(260)
-        return String(cut[..<(cut.lastIndex(of: " ") ?? cut.endIndex)]) + "…"
+    /// The paragraph with its highlights and strikethroughs. A long one is cut at words near 260 characters around
+    /// its first mark; a line limit would leave empty space under the text.
+    private static func marked(_ annotation: Annotation) -> AttributedString {
+        let excerpt = annotation.excerpt()
+        var text = AttributedString(excerpt.text)
+        for run in excerpt.runs {
+            guard let range = Range(run.range, in: text) else { continue }
+            switch run.mark {
+            case .highlight: text[range].backgroundColor = .highlight
+            case .strikethrough: text[range].strikethroughStyle = .single
+            }
+        }
+        return text
     }
 
     /// The note has no frame: a blur toned to the page color keeps it readable over the quote and disappears into
     /// the page beside it. The blur is drawn well past the text, so its soft edge has faded out completely before
-    /// the drawing ends and no rectangle shows.
-    private var note: some View {
-        Text(annotation.note)
+    /// the drawing ends and no rectangle shows. Over a quote the note and its blur are only as wide as its text, so a
+    /// short note covers a corner of the quote and no more.
+    private func note(_ text: String, alone: Bool) -> some View {
+        Text(text)
             .font(.callout.weight(.semibold))
             .padding(Tokens.tilePadding - 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 Rectangle()
                     .fill(.thickMaterial)
@@ -239,5 +264,6 @@ private struct AnnotationCard: View {
                     .mask { RoundedRectangle(cornerRadius: Tokens.plateRadius, style: .continuous).padding(30).blur(radius: 12) }
                     .padding(-24)
             }
+            .frame(maxWidth: alone ? .infinity : nil, alignment: .leading)
     }
 }

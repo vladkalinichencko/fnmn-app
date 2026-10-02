@@ -10,8 +10,9 @@ struct BlockView: View, Equatable {
     let index: Int
     let baseURL: URL
     let mode: PlateMode
-    /// The paragraph scrolled past the top, or lies before the "read through here" mark.
-    let read: Bool
+    /// How much of the block is read, from its top: all of it once scrolled past the top or before the "read through
+    /// here" mark, the part above the reading line while the line stands in it.
+    let readShare: Double
     /// The "read through here" mark stands on this paragraph.
     let markedReadThrough: Bool
     /// Highlights and notes on this block.
@@ -22,11 +23,12 @@ struct BlockView: View, Equatable {
     var body: some View {
         switch block {
         case let .heading(level, title):
-            SectionHeading(index: index, level: level, title: title, fold: fold, read: read)
+            SectionHeading(index: index, level: level, title: title, fold: fold)
+                .grayed(readShare)
         case let .text(markdown):
             PlateView(
                 markdown: markdown, index: index, baseURL: baseURL, mode: mode,
-                read: read, markedReadThrough: markedReadThrough, annotations: annotations
+                readShare: readShare, markedReadThrough: markedReadThrough, annotations: annotations
             )
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
@@ -40,6 +42,24 @@ struct BlockView: View, Equatable {
     private func resolve(_ path: String) -> URL {
         if let url = URL(string: path), url.scheme != nil { return url }
         return baseURL.appending(path: path)
+    }
+}
+
+extension View {
+    /// Grays the read share of a block from its top. Every block keeps the mask, read or not, so reading on does not
+    /// rebuild it; the gray runs down to its new edge only when the block becomes read whole or stops being so, while
+    /// the reading line moving inside the block moves the edge at once.
+    func grayed(_ readShare: Double) -> some View {
+        mask {
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    Color.black.opacity(Tokens.readOpacity)
+                        .frame(height: geometry.size.height * min(max(readShare, 0), 1))
+                    Color.black
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: readShare == 1)
     }
 }
 
@@ -57,11 +77,10 @@ private struct SectionHeading: View {
     let level: Int
     let title: String
     let fold: HeadingFold
-    let read: Bool
     @Environment(ReaderCoordinator.self) private var reader
 
     var body: some View {
-        HeadingView(level: level, title: title, fold: fold, read: read)
+        HeadingView(level: level, title: title, fold: fold)
             // Over the title, which would otherwise take the touch: the whole heading is the button.
             .overlay {
                 if fold != .none {
@@ -70,17 +89,23 @@ private struct SectionHeading: View {
                         .onTapGesture { reader.send(.toggleSection(index)) }
                 }
             }
+            // A heading is not selected in parts; a long press copies all of it.
+            .contextMenu {
+                Button("Copy", systemImage: "doc.on.doc") {
+                    UIPasteboard.general.string = MarkedMarkdown.plainText(title, baseURL: nil)
+                }
+            }
     }
 }
 
 /// A heading on the page. A heading with a section under it shows a chevron that turns when the section opens, and
-/// how many blocks it hides while it is closed. It grays once it is read, as a paragraph does.
+/// how many blocks it hides while it is closed.
 struct HeadingView: View {
     let level: Int
     let title: String
     var fold = HeadingFold.none
-    var read = false
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
+    @ScaledMetric(relativeTo: .subheadline) private var chevronWidth: CGFloat = 18
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -97,10 +122,11 @@ struct HeadingView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(fold == .open ? 90 : 0))
+                    // A turn leaves the layout as it was, so the chevron gets the width it needs lying down; past
+                    // the heading's edge the gray mask would cut it off.
+                    .frame(width: chevronWidth)
             }
         }
-        .opacity(read ? 0.55 : 1)
-        .animation(.easeInOut(duration: 0.4), value: read)
         .padding(.top, level <= 2 ? Tokens.gap : 4)
         .contentShape(.rect)
     }
@@ -136,7 +162,7 @@ struct PlateView: View {
     let index: Int
     let baseURL: URL
     let mode: PlateMode
-    let read: Bool
+    let readShare: Double
     let markedReadThrough: Bool
     let annotations: [Annotation]
     /// How far the finger has moved the plate from where the mode puts it; zero whenever no finger is on it.
@@ -179,7 +205,7 @@ struct PlateView: View {
                 .offset(x: offset)
                 // Leftward opens the note while reading and rightward closes it; rightward while reading pulls
                 // out the "read to here" button.
-                .gesture(HorizontalPan(starts: { open ? $0 > 0 : swipesOpen }, changed: dragged, ended: released))
+                .gesture(HorizontalPan(starts: { open ? $0 > 0 : true }, changed: dragged, ended: released))
         }
         .animation(Self.slide, value: open)
         .onChange(of: noting) { side = nil }
@@ -240,95 +266,24 @@ struct PlateView: View {
         }
     }
 
-    /// A plate opens its note while text is not being selected or ticked; another plate's open note gives way.
-    private var swipesOpen: Bool {
-        switch mode {
-        case .reading, .noting: true
-        case .selectingText, .selectingParagraphs: false
-        }
-    }
-
+    /// A selection stays inside its plate. What is read grays in the text and fades the glass into the page.
     private var plate: some View {
         StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks))
             // StructuredText parses again only when the Markdown changes; new marks need a new parse.
             .id(marks)
             .textual.overflowMode(.wrap)
             .plateMarkdownStyles()
-            .modifier(TextSelection(isOn: mode == .selectingText(index)))
-            .environment(\.textualSelectionMenu, mode == .selectingText(index) ? selectionMenu : nil)
+            .textual.textSelection(.enabled)
+            .environment(\.textualSelectionMenu, selectionMenu)
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .plate(cornerRadius: Tokens.plateRadius)
-            .overlay {
-                // Over the text, which would otherwise take the touch: the whole plate is the button.
-                if isTicking {
-                    Color.clear
-                        .contentShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-                        .onTapGesture { reader.send(.plate(.toggle(index))) }
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                if let tick { tick } else { noteMark }
-            }
-            .opacity(read && mode == .reading ? 0.55 : 1)
-            .animation(.easeInOut(duration: 0.4), value: read)
-            // The menu lifts the plate by this shape too; by the frame it would lift the square corners around the glass.
-            .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+            .grayed(mode == .reading ? readShare : 0)
+            .plate(cornerRadius: Tokens.plateRadius, readShare: mode == .reading ? readShare : 0)
+            .overlay(alignment: .topTrailing) { noteMark }
+            .contentShape(.interaction, .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .gesture(TapGesture().onEnded { side = false; reader.send(.plate(.done)) }, isEnabled: open)
-            .contextMenu { if mode == .reading { menu } }
             .sensoryFeedback(.impact(weight: .light), trigger: marks)
             .sensoryFeedback(.selection, trigger: markedReadThrough)
-    }
-
-    @ViewBuilder
-    private var menu: some View {
-        let text = plainText
-        Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
-        let target = reader.target(index, text: text)
-        ForEach(annotationCommands(annotations, at: target), id: \.title) { command in
-            Button(command.title, systemImage: command.systemImage) { reader.send(.mark(command, target)) }
-        }
-        Button("Select Text", systemImage: "character.cursor.ibeam") { reader.send(.plate(.selectText(index))) }
-        Button("Select Paragraphs", systemImage: "checklist") { reader.send(.plate(.selectParagraphs(from: index))) }
-        Button("Add Note", systemImage: "note.text") { reader.send(.plate(.note(index))) }
-        Button("Ask ChatGPT", systemImage: "bubble.left.and.text.bubble.right") { reader.send(.ask(text)) }
-        Button("Copy as Prompt", systemImage: "text.quote") { reader.send(.copyPrompt(text)) }
-        let pictures = ArticleBody.imagePaths(in: markdown).map { baseURL.appending(path: $0) }
-            // Only pictures the reader can show: a site's SVG icons are files too, but they are not images here.
-            .filter { ImageFiles.headerSize(of: $0) != nil }
-        ForEach(Array(pictures.enumerated()), id: \.offset) { number, picture in
-            Button(pictures.count == 1 ? "Save Picture to Photos" : "Save Picture \(number + 1) to Photos", systemImage: "square.and.arrow.down") {
-                guard let image = UIImage(contentsOfFile: picture.path) else { return }
-                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-            }
-        }
-    }
-
-    /// Keyed by the paragraph and its marks: the menu changes only when they do.
-    private var selectionMenu: TextSelectionMenu {
-        let text = plainText
-        let reader = reader
-        let annotations = annotations
-        let index = index
-        return TextSelectionMenu(key: [AnyHashable(reader.materialID), AnyHashable(index), AnyHashable(annotations)]) { selected in
-            let target = reader.target(index, text: text, quote: selected)
-            let marks = annotationCommands(annotations, at: target).map { command in
-                UIAction(title: command.title, image: UIImage(systemName: command.systemImage)) { _ in reader.send(.mark(command, target)) }
-            }
-            let ask = UIAction(title: "Ask ChatGPT", image: UIImage(systemName: "bubble.left.and.text.bubble.right")) { _ in reader.send(.ask(selected)) }
-            return marks + [ask]
-        }
-    }
-
-    private var tick: AnyView? {
-        guard case let .selectingParagraphs(picked) = mode else { return nil }
-        return AnyView(
-            Image(systemName: picked.contains(index) ? "checkmark.circle.fill" : "circle")
-                .font(.title3)
-                .foregroundStyle(picked.contains(index) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                .padding(10)
-                .allowsHitTesting(false)
-        )
     }
 
     /// A tab on the right edge of a plate that has a note, as tall as the note's text within the plate; the note
@@ -344,23 +299,42 @@ struct PlateView: View {
         }
     }
 
-    private var isTicking: Bool {
-        if case .selectingParagraphs = mode { true } else { false }
-    }
-
-    private var marks: [ParagraphQuoteMark] {
-        annotations.compactMap { annotation in
-            guard let mark = annotation.mark, !annotation.quote.isEmpty else { return nil }
-            return ParagraphQuoteMark(quote: annotation.quote, mark: mark)
+    /// The edit menu of a selection in this plate: each mark or its removal, ChatGPT, and saving the pictures inside
+    /// it. Keyed by the paragraph and its marks, so it changes only when they do.
+    private var selectionMenu: TextSelectionMenu {
+        let reader = reader, index = index, annotations = annotations, text = plainText
+        return TextSelectionMenu(key: [AnyHashable(reader.materialID), AnyHashable(index), AnyHashable(annotations)]) { selected in
+            var items: [UIMenuElement] = []
+            if !selected.text.isEmpty {
+                let target = reader.target(index, text: text, quote: selected.text)
+                items += annotationCommands(annotations, at: target).map { command in
+                    UIAction(title: command.title, image: UIImage(systemName: command.systemImage)) { _ in
+                        reader.send(.mark(command, target))
+                    }
+                }
+                items.append(UIAction(title: "Ask ChatGPT", image: UIImage(systemName: "bubble.left.and.text.bubble.right")) { _ in
+                    reader.send(.ask(selected.text))
+                })
+                items.append(UIAction(title: "Copy as Prompt", image: UIImage(systemName: "text.quote")) { _ in
+                    reader.send(.copyPrompt(selected.text))
+                })
+            }
+            if !selected.images.isEmpty {
+                let title = selected.images.count == 1 ? "Save Picture to Photos" : "Save \(selected.images.count) Pictures to Photos"
+                items.append(UIAction(title: title, image: UIImage(systemName: "square.and.arrow.down")) { _ in
+                    for image in selected.images { UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil) }
+                })
+            }
+            return items
         }
     }
 
-    /// The note on the whole paragraph. It is stored with the paragraph's text as its quote, so the shelf can show both.
+    private var marks: [QuoteMark] {
+        annotations.flatMap(\.marks)
+    }
+
     private var paragraphNote: String {
-        let notes = annotations.filter { !$0.note.isEmpty }
-        guard !notes.isEmpty else { return "" }
-        let text = plainText
-        return notes.first { $0.quote.isEmpty || $0.quote == text }?.note ?? ""
+        annotations.first { !$0.note.isEmpty }?.note ?? ""
     }
 
     private var plainText: String {
@@ -368,8 +342,7 @@ struct PlateView: View {
     }
 
     private func saveNote(_ text: String) {
-        let paragraph = plainText
-        reader.send(.note(text, reader.target(index, text: paragraph, quote: paragraph)))
+        reader.send(.note(text, reader.target(index, text: plainText)))
     }
 }
 
@@ -462,25 +435,16 @@ private struct MarginNote: View {
     }
 }
 
-private struct TextSelection: ViewModifier {
-    let isOn: Bool
-
-    func body(content: Content) -> some View {
-        if isOn {
-            content.textual.textSelection(.enabled)
-        } else {
-            content.textual.textSelection(.disabled)
-        }
-    }
-}
-
-/// A picture that stands on its own between paragraphs, never wider than the picture itself.
+/// A picture that stands on its own between paragraphs, never wider than the picture itself. A tap opens it on the
+/// whole screen, growing out of its place in the text.
 private struct StandaloneImage: View {
     let url: URL
     let alt: String
     /// The picture's own size, read from its file header before the block is laid out: a picture that took its
     /// height only after it appeared would push the text below it down while scrolling up.
     @State private var natural: CGSize?
+    @State private var enlarged = false
+    @Namespace private var zoom
 
     init(url: URL, alt: String) {
         self.url = url
@@ -507,7 +471,13 @@ private struct StandaloneImage: View {
             }
         }
         .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+        .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+        .onTapGesture { enlarged = true }
+        .matchedTransitionSource(id: url, in: zoom)
         .frame(maxWidth: .infinity)
+        .fullScreenCover(isPresented: $enlarged) {
+            ImageViewer(url: url).navigationTransition(.zoom(sourceID: url, in: zoom))
+        }
         .contextMenu {
             Button("Save to Photos", systemImage: "square.and.arrow.down") {
                 guard let image = UIImage(contentsOfFile: url.path) else { return }
@@ -521,19 +491,34 @@ private struct StandaloneImage: View {
     }
 }
 
+/// A video in the text is its first frame under a play button; a tap plays it on the whole screen.
 struct ArticleVideo: View {
     let url: URL
-    @State private var player: AVPlayer?
+    @State private var frame: UIImage?
+    @State private var playing = false
+    @Namespace private var zoom
 
     var body: some View {
-        VideoPlayer(player: player)
+        Color.black
             .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-            .task { player = AVPlayer(url: url) }
-            .onDisappear {
-                player?.pause()
-                player = nil
+            .overlay {
+                if let frame { Image(uiImage: frame).resizable().scaledToFit() }
             }
+            .overlay {
+                Image(systemName: "play.fill")
+                    .font(.title)
+                    .foregroundStyle(.white)
+                    .padding(18)
+                    .glassEffect(.regular, in: .circle)
+            }
+            .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+            .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+            .onTapGesture { playing = true }
+            .matchedTransitionSource(id: url, in: zoom)
+            .fullScreenCover(isPresented: $playing) {
+                VideoViewer(url: url).navigationTransition(.zoom(sourceID: url, in: zoom))
+            }
+            .task { frame = await Self.firstFrame(of: url) }
             .contextMenu {
                 if url.isFileURL {
                     Button("Save to Photos", systemImage: "square.and.arrow.down") {
@@ -542,5 +527,14 @@ struct ArticleVideo: View {
                 }
                 ShareLink(item: url)
             }
+    }
+
+    @concurrent
+    private static func firstFrame(of url: URL) async -> UIImage? {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 1200, height: 1200)
+        guard let (image, _) = try? await generator.image(at: .zero) else { return nil }
+        return UIImage(cgImage: image)
     }
 }

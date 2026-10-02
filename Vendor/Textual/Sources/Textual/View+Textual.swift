@@ -159,6 +159,14 @@ extension TextualNamespace where Base: View {
     #endif
   }
 
+  /// Calls `action` with the top and bottom of every line of ``InlineText`` and ``StructuredText`` in this view,
+  /// in its own coordinates, whenever they move.
+  @MainActor public func onTextLinesChange(
+    _ action: @escaping ([ClosedRange<CGFloat>]) -> Void
+  ) -> some View {
+    base.modifier(TextLines(action: action))
+  }
+
   /// Sets the spacing used between table cells in ``StructuredText``.
   public func tableCellSpacing(
     horizontal: CGFloat? = nil,

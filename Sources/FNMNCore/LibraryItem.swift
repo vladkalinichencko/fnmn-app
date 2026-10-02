@@ -244,17 +244,19 @@ extension LibrarySnapshot {
         allItems.filter { isArchived($0.id) }
     }
 
-    /// Titles, authors, sources, albums and section headings; the body text is not searched.
-    public func items(matching query: String) -> [LibraryItem] {
+    /// Titles, authors, sources, albums and section headings; the body text is not searched. A screen searches
+    /// only the materials it shows, the whole library by default.
+    public func items(matching query: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+        let candidates = candidates ?? items
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else { return items }
+        guard !needle.isEmpty else { return candidates }
         let folded = ArticleEntry.folded(needle)
         func hit(_ text: String) -> Bool { ArticleEntry.folded(text).contains(folded) }
         let articleHits = Set(articles.filter { $0.searchText.contains(folded) }.map(\.material.id))
         // Albums and sources repeat across tiles, so each name is tested once.
         let albumHits = Set(albums.filter(hit))
         var sourceHits: [String: Bool] = [:]
-        return items.filter { item in
+        return candidates.filter { item in
             if articleHits.contains(item.id) { return true }
             if albums(of: item.id).contains(where: albumHits.contains) { return true }
             guard let source = item.source?.name else { return false }
@@ -276,6 +278,23 @@ extension LibrarySnapshot {
         }
         return groups.sorted {
             ($0.annotations.first?.updatedAt ?? .distantPast) > ($1.annotations.first?.updatedAt ?? .distantPast)
+        }
+    }
+
+    /// The annotations a search finds: all of a material the material search finds, and elsewhere those whose
+    /// paragraph or note holds the query.
+    public func annotationGroups(matching query: String) -> [AnnotationGroup] {
+        let groups = annotationGroups
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return groups }
+        let folded = ArticleEntry.folded(needle)
+        let found = Set(items(matching: needle, among: groups.map(\.item)).map(\.id))
+        return groups.compactMap { group in
+            if found.contains(group.id) { return group }
+            let hits = group.annotations.filter {
+                ArticleEntry.folded($0.text).contains(folded) || ArticleEntry.folded($0.note).contains(folded)
+            }
+            return hits.isEmpty ? nil : AnnotationGroup(item: group.item, annotations: hits)
         }
     }
 
