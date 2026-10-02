@@ -20,8 +20,9 @@ struct MaterialReader: View {
     }
 }
 
-/// The heading of the section being read, once the heading itself has gone above the screen. A new one comes up from
-/// below while the text goes on down, and down from above while it goes back up.
+/// The heading of the section being read, as plain text on the left of the bar, once the heading itself has gone
+/// above the screen. The system's push transition brings a new one up from below while the text goes on down, and
+/// down from above while it goes back up, pushing the old one out at once.
 private struct SectionTitle: View {
     let heading: (index: Int, title: String)?
     /// The heading shown before this one, which says which way the reader went.
@@ -29,15 +30,16 @@ private struct SectionTitle: View {
 
     var body: some View {
         let forward = (heading?.index ?? -1) >= (last ?? -1)
-        ZStack {
+        ZStack(alignment: .leading) {
             if let heading {
-                InlineText(markdown: heading.title, syntaxExtensions: [.math])
+                Text(MarkedMarkdown.plainText(heading.title, baseURL: nil))
                     .font(.headline)
                     .lineLimit(1)
                     .id(heading.index)
-                    .transition(.asymmetric(insertion: .move(edge: forward ? .bottom : .top), removal: .opacity).combined(with: .opacity))
+                    .transition(.push(from: forward ? .bottom : .top))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
         .animation(.snappy(duration: 0.3), value: heading?.index)
         .onChange(of: heading?.index) { _, index in last = index }

@@ -46,10 +46,14 @@ struct LibraryScreen: View {
             if !continued.isEmpty {
                 LibrarySection("Continue") { ItemGrid(items: continued) }
             }
-            LibrarySection("Unsorted") {
-                LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    ForEach(imports.jobs.filter { $0.itemID == nil && !($0.readsLibraryFolder && $0.isPreparing) }) { PreparingTile(job: $0) }
-                    ForEach(library.snapshot.unsortedItems) { ItemTile(item: $0) }
+            let preparing = imports.jobs.filter { $0.itemID == nil && !($0.readsLibraryFolder && $0.isPreparing) }
+            let unsorted = library.snapshot.unsortedItems
+            if !preparing.isEmpty || !unsorted.isEmpty {
+                LibrarySection("Unsorted") {
+                    LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
+                        ForEach(preparing) { PreparingTile(job: $0) }
+                        ForEach(unsorted) { ItemTile(item: $0) }
+                    }
                 }
             }
             LibrarySection("Collections") {

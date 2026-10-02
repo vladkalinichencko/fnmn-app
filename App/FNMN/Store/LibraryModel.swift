@@ -47,6 +47,7 @@ final class LibraryModel {
     /// This device's changes waiting to be appended to its journal, and what it knows of the other journals.
     @ObservationIgnored private var journal: [JournalEvent] = []
     @ObservationIgnored private var sync = JournalSync()
+    @ObservationIgnored private var journalRead: Task<Void, Never>?
     @ObservationIgnored private let device: String = {
         if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
         let id = UUID().uuidString
@@ -141,19 +142,37 @@ final class LibraryModel {
             try await file.appendJournal(events, device: device)
             try await file.saveSync(sync)
         } catch {
+            // Events that did not reach the journal wait for the next write instead of being lost.
+            journal = events + journal
+            progressUnsaved = true
             failure = error.localizedDescription
         }
     }
 
     /// Takes in the other devices' changes: at launch, when the app comes back, and when the FNMN folder is linked.
-    /// Their new materials come first, so their journals can place them in albums.
+    /// Their journals come first, because notes, marks, albums and deletions are a few lines, while the deliveries
+    /// can take minutes to come down from iCloud; a delivery of a material deleted elsewhere is then not read in.
     func syncWithOtherDevices() async {
+        await readJournals()
         await readOriginals()
         do {
             try await readChangedDeliveries()
         } catch {
             failure = error.localizedDescription
         }
+    }
+
+    /// The other devices' journals. A launch and a return to the app can both start a sync, and two reads at once
+    /// would apply the same lines twice, so a read that finds one running waits for it instead.
+    private func readJournals() async {
+        if let running = journalRead { return await running.value }
+        let read = Task { await readJournalsOnce() }
+        journalRead = read
+        await read.value
+        journalRead = nil
+    }
+
+    private func readJournalsOnce() async {
         guard let folder = await file.journalFolder(), FileManager.default.fileExists(atPath: folder.path) else { return }
         do {
             try await CloudFolder.download(folder, timeout: .seconds(60))
@@ -326,12 +345,6 @@ final class LibraryModel {
     /// Where an article's pictures resolve: its unpacked copy.
     func articleFolder(_ materialID: String) -> URL? {
         entry(materialID).map(file.cachedFolder(of:))
-    }
-
-    /// Whether opening the material has to bring its archive down from iCloud first.
-    func needsDownload(_ materialID: String) async -> Bool {
-        guard let entry = entry(materialID) else { return false }
-        return await !file.isUnpacked(entry)
     }
 
     /// A material is unpacked from its copy in the cache; when the system has emptied that, its archive comes

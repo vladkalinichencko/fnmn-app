@@ -44,6 +44,8 @@ struct ReadingLineView: View {
             .padding(.leading, Self.inset)
             .offset(y: y - Self.grip / 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // In landscape the column stops at the safe area; the line goes on to the screen's edge.
+            .ignoresSafeArea(.container, edges: .trailing)
             .sensoryFeedback(.impact(weight: .light, intensity: 0.5), trigger: reader.stop(of: line)) { _, _ in start != nil }
         }
     }

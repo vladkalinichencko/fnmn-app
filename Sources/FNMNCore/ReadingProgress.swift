@@ -59,11 +59,13 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
         return next
     }
 
-    /// A paragraph is read when the material is marked read, when it scrolled past the top, or when it lies at or
-    /// before the reader's "read through here" mark.
+    /// Without the reading line on screen, a paragraph is read when the material is marked read, when it scrolled
+    /// past the top, when it lies at or before the reader's "read through here" mark, or above where the line was
+    /// left: hiding the line takes nothing read away.
     public func isPieceRead(_ piece: Int, of itemID: String, current: Int?) -> Bool {
         if readings[itemID]?.isRead == true { return true }
         if let mark = readThrough[itemID], piece <= mark { return true }
+        if let line = lines[itemID], piece < line.piece { return true }
         guard let current else { return false }
         return piece < current
     }

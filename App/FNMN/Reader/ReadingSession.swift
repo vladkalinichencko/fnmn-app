@@ -100,8 +100,7 @@ struct ReadingSession: View {
             }
             .coordinateSpace(.named(Self.column))
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        .scrollPosition(Bindable(reader).position, anchor: .top)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }        .scrollPosition(Bindable(reader).position, anchor: .top)
         // The place is read off the rows the person sees, never through the position that moves the column:
         // a position written back on each step made the column pull the next block to its top while scrolling up.
         .onScrollTargetVisibilityChange(idType: Int.self, threshold: 0.01) { shown in

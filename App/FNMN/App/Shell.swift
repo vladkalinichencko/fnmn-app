@@ -50,26 +50,22 @@ extension View {
     /// Makes a tile the place its screen opens from and closes back to. A material's tile is named by the
     /// material's id, an album's or a publisher's by the route it opens.
     @ViewBuilder
-    func zoomSource(of id: some Hashable & Sendable, cornerRadius: CGFloat) -> some View {
-        modifier(ZoomSourceModifier(id: id, cornerRadius: cornerRadius))
+    func zoomSource(of id: some Hashable & Sendable) -> some View {
+        modifier(ZoomSourceModifier(id: id))
     }
 }
 
 private struct ZoomSourceModifier: ViewModifier {
     let id: AnyHashable
-    let cornerRadius: CGFloat
     @Environment(\.zoomNamespace) private var namespace
 
-    init(id: some Hashable & Sendable, cornerRadius: CGFloat) {
+    init(id: some Hashable & Sendable) {
         self.id = AnyHashable(id)
-        self.cornerRadius = cornerRadius
     }
 
     func body(content: Content) -> some View {
         if let namespace {
-            content.matchedTransitionSource(id: id, in: namespace) {
-                $0.clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
-            }
+            content.matchedTransitionSource(id: id, in: namespace)
         } else {
             content
         }

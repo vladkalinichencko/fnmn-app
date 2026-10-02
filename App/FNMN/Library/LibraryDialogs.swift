@@ -87,6 +87,7 @@ private struct LibraryDialogsModifier: ViewModifier {
             }
             .sheet(isPresented: dialogs.isShowing { $0 == .settings }) {
                 SettingsScreen()
+                    .presentationDetents([.medium, .large])
             }
             .alert("New Collection", isPresented: dialogs.isShowing { if case .namingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.albumTarget) { itemID in
                 TextField("Name", text: $albumName)

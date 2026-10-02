@@ -18,8 +18,8 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
     private var page: (light: UIColor, dark: UIColor) {
         switch self {
         case .plain: (UIColor(white: 1, alpha: 1), UIColor(white: 0, alpha: 1))
-        case .gray: (UIColor(white: 0.88, alpha: 1), UIColor(white: 0.11, alpha: 1))
-        case .paper: (UIColor(red: 0.95, green: 0.915, blue: 0.84, alpha: 1), UIColor(red: 0.11, green: 0.095, blue: 0.07, alpha: 1))
+        case .gray: (UIColor(white: 0.88, alpha: 1), UIColor(white: 0.17, alpha: 1))
+        case .paper: (UIColor(red: 0.95, green: 0.915, blue: 0.84, alpha: 1), UIColor(red: 0.18, green: 0.15, blue: 0.11, alpha: 1))
         }
     }
 
@@ -72,7 +72,7 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
 enum PageColors {
     static func plate(on page: UIColor, dark: Bool) -> UIColor {
         if dark { return page.mixed(with: .white, by: 0.12) }
-        return page.luminance > 0.95 ? page.mixed(with: .black, by: 0.05) : page.mixed(with: .white, by: 0.5)
+        return page.luminance > 0.95 ? page.mixed(with: .black, by: 0.05) : page.mixed(with: .white, by: 0.35)
     }
 
     static func link(on page: UIColor, dark: Bool) -> UIColor {
@@ -213,9 +213,7 @@ struct ReaderAppearanceModifier: ViewModifier {
             .font(.system(.body, design: font.design))
             .background(background.canvas)
             .environment(\.plateTint, background.plate)
-            .environment(\.page, background.canvas)
-            .tint(background.link)
-            // `Color.accentColor` ignores `.tint`, and Textual paints links with it, so the color is given outright.
+            // Only links take the page's link color; a tint would also paint every icon of the reader's menus.
             .textual.inlineStyle(.default.link(.foregroundColor(background.link), .underlineStyle(.single)))
     }
 }

@@ -56,8 +56,7 @@ struct ItemTile: View {
             }
         }
         .buttonStyle(.plain)
-        .zoomSource(of: item.id, cornerRadius: Tokens.tileRadius)
-        .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+        .zoomSource(of: item.id)
         .draggable(item.id)
         .contextMenu { ItemActions(item: item, album: album) }
     }
@@ -261,7 +260,7 @@ struct TileCard<Content: View>: View {
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
             .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.tileRadius, color: color) }
             .plate(cornerRadius: Tokens.tileRadius)
-            .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
+            .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 }
 

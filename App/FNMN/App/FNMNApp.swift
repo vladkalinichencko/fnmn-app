@@ -39,7 +39,7 @@ private struct WindowRoot: View {
         Group {
             switch library.loadState {
             case .idle, .loading:
-                ProgressView()
+                Loading()
             case let .failed(message):
                 ContentUnavailableView {
                     Label("Library unavailable", systemImage: "exclamationmark.triangle")

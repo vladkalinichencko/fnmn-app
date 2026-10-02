@@ -134,7 +134,7 @@ private struct AlbumZoomSource: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if let route {
-            content.zoomSource(of: route, cornerRadius: Tokens.tileRadius)
+            content.zoomSource(of: route)
         } else {
             content
         }
@@ -156,7 +156,6 @@ private struct AlbumTileBehavior: ViewModifier {
                     return !ids.isEmpty
                 }
                 .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
-                .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.tileRadius, style: .continuous))
                 .contextMenu {
                     Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(album.name)) }
                     Button("Delete Collection", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(album.name)) }

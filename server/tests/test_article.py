@@ -208,7 +208,7 @@ class ArticleTests(unittest.TestCase):
         with self.assertRaises(ImportFailure) as caught:
             imported_article("https://example.com/notes", fail("403 Forbidden"), lambda url: b"", [], fail("HTTP 403"))
         self.assertEqual(caught.exception.phase, "fetchingPage")
-        self.assertIn("403 Forbidden; Chrome: HTTP 403", str(caught.exception))
+        self.assertIn("Chrome: HTTP 403; 403 Forbidden", str(caught.exception))
 
     def test_heading_with_math_stays_one_section(self):
         source = """

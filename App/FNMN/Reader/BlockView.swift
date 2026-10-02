@@ -46,9 +46,8 @@ struct BlockView: View, Equatable {
 }
 
 extension View {
-    /// Grays the read share of a block from its top. Every block keeps the mask, read or not, so reading on does not
-    /// rebuild it; the gray runs down to its new edge only when the block becomes read whole or stops being so, while
-    /// the reading line moving inside the block moves the edge at once.
+    /// Grays the read share of a block from its top, at once, even when the change comes inside another animation
+    /// such as a plate sliding back. Every block keeps the mask, read or not, so reading on does not rebuild it.
     func grayed(_ readShare: Double) -> some View {
         mask {
             GeometryReader { geometry in
@@ -57,9 +56,9 @@ extension View {
                         .frame(height: geometry.size.height * min(max(readShare, 0), 1))
                     Color.black
                 }
+                .transaction(value: readShare) { $0.animation = nil }
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: readShare == 1)
     }
 }
 
@@ -212,20 +211,23 @@ struct PlateView: View {
     }
 
     /// The button the plate uncovers as it is pulled right, as wide as the pull; it takes hold, with a tap of
-    /// feedback, once the plate has gone far enough for letting go to mark.
+    /// feedback, once the plate has gone far enough for letting go to mark. Its icon stands over a short caption, so
+    /// both fit in the width the pull reaches before it takes hold.
     private var readButton: some View {
         let pull = max(offset, 0)
-        let label = markedReadThrough ? "Unmark" : "Read to Here"
         return Color.accentColor
-            .overlay(alignment: .leading) {
-                Label(label, systemImage: markedReadThrough ? "arrow.uturn.backward" : "checkmark")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .fixedSize()
-                    .padding(.leading, 20)
-                    .opacity(min(pull / 60, 1))
-                    .scaleEffect(pull >= Self.commit ? 1.06 : 1, anchor: .leading)
-                    .animation(.snappy, value: pull >= Self.commit)
+            .overlay {
+                VStack(spacing: 3) {
+                    Image(systemName: markedReadThrough ? "arrow.uturn.backward" : "checkmark")
+                        .font(.body.weight(.semibold))
+                    Text(markedReadThrough ? "Unmark" : "Read to Here")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .fixedSize()
+                .opacity(min(pull / 60, 1))
+                .scaleEffect(pull >= Self.commit ? 1.06 : 1)
+                .animation(.snappy, value: pull >= Self.commit)
             }
             .frame(width: max(pull - Self.pullGap, 0), height: size.height)
             .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
@@ -266,7 +268,7 @@ struct PlateView: View {
         }
     }
 
-    /// A selection stays inside its plate. What is read grays in the text and fades the glass into the page.
+    /// A selection stays inside its plate. What is read grays in the text; the glass stays as it is.
     private var plate: some View {
         StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks))
             // StructuredText parses again only when the Markdown changes; new marks need a new parse.
@@ -277,8 +279,8 @@ struct PlateView: View {
             .environment(\.textualSelectionMenu, selectionMenu)
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .grayed(mode == .reading ? readShare : 0)
-            .plate(cornerRadius: Tokens.plateRadius, readShare: mode == .reading ? readShare : 0)
+            .grayed(readShare)
+            .plate(cornerRadius: Tokens.plateRadius)
             .overlay(alignment: .topTrailing) { noteMark }
             .contentShape(.interaction, .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
             .gesture(TapGesture().onEnded { side = false; reader.send(.plate(.done)) }, isEnabled: open)
@@ -389,7 +391,8 @@ private struct MarginNote: View {
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         overflow = Overflow(below: height > room + 1, text: height)
                     }
-                    .frame(maxHeight: .infinity, alignment: .top)
+                    // Without a minimum the frame grows to the fixed text, so a long note would show whole past its paragraph.
+                    .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
                     .clipped()
             }
         }
@@ -466,12 +469,13 @@ private struct StandaloneImage: View {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFit()
                 } placeholder: {
-                    Text(alt).foregroundStyle(.secondary)
+                    Loading()
+                        .frame(height: Tokens.embedHeight)
+                        .plate(cornerRadius: Tokens.plateRadius)
                 }
             }
         }
         .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-        .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .onTapGesture { enlarged = true }
         .matchedTransitionSource(id: url, in: zoom)
         .frame(maxWidth: .infinity)
@@ -494,31 +498,44 @@ private struct StandaloneImage: View {
 /// A video in the text is its first frame under a play button; a tap plays it on the whole screen.
 struct ArticleVideo: View {
     let url: URL
-    @State private var frame: UIImage?
+    @State private var poster = Poster.loading
     @State private var playing = false
     @Namespace private var zoom
 
+    /// The first frame, shown before the video plays; a video whose frame cannot be read plays all the same.
+    private enum Poster {
+        case loading
+        case frame(UIImage)
+        case none
+    }
+
     var body: some View {
-        Color.black
+        Color.clear
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay {
-                if let frame { Image(uiImage: frame).resizable().scaledToFit() }
+                switch poster {
+                case .loading: Loading()
+                case let .frame(frame): Image(uiImage: frame).resizable().scaledToFit()
+                case .none: EmptyView()
+                }
             }
             .overlay {
-                Image(systemName: "play.fill")
-                    .font(.title)
-                    .foregroundStyle(.white)
-                    .padding(18)
-                    .glassEffect(.regular, in: .circle)
+                if case .loading = poster {} else {
+                    Image(systemName: "play.fill")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                        .padding(18)
+                        .glassEffect(.regular, in: .circle)
+                }
             }
             .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-            .contentShape([.interaction, .contextMenuPreview], .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+            .plate(cornerRadius: Tokens.plateRadius)
             .onTapGesture { playing = true }
             .matchedTransitionSource(id: url, in: zoom)
             .fullScreenCover(isPresented: $playing) {
                 VideoViewer(url: url).navigationTransition(.zoom(sourceID: url, in: zoom))
             }
-            .task { frame = await Self.firstFrame(of: url) }
+            .task { poster = await Self.firstFrame(of: url).map(Poster.frame) ?? .none }
             .contextMenu {
                 if url.isFileURL {
                     Button("Save to Photos", systemImage: "square.and.arrow.down") {

@@ -125,7 +125,7 @@ struct VideoReaderView: View {
         let video = video
         if let file = library.originalFile(materialID), file != playable {
             // The file saved on another device, or let go by this one, comes down from iCloud before it plays.
-            VideoPlaceholder { ProgressView("Downloading from iCloud") }
+            VideoPlaceholder { Loading() }
                 .task(id: file) {
                     do {
                         try await CloudFolder.download(file, timeout: .seconds(1800))
@@ -163,7 +163,7 @@ struct VideoReaderView: View {
                 }
                 switch embedState {
                 case .loading:
-                    VideoPlaceholder { ProgressView() }
+                    VideoPlaceholder { Loading() }
                 case .ready:
                     EmptyView()
                 case .failed:

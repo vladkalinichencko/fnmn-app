@@ -38,23 +38,33 @@ def _page(url: str) -> str:
 
 
 def _rendered(url: str) -> str:
-    """Open the page in an ordinary Google Chrome window placed off screen, one page at a time."""
+    """Open the page in Google Chrome without a window, one page at a time.
+
+    Chrome without a window names itself HeadlessChrome and reports automation, and Medium refuses such a
+    browser, so it introduces itself as the ordinary Chrome it is.
+    """
     with _CHROME, sync_playwright() as playwright:
         browser = playwright.chromium.launch(
             channel="chrome",
-            headless=False,
-            args=["--window-position=-2400,-2400", "--window-size=1280,1600"],
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"],
         )
         try:
-            page = browser.new_page()
+            probe = browser.new_page()
+            agent = probe.evaluate("navigator.userAgent").replace("HeadlessChrome", "Chrome")
+            probe.close()
+            page = browser.new_page(user_agent=agent, viewport={"width": 1280, "height": 1600})
             documents = []
             page.on("response", lambda response: documents.append(response)
                     if response.request.is_navigation_request() and response.frame == page.main_frame else None)
-            page.goto(url, wait_until="load", timeout=45_000)
-            try:
-                page.wait_for_load_state("networkidle", timeout=_SETTLE_MS)
-            except Error:
-                pass
+            # A page whose trackers or widgets never finish loading is still read once its document is there.
+            page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+            for state in ("load", "networkidle"):
+                try:
+                    page.wait_for_load_state(state, timeout=_SETTLE_MS)
+                except Error:
+                    pass
+            _wait_for_text(page)
             if documents and documents[-1].status >= 400:
                 raise OSError(f"browser got HTTP {documents[-1].status} for {url}")
             for _ in range(3):
@@ -65,6 +75,19 @@ def _rendered(url: str) -> str:
             raise OSError(f"page kept navigating: {url}")
         finally:
             browser.close()
+
+
+def _wait_for_text(page) -> None:
+    """A page that draws its article from script keeps growing after the network calms down, so read it once its text has stood still for three seconds."""
+    lengths = []
+    for _ in range(2 * _SETTLE_MS // 500):
+        try:
+            lengths.append(page.evaluate("document.body ? document.body.innerText.length : 0"))
+        except Error:
+            lengths.append(-1)
+        if len(lengths) > 6 and len(set(lengths[-7:])) == 1:
+            return
+        page.wait_for_timeout(500)
 
 
 LIVE = Web(

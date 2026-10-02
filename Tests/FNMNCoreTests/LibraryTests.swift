@@ -618,6 +618,12 @@ private func span(_ quote: String) -> AnnotationTarget {
     #expect(progress.isPieceRead(7, of: "a", current: 8))
 }
 
+@Test func hidingTheReadingLineKeepsTheBlocksAboveItRead() {
+    let progress = ReadingProgress().applying(.line(ReadingLine(piece: 4, fraction: 0.5), itemID: "a"))
+    #expect(progress.isPieceRead(3, of: "a", current: 0))
+    #expect(!progress.isPieceRead(4, of: "a", current: 0))
+}
+
 @Test func aMaterialOpensAtItsFirstUnreadBlock() {
     let marked = ReadingProgress().applying(.readThrough(piece: 5, itemID: "a"))
     #expect(ReadingProgress().openingPiece(of: "a", place: nil, count: 10) == nil)
@@ -735,6 +741,17 @@ private func span(_ quote: String) -> AnnotationTarget {
     try library.importPackage(changed, at: .now)
     #expect(library.annotations.isEmpty)
     #expect(library.progressChanges(since: first) == [.restart(itemID: article.material.id)])
+}
+
+@Test func aMarkFromAnotherDeviceOnTheNewTextOutlivesTheDeliveryArrivingAfterIt() throws {
+    var library = LibrarySnapshot()
+    let rewritten = Date(timeIntervalSince1970: 1_000)
+    try library.importPackage(article, at: .now)
+    library.annotations.append(Annotation(materialID: article.material.id, piece: 0, text: "Old", note: "before", updatedAt: rewritten - 60))
+    library.annotations.append(Annotation(materialID: article.material.id, piece: 1, text: "New", note: "after", updatedAt: rewritten + 60))
+    let changed = ImportPackage(material: article.material, sections: article.sections, blocks: article.blocks, body: "A different page.")
+    try library.importPackage(changed, at: .now, delivery: "a.tar", deliveredAt: rewritten)
+    #expect(library.annotations.map(\.note) == ["after"])
 }
 
 @Test func theOldPackagesFolderGoesOnceEveryPackageIsIn() async throws {

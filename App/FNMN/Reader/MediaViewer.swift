@@ -13,7 +13,7 @@ struct ImageViewer: View {
             if let image {
                 ZoomingImage(image: image).ignoresSafeArea()
             } else {
-                ProgressView()
+                Loading()
             }
         }
         .overlay(alignment: .top) {

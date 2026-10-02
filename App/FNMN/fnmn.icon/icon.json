@@ -4,6 +4,70 @@
     {
       "layers" : [
         {
+          "blend-mode-specializations" : [
+            {
+              "value" : "lighten"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "darken"
+            }
+          ],
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.96783,0.00000,0.23280,0.75000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.96783,0.00000,0.23280,0.75000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "none"
+            }
+          ],
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "Rectangle 15.svg",
+          "name" : "Rectangle 15",
+          "opacity-specializations" : [
+            {
+              "appearance" : "tinted",
+              "value" : 0.5
+            }
+          ],
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              3
+            ]
+          }
+        },
+        {
+          "blend-mode-specializations" : [
+            {
+              "value" : "hard-light"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "hard-light"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "darken"
+            }
+          ],
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "Rectangle 16 2.svg",
+          "name" : "Rectangle 16"
+        },
+        {
           "fill-specializations" : [
             {
               "value" : {
@@ -24,6 +88,7 @@
             }
           ],
           "glass" : true,
+          "hidden" : false,
           "image-name" : "FNMN.svg",
           "name" : "FNMN",
           "position" : {

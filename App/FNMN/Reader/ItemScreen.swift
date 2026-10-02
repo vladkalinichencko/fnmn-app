@@ -20,9 +20,8 @@ struct ItemScreen: View {
 }
 
 private enum ArticleText {
+    /// Reading the archive, after it comes down from iCloud if the phone had let it go.
     case loading
-    /// The phone had let the archive go, so it comes down from iCloud before it can open.
-    case downloading
     case article(ReaderCoordinator, sourceURL: URL?)
     case video(VideoCoordinator)
     case failed(String)
@@ -41,9 +40,7 @@ private struct ArticleOpener: View {
         Group {
             switch text {
             case .loading:
-                ProgressView()
-            case .downloading:
-                ProgressView("Downloading from iCloud")
+                Loading()
             case let .failed(message):
                 ContentUnavailableView("Couldn’t open this material", systemImage: "doc", description: Text(message))
             case let .article(reader, sourceURL):
@@ -55,7 +52,6 @@ private struct ArticleOpener: View {
         .task(id: library.snapshot.articles.first { $0.material.id == itemID }?.textDigest) {
             let interval = Signposts.library.beginInterval("Open material")
             defer { Signposts.library.endInterval("Open material", interval) }
-            if await library.needsDownload(itemID) { text = .downloading }
             do {
                 text = try await open()
             } catch {

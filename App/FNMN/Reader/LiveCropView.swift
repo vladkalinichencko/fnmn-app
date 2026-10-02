@@ -19,8 +19,7 @@ struct LiveCropView: View {
                 .frame(height: height)
                 .opacity(isShown ? 1 : 0)
             if case .loading = phase {
-                ProgressView("Opening the figure")
-                    .frame(maxWidth: .infinity, minHeight: 180)
+                Loading()
             }
             if case let .failed(message) = phase {
                 Text(message)
@@ -30,6 +29,7 @@ struct LiveCropView: View {
         }
         .frame(height: height)
         .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+        .plate(cornerRadius: Tokens.plateRadius)
     }
 
     private var isShown: Bool {
@@ -39,7 +39,7 @@ struct LiveCropView: View {
 
     private var height: CGFloat {
         if case let .shown(value) = phase { return max(value, 44) }
-        return 180
+        return Tokens.embedHeight
     }
 }
 

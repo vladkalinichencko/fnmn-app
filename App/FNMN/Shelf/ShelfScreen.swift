@@ -185,8 +185,6 @@ private struct AnnotationCard: View {
             }
         }
         .buttonStyle(.plain)
-        // Lifted by the frame, the card would show the menu's own plate behind the quote and the note.
-        .contentShape(.contextMenuPreview, .rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .contextMenu {
             Button("Copy", systemImage: "doc.on.doc") {
                 UIPasteboard.general.string = [annotation.quoted, annotation.note].filter { !$0.isEmpty }.joined(separator: "\n\n")
@@ -225,8 +223,9 @@ private struct AnnotationCard: View {
         Text(Self.marked(annotation))
             .font(.system(.callout, design: .serif))
             .padding(Tokens.tilePadding)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .clipped()
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            // The card grows with a long note; the quote's plate keeps the height of its own text.
+            .fixedSize(horizontal: false, vertical: true)
             .rotationEffect(.degrees(Self.quoteTurn))
             .plate(in: TurnedRectangle(cornerRadius: Tokens.plateRadius, degrees: Self.quoteTurn))
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { quoteHeight = $0 }

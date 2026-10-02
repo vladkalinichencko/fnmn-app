@@ -76,8 +76,10 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         if let block { state.line = ReadingLine(piece: block, fraction: 0) }
     case let .showLine(shows):
         state.showsLine = shows
-        // A line shown for the first time stands at the top of the block reading stopped at.
-        if shows, state.line == nil, let piece = state.place ?? document.visibleBlocks(folded: state.folded).first {
+        // A line shown again stands where it was left, or at the top of the block reading stopped at when reading
+        // without it went further, so showing it takes nothing read away either.
+        if shows, let piece = state.place ?? document.visibleBlocks(folded: state.folded).first,
+           state.line.map({ $0.piece < piece }) ?? true {
             state.line = ReadingLine(piece: piece, fraction: 0)
         }
     case let .moveLine(line):
@@ -247,6 +249,7 @@ final class ReaderCoordinator {
             }
             savePlace(next.place)
         case .showLine:
+            if next.line != before.line { library.apply(.line(next.line, itemID: materialID)) }
             savePlace(next.place)
         case .moveLine:
             break
@@ -274,12 +277,13 @@ final class ReaderCoordinator {
     }
 
     /// The share read follows the plates shown as read: those above the reading line's block while it shows, or else
-    /// those above the place and those up to the "read through here" mark, whichever reaches further.
+    /// those above the place, up to the "read through here" mark and above where the line was left, whichever reaches
+    /// further.
     private func savePlace(_ place: Int?) {
         let read = if state.showsLine, let line = state.line {
             line.piece - 1
         } else {
-            [place, library.progress.readThrough[materialID]].compactMap { $0 }.max() ?? -1
+            [place, library.progress.readThrough[materialID], state.line.map { $0.piece - 1 }].compactMap { $0 }.max() ?? -1
         }
         let position = place.map(ReadingPosition.piece) ?? library.position(of: materialID) ?? .piece(0)
         library.apply(.savePosition(position, itemID: materialID, progress: Double(read + 1) / Double(document.blocks.count)))

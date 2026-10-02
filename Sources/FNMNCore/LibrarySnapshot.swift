@@ -43,7 +43,8 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         let entry = ArticleEntry(package, delivery: delivery, deliveredAt: deliveredAt)
         if let index = articles.firstIndex(where: { $0.material.id == id }) {
             if articles[index].textDigest != entry.textDigest {
-                forgetMarks(of: id)
+                // Marks another device made on the new text after it rewrote the delivery may have arrived first.
+                forgetMarks(of: id, before: deliveredAt)
             }
             articles[index] = entry
         } else {
@@ -88,8 +89,12 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         }
     }
 
-    mutating func forgetMarks(of materialID: String) {
-        annotations.removeAll { $0.materialID == materialID }
+    mutating func forgetMarks(of materialID: String, before date: Date? = nil) {
+        annotations.removeAll { annotation in
+            guard annotation.materialID == materialID else { return false }
+            guard let date, let updatedAt = annotation.updatedAt else { return true }
+            return updatedAt < date
+        }
     }
 
     static func ordered(_ names: [String]) -> [String] {

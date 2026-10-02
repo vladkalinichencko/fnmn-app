@@ -43,23 +43,17 @@ def document(source: str, markdown: str, assets: dict[str, str], web: Web, repor
 
 
 def _readable_page(url: str, web: Web, depth: int = 0) -> tuple[str, str, dict[str, str]]:
-    """Read the plain HTTP page; open it in Chrome when the site refuses or sends a shell for its scripts.
-    A page that is only a frame around another page is that other page."""
-    try:
-        source = web.page(url)
-        markdown, assets = article_markdown(source, url)
-        if _has_prose(markdown):
-            return source, markdown, assets
-        if framed := _inside_frame(source, url, web, depth):
-            return framed
-        refusal = "page has no readable text before its scripts run"
-    except Exception as error:
-        refusal = str(error)
+    """Read the page as Chrome shows it once its scripts ran, since many sites send only a shell, or a section's
+    blurb, before that; a page Chrome cannot open is read over plain HTTP. A page that is only a frame around
+    another page is that other page."""
     try:
         source = web.rendered(url)
-        markdown, assets = article_markdown(source, url)
-    except Exception as error:
-        raise ImportFailure("fetchingPage", f"{refusal}; Chrome: {error}") from error
+    except Exception as refusal:
+        try:
+            source = web.page(url)
+        except Exception as error:
+            raise ImportFailure("fetchingPage", f"Chrome: {refusal}; {error}") from error
+    markdown, assets = article_markdown(source, url)
     if not _has_prose(markdown) and (framed := _inside_frame(source, url, web, depth)):
         return framed
     return source, markdown, assets

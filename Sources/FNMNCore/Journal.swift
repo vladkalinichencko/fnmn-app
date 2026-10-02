@@ -42,6 +42,7 @@ public struct JournalEvent: Codable, Equatable, Sendable {
         case let .library(.setArchived(_, itemID)): "archived:\(itemID)"
         case let .library(.addToAlbum(name, itemIDs)) where itemIDs.count == 1: "placement:\(itemIDs[0]):\(name)"
         case let .library(.removeFromAlbum(name, itemID)): "placement:\(itemID):\(name)"
+        case let .library(.removeAnnotation(id)): "removed:\(id)"
         default: nil
         }
     }
@@ -90,6 +91,8 @@ public func merge(
         }
         switch event.change {
         case let .library(change):
+            // A paragraph's annotation deleted here or elsewhere does not come back from an edit made before the deletion.
+            if let id = change.annotationID, let removed = sync.clock["removed:\(id)"], event.time <= removed { continue }
             guard let next = try? catalog.applying(change, at: event.time) else { continue }
             progress = next.progressChanges(since: catalog).reduce(progress) { $0.applying($1) }
             catalog = next
@@ -113,6 +116,17 @@ public func merge(
         }
     }
     return (catalog, progress, sync)
+}
+
+extension LibraryChange {
+    /// The paragraph record an edit of marks or notes lands in.
+    fileprivate var annotationID: UUID? {
+        switch self {
+        case let .mark(_, target), let .unmark(_, target), let .note(_, target):
+            Annotation.id(materialID: target.materialID, piece: target.piece)
+        default: nil
+        }
+    }
 }
 
 extension ProgressChange {
