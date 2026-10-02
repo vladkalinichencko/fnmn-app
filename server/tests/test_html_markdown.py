@@ -148,6 +148,16 @@ class HtmlMarkdownTests(unittest.TestCase):
         self.assertIn("Call `foo` then `fetch` with `x=1`.", markdown)
         self.assertIn("Type ``a`b`` or `` `x` `` here.", markdown)
 
+    def test_emphasis_marks_stand_where_commonmark_reads_them(self):
+        source = """
+        <html><body><article><h1>Card</h1>
+          <p>Transformers are the gold standard of neural networks today, and of large language models above all.</p>
+          <p><b>Eyes:</b>green, <i>(see)</i>below and <b>one</b><b> two</b> in a row.</p>
+        </article></body></html>
+        """
+        markdown, _ = article_markdown(source, PAGE)
+        self.assertIn("**Eyes:** green, *(see)* below and **one two** in a row.", markdown)
+
     def test_a_quote_and_a_list_item_keep_their_paragraphs_and_inner_lists_apart(self):
         source = """
         <html><body><article><h1>Primer</h1>

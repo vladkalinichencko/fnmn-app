@@ -3,11 +3,14 @@ from __future__ import annotations
 import copy
 import hashlib
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import trafilatura
 from lxml import etree, html
+
+from markdown import CLOSING_PUNCTUATION, OPENING_PUNCTUATION
 
 _PROSE = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "blockquote", "table", "pre"}
 _BLOCKS = _PROSE | {"figure", "div", "section", "img", "video", "iframe"}
@@ -351,10 +354,10 @@ def _flow(node, page_url: str, downloads: dict[str, str]) -> str:
     """A container's content in document order. Its own text and inline children gather into paragraphs and
     block children stand between them, so text a site puts straight into a div reads like any <p>."""
     blocks: list[str] = []
-    run: list[str] = [node.text or ""]
+    run: list[str | _Emphasis] = [node.text or ""]
 
     def close_paragraph():
-        paragraph = "".join(run).strip()
+        paragraph = _joined(run).strip()
         if paragraph:
             blocks.append(paragraph)
         run.clear()
@@ -571,20 +574,81 @@ def _inline_spaced(node, page_url: str, downloads: dict[str, str]) -> str:
     for child in node:
         parts.append(_piece(child, page_url, downloads))
         parts.append(child.tail or "")
-    return "".join(parts)
+    return _joined(parts)
 
 
 _BOLD_TAGS = {"strong", "b"}
 _ITALIC_TAGS = {"em", "i"}
 
 
-def _emphasis(node, mark: str, page_url: str, downloads: dict[str, str]) -> str:
+@dataclass(frozen=True)
+class _Emphasis:
+    """Bold or italic text, with the spaces at its edges, whose marks are written once the characters on both
+    sides of it are known."""
+
+    text: str
+    mark: str
+
+
+def _emphasis(node, mark: str, page_url: str, downloads: dict[str, str]) -> str | _Emphasis:
     """Bold inside bold, as `<b><strong>`, adds no marks of its own."""
     family = _BOLD_TAGS if node.tag in _BOLD_TAGS else _ITALIC_TAGS
     text = _inline_spaced(node, page_url, downloads)
     if any(outer.tag in family for outer in node.iterancestors()):
         return text
-    return _wrapped(text, mark, mark)
+    return _Emphasis(text, mark)
+
+
+def _joined(parts: list[str | _Emphasis]) -> str:
+    """Inline pieces as one run of Markdown. Two runs of one emphasis side by side, as `<b>a</b><b>b</b>`, are one
+    run: `**a****b**` pairs its marks wrongly. A mark goes where CommonMark reads it: a run that starts with
+    punctuation opens only after a space or punctuation, and one that ends with it closes only before them, so
+    `<b>Eyes:</b>green` gets a space after its marks instead of reading as `**Eyes:**green` with the stars in it."""
+    merged: list[str | _Emphasis] = []
+    for part in parts:
+        if not part:
+            continue
+        previous = merged[-1] if merged else None
+        if isinstance(part, _Emphasis) and isinstance(previous, _Emphasis) and previous.mark == part.mark:
+            merged[-1] = _Emphasis(previous.text + part.text, part.mark)
+        else:
+            merged.append(part)
+    written = ""
+    for index, part in enumerate(merged):
+        if isinstance(part, str):
+            written += part
+            continue
+        inner = part.text.strip()
+        if not inner:
+            written += part.text
+            continue
+        lead = part.text[: len(part.text) - len(part.text.lstrip())]
+        trail = part.text[len(part.text.rstrip()) :]
+        before = lead[-1:] or written[-1:] or " "
+        after = trail[:1] or _first_character(merged[index + 1 :])
+        # A mark next to another emphasis's marks is one run of stars with them, so it is the text inside that counts.
+        first, last = inner.lstrip("*")[:1] or "*", inner.rstrip("*")[-1:] or "*"
+        written += lead
+        if before.isalnum() and _punctuation(first) and first not in CLOSING_PUNCTUATION:
+            written += " "
+        written += part.mark + inner + part.mark
+        if after.isalnum() and _punctuation(last) and last not in OPENING_PUNCTUATION:
+            written += " "
+        written += trail
+    return written
+
+
+def _first_character(parts: list[str | _Emphasis]) -> str:
+    """The first character the pieces will write: an emphasis that opens without a space opens with its mark."""
+    for part in parts:
+        if isinstance(part, str):
+            return part[0]
+        return part.text[0] if part.text[0].isspace() else part.mark[0]
+    return " "
+
+
+def _punctuation(character: str) -> bool:
+    return not character.isalnum() and not character.isspace()
 
 
 def _wrapped(text: str, opening: str, closing: str) -> str:
@@ -608,7 +672,7 @@ def _code(text: str) -> str:
     return _wrapped(text, fence + pad, pad + fence)
 
 
-def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
+def _piece(node, page_url: str, downloads: dict[str, str]) -> str | _Emphasis:
     """One inline element as Markdown, without the text that follows it."""
     if not isinstance(node.tag, str):
         return ""
