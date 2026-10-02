@@ -221,7 +221,9 @@ struct AlbumPicker: View {
         NavigationStack {
             ScrollView {
                 LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    ForEach(library.snapshot.albumSummaries) { album in
+                    // The collections the material is already in are not offered again.
+                    let current = library.snapshot.albums(of: itemID)
+                    ForEach(library.snapshot.albumSummaries.filter { !current.contains($0.name) }) { album in
                         AlbumTile(album: album) {
                             dialogs.send(.dismiss)
                             Task { await library.apply(.addToAlbum(album.name, itemIDs: [itemID])) }
