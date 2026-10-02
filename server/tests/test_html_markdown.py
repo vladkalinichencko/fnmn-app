@@ -59,6 +59,20 @@ class HtmlMarkdownTests(unittest.TestCase):
         markdown, _ = article_markdown(page, PAGE)
         self.assertIn("**Eyes:** green, **and** a long", markdown)
 
+    def test_spaces_at_the_edges_of_spans_and_links_stay_between_words(self):
+        page = (
+            '<html><body><article><p><span>The contest </span><a href="https://example.com/aimo"><span>AIMO</span></a>'
+            "<span>, with a prize of </span><b><strong>1 million dollars</strong></b><span>. "
+            '</span><a href="https://example.com/paper"><span>DeepSeekMath </span></a><span>– a long enough sentence of the article prose.</span></p>'
+            "</article></body></html>"
+        )
+        markdown, _ = article_markdown(page, PAGE)
+        self.assertEqual(
+            markdown,
+            "The contest [AIMO](https://example.com/aimo), with a prize of **1 million dollars**. "
+            "[DeepSeekMath](https://example.com/paper) – a long enough sentence of the article prose.",
+        )
+
     def test_text_stays_markdown_and_figures_point_at_the_live_page(self):
         markdown, downloads = article_markdown(SAMPLE, PAGE)
         self.assertIn("# Momentum", markdown)
@@ -108,6 +122,19 @@ class HtmlMarkdownTests(unittest.TestCase):
         self.assertTrue(any(url.endswith("pic.png") for url in downloads.values()))
         self.assertIn("![slope](", markdown)
         self.assertEqual(markdown.count("```fnmn-interactive"), 1)
+
+    def test_a_cover_figure_whose_picture_was_dropped_is_not_a_live_figure(self):
+        source = """
+        <html><head><title>Transformers and what comes after them</title></head><body><main>
+          <figure class="relative"><img alt="" src="/_next/image?url=cover.png">
+            <figcaption><h1>Transformers and what comes after them</h1><p>05.11.2024</p></figcaption></figure>
+          <p>Transformers are the gold standard of neural networks today, and of large language models above all.</p>
+          <p>They were the first architecture that scales: more data and parameters give a better model every time.</p>
+        </main></body></html>
+        """
+        markdown, _ = article_markdown(source, PAGE)
+        self.assertNotIn("fnmn-interactive", markdown)
+        self.assertIn("gold standard", markdown)
 
     def test_article_wins_by_score_and_formula_comes_from_the_annotation(self):
         source = """

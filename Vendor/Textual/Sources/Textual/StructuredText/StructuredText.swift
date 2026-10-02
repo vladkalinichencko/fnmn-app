@@ -123,6 +123,9 @@ public struct StructuredText: View {
         .modifier(TextSelectionInteraction())
         .modifier(TextSelectionCoordination())
     }
+    // The container is as wide as it is offered, never as its content: an attachment first sized wider than the
+    // text would otherwise widen the container it is sized against and keep its width.
+    .frame(maxWidth: .infinity, alignment: .leading)
     .coordinateSpace(.textContainer)
     // Disable line limit to avoid per-fragment truncation
     .lineLimit(nil)

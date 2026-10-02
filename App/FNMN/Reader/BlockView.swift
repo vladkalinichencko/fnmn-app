@@ -115,6 +115,7 @@ struct HeadingView: View {
                 Text(hidden, format: .number)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .transition(.blurReplace)
             }
             if fold != .none {
                 Image(systemName: "chevron.right")
@@ -126,6 +127,8 @@ struct HeadingView: View {
                     .frame(width: chevronWidth)
             }
         }
+        // The column opens and closes the section at once; only the heading itself moves to its new look.
+        .animation(.snappy(duration: 0.22), value: fold)
         .padding(.top, level <= 2 ? Tokens.gap : 4)
         .contentShape(.rect)
     }
@@ -152,6 +155,11 @@ struct LeadImage: View {
     }
 }
 
+extension EnvironmentValues {
+    /// The width of the text inside a plate, once the column is laid out.
+    @Entry var plateTextWidth: CGFloat?
+}
+
 /// A paragraph, list, quote, table or code block on its own rounded plate.
 /// Dragging it left uncovers its margin note, which lies under the plate all along; dragging it right far enough
 /// marks "read to here", with a tap of feedback where the mark takes hold.
@@ -172,6 +180,7 @@ struct PlateView: View {
 
     /// Where the last swipe left the plate, until the mode catches up with it.
     @State private var side: Bool?
+    @Environment(\.plateTextWidth) private var textWidth
 
     private var noting: Bool { mode == .noting(index) }
     /// Whether the plate stands aside. The swipe decides this at once and the mode follows a moment later, so a
@@ -270,9 +279,9 @@ struct PlateView: View {
 
     /// A selection stays inside its plate. What is read grays in the text; the glass stays as it is.
     private var plate: some View {
-        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks))
-            // StructuredText parses again only when the Markdown changes; new marks need a new parse.
-            .id(marks)
+        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth))
+            // StructuredText parses again only when the Markdown changes; new marks and a new width need a new parse.
+            .id([AnyHashable(marks), AnyHashable(textWidth)])
             .textual.overflowMode(.wrap)
             .plateMarkdownStyles()
             .textual.textSelection(.enabled)

@@ -164,6 +164,11 @@ def _open_at(root, heading) -> None:
             node.drop_tree()
         elif passed and node.tag in {"h1", "h2", "h3"} and _heading_text(node).casefold() == text:
             node.drop_tree()
+    # A figure around the title is a cover with the title laid over it; with its picture gone above the title, it is
+    # text and not a figure the page draws.
+    if header:
+        for figure in [node for node in above if node.tag == "figure" and root in node.iterancestors()]:
+            figure.drop_tag()
 
 
 def _heading_text(node) -> str:
@@ -563,14 +568,26 @@ def _inline_spaced(node, page_url: str, downloads: dict[str, str]) -> str:
     return "".join(parts)
 
 
+_BOLD_TAGS = {"strong", "b"}
+_ITALIC_TAGS = {"em", "i"}
+
+
 def _emphasis(node, mark: str, page_url: str, downloads: dict[str, str]) -> str:
-    """Spaces at the edges of `<b>word </b>` stay outside the marks: Markdown takes `**word **` for plain text,
-    and a stripped space glues the word to the next one. Bold inside bold adds no marks of its own."""
+    """Bold inside bold, as `<b><strong>`, adds no marks of its own."""
+    family = _BOLD_TAGS if node.tag in _BOLD_TAGS else _ITALIC_TAGS
     text = _inline_spaced(node, page_url, downloads)
-    inner = text.strip()
-    if not inner or any(outer.tag == node.tag for outer in node.iterancestors()):
+    if any(outer.tag in family for outer in node.iterancestors()):
         return text
-    return text[: len(text) - len(text.lstrip())] + mark + inner + mark + text[len(text.rstrip()) :]
+    return _wrapped(text, mark, mark)
+
+
+def _wrapped(text: str, opening: str, closing: str) -> str:
+    """Spaces at the edges of `<b>word </b>` or `<a>word </a>` stay outside the marks: Markdown takes `**word **`
+    for plain text, and a dropped space glues the word to the next one."""
+    inner = text.strip()
+    if not inner:
+        return text
+    return text[: len(text) - len(text.lstrip())] + opening + inner + closing + text[len(text.rstrip()) :]
 
 
 def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
@@ -583,20 +600,21 @@ def _piece(node, page_url: str, downloads: dict[str, str]) -> str:
         return f"$$\n{source}\n$$" if display else f"${source}$"
     if node.tag in {"style", "script", "button", "select", "textarea"}:
         return ""
-    if node.tag in {"em", "i"}:
+    if node.tag in _ITALIC_TAGS:
         return _emphasis(node, "*", page_url, downloads)
-    if node.tag in {"strong", "b"}:
+    if node.tag in _BOLD_TAGS:
         return _emphasis(node, "**", page_url, downloads)
     if node.tag == "code":
         return f"`{_inline(node, page_url, downloads)}`"
     if node.tag == "a":
-        label = _inline(node, page_url, downloads)
-        return f"[{label}]({_absolute(page_url, node.get('href') or '')})" if label else ""
+        label = _inline_spaced(node, page_url, downloads)
+        return _wrapped(label, "[", f"]({_absolute(page_url, node.get('href') or '')})") if label.strip() else label
     if node.tag == "img":
         return _image(node, page_url, downloads)
     if node.tag == "br":
         return "\n"
-    return _inline(node, page_url, downloads)
+    # A span keeps the spaces at its edges: sites put the space between two words inside one of them.
+    return _inline_spaced(node, page_url, downloads)
 
 
 def _math_source(node) -> tuple[str, bool] | None:

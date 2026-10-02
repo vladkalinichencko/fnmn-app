@@ -11,6 +11,8 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
     public var folded: [String: [Int]] = [:]
     /// Where each material's reading line stands.
     public var lines: [String: ReadingLine] = [:]
+    /// When each collection, publisher, type or month was last opened, by its `AlbumSummary.id`.
+    public var groupsOpened: [String: Date] = [:]
 
     public init() {}
 
@@ -21,6 +23,7 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
         readings = try container.decode([String: MaterialReading].self, forKey: .readings)
         folded = try container.decodeIfPresent([String: [Int]].self, forKey: .folded) ?? [:]
         lines = try container.decodeIfPresent([String: ReadingLine].self, forKey: .lines) ?? [:]
+        groupsOpened = try container.decodeIfPresent([String: Date].self, forKey: .groupsOpened) ?? [:]
     }
 
     public func applying(_ change: ProgressChange, at date: Date = .now) -> ReadingProgress {
@@ -28,6 +31,8 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
         switch change {
         case let .open(itemID):
             next.readings[itemID, default: MaterialReading()].openedAt = date
+        case let .openGroup(id):
+            next.groupsOpened[id] = date
         case let .setRead(isRead, itemID):
             next.readings[itemID, default: MaterialReading()].isRead = isRead
         case let .savePosition(position, itemID, progress):
@@ -92,6 +97,8 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
 /// Every change to reading progress. A new change is a new case here and one branch in `applying`.
 public enum ProgressChange: Codable, Equatable, Sendable {
     case open(itemID: String)
+    /// A collection, publisher, type or month was opened, by its `AlbumSummary.id`.
+    case openGroup(id: String)
     case setRead(Bool, itemID: String)
     case savePosition(ReadingPosition, itemID: String, progress: Double)
     case readThrough(piece: Int?, itemID: String)
@@ -110,8 +117,8 @@ public enum ProgressChange: Codable, Equatable, Sendable {
 
 /// The line the reader moves down the text as it reads: the text above it is read. It stands in the block whose
 /// text it has not passed yet, at a share of that block's height, so it keeps its place between the same lines of
-/// text when the column is narrower or the font larger. Above the block, in the gap after the one before, the share
-/// is below zero.
+/// text when the column is narrower or the font larger. At the block's top, in the gap after the one before, the
+/// share is zero.
 public struct ReadingLine: Codable, Equatable, Hashable, Sendable {
     public var piece: Int
     public var fraction: Double
@@ -135,25 +142,18 @@ public struct ReadingLine: Codable, Equatable, Hashable, Sendable {
         return merged
     }
 
-    /// Where the line may stand among merged lines of text: halfway between two that follow one another, at the top
-    /// of the first and at the bottom of the last, and anywhere across a space wider than any between paragraphs,
-    /// which holds a picture, a video or a formula that scrolls sideways.
-    public static func stops(between lines: [ClosedRange<Double>]) -> [ClosedRange<Double>] {
-        guard let first = lines.first, let last = lines.last else { return [] }
-        let between = zip(lines, lines.dropFirst()).map { above, below -> ClosedRange<Double> in
-            let top = above.upperBound, bottom = below.lowerBound
+    /// Where the line may stand inside one block, given the block's content without the gap under it and its merged
+    /// lines of text: halfway between two lines that follow one another, and anywhere across a space wider than any
+    /// between lines, which holds a picture, a video or a formula that scrolls sideways, whether above the first line,
+    /// between two or below the last. The block's top is not among them: there the line stands in the gap above.
+    public static func stops(within content: ClosedRange<Double>, lines: [ClosedRange<Double>]) -> [ClosedRange<Double>] {
+        let edges = [content.lowerBound...content.lowerBound] + lines + [content.upperBound...content.upperBound]
+        return zip(edges.indices, edges.indices.dropFirst()).compactMap { above, below in
+            let top = edges[above].upperBound, bottom = edges[below].lowerBound
+            if bottom - top > 80 { return top + 8...bottom - 8 }
             let middle = (top + bottom) / 2
-            return bottom - top > 80 ? top + 8...bottom - 8 : middle...middle
+            return above == 0 || below == edges.count - 1 ? nil : middle...middle
         }
-        return [first.lowerBound...first.lowerBound] + between + [last.upperBound...last.upperBound]
-    }
-
-    /// Where the line stands at the top of a block whose row starts at `top`: at the stop between the text above the
-    /// block and its own first line, the place a drag into the gap between them comes to rest. Over a picture the
-    /// stop spans the picture, and the line stands at the block's top.
-    public static func stop(atTopOf top: Double, lines: [ClosedRange<Double>], stops: [ClosedRange<Double>]) -> Double {
-        guard let below = lines.firstIndex(where: { $0.lowerBound >= top - 1 }), stops.indices.contains(below) else { return top }
-        return min(max(top, stops[below].lowerBound), stops[below].upperBound)
     }
 
     /// The place closest to a height: the height itself across a picture, or else the nearest stop between lines.

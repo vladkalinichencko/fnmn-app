@@ -1,5 +1,6 @@
 import AVKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension EnvironmentValues {
     /// The reader's namespace a picture or video on the whole screen grows out of.
@@ -28,9 +29,25 @@ private struct MediaSource: ViewModifier {
     }
 }
 
+/// A picture or video of the text on the whole screen, under the system's own bar.
+struct MediaViewer: View {
+    let url: URL
+
+    var body: some View {
+        NavigationStack {
+            if UTType(filenameExtension: url.pathExtension)?.conforms(to: .movie) == true {
+                VideoViewer(url: url)
+            } else {
+                ImageViewer(url: url)
+            }
+        }
+        .environment(\.colorScheme, .dark)
+    }
+}
+
 /// A picture on the whole screen, as in Photos: pinching enlarges it, a finger moves it, a double tap zooms into
 /// the tapped point and back out.
-struct ImageViewer: View {
+private struct ImageViewer: View {
     let url: URL
     @State private var image: UIImage?
 
@@ -43,12 +60,11 @@ struct ImageViewer: View {
                 Loading()
             }
         }
-        .overlay(alignment: .top) {
-            MediaBar(url: url) {
+        .toolbar {
+            MediaToolbar(url: url) {
                 if let image { UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil) }
             }
         }
-        .environment(\.colorScheme, .dark)
         .task { image = await Self.load(url) }
     }
 
@@ -60,56 +76,41 @@ struct ImageViewer: View {
     }
 }
 
-/// A video on the whole screen, playing from the start, under a bar that closes it.
-struct VideoViewer: View {
+/// A video on the whole screen, playing from the start.
+private struct VideoViewer: View {
     let url: URL
     @State private var player: AVPlayer?
 
     var body: some View {
-        VStack(spacing: 0) {
-            MediaBar(url: url) {
-                if url.isFileURL { UISaveVideoAtPathToSavedPhotosAlbum(url.path, nil, nil, nil) }
+        VideoPlayer(player: player)
+            .background(Color.black.ignoresSafeArea())
+            .toolbar {
+                MediaToolbar(url: url) {
+                    if url.isFileURL { UISaveVideoAtPathToSavedPhotosAlbum(url.path, nil, nil, nil) }
+                }
             }
-            VideoPlayer(player: player)
-        }
-        .background(.black)
-        .environment(\.colorScheme, .dark)
-        .task {
-            player = AVPlayer(url: url)
-            player?.play()
-        }
-        .onDisappear { player?.pause() }
+            .task {
+                player = AVPlayer(url: url)
+                player?.play()
+            }
+            .onDisappear { player?.pause() }
     }
 }
 
-/// Close on the left; saving to Photos and sharing on the right. Each icon is laid in a fixed square, so the glass
-/// circle around it is as large as a toolbar's.
-private struct MediaBar: View {
+/// Close on the left; saving to Photos and sharing on the right.
+private struct MediaToolbar: ToolbarContent {
     let url: URL
     let save: () -> Void
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
-        HStack {
-            Button { dismiss() } label: { icon("xmark") }
-                .accessibilityLabel("Close")
-            Spacer()
-            Button(action: save) { icon("square.and.arrow.down") }
-                .accessibilityLabel("Save to Photos")
-            ShareLink(item: url) { icon("square.and.arrow.up") }
-                .accessibilityLabel("Share")
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button(role: .close) { dismiss() }
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .padding(.horizontal, Tokens.gutter)
-        .padding(.vertical, 8)
-    }
-
-    private func icon(_ name: String) -> some View {
-        Image(systemName: name)
-            .font(.title2)
-            .foregroundStyle(.primary)
-            .frame(width: 44, height: 44)
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button("Save to Photos", systemImage: "square.and.arrow.down", action: save)
+            ShareLink(item: url)
+        }
     }
 }
 

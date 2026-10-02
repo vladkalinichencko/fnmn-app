@@ -54,13 +54,15 @@ public enum LibraryGrouping: String, CaseIterable, Hashable, Sendable {
 }
 
 public enum GroupSort: String, CaseIterable, Hashable, Sendable {
-    /// Albums in the order they were made, the rest by name, months newest first.
-    case standard, name, size, recent
+    /// Albums in the order they were made, the rest by name, months newest first. `recent` puts first the group
+    /// a material was added to last, `opened` the one opened last, itself or through one of its materials.
+    case standard, name, size, recent, opened
 }
 
-/// The order of the materials on the screen of one album, publisher, type or month.
+/// The order of the materials on the screen of one album, publisher, type or month. `opened` puts the material
+/// opened last first, and those never opened after them, newest first.
 public enum ItemSort: String, CaseIterable, Hashable, Sendable {
-    case newest, oldest, title
+    case newest, oldest, title, opened
 }
 
 public enum ItemGrouping: String, CaseIterable, Hashable, Sendable {
@@ -92,7 +94,10 @@ public struct AlbumSummary: Identifiable, Hashable, Sendable {
     public let count: Int
     /// Up to three materials, the newest first, fanned out on the group's tile.
     public let front: [LibraryItem]
-    public var id: String { "\(grouping.rawValue):\(key)" }
+    public var id: String { Self.id(grouping, key) }
+
+    /// The id of a group without its summary, for a screen that knows only what it shows.
+    public static func id(_ grouping: LibraryGrouping, _ key: String) -> String { "\(grouping.rawValue):\(key)" }
 }
 
 public struct AnnotationGroup: Identifiable, Sendable {
@@ -133,7 +138,7 @@ extension LibrarySnapshot {
 
     /// The Collections section: the same materials gathered by album, publisher, type or month added.
     /// Only albums can be empty; the other groupings list what exists.
-    public func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort) -> [AlbumSummary] {
+    public func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress()) -> [AlbumSummary] {
         var summaries: [AlbumSummary]
         if grouping == .albums {
             summaries = albumSummaries
@@ -165,18 +170,35 @@ extension LibrarySnapshot {
         case .recent:
             let newest = { (group: AlbumSummary) in group.front.first?.addedAt ?? .distantPast }
             summaries.sort { newest($0) != newest($1) ? newest($0) > newest($1) : byName($0, $1) }
+        case .opened:
+            var opened = progress.groupsOpened
+            for item in items {
+                guard let date = progress.readings[item.id]?.openedAt else { continue }
+                let keys = grouping == .albums ? albums(of: item.id) : Self.group(of: item, by: grouping).map { [$0.key] } ?? []
+                for key in keys {
+                    let id = AlbumSummary.id(grouping, key)
+                    opened[id] = max(opened[id] ?? .distantPast, date)
+                }
+            }
+            let last = { (group: AlbumSummary) in opened[group.id] ?? .distantPast }
+            summaries.sort { last($0) != last($1) ? last($0) > last($1) : byName($0, $1) }
         }
         return summaries
     }
 
     /// The materials of one album, publisher, type or month in the reader's order, in sections when grouped.
-    public static func arrange(_ items: [LibraryItem], sortedBy sort: ItemSort, groupedBy grouping: ItemGrouping) -> [ItemSection] {
+    /// `opened` gives when each material was last opened, for sorting by it.
+    public static func arrange(
+        _ items: [LibraryItem], sortedBy sort: ItemSort, groupedBy grouping: ItemGrouping, opened: [String: Date] = [:]
+    ) -> [ItemSection] {
         func sorted(_ items: [LibraryItem]) -> [LibraryItem] {
             items.sorted { a, b in
                 let titles = a.title.localizedStandardCompare(b.title)
                 switch sort {
                 case .title where titles != .orderedSame: return titles == .orderedAscending
-                case .newest where a.addedAt != b.addedAt: return (a.addedAt ?? .distantPast) > (b.addedAt ?? .distantPast)
+                case .opened where opened[a.id] != opened[b.id]: return (opened[a.id] ?? .distantPast) > (opened[b.id] ?? .distantPast)
+                case .newest where a.addedAt != b.addedAt, .opened where a.addedAt != b.addedAt:
+                    return (a.addedAt ?? .distantPast) > (b.addedAt ?? .distantPast)
                 case .oldest where a.addedAt != b.addedAt: return (a.addedAt ?? .distantPast) < (b.addedAt ?? .distantPast)
                 default: return titles == .orderedSame ? a.id < b.id : titles == .orderedAscending
                 }

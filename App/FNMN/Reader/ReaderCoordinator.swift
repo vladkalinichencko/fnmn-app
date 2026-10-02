@@ -110,16 +110,22 @@ final class ReaderCoordinator {
     let source: SourceRef?
     let baseURL: URL
     private(set) var state: ReaderState
-    /// Where the column is sent. Only actions move it; the person's own scrolling comes back as `.scrolled`
-    /// and is never written here, so the column is not pulled to a block's top while the finger moves it.
-    var position = ScrollPosition(idType: Int.self)
+    /// Sends the column to a block's top once, set by the column itself. A scroll position kept in state would be
+    /// gone to again on every change of the column's content: opening a section put the block the column had opened
+    /// at back on top, after a pass through the top of the article while the lazy column guessed the heights above.
+    /// The person's own scrolling comes back as `.scrolled`.
+    @ObservationIgnored var scroll: (Int) -> Void = { _ in }
+    /// The blocks the last action brought onto the page by opening sections. Their rows come in from a little above,
+    /// while their places in the column are set at once; a row the lazy column makes later, on scrolling, just shows.
+    @ObservationIgnored private(set) var revealed: Set<Int> = []
     /// Each block's row in the column's coordinate space, with the gap under it. A row the lazy column has let go
-    /// keeps its last frame. Only the reading line watches them.
+    /// keeps the frame it had then, where another block may stand once a section closes or a picture above takes its
+    /// size, so the reading line reads only the rows of the blocks on screen. Only the reading line watches them.
     private(set) var rows: [Int: CGRect] = [:]
-    /// The lines of text laid out in the column, merged where they overlap, and the places between them the reading
-    /// line stands at.
-    @ObservationIgnored private var textLines: [ClosedRange<Double>] = []
-    @ObservationIgnored private var stops: [ClosedRange<Double>] = []
+    /// The blocks on screen, as the scroll view reports them.
+    private(set) var shown: Set<Int> = []
+    /// The lines of text laid out in the column, merged where they overlap. Only the reading line watches them.
+    private var textLines: [ClosedRange<Double>] = []
     @ObservationIgnored private let library: LibraryModel
 
     /// The column opens at the note it was opened at, or else at the place reading stopped, which with the reading
@@ -145,6 +151,7 @@ final class ReaderCoordinator {
     func send(_ action: ReaderAction) {
         let before = state
         let next = readerReduce(state, action, document: document)
+        revealed = next.folded == before.folded ? [] : Set(document.visibleBlocks(folded: next.folded)).subtracting(visible)
         // A row entering at the bottom changes nothing here; writing the same state would still redraw the reader.
         if next != before { withAnimation(animation(for: action)) { state = next } }
         perform(action, from: before, to: next)
@@ -171,67 +178,101 @@ final class ReaderCoordinator {
         return AnnotationTarget(materialID: materialID, piece: piece, text: text, span: span)
     }
 
-    /// The height of the column the line stands at, or nil while its block is not laid out. At a block's top it
-    /// stands at the stop between the block and the text above it.
+    /// The height of the column the line shows at, from its own block alone, so lines of text coming and going as
+    /// the column scrolls never move it. At a block's top it stands at the block's one place between blocks; inside
+    /// a block, at the block's stop nearest its share, so a new font or width keeps it between lines; past the whole
+    /// block, in the gap under it. A line in a closed section shows under the heading that closed it. Nil while the
+    /// row is off screen.
     func y(of line: ReadingLine) -> CGFloat? {
-        guard let row = rows[line.piece] else { return nil }
-        guard line.fraction > 0 else { return top(of: line.piece) }
-        return row.minY + line.fraction * (row.height - Tokens.gap)
+        let visible = visible
+        guard visible.contains(line.piece) else {
+            return visible.last { $0 < line.piece }.flatMap { shown.contains($0) ? rows[$0] : nil }.map { $0.maxY - Tokens.gap / 2 }
+        }
+        guard let block = stops(of: line.piece) else { return nil }
+        guard line.fraction > 0 else { return CGFloat(block.top) }
+        guard line.fraction < 1 else { return block.row.maxY - Tokens.gap / 2 }
+        let y = Double(block.row.minY + line.fraction * (block.row.height - Tokens.gap))
+        return CGFloat(ReadingLine.nearest(to: y, in: block.inside) ?? y)
     }
 
-    /// The line at the place nearest to a height of the column. It belongs to the first block whose text reaches
-    /// below it; the stop between two blocks is the top of the lower one, wherever the middle of the gap falls.
+    /// The line at the place nearest to a height of the column: a block's top, or a stop inside it.
     func line(near y: CGFloat) -> ReadingLine? {
-        guard let place = ReadingLine.nearest(to: y, in: stops).map({ CGFloat($0) }),
-              let piece = visible.first(where: { rows[$0].map { place < $0.maxY - Tokens.gap } ?? false }),
-              let row = rows[piece]
-        else { return nil }
-        if let next = visible.first(where: { $0 > piece }), let top = top(of: next), place >= top - 0.5 {
-            return ReadingLine(piece: next, fraction: 0)
+        let y = Double(y)
+        var nearest: (line: ReadingLine, distance: Double)?
+        for block in visible.compactMap(stops(of:)) {
+            let height = max(Double(block.row.height - Tokens.gap), 1)
+            let inside = block.inside.map { stop in
+                let place = min(max(y, stop.lowerBound), stop.upperBound)
+                return (place, min((place - Double(block.row.minY)) / height, 1))
+            }
+            for (place, fraction) in [(block.top, 0)] + inside where abs(place - y) < nearest?.distance ?? .infinity {
+                nearest = (ReadingLine(piece: block.piece, fraction: fraction), abs(place - y))
+            }
         }
-        if let top = top(of: piece), place <= top + 0.5 {
-            return ReadingLine(piece: piece, fraction: 0)
-        }
-        return ReadingLine(piece: piece, fraction: (place - row.minY) / max(row.height - Tokens.gap, 1))
-    }
-
-    private func top(of piece: Int) -> CGFloat? {
-        rows[piece].map { CGFloat(ReadingLine.stop(atTopOf: Double($0.minY), lines: textLines, stops: stops)) }
+        return nearest?.line
     }
 
     /// The stop the line stands at, so the finger feels a tick at each new one and none while it crosses a picture.
     func stop(of line: ReadingLine) -> Int? {
         guard let y = y(of: line).map(Double.init) else { return nil }
-        return stops.firstIndex { $0.lowerBound - 1 <= y && y <= $0.upperBound + 1 }
+        let stops = visible.compactMap(stops(of:)).flatMap { [$0.top...$0.top] + $0.inside }
+        let distance = { (stop: ClosedRange<Double>) in abs(min(max(y, stop.lowerBound), stop.upperBound) - y) }
+        return stops.indices.min { distance(stops[$0]) < distance(stops[$1]) }
+    }
+
+    /// Where the line may stand in one block: at its top, halfway across the space between the block above and this
+    /// one's content, so between two blocks it has one place; at the stops among the block's own lines; and under the
+    /// last block on the page, in the gap below it, so its last line can be read too. Only a block on screen has
+    /// stops: a row the lazy column let go keeps the frame it had, where another block may stand now.
+    private func stops(of piece: Int) -> BlockStops? {
+        guard shown.contains(piece), let row = rows[piece] else { return nil }
+        let content = Double(row.minY)...Double(row.maxY - Tokens.gap)
+        let lines = textLines.filter { content.contains(($0.lowerBound + $0.upperBound) / 2) }
+        let isText = switch document.blocks[piece] {
+        case .heading, .text: true
+        case .image, .video, .interactive: false
+        }
+        // A heading's room above its title is no part of what shows, so its top is measured to the title.
+        let start = if case .heading = document.blocks[piece], let first = lines.first { first.lowerBound } else { content.lowerBound }
+        // Text whose lines are not laid out yet has no stops; a picture, a video or a page has one across it.
+        let inside = isText && lines.isEmpty ? [] : ReadingLine.stops(within: content, lines: lines)
+        let end = Double(row.maxY - Tokens.gap / 2)
+        return BlockStops(
+            piece: piece,
+            row: row,
+            top: (content.lowerBound - Double(Tokens.gap) + start) / 2,
+            inside: piece == visible.last ? inside + [end...end] : inside
+        )
+    }
+
+    private struct BlockStops {
+        let piece: Int
+        let row: CGRect
+        let top: Double
+        let inside: [ClosedRange<Double>]
     }
 
     /// A block was laid out, or laid out again with a new font or width.
     func rowChanged(_ index: Int, _ row: CGRect) {
         rows[index] = row
-        keepLineBetweenLines()
+    }
+
+    func shownChanged(_ blocks: [Int]) {
+        let blocks = Set(blocks)
+        if blocks != shown { shown = blocks }
     }
 
     /// New lines of text came into the column, or the old ones moved with a new font or width.
     func textLinesChanged(_ lines: [ClosedRange<CGFloat>]) {
-        textLines = ReadingLine.merged(lines.map { Double($0.lowerBound)...Double($0.upperBound) })
-        stops = ReadingLine.stops(between: textLines)
-        keepLineBetweenLines()
-    }
-
-    /// The line keeps its share of its block when the text is laid out again, which can put it off the places
-    /// between lines; it then goes to the nearest one. It is saved only where the reader leaves it, so a font size
-    /// being dragged through does not record a line at every step.
-    private func keepLineBetweenLines() {
-        guard state.showsLine, state.opening == nil, let line = state.line, let y = y(of: line),
-              let moved = self.line(near: y), moved != line, let movedY = self.y(of: moved), abs(movedY - y) > 0.5
-        else { return }
-        send(.moveLine(moved))
+        let merged = ReadingLine.merged(lines.map { Double($0.lowerBound)...Double($0.upperBound) })
+        if merged != textLines { textLines = merged }
     }
 
     private func animation(for action: ReaderAction) -> Animation? {
         switch action {
-        case .plate, .toggleSection, .foldAll: .snappy
-        case .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia: nil
+        // A section opens and closes at once: the lazy column, animating rows in, loses where it stands.
+        case .plate: .snappy
+        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia: nil
         }
     }
 
@@ -271,7 +312,7 @@ final class ReaderCoordinator {
             _ = ChatGPTHandoff.remember(title: title, passage: passage)
         case .opened:
             guard next != before, let target = next.scrollID else { return }
-            position.scrollTo(id: target, anchor: .top)
+            scroll(target)
         case .plate, .openMedia, .closeMedia:
             break
         case .toggleSection, .foldAll:
@@ -279,7 +320,7 @@ final class ReaderCoordinator {
             library.apply(.fold(next.folded.sorted(), itemID: materialID))
             // The top block may have gone under a closed heading; the column goes to the one that stands for it.
             if let place = next.place, !visible.contains(place), let target = current(in: visible) {
-                position.scrollTo(id: target, anchor: .top)
+                scroll(target)
             }
         }
     }
@@ -288,10 +329,11 @@ final class ReaderCoordinator {
     /// those above the place, up to the "read through here" mark and above where the line was left, whichever reaches
     /// further.
     private func savePlace(_ place: Int?) {
-        let read = if state.showsLine, let line = state.line {
-            line.piece - 1
+        let lineRead = state.line.map { $0.fraction >= 1 ? $0.piece : $0.piece - 1 }
+        let read = if state.showsLine, let lineRead {
+            lineRead
         } else {
-            [place, library.progress.readThrough[materialID], state.line.map { $0.piece - 1 }].compactMap { $0 }.max() ?? -1
+            [place, library.progress.readThrough[materialID], lineRead].compactMap { $0 }.max() ?? -1
         }
         let position = place.map(ReadingPosition.piece) ?? library.position(of: materialID) ?? .piece(0)
         library.apply(.savePosition(position, itemID: materialID, progress: Double(read + 1) / Double(document.blocks.count)))

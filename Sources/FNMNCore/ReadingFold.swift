@@ -15,12 +15,14 @@ extension ReaderDocument {
         return visible
     }
 
-    /// The headings of the lowest level in each branch: those with text under them and no heading beneath. Closing
-    /// them hides only the paragraphs, so every heading of every level stays on the page as the contents.
+    /// The headings of the lowest level in each branch: those with text under them and no heading beneath that has
+    /// text of its own. Closing them hides the paragraphs and only empty headings, such as a closing "More in our
+    /// Telegram" under the last section, so every heading with text stays on the page as the contents.
     /// The title the header shows is not one.
     public var lowestHeadings: Set<Int> {
         Set(sections.filter { index, section in
-            index != repeatedTitle && section.size > 0 && section.size == section.end - index - 1
+            index != repeatedTitle && section.size > 0
+                && !sections.contains { $0.key > index && $0.key < section.end && $0.value.size > 0 }
         }.keys)
     }
 

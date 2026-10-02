@@ -7,10 +7,12 @@ import Textual
 struct MarkedMarkdown: MarkupParser {
     let baseURL: URL?
     let marks: [QuoteMark]
+    /// The width of the plate's text, when the column is laid out; a picture is never wider.
+    var width: CGFloat?
 
     func attributedString(for input: String) throws -> AttributedString {
         var text = try Self.parse(input, baseURL: baseURL)
-        Self.placePictures(&text)
+        Self.placePictures(&text, within: width)
         Self.markEqualsHighlights(&text)
         for mark in marks {
             Self.apply(mark, to: &text)
@@ -79,12 +81,14 @@ struct MarkedMarkdown: MarkupParser {
 
     /// A picture on disk takes its size from the file's header as the paragraph is parsed. Textual's own loader
     /// reads the file only after the paragraph appears, so the paragraph grew by the picture's height and pushed
-    /// the column while it scrolled up. Textual draws a picture without taking touches, so the picture is also a link
-    /// to its own file, and a tap on it opens it on the whole screen like a link.
-    private static func placePictures(_ text: inout AttributedString) {
+    /// the column while it scrolled up. Textual first lays the text out before it knows its width, so the picture
+    /// is also no wider than the plate's text from the start. Textual draws a picture without taking touches, so the
+    /// picture is also a link to its own file, and a tap on it opens it on the whole screen like a link.
+    private static func placePictures(_ text: inout AttributedString, within limit: CGFloat?) {
         for run in text.runs {
             guard let url = run.imageURL, url.isFileURL, let size = ImageFiles.headerSize(of: url) else { continue }
-            let picture = ParagraphPicture(url: url, width: size.width, height: size.height, description: String(text[run.range].characters))
+            let width = min(size.width, limit ?? size.width)
+            let picture = ParagraphPicture(url: url, width: width, height: width * size.height / size.width, description: String(text[run.range].characters))
             text[run.range].textual.attachment = AnyAttachment(picture)
             text[run.range].imageURL = nil
             text[run.range].link = url
@@ -126,7 +130,7 @@ struct MarkedMarkdown: MarkupParser {
     }
 }
 
-/// A picture inside a paragraph, as wide as the file in pixels or the paragraph, whichever is narrower.
+/// A picture inside a paragraph, as wide as the file in pixels or the plate's text, whichever is narrower.
 private struct ParagraphPicture: Attachment {
     let url: URL
     let width: CGFloat

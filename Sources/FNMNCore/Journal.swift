@@ -33,6 +33,7 @@ public struct JournalEvent: Codable, Equatable, Sendable {
     public var key: String? {
         switch change {
         case let .progress(.open(itemID)): "opened:\(itemID)"
+        case let .progress(.openGroup(id)): "openedGroup:\(id)"
         case let .progress(.setRead(_, itemID)): "read:\(itemID)"
         case let .progress(.savePosition(_, itemID, _)): "position:\(itemID)"
         case let .progress(.readThrough(_, itemID)): "readThrough:\(itemID)"
@@ -134,7 +135,7 @@ extension ProgressChange {
     fileprivate var readingItemID: String? {
         switch self {
         case let .open(itemID), let .setRead(_, itemID), let .savePosition(_, itemID, _), let .readThrough(_, itemID), let .line(_, itemID): itemID
-        case .fold, .reset, .restart, .forget: nil
+        case .openGroup, .fold, .reset, .restart, .forget: nil
         }
     }
 }

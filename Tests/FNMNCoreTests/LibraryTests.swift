@@ -640,20 +640,18 @@ private func span(_ quote: String) -> AnnotationTarget {
     // line under a picture.
     let lines = ReadingLine.merged([0...20, 20...40, 60...80, 61...79, 100...140, 110...125, 140...140, 400...420])
     #expect(lines == [0...20, 20...40, 60...80, 100...140, 400...420])
-    let stops = ReadingLine.stops(between: lines)
-    #expect(stops == [0...0, 20...20, 50...50, 90...90, 148...392, 420...420])
-    #expect(ReadingLine.stops(between: []) == [])
-    // At the top of a block the line stands halfway between the text above and the block's first line, at the top
-    // of a picture, and at the top of a block with no text under it.
-    #expect(ReadingLine.stop(atTopOf: 45, lines: lines, stops: stops) == 50)
-    #expect(ReadingLine.stop(atTopOf: 95, lines: lines, stops: stops) == 90)
-    #expect(ReadingLine.stop(atTopOf: 150, lines: lines, stops: stops) == 150)
-    #expect(ReadingLine.stop(atTopOf: 500, lines: lines, stops: stops) == 500)
+    // The block's own top and bottom are no stops: between blocks the line stands only in the gap.
+    let stops = ReadingLine.stops(within: -16...436, lines: lines)
+    #expect(stops == [20...20, 50...50, 90...90, 148...392])
     #expect(ReadingLine.nearest(to: 33, in: stops) == 20)
     // Across the picture the line stands where it is put.
     #expect(ReadingLine.nearest(to: 250, in: stops) == 250)
     #expect(ReadingLine.nearest(to: 143, in: stops) == 148)
     #expect(ReadingLine.nearest(to: 33, in: []) == nil)
+    // A picture above the first line, or a block that is only a picture, is a space the line crosses.
+    #expect(ReadingLine.stops(within: 0...300, lines: [200...220, 240...260]) == [8...192, 230...230])
+    #expect(ReadingLine.stops(within: 0...300, lines: []) == [8...292])
+    #expect(ReadingLine.stops(within: 0...40, lines: []) == [])
 }
 
 @Test func withTheReadingLineTheBlocksAboveItAndItsOwnBlockDownToItAreRead() {
@@ -824,4 +822,19 @@ private func prepared(_ id: String, kind: Material.Kind = .article, source: Stri
     #expect(library.groups(by: .months, sortedBy: .standard).count == 2)
     let articles = library.items(in: .types, key: "article")
     #expect(articles.map(\.id) == ["c", "a"])
+}
+
+@Test func recentlyOpenedPutsFirstWhatWasOpenedLastItselfOrThroughAMaterial() throws {
+    var library = LibrarySnapshot()
+    for (id, source, date) in [("a", "alpha", 1_000_000.0), ("b", "beta", 2_000_000), ("c", "gamma", 3_000_000)] {
+        let (package, delivered) = try prepared(id, source: source, at: date)
+        try library.importPackage(package, at: delivered)
+    }
+    let progress = ReadingProgress()
+        .applying(.open(itemID: "a"), at: Date(timeIntervalSince1970: 10))
+        .applying(.openGroup(id: AlbumSummary.id(.publishers, library.item("b")!.source!.id)), at: Date(timeIntervalSince1970: 20))
+    #expect(library.groups(by: .publishers, sortedBy: .opened, progress: progress).map(\.name) == ["beta", "alpha", "gamma"])
+    let opened = progress.readings.compactMapValues(\.openedAt)
+    let arranged = LibrarySnapshot.arrange(library.items, sortedBy: .opened, groupedBy: .none, opened: opened)
+    #expect(arranged.first?.items.map(\.id) == ["a", "c", "b"])
 }

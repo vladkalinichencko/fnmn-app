@@ -60,7 +60,7 @@ struct LibraryScreen: View {
                 CollectionOptions(grouping: $grouping, sort: $sort)
             } content: {
                 LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    ForEach(library.snapshot.groups(by: grouping, sortedBy: sort)) { AlbumTile(album: $0) }
+                    ForEach(library.snapshot.groups(by: grouping, sortedBy: sort, progress: library.progress)) { AlbumTile(album: $0) }
                 }
             }
         }
@@ -148,6 +148,7 @@ private extension GroupSort {
         case .name: "Name"
         case .size: "Most Items"
         case .recent: "Recently Added"
+        case .opened: "Recently Opened"
         }
     }
 }

@@ -12,34 +12,50 @@ struct LiveCropView: View {
     let url: URL
     let selector: String?
     @State private var phase = CropPhase.loading
+    /// The height each figure last showed at. The lazy column lets a figure go once it scrolls far away and makes it
+    /// anew when it comes back; starting at the plate's loading height, it would grow while the column scrolls up
+    /// to it and push the text below it down.
+    private static var shownHeights: [String: CGFloat] = [:]
 
     var body: some View {
         ZStack {
             LiveCropWebView(url: url, selector: selector, phase: $phase)
-                .frame(height: height)
+                .frame(height: height ?? 0)
                 .opacity(isShown ? 1 : 0)
             if case .loading = phase {
                 Loading()
             }
+            // A figure that did not come takes one line of the plate, set in from its edges like a paragraph.
             if case let .failed(message) = phase {
                 Text(message)
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Tokens.tilePadding)
             }
         }
         .frame(height: height)
         .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
         .plate(cornerRadius: Tokens.plateRadius)
+        .onChange(of: phase) {
+            if case let .shown(value) = phase { Self.shownHeights[key] = value }
+        }
     }
+
+    private var key: String { url.absoluteString + "#" + (selector ?? "") }
 
     private var isShown: Bool {
         if case .shown = phase { return true }
         return false
     }
 
-    private var height: CGFloat {
-        if case let .shown(value) = phase { return max(value, 44) }
-        return Tokens.embedHeight
+    /// Nil once the figure failed: the plate is as tall as the message.
+    private var height: CGFloat? {
+        switch phase {
+        case let .shown(value): max(value, 44)
+        case .loading: Self.shownHeights[key].map { max($0, 44) } ?? Tokens.embedHeight
+        case .failed: nil
+        }
     }
 }
 

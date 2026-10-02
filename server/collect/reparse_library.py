@@ -4,8 +4,8 @@
         ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
 
 A material keeps its id, so it stays in its collections. The app forgets reading progress and marks of a
-material whose text changed, so a material the reader marked read, noted or highlighted, according to the
-journals in `state/`, is left as it is. So is a material the reader deleted: its archive may still be in the
+material whose text changed, so a material the reader marked read, noted, highlighted or read past its first
+block, according to the journals in `state/`, is left as it is. So is a material the reader deleted: its archive may still be in the
 folder, and a rewritten archive is newer than the deletion, which the app takes for the material coming back. A page that fails, or gives no text now, keeps the delivery it has.
 A saved link whose page now reads as an article becomes that article, unless the article is already in the
 folder or was deleted; the app moves the link's collections to it. `--into` writes the new deliveries to another folder to look at them first.
@@ -34,9 +34,21 @@ def touched(state: Path) -> set[str]:
             change = json.loads(line)["change"]
             ((_, wrapped),) = change.items()
             ((name, body),) = wrapped.get("_0", wrapped).items()
-            if name in _KEPT_CHANGES:
+            if name in _KEPT_CHANGES or _moved_on(name, body):
                 materials.update(_ids(body))
     return materials
+
+
+def _moved_on(name: str, body: dict) -> bool:
+    """A reading line, a "read through here" mark or a saved place anywhere past the first block."""
+    place = body.get("_0")
+    if name == "line":
+        return bool(place) and (place["piece"] > 0 or place["fraction"] > 0)
+    if name == "readThrough":
+        return body.get("piece") is not None
+    if name == "savePosition":
+        return bool(place) and place.get("blockID") != "piece:0"
+    return False
 
 
 def _ids(value) -> set[str]:
@@ -97,7 +109,7 @@ def main() -> None:
         if args.only and material.get("sourceURL") not in args.only:
             continue
         selected.append(archive)
-    print(f"{len(selected)} to read, {len(kept)} read, annotated or deleted by the reader left as they are", flush=True)
+    print(f"{len(selected)} to read, {len(kept)} read, annotated, deleted or started by the reader left as they are", flush=True)
     log = (args.into or Path.cwd()) / "reparse.json"
     results: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=args.workers) as pool:

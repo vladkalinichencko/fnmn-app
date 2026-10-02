@@ -183,6 +183,7 @@ struct GroupScreen: View {
         .noResults(for: query, when: found.isEmpty)
         .screenSearch($query)
         .navigationTitle(library.snapshot.groupName(grouping, key: key))
+        .task { library.apply(.openGroup(id: AlbumSummary.id(grouping, key))) }
     }
 }
 
@@ -202,6 +203,7 @@ struct AlbumScreen: View {
         .noResults(for: query, when: found.isEmpty)
         .screenSearch($query)
         .navigationTitle(name)
+        .task { library.apply(.openGroup(id: AlbumSummary.id(.albums, name))) }
         .toolbar {
             Menu("More", systemImage: "ellipsis") {
                 Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(name)) }
@@ -263,6 +265,7 @@ struct SourceScreen: View {
         .noResults(for: query, when: found.isEmpty)
         .screenSearch($query)
         .navigationTitle(items.first?.source?.name ?? "")
+        .task { library.apply(.openGroup(id: AlbumSummary.id(.publishers, id))) }
         .toolbar {
             if let homepage = items.lazy.compactMap(\.source?.homepage).first {
                 Link(destination: homepage) { Label("Open Site", systemImage: "arrow.up.right") }

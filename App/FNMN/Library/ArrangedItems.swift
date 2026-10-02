@@ -6,6 +6,7 @@ import SwiftUI
 struct ArrangedItems: View {
     let items: [LibraryItem]
     var album: String?
+    @Environment(LibraryModel.self) private var library
     @AppStorage private var sort: ItemSort
     @AppStorage private var grouping: ItemGrouping
 
@@ -18,7 +19,8 @@ struct ArrangedItems: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.sectionGap) {
-            ForEach(LibrarySnapshot.arrange(items, sortedBy: sort, groupedBy: grouping)) { section in
+            let opened = sort == .opened ? library.progress.readings.compactMapValues(\.openedAt) : [:]
+            ForEach(LibrarySnapshot.arrange(items, sortedBy: sort, groupedBy: grouping, opened: opened)) { section in
                 VStack(alignment: .leading, spacing: Tokens.gap) {
                     if let title = section.title {
                         Text(title).font(.title2.weight(.black))
@@ -54,6 +56,7 @@ private extension ItemSort {
         case .newest: "Newest First"
         case .oldest: "Oldest First"
         case .title: "Title"
+        case .opened: "Recently Opened"
         }
     }
 }
