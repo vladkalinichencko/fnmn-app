@@ -87,6 +87,8 @@ struct VideoReaderView: View {
             Button("Remove Download", systemImage: "trash") {
                 Task { await library.removeOriginal(of: materialID) }
             }
+        } else if !Features.videoDownload {
+            EmptyView()
         } else if let download {
             switch download.phase {
             case let .preparing(step):
@@ -176,7 +178,7 @@ struct VideoReaderView: View {
     }
 
     /// The embed needs a page address of our own for YouTube to accept it; it is the server's.
-    /// The original and the download stay in the `···` menu, so the message only says what is missing.
+    /// The original and, where the build has it, the download stay in the `···` menu, so the message only says what is missing.
     private var embedState: EmbedPhase {
         guard videoID != nil else { return .failed("Not a YouTube video") }
         guard server.connection != nil else { return .failed("Connect the server in Settings to play here") }
@@ -398,7 +400,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
             case "ready": onPhase?(.ready)
             case "time": if let value = body["seconds"] as? Double { onSeconds?(value) }
             case "paused": onPause?()
-            case "failed": onPhase?(.failed("YouTube refused to play this video here (error \(body["code"] ?? "")). Download it or open it on YouTube."))
+            case "failed": onPhase?(.failed("YouTube refused to play this video here (error \(body["code"] ?? "")). \(Features.videoDownload ? "Download it or open it on YouTube." : "Open it on YouTube.")"))
             default: break
             }
         }
