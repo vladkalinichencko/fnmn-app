@@ -90,8 +90,8 @@ private struct AlbumFan: View {
         )
     }
 
-    /// A picture is laid down like a photo, with a shadow under it and a plate of glass behind it, which a picture
-    /// with transparent parts shows through.
+    /// A picture is laid down like a photo on a plate of glass, which gives it the same soft shadow as every other
+    /// plate and shows through a picture's transparent parts.
     /// A title on glass starts a little lower than on a tile, clear of the turned plate's corner.
     /// A title lies on glass, and glass under a transform spreads past its frame, so the glass turns its shape instead.
     @ViewBuilder
@@ -103,7 +103,6 @@ private struct AlbumFan: View {
                 .rotationEffect(.degrees(place.degrees))
                 .offset(place.offset)
                 .background { Color.clear.plate(in: turned) }
-                .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
         } else {
             Text(item.title)
                 .font(.headline.weight(.black))
