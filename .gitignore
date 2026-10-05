@@ -12,3 +12,5 @@ prepared-browser-library/
 xcuserdata/
 App/FNMN.xcodeproj/project.xcworkspace/
 .venv-ocr/
+
+.recall/
