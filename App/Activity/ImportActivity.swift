@@ -47,10 +47,10 @@ enum ImportActivity {
             return
         }
         // The system calls this on a queue of its own, so it hops to the main actor instead of assuming it is there.
-        // The server job keeps running while the app is suspended.
+        // The server job keeps running while the app is suspended, so losing the time is not a failed import.
         task.expirationHandler = {
             Task { @MainActor in
-                background?.setTaskCompleted(success: false)
+                background?.setTaskCompleted(success: true)
                 background = nil
             }
         }
