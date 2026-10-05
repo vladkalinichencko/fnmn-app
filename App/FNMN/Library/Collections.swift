@@ -90,17 +90,20 @@ private struct AlbumFan: View {
         )
     }
 
-    /// A picture is laid down like a photo, with a shadow under it.
+    /// A picture is laid down like a photo, with a shadow under it and a plate of glass behind it, which a picture
+    /// with transparent parts shows through.
     /// A title on glass starts a little lower than on a tile, clear of the turned plate's corner.
     /// A title lies on glass, and glass under a transform spreads past its frame, so the glass turns its shape instead.
     @ViewBuilder
     private func card(_ item: LibraryItem, place: Place) -> some View {
+        let turned = TurnedRectangle(cornerRadius: Tokens.tileRadius, degrees: place.degrees, scale: place.scale, offset: place.offset)
         if let cover = item.cover {
             CoverImage(cover: cover, cornerRadius: Tokens.tileRadius)
-                .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
                 .scaleEffect(place.scale)
                 .rotationEffect(.degrees(place.degrees))
                 .offset(place.offset)
+                .background { Color.clear.plate(in: turned) }
+                .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
         } else {
             Text(item.title)
                 .font(.headline.weight(.black))
@@ -111,7 +114,7 @@ private struct AlbumFan: View {
                 .scaleEffect(place.scale)
                 .rotationEffect(.degrees(place.degrees))
                 .offset(place.offset)
-                .plate(in: TurnedRectangle(cornerRadius: Tokens.tileRadius, degrees: place.degrees, scale: place.scale, offset: place.offset))
+                .plate(in: turned)
         }
     }
 
