@@ -144,6 +144,14 @@ struct ItemActions: View {
         if let job = imports.job(of: item.id) {
             JobActions(job: job)
             Divider()
+        } else if item.kind == .link, let original = library.original(of: item.id, page: item.originalURL) {
+            Button("Format Again", systemImage: "arrow.clockwise") {
+                switch original {
+                case let .web(url): imports.send(.submit(.link(url), id: UUID()))
+                case let .file(url): imports.send(.submit(.file(url), id: UUID()))
+                }
+            }
+            Divider()
         }
         Button("Add to Collection…", systemImage: "rectangle.stack.badge.plus") {
             dialogs.send(.pickAlbum(itemID: item.id))

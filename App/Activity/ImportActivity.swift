@@ -46,9 +46,10 @@ enum ImportActivity {
             task.setTaskCompleted(success: true)
             return
         }
+        // The system calls this on a queue of its own, so it hops to the main actor instead of assuming it is there.
         // The server job keeps running while the app is suspended.
         task.expirationHandler = {
-            MainActor.assumeIsolated {
+            Task { @MainActor in
                 background?.setTaskCompleted(success: false)
                 background = nil
             }
