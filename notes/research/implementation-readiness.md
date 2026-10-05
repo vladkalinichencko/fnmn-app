@@ -45,7 +45,7 @@ Apple Foundation Models документирует `LanguageModelSession`, `@Gen
 
 Core AI — отдельный Apple framework для загрузки и исполнения собственных on-device моделей (`.aimodel`) с CPU/GPU/Neural Engine; он не является заменой Foundation Models и не даёт автоматически классификатор контента. Для первой классификации Foundation Models с `@Generable` проще и прямо соответствует выбранному стеку; Core AI понадобится только после выбора и подготовки собственной модели. [Core AI](https://developer.apple.com/documentation/CoreAI).
 
-Название «TypeSafe Jev API» не найдено в проверенных Apple документации, локальных заметках или доступных SDK-описаниях. Не следует изобретать этот API или связывать его с `@Generable`; требуется уточнение названия/ссылки от автора. До этого классификация остаётся будущим исследованием, а не условием article MVP.
+«TypeSafe Jev API» — облачная модель Jev от TypeSafe AI, которая отвечает на типизированные вопросы вероятностями; к `@Generable` её подключает сторонний мост. Описание и ограничения: [typesafe-jev.md](typesafe-jev.md). Классификация остаётся задачей M5, а не условием article MVP.
 
 ## Границы готовности
 
