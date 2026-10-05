@@ -90,20 +90,13 @@ private struct AlbumFan: View {
         )
     }
 
-    /// A picture is laid down like a photo, with a shadow inside and a deeper one under it.
-    /// The picture and its inner shadow are drawn once into one texture, so scrolling moves a finished
-    /// image instead of blurring the edge again; the shadow under it stays outside, where the texture would clip it.
+    /// A picture is laid down like a photo, with a shadow under it.
     /// A title on glass starts a little lower than on a tile, clear of the turned plate's corner.
     /// A title lies on glass, and glass under a transform spreads past its frame, so the glass turns its shape instead.
     @ViewBuilder
     private func card(_ item: LibraryItem, place: Place) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Tokens.tileRadius, style: .continuous)
         if let cover = item.cover {
             CoverImage(cover: cover, cornerRadius: Tokens.tileRadius)
-                .overlay {
-                    shape.stroke(.black.opacity(0.35), lineWidth: 8).blur(radius: 6).clipShape(shape)
-                }
-                .drawingGroup()
                 .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
                 .scaleEffect(place.scale)
                 .rotationEffect(.degrees(place.degrees))
