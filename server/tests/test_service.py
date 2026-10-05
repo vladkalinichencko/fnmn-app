@@ -53,6 +53,27 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(file.exists())
         self.assertEqual(self.client.get(f"/jobs/{job['id']}").status_code, 404)
 
+    def test_asking_again_for_a_link_or_file_gets_the_job_the_server_already_has(self):
+        def fake_import(url, folders, web, report):
+            time.sleep(0.2)
+            return Delivery({"material": {"sourceURL": url}, "folders": folders}, {})
+
+        with patch("jobs.import_link", fake_import), patch("jobs.import_file", lambda name, data, web, report: Delivery({"material": {}}, {})):
+            first = self.client.post("/jobs", json={"url": "https://example.com/b.pdf"}).json()
+            again = self.client.post("/jobs", json={"url": "https://example.com/b.pdf"}).json()
+            other = self.client.post("/jobs", json={"url": "https://example.com/c.pdf"}).json()
+            file = self.client.post("/files", params={"name": "a.pdf"}, content=b"one").json()
+            file_again = self.client.post("/files", params={"name": "a.pdf"}, content=b"one").json()
+            file_changed = self.client.post("/files", params={"name": "a.pdf"}, content=b"two").json()
+            while self.client.get(f"/jobs/{first['id']}").json()["phase"] != "done":
+                time.sleep(0.05)
+            after_done = self.client.post("/jobs", json={"url": "https://example.com/b.pdf"}).json()
+        self.assertEqual(first["id"], again["id"])
+        self.assertEqual(first["id"], after_done["id"])
+        self.assertNotEqual(first["id"], other["id"])
+        self.assertEqual(file["id"], file_again["id"])
+        self.assertNotEqual(file["id"], file_changed["id"])
+
     def test_a_link_nothing_could_be_made_of_arrives_as_the_link_with_its_reason(self):
         def fail(url, folders, web, report):
             raise ValueError("no text layer")
