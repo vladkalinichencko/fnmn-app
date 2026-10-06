@@ -234,6 +234,9 @@ enum ReaderAppearance {
     static let wordStartsKey = "readerWordStarts"
     /// The materials read one plate at a time, kept on this device only, like the rest of how the reader looks.
     static let onePlateKey = "readerOnePlate"
+    static let speedKey = "readerSpeedWordsPerMinute"
+    static let speedWordsKey = "readerSpeedWordsPerFrame"
+    static let speedPausesKey = "readerSpeedPauses"
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
 
@@ -317,6 +320,7 @@ struct ReaderMenu: View {
                 get: { reader.state.shownPlate != nil },
                 set: { reader.send(.onePlate($0)) }
             ))
+            Button("Speed Reading", systemImage: "hare") { reader.send(.speedReading(true)) }
             let lowest = reader.document.lowestHeadings
             if !lowest.isEmpty {
                 if lowest.isSubset(of: reader.state.folded) {

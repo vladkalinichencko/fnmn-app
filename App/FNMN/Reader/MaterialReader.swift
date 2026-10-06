@@ -16,6 +16,15 @@ struct MaterialReader: View {
                 ToolbarItem(placement: .principal) { SectionTitle(heading: reader.passedHeading) }
                 ToolbarItem(placement: .primaryAction) { ReaderMenu(reader: reader, page: sourceURL) }
             }
+            .fullScreenCover(isPresented: Binding(
+                get: { reader.state.speedStart != nil },
+                set: { if !$0 { reader.send(.speedReading(false)) } }
+            )) {
+                if let start = reader.state.speedStart {
+                    SpeedReader(reader: reader, start: start)
+                        .environment(library)
+                }
+            }
             .onDisappear { Task { await library.saveProgress() } }
     }
 }

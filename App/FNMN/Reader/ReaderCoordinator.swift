@@ -25,6 +25,8 @@ struct ReaderState: Equatable {
     var media: URL?
     /// The plate shown alone over the blurred column while reading one plate at a time; nil while reading the column.
     var shownPlate: Int?
+    /// Where speed reading opened, as a block and the share of it already read; nil while it is closed.
+    var speedStart: ReadingLine?
 }
 
 enum ReaderAction {
@@ -53,6 +55,10 @@ enum ReaderAction {
     case onePlate(Bool)
     /// The person swiped past the end of the plate shown, to the next one, or past its start, to the one before.
     case turnPlate(forward: Bool)
+    /// Speed reading opens at the place reading stands at, or closes.
+    case speedReading(Bool)
+    /// Speed reading has shown the text up to this block and this share of its words, which is now read.
+    case speedRead(ReadingLine)
 }
 
 /// Pure: the next screen state for an action. A heading folds or opens below itself, so the column stays where it is.
@@ -130,6 +136,32 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         state.keepsPlace = false
         state.place = next
         if state.showsLine { state.line = ReadingLine(piece: next, fraction: 0) }
+    case .speedReading(true):
+        guard state.speedStart == nil else { return state }
+        // From the reading line where it stands, or else from the top of the plate shown alone or of the column.
+        state.speedStart = if state.showsLine, let line = state.line {
+            line
+        } else {
+            ReadingLine(piece: state.shownPlate ?? state.scrollID ?? state.place ?? 0, fraction: 0)
+        }
+        state.mode = .reading
+    case .speedReading(false):
+        state.speedStart = nil
+    case let .speedRead(shown):
+        guard state.speedStart != nil else { return state }
+        // What was shown is read, as if scrolled past or passed by the line: the line stands at the share of the
+        // words shown, or at the top of the next plate once the block is through; the place and the plate follow.
+        let next = shown.fraction >= 1 ? document.plate(after: shown.piece) : nil
+        let line = next.map { ReadingLine(piece: $0, fraction: 0) } ?? shown
+        state.keepsPlace = false
+        state.place = line.piece
+        if state.showsLine { state.line = line }
+        if state.shownPlate != nil {
+            state.shownPlate = document.plate(holding: line.piece)
+        } else {
+            state.folded.subtract(document.headings(holding: line.piece))
+            state.opening = line.piece
+        }
     case .mark, .note, .settleLine, .ask, .copyPrompt:
         break
     }
@@ -319,7 +351,7 @@ final class ReaderCoordinator {
         // A section opens and closes at once: the lazy column, animating rows in, loses where it stands.
         case .plate: .snappy
         // The plate shown alone and the blur under it animate themselves; the column under them opens sections at once.
-        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia, .onePlate, .turnPlate: nil
+        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia, .onePlate, .turnPlate, .speedReading, .speedRead: nil
         }
     }
 
@@ -384,6 +416,20 @@ final class ReaderCoordinator {
             guard next.shownPlate != before.shownPlate else { return }
             if next.line != before.line { library.apply(.line(next.line, itemID: materialID)) }
             savePlace(next.place)
+        case .speedReading:
+            break
+        case .speedRead:
+            guard next != before else { return }
+            if next.line != before.line { library.apply(.line(next.line, itemID: materialID)) }
+            if next.folded != before.folded { library.apply(.fold(next.folded.sorted(), itemID: materialID)) }
+            savePlace(next.place)
+            // The column under speed reading goes to the place, once the sections just opened lay their rows out.
+            if next.opening != nil {
+                Task {
+                    await Task.yield()
+                    self.send(.opened)
+                }
+            }
         }
     }
 
