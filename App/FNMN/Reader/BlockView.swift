@@ -417,6 +417,10 @@ private struct MarginNote: View {
             focused = false
             if draft != saved { save(draft) }
         }
+        // A plate shown alone goes away while its note is open when reading turns back to the column.
+        .onDisappear {
+            if active, draft != saved { save(draft) }
+        }
     }
 
     private var fade: some View {

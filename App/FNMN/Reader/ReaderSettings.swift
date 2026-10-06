@@ -232,8 +232,21 @@ enum ReaderAppearance {
     static let lineKey = "readerLine"
     static let lineSideKey = "readerLineSide"
     static let wordStartsKey = "readerWordStarts"
+    /// The materials read one plate at a time, kept on this device only, like the rest of how the reader looks.
+    static let onePlateKey = "readerOnePlate"
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
+
+    static func readsOnePlate(_ materialID: String) -> Bool {
+        UserDefaults.standard.stringArray(forKey: onePlateKey)?.contains(materialID) == true
+    }
+
+    static func setReadsOnePlate(_ reads: Bool, materialID: String) {
+        var materials = Set(UserDefaults.standard.stringArray(forKey: onePlateKey) ?? [])
+        guard materials.contains(materialID) != reads else { return }
+        if reads { materials.insert(materialID) } else { materials.remove(materialID) }
+        UserDefaults.standard.set(materials.sorted(), forKey: onePlateKey)
+    }
 }
 
 /// Text size, background, font, line spacing and column width, the same choices for every screen that reads text.
@@ -300,6 +313,10 @@ struct ReaderMenu: View {
             ReaderAppearanceControls()
             Toggle("Reading Line", systemImage: "ruler",isOn: $showsLine)
             Toggle("Bold Word Starts", systemImage: "bold", isOn: $boldsWordStarts)
+            Toggle("One Plate at a Time", systemImage: "rectangle.stack", isOn: Binding(
+                get: { reader.state.shownPlate != nil },
+                set: { reader.send(.onePlate($0)) }
+            ))
             let lowest = reader.document.lowestHeadings
             if !lowest.isEmpty {
                 if lowest.isSubset(of: reader.state.folded) {

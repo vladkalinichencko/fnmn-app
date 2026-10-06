@@ -77,6 +77,7 @@ private struct ArticleOpener: View {
             place: place,
             note: startPiece,
             showsLine: showsLine,
+            onePlate: ReaderAppearance.readsOnePlate(itemID),
             library: library
         )
         return .article(reader, sourceURL: package.material.sourceURL)

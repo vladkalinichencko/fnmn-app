@@ -9,6 +9,8 @@ public struct ReaderDocument: Equatable, Sendable {
     public let lead: Int?
     /// What each heading holds: its block count, shown when the document is folded, and where it ends.
     public let sections: [Int: HeadingSection]
+    /// The blocks read one at a time, in order: every block but the headings and the cover.
+    public let plates: [Int]
 
     public init(markdown: String, title: String) {
         let blocks = ArticleBody.blocks(in: markdown)
@@ -16,10 +18,14 @@ public struct ReaderDocument: Equatable, Sendable {
         repeatedTitle = blocks.firstIndex { block in
             if case let .heading(_, heading) = block { heading == title } else { false }
         }
-        lead = blocks.firstIndex { if case .heading = $0 { false } else { true } }.flatMap { index in
+        let lead = blocks.firstIndex { if case .heading = $0 { false } else { true } }.flatMap { index in
             if case .image = blocks[index] { index } else { nil }
         }
+        self.lead = lead
         sections = Self.sections(blocks)
+        plates = blocks.indices.filter { index in
+            if case .heading = blocks[index] { false } else { index != lead }
+        }
     }
 
     /// The heading of the innermost section a block lies in: the nearest heading before it, of whatever level, since a

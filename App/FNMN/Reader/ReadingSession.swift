@@ -64,6 +64,7 @@ struct ReadingSession: View {
         } else {
             progress.readThrough[reader.materialID]
         }
+        let paging = reader.state.shownPlate != nil
         ScrollViewReader { proxy in
             ScrollView {
                 // The gap under a block belongs to the block, so it closes up with it.
@@ -120,12 +121,31 @@ struct ReadingSession: View {
             .onChange(of: showsLine) { reader.send(.showLine(showsLine)) }
             // The column is laid out unseen at the top and shows only once it stands where it opens, so the jump there is never seen.
             .animation(.easeOut(duration: 0.3)) { $0.opacity(reader.state.hidesColumn ? 0 : 1) }
+            // Under a plate shown alone the column stays out of focus and takes no touches. Its pictures stop being
+            // where the whole-screen view zooms from, since the plate shown holds the same ones.
+            .animation(.smooth(duration: 0.35)) { $0.blur(radius: paging ? 16 : 0) }
+            .allowsHitTesting(!paging)
+            .accessibilityHidden(paging)
+            .environment(\.mediaZoom, paging ? nil : mediaZoom)
             // After the first layout, when the lazy column knows its rows and can go to one far down.
             .task {
                 reader.scroll = { proxy.scrollTo($0, anchor: .top) }
                 await Task.yield()
                 reader.send(.opened)
             }
+        }
+        // The plate and the shade come and go by themselves: the column under them opens sections at once.
+        .overlay {
+            ZStack {
+                if let plate = reader.state.shownPlate {
+                    Color.black.opacity(0.12)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                    PlatePager(reader: reader, plate: plate, width: width > 0 ? column.width(in: width) : nil)
+                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                }
+            }
+            .animation(.smooth(duration: 0.35), value: paging)
         }
         .environment(reader)
         .environment(\.mediaZoom, mediaZoom)
