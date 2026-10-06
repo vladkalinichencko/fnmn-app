@@ -117,21 +117,108 @@ private extension UIColor {
     }
 }
 
+/// The two system faces and three bundled ones. The bundled files carry their own Cyrillic, drawn in from a close
+/// face (`server/fonts/build_reader_fonts.py`): CoreText's fallback for a missing glyph keeps neither bold nor italic.
 enum ReaderFont: String, CaseIterable, Identifiable {
-    case system, serif
+    case system, serif, libron, literata, atkinson
     var id: String { rawValue }
 
     var name: String {
         switch self {
         case .system: "San Francisco"
         case .serif: "New York"
+        case .libron: "Libron"
+        case .literata: "Literata"
+        case .atkinson: "Atkinson Hyperlegible"
         }
     }
 
-    var design: Font.Design {
+    /// The bundled face's regular style; SwiftUI's bold and italic find the family's other styles from it.
+    private var face: String? {
         switch self {
-        case .system: .default
-        case .serif: .serif
+        case .system, .serif: nil
+        case .libron: "Libron-Regular"
+        case .literata: "Literata-Regular"
+        case .atkinson: "AtkinsonHyperlegibleNext-Regular"
+        }
+    }
+
+    private var design: Font.Design {
+        switch self {
+        case .system, .atkinson: .default
+        case .serif, .libron, .literata: .serif
+        }
+    }
+
+    /// The face at a text style's size, growing with the reader's text size like the system's own fonts.
+    func font(_ style: Font.TextStyle) -> Font {
+        guard let face else { return .system(style, design: design) }
+        return .custom(face, size: Self.defaultSize(of: style), relativeTo: style)
+    }
+
+    /// A text style's size at the default text size, which `relativeTo` scales from.
+    private static func defaultSize(of style: Font.TextStyle) -> CGFloat {
+        let platform: UIFont.TextStyle = switch style {
+        case .extraLargeTitle2: .extraLargeTitle2
+        case .extraLargeTitle: .extraLargeTitle
+        case .largeTitle: .largeTitle
+        case .title: .title1
+        case .title2: .title2
+        case .title3: .title3
+        case .headline: .headline
+        case .subheadline: .subheadline
+        case .callout: .callout
+        case .footnote: .footnote
+        case .caption: .caption1
+        case .caption2: .caption2
+        default: .body
+        }
+        return UIFont.preferredFont(forTextStyle: platform, compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).pointSize
+    }
+}
+
+/// The room between lines of a paragraph, as a share of the font's size. More room helps an eye that loses its line.
+enum ReaderLineSpacing: String, CaseIterable, Identifiable {
+    case tight, regular, loose
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .tight: "Tight"
+        case .regular: "Regular"
+        case .loose: "Loose"
+        }
+    }
+
+    var share: CGFloat {
+        switch self {
+        case .tight: 0.12
+        case .regular: 0.23
+        case .loose: 0.5
+        }
+    }
+}
+
+/// How wide the column of text is. A narrower column has shorter lines, which are easier to keep one's place in.
+enum ReaderColumn: String, CaseIterable, Identifiable {
+    case narrow, regular, wide
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .narrow: "Narrow"
+        case .regular: "Regular"
+        case .wide: "Wide"
+        }
+    }
+
+    /// The column's width on a screen this wide: the regular one is `Tokens.readingWidth`, the narrow one a little
+    /// under it even on a phone, the wide one most of a wide screen.
+    func width(in screen: CGFloat) -> CGFloat {
+        switch self {
+        case .narrow: Tokens.readingWidth(in: screen) * 0.86
+        case .regular: Tokens.readingWidth(in: screen)
+        case .wide: min(screen, max(screen * 0.8, Tokens.minReading))
         }
     }
 }
@@ -140,17 +227,21 @@ enum ReaderAppearance {
     static let typeSizeKey = "readerTypeSize"
     static let backgroundKey = "readerBackground"
     static let fontKey = "readerFont"
+    static let lineSpacingKey = "readerLineSpacing"
+    static let columnKey = "readerColumn"
     static let lineKey = "readerLine"
     static let lineSideKey = "readerLineSide"
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
 }
 
-/// Text size, background and font, the same three choices for every screen that reads text.
+/// Text size, background, font, line spacing and column width, the same choices for every screen that reads text.
 struct ReaderAppearanceControls: View {
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
+    @AppStorage(ReaderAppearance.lineSpacingKey) private var spacing = ReaderLineSpacing.regular
+    @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
 
     var body: some View {
         ControlGroup {
@@ -173,6 +264,24 @@ struct ReaderAppearanceControls: View {
         } label: {
             Label("Font", systemImage: "textformat")
             Text(font.name)
+        }
+        .pickerStyle(.menu)
+        Picker(selection: $spacing) {
+            ForEach(ReaderLineSpacing.allCases) { option in
+                Text(option.name).tag(option)
+            }
+        } label: {
+            Label("Line Spacing", systemImage: "arrow.up.and.down.text.horizontal")
+            Text(spacing.name)
+        }
+        .pickerStyle(.menu)
+        Picker(selection: $column) {
+            ForEach(ReaderColumn.allCases) { option in
+                Text(option.name).tag(option)
+            }
+        } label: {
+            Label("Column Width", systemImage: "arrow.left.and.right.text.vertical")
+            Text(column.name)
         }
         .pickerStyle(.menu)
     }
@@ -206,15 +315,29 @@ struct ReaderAppearanceModifier: ViewModifier {
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
+    @AppStorage(ReaderAppearance.lineSpacingKey) private var spacing = ReaderLineSpacing.regular
 
     func body(content: Content) -> some View {
         content
             .dynamicTypeSize(ReaderAppearance.sizes[min(max(size, 0), ReaderAppearance.sizes.count - 1)])
-            // A font, not a font design: Textual derives code from the environment font with `.monospaced()`.
-            .font(.system(.body, design: font.design))
+            // A font, not a font design: Textual derives code from the environment font with `.monospaced()`, which
+            // turns a bundled face, having no fixed-width style, into the system's fixed-width font.
+            .font(font.font(.body))
+            .textual.paragraphStyle(ReaderParagraph(lineSpacing: spacing.share))
             .background(background.canvas)
             .environment(\.plateTint, background.plate)
             // Only links take the page's link color; a tint would also paint every icon of the reader's menus.
             .textual.inlineStyle(.default.link(.foregroundColor(background.link), .underlineStyle(.single)))
+    }
+}
+
+/// Textual's paragraph with the reader's line spacing.
+private struct ReaderParagraph: StructuredText.ParagraphStyle {
+    let lineSpacing: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .textual.lineSpacing(.fontScaled(lineSpacing))
+            .textual.blockSpacing(.fontScaled(top: 0.8))
     }
 }

@@ -240,7 +240,7 @@ private struct CueRow: View {
                 .foregroundStyle(state == .current ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
                 .frame(minWidth: 36, alignment: .trailing)
             Text(cue.text)
-                .font(.system(.body, design: readerFont.design))
+                .font(readerFont.font(.body))
                 .foregroundStyle(state == .past ? .secondary : .primary)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)

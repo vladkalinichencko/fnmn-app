@@ -140,7 +140,7 @@ struct HeadingView: View {
         case 3: .title3
         default: .headline
         }
-        return .system(style, design: readerFont.design).bold()
+        return readerFont.font(style).bold()
     }
 }
 
@@ -381,7 +381,7 @@ private struct MarginNote: View {
                     TextField("Note", text: $draft, axis: .vertical)
                         .focused($focused)
                         .onAppear { focused = saved.isEmpty }
-                        .modifier(NoteLayout(design: readerFont.design))
+                        .modifier(NoteLayout(font: readerFont.font(.callout)))
                 }
                 .scrollIndicators(.hidden)
                 .scrollBounceBehavior(.basedOnSize)
@@ -395,7 +395,7 @@ private struct MarginNote: View {
             } else {
                 Text(draft.isEmpty ? "Note" : draft)
                     .foregroundStyle(draft.isEmpty ? .tertiary : .primary)
-                    .modifier(NoteLayout(design: readerFont.design))
+                    .modifier(NoteLayout(font: readerFont.font(.callout)))
                     .fixedSize(horizontal: false, vertical: true)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         overflow = Overflow(below: height > room + 1, text: height)
@@ -429,11 +429,11 @@ private struct MarginNote: View {
 
     /// The closed text and the editor stand in the same place, so the note does not move when it opens.
     private struct NoteLayout: ViewModifier {
-        let design: Font.Design
+        let font: Font
 
         func body(content: Content) -> some View {
             content
-                .font(.system(.callout, design: design))
+                .font(font)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, Tokens.tilePadding)
         }

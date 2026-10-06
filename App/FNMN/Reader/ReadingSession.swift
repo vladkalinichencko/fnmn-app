@@ -48,6 +48,7 @@ struct ReadingSession: View {
     /// The column's width inside its gutters, which every plate shares.
     @State private var columnWidth: CGFloat = 0
     @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
+    @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
     @Namespace private var mediaZoom
 
     var body: some View {
@@ -101,7 +102,7 @@ struct ReadingSession: View {
                 .padding(.horizontal, Tokens.gutter)
                 .padding(.bottom, 80)
                 // A wide screen reads in a narrower column in the middle; the scroll view itself keeps the whole width.
-                .frame(maxWidth: width > 0 ? Tokens.readingWidth(in: width) : .infinity)
+                .frame(maxWidth: width > 0 ? column.width(in: width) : .infinity)
                 .frame(maxWidth: .infinity)
                 // The line runs across the whole screen, over the gutters; the column starts at the same height.
                 .overlay {

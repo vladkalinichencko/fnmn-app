@@ -30,6 +30,21 @@
 			</array>
 		</dict>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Libron-Regular.ttf</string>
+		<string>Libron-Bold.ttf</string>
+		<string>Libron-Italic.ttf</string>
+		<string>Libron-BoldItalic.ttf</string>
+		<string>Literata-Regular.ttf</string>
+		<string>Literata-Bold.ttf</string>
+		<string>Literata-Italic.ttf</string>
+		<string>Literata-BoldItalic.ttf</string>
+		<string>AtkinsonHyperlegibleNext-Regular.ttf</string>
+		<string>AtkinsonHyperlegibleNext-Bold.ttf</string>
+		<string>AtkinsonHyperlegibleNext-Italic.ttf</string>
+		<string>AtkinsonHyperlegibleNext-BoldItalic.ttf</string>
+	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>FNMN saves pictures and videos from articles to your photo library.</string>
 	<key>LSApplicationQueriesSchemes</key>

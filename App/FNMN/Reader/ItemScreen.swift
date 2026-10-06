@@ -104,7 +104,7 @@ struct MaterialHeader: View {
                     .buttonStyle(.plain)
             }
             Text(title)
-                .font(.system(.largeTitle, design: readerFont.design).bold())
+                .font(readerFont.font(.largeTitle).bold())
                 .contextMenu {
                     Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = title }
                 }
