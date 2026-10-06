@@ -141,6 +141,7 @@ enum ReaderAppearance {
     static let backgroundKey = "readerBackground"
     static let fontKey = "readerFont"
     static let lineKey = "readerLine"
+    static let lineSideKey = "readerLineSide"
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
 }

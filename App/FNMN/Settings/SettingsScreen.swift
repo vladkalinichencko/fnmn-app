@@ -15,10 +15,21 @@ struct SettingsScreen: View {
     @State private var address = ""
     @State private var token = ""
     @State private var check = ConnectionCheck.editing
+    @AppStorage(ReaderAppearance.lineSideKey) private var lineSide = ReadingLineSide.left
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("Reading Line Handle", selection: $lineSide) {
+                        ForEach(ReadingLineSide.allCases) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Reading Line Handle")
+                } footer: {
+                    Text("The edge of the screen where you drag the red reading line from.")
+                }
                 Section {
                     LabeledContent("Folder", value: library.cloudFolder?.lastPathComponent ?? "Not chosen")
                     ChooseLibraryFolderButton(title: "Choose Another Folder")
