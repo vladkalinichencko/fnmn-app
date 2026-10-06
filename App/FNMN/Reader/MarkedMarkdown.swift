@@ -9,6 +9,8 @@ struct MarkedMarkdown: MarkupParser {
     let marks: [QuoteMark]
     /// The width of the plate's text, when the column is laid out; a picture is never wider.
     var width: CGFloat?
+    /// The opening letters of each word are bold.
+    var boldsWordStarts = false
 
     func attributedString(for input: String) throws -> AttributedString {
         var text = try Self.parse(input, baseURL: baseURL)
@@ -17,7 +19,25 @@ struct MarkedMarkdown: MarkupParser {
         for mark in marks {
             Self.apply(mark, to: &text)
         }
+        if boldsWordStarts { Self.boldWordStarts(&text) }
         return text
+    }
+
+    /// Sets the opening letters of each word bold, outside code, formulas and pictures. The characters stay as they
+    /// are, so a quote is found in the text the same way.
+    private static func boldWordStarts(_ text: inout AttributedString) {
+        var index = text.startIndex
+        var offset = 0
+        for range in WordStarts.ranges(in: String(text.characters)) {
+            let start = text.characters.index(index, offsetBy: range.lowerBound - offset)
+            let end = text.characters.index(start, offsetBy: range.count)
+            (index, offset) = (end, range.upperBound)
+            for run in text[start..<end].runs where run.textual.attachment == nil {
+                let intent = run.inlinePresentationIntent ?? []
+                guard !intent.contains(.code) else { continue }
+                text[run.range].inlinePresentationIntent = intent.union(.stronglyEmphasized)
+            }
+        }
     }
 
     /// The paragraph's text as the reader shows it; annotation quotes are found in this string.

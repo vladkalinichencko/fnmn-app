@@ -181,6 +181,7 @@ struct PlateView: View {
     /// Where the last swipe left the plate, until the mode catches up with it.
     @State private var side: Bool?
     @Environment(\.plateTextWidth) private var textWidth
+    @AppStorage(ReaderAppearance.wordStartsKey) private var boldsWordStarts = false
 
     private var noting: Bool { mode == .noting(index) }
     /// Whether the plate stands aside. The swipe decides this at once and the mode follows a moment later, so a
@@ -279,9 +280,10 @@ struct PlateView: View {
 
     /// A selection stays inside its plate. What is read grays in the text; the glass stays as it is.
     private var plate: some View {
-        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth))
-            // StructuredText parses again only when the Markdown changes; new marks and a new width need a new parse.
-            .id([AnyHashable(marks), AnyHashable(textWidth)])
+        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts))
+            // StructuredText parses again only when the Markdown changes; new marks, a new width and bold word starts
+            // need a new parse.
+            .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts)])
             .textual.overflowMode(.wrap)
             .plateMarkdownStyles()
             .textual.textSelection(.enabled)

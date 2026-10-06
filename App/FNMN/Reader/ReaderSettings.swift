@@ -231,6 +231,7 @@ enum ReaderAppearance {
     static let columnKey = "readerColumn"
     static let lineKey = "readerLine"
     static let lineSideKey = "readerLineSide"
+    static let wordStartsKey = "readerWordStarts"
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
 }
@@ -292,11 +293,13 @@ struct ReaderMenu: View {
     let reader: ReaderCoordinator
     let page: URL?
     @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
+    @AppStorage(ReaderAppearance.wordStartsKey) private var boldsWordStarts = false
 
     var body: some View {
         Menu("Reading Options", systemImage: "ellipsis") {
             ReaderAppearanceControls()
             Toggle("Reading Line", systemImage: "ruler",isOn: $showsLine)
+            Toggle("Bold Word Starts", systemImage: "bold", isOn: $boldsWordStarts)
             let lowest = reader.document.lowestHeadings
             if !lowest.isEmpty {
                 if lowest.isSubset(of: reader.state.folded) {
