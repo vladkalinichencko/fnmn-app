@@ -6,11 +6,11 @@ These scripts turn any born-digital PDF into a checked FNMN book package:
 PDF text + grounded page OCR -> assembly -> unambiguous cleanup -> formula and footnote crops back to the model -> app package
 ```
 
-Install the pinned OCR environment:
+Recreate the pinned OCR environment from the repository root:
 
 ```bash
-python3 -m venv .venv-ocr
-.venv-ocr/bin/pip install -r server/pdf-book/requirements-ocr.txt
+uv venv --clear --python 3.12 --managed-python .venv-ocr
+uv pip install --python .venv-ocr/bin/python -r server/pdf-book/requirements-ocr.txt
 ```
 
 Run the complete pipeline from the repository root:
