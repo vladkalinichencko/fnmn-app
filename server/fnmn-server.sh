@@ -32,6 +32,9 @@ agent() {
   <key>ProgramArguments</key><array>$arguments</array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>$ROOT/.venv/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- tailscaled picks each socket's interface by route, so with a full-tunnel VPN and its kill switch on
+         it goes through the tunnel instead of binding to Wi-Fi, which the kill switch drops. -->
+    <key>TS_BIND_TO_INTERFACE_BY_ROUTE</key><string>true</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
