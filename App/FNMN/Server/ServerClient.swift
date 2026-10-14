@@ -107,13 +107,15 @@ struct ServerClient: ServerPort {
     }
 
     func job(_ id: String, connection: ServerConnection) async throws -> ServerJob {
-        try await decoded(ServerJob.self, for: authorizedRequest(path: "jobs/\(id)", connection: connection))
+        try await repeatingDrops { try await decoded(ServerJob.self, for: authorizedRequest(path: "jobs/\(id)", connection: connection)) }
     }
 
     func delivery(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL {
         var request = authorizedRequest(path: "jobs/\(id)/package", connection: connection)
         request.timeoutInterval = 600
-        let (file, response) = try await URLSession.shared.download(for: request, delegate: Transfer(.receiving, onStep: onStep))
+        let (file, response) = try await repeatingDrops {
+            try await URLSession.shared.download(for: request, delegate: Transfer(.receiving, onStep: onStep))
+        }
         try accept(response, data: Data())
         return file
     }
@@ -136,7 +138,9 @@ struct ServerClient: ServerPort {
     func videoFile(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL {
         var request = authorizedRequest(path: "jobs/\(id)/file", connection: connection)
         request.timeoutInterval = 600
-        let (download, response) = try await URLSession.shared.download(for: request, delegate: Transfer(.receiving, onStep: onStep))
+        let (download, response) = try await repeatingDrops {
+            try await URLSession.shared.download(for: request, delegate: Transfer(.receiving, onStep: onStep))
+        }
         try accept(response, data: Data())
         // The download lands as a `.tmp`; the file keeps the extension the server gave it, which names the original.
         let name = response.suggestedFilename.map { URL(filePath: $0).pathExtension } ?? ""
@@ -150,6 +154,20 @@ struct ServerClient: ServerPort {
         let (data, response) = try await URLSession.shared.data(for: request)
         try accept(response, data: data)
         return try JSONDecoder().decode(type, from: data)
+    }
+
+    /// Repeats a request the network dropped on the way, which a phone behind a VPN and Funnel sees now and then.
+    /// The server keeps a job and its file until the phone forgets them, so a repeat gets the same answer.
+    private func repeatingDrops<Value>(_ request: () async throws -> Value) async throws -> Value {
+        let dropped: Set<URLError.Code> = [.networkConnectionLost, .timedOut, .cannotConnectToHost, .notConnectedToInternet]
+        for pause in [2, 5] {
+            do {
+                return try await request()
+            } catch let error as URLError where dropped.contains(error.code) {
+                try await Task.sleep(for: .seconds(pause))
+            }
+        }
+        return try await request()
     }
 
     private func authorizedRequest(path: String, connection: ServerConnection) -> URLRequest {
