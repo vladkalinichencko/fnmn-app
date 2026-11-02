@@ -115,9 +115,7 @@ struct ArchiveScreen: View {
 private struct AnnotationEntry: Identifiable {
     let item: LibraryItem
     let annotation: Annotation
-    var id: UUID {
-        annotation.id
-    }
+    var id: UUID { annotation.id }
 
     static func all(in groups: [AnnotationGroup]) -> [AnnotationEntry] {
         groups.flatMap { group in group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) } }

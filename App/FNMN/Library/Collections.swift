@@ -126,6 +126,7 @@ private struct AlbumFan: View {
 private struct AlbumZoomSource: ViewModifier {
     let route: Route?
 
+    @ViewBuilder
     func body(content: Content) -> some View {
         if let route {
             content.zoomSource(of: route)
@@ -141,6 +142,7 @@ private struct AlbumTileBehavior: ViewModifier {
     @Environment(LibraryModel.self) private var library
     @Environment(LibraryDialogs.self) private var dialogs
 
+    @ViewBuilder
     func body(content: Content) -> some View {
         if album.grouping == .albums {
             content

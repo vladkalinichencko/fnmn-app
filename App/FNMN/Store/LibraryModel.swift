@@ -27,9 +27,6 @@ enum LibraryLoadState: Equatable {
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
     private(set) var progress = ReadingProgress()
-    /// What screens show of the catalog, collected once per change of `snapshot` instead of reworked in
-    /// every view body: `allItems` is the expensive pass over the browser catalog and the sort, the other
-    /// two are its archive split. Two separate observable values, so a view of one never wakes for the other.
     private(set) var allItems: [LibraryItem] = []
     private(set) var catalogItems: [LibraryItem] = []
     private(set) var archivedItems: [LibraryItem] = []
@@ -123,7 +120,6 @@ final class LibraryModel {
         } else {
             let next = (places + [change]).reduce(progress) { $0.applying($1) }
             places = []
-            // An equal value does not wake the screens watching progress.
             if next != progress {
                 progress = next
             }
@@ -149,9 +145,7 @@ final class LibraryModel {
             }
             progress = places.reduce(progress) { $0.applying($1) }
             places = []
-            for change in latest.values {
-                record(.progress(change))
-            }
+            for change in latest.values { record(.progress(change)) }
         }
         progressUnsaved = false
         let events = journal
@@ -239,11 +233,7 @@ final class LibraryModel {
         return progress.positions[itemID]
     }
 
-    // MARK: Collected catalog
-
-    /// The one place `snapshot.allItems` runs: a change of the catalog collects it here, and every screen
-    /// reads from the three lists below. This keeps the pass over the browser catalog and the sort out of
-    /// view bodies, where sheets and typing trigger them on frames.
+    /// The only place `snapshot.allItems` runs.
     private func refreshCatalog() {
         let items = snapshot.allItems
         let archived = Set(snapshot.archived)
@@ -252,7 +242,6 @@ final class LibraryModel {
         archivedItems = items.filter { archived.contains($0.id) }
     }
 
-    /// The catalog the screens list, drawn from global search; every call is a filter over what is collected.
     func items(matching query: String) -> [LibraryItem] {
         snapshot.items(matching: query, among: catalogItems)
     }
@@ -293,7 +282,6 @@ final class LibraryModel {
         snapshot.groupName(grouping, key: key, among: catalogItems)
     }
 
-    /// Notes live for archived materials too, so they search over the full collected catalog.
     func annotationGroups(matching query: String) -> [AnnotationGroup] {
         snapshot.annotationGroups(matching: query, among: allItems)
     }
@@ -322,7 +310,7 @@ final class LibraryModel {
     /// the folder is read and the other devices' journals are taken in.
     func linkLibraryFolder(_ folder: URL, onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
         _ = folder.startAccessingSecurityScopedResource()
-        try UserDefaults.standard.set(folder.bookmarkData(), forKey: Self.cloudFolderKey)
+        UserDefaults.standard.set(try folder.bookmarkData(), forKey: Self.cloudFolderKey)
         await file.useCloudFolder(folder)
         cloudFolder = folder
         try await moveIntoCloudIfNeeded()
@@ -486,9 +474,7 @@ final class LibraryModel {
             }
             snapshot = updated
             refreshCatalog()
-            for change in updated.progressChanges(since: current) {
-                apply(change)
-            }
+            for change in updated.progressChanges(since: current) { apply(change) }
         }
         lastWrite = Task { _ = try? await task.value }
         try await task.value

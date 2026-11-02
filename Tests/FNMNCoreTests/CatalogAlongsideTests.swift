@@ -2,9 +2,7 @@
 import Foundation
 import Testing
 
-/// The catalog selectors take `among`, the materials collected already, so screens draw from the
-/// model's list instead of collecting the catalog in a view body. These tests keep the two ways —
-/// collecting here, or passing along what the model holds — answering with the very same lists.
+/// Selectors given `among` (the collected materials) answer the same as the ones that collect for themselves.
 final class CatalogAlongsideTests {
     private static let library: LibrarySnapshot = {
         var library = LibrarySnapshot()
@@ -25,7 +23,6 @@ final class CatalogAlongsideTests {
         }
         let lastFive = library.articles.suffix(5).map(\.material.id)
         library.archived = lastFive
-        // A note to an archived material too, so the annotation tests see more than `items` holds.
         library.annotations = [
             Annotation(materialID: "article:0", piece: 0, text: "First kernel", updatedAt: Date.distantPast),
             Annotation(materialID: lastFive[0], piece: 0, text: "Archived note", note: "kept", updatedAt: .now),
@@ -59,7 +56,6 @@ final class CatalogAlongsideTests {
             }
         }
 
-        // The notes do reach the archive: the second note's material is not in `items` alone.
         #expect(!library.items.contains { $0.id == library.annotations[1].materialID })
         #expect(collected.contains { $0.id == library.annotations[1].materialID })
     }

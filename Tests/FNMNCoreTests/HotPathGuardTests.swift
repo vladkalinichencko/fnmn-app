@@ -2,11 +2,7 @@
 import Foundation
 import XCTest
 
-/// A guard test standing for the lint rule this repo wrote after the 2026-11-01 jank: a view body
-/// collects the catalog again and again — on every reshuffle of the screen, each keystroke of the
-/// search and each wake of `LibraryModel`, where the sheet and a scroll share the frame. The pass is
-/// expensive (~10 ms per 1500 materials on a Mac, more on a phone), so screens read the lists
-/// `LibraryModel` collects once per catalog change, and only the model calls these selectors.
+/// Test form of the `snapshot_catalog_selector_in_view` lint rule; see AGENTS.md.
 final class HotPathGuardTests: XCTestCase {
     private static let forbiddenSelectors: [(selector: String, why: String)] = [
         ("snapshot.items(", "collects the catalog; read the model's list"),
@@ -19,7 +15,6 @@ final class HotPathGuardTests: XCTestCase {
         ("snapshot.annotationGroups", "collects the catalog; read the model's list"),
     ]
 
-    /// The one file allowed to collect: the model's wrappers and the catalog refresh live there.
     private static let allowed = "LibraryModel.swift"
 
     func testViewBodiesDoNotCollectTheCatalog() throws {

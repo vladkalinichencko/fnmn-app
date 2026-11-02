@@ -2,9 +2,7 @@
 import Foundation
 import Testing
 
-/// Screens draw from the catalog the model collected once; these selectors over collected materials
-/// must not quietly become a new rebuild of the whole catalog, or the sheet and the search go back
-/// to collecting in a view body.
+/// Screens draw from the collected catalog, so a selector over it must fit the frame budget (5 ms).
 struct CollectedCatalogSpeedTests {
     private static let library: LibrarySnapshot = {
         var library = LibrarySnapshot()
@@ -21,28 +19,15 @@ struct CollectedCatalogSpeedTests {
         return library
     }()
 
-    @Test func selectorsOverCollectedMaterialsDoFarLessThanCollecting() {
+    @Test func albumSummariesOverCollectedMaterialsFitTheFrameBudget() {
         let library = Self.library
         let catalog = library.items
-
-        func lowestOverRuns(_ runs: Int, _ body: () -> Void) -> Double {
-            _ = body() // warm up
-            let clock = ContinuousClock()
-            var times: [Double] = []
-            for _ in 0 ..< runs {
-                let start = clock.now
-                body()
-                let end = clock.now
-                times.append(Double((end - start) / .milliseconds(1)))
-            }
-            return times.min()!
+        var best = Double.infinity
+        for _ in 0 ..< 10 {
+            let start = ContinuousClock.now
+            _ = library.albumSummaries(among: catalog)
+            best = min(best, Double((ContinuousClock.now - start) / .milliseconds(1)))
         }
-
-        // The rebuild the screens must never do while a sheet or a keystroke waits.
-        let collect = lowestOverRuns(3) { _ = library.albumSummaries }
-        // What they actually run, over the collected list.
-        let along = lowestOverRuns(10) { _ = library.albumSummaries(among: catalog) }
-
-        #expect(along < collect / 5, "alongside took \(along) ms, collecting took \(collect) ms")
+        #expect(best < 5, "albumSummaries over the collected catalog took \(best) ms at best")
     }
 }

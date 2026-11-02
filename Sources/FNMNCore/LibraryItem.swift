@@ -20,9 +20,7 @@ public struct SourceRef: Hashable, Identifiable, Sendable {
 
     /// Sources are one when they stand on the same page, whatever they are called; one with no page, a book's
     /// authors, is known by its name.
-    public var id: String {
-        homepage?.absoluteString ?? name
-    }
+    public var id: String { homepage?.absoluteString ?? name }
 }
 
 extension LibraryItem.Kind {
@@ -96,37 +94,30 @@ public struct AlbumSummary: Identifiable, Hashable, Sendable {
     public let count: Int
     /// Up to three materials, the newest first, fanned out on the group's tile.
     public let front: [LibraryItem]
-    public var id: String {
-        Self.id(grouping, key)
-    }
+    public var id: String { Self.id(grouping, key) }
 
     /// The id of a group without its summary, for a screen that knows only what it shows.
-    public static func id(_ grouping: LibraryGrouping, _ key: String) -> String {
-        "\(grouping.rawValue):\(key)"
-    }
+    public static func id(_ grouping: LibraryGrouping, _ key: String) -> String { "\(grouping.rawValue):\(key)" }
 }
 
 public struct AnnotationGroup: Identifiable, Sendable {
     public let item: LibraryItem
     public let annotations: [Annotation]
-    public var id: String {
-        item.id
-    }
+    public var id: String { item.id }
 }
 
-public extension LibrarySnapshot {
+extension LibrarySnapshot {
     /// Every material outside the archive, newest first.
-    var items: [LibraryItem] {
+    public var items: [LibraryItem] {
         allItems.filter { !isArchived($0.id) }
     }
 
-    func item(_ id: String) -> LibraryItem? {
+    public func item(_ id: String) -> LibraryItem? {
         allItems.first { $0.id == id }
     }
 
-    /// The opened materials that continue reading, newest first. `among` takes materials collected
-    /// already, as `LibraryModel` holds them; nil collects the catalog for this one call.
-    func continueItems(_ progress: ReadingProgress, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+    /// `among` takes the materials `LibraryModel` has collected; nil collects them for this call.
+    public func continueItems(_ progress: ReadingProgress, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
         let opened = (candidates ?? items).compactMap { item -> (LibraryItem, Date)? in
             guard let reading = progress.readings[item.id], !reading.isRead, let date = reading.openedAt else { return nil }
             return (item, date)
@@ -134,24 +125,16 @@ public extension LibrarySnapshot {
         return opened.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
-    var unsortedItems: [LibraryItem] {
-        unsortedItems()
-    }
+    public var unsortedItems: [LibraryItem] { unsortedItems() }
 
-    /// The materials in no album yet. `among` is the already collected catalog, as `LibraryModel` holds.
-    func unsortedItems(among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+    public func unsortedItems(among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
         (candidates ?? items).filter { albums(of: $0.id).isEmpty }
     }
 
-    var albumSummaries: [AlbumSummary] {
-        albumSummaries()
-    }
+    public var albumSummaries: [AlbumSummary] { albumSummaries() }
 
-    /// The albums with their members and covers, over materials collected already; nil with `among`
-    /// collects the catalog for this one call, which views do not do: they read the model's list.
-    /// The members gather in one pass over the materials, each into its own albums, instead of a scan
-    /// per album.
-    func albumSummaries(among candidates: [LibraryItem]? = nil) -> [AlbumSummary] {
+    /// One pass over the materials, each sorted into its albums, instead of a scan per album.
+    public func albumSummaries(among candidates: [LibraryItem]? = nil) -> [AlbumSummary] {
         let members = candidates ?? items
         var byAlbum: [String: [LibraryItem]] = [:]
         for item in members {
@@ -166,9 +149,8 @@ public extension LibrarySnapshot {
     }
 
     /// The Collections section: the same materials gathered by album, publisher, type or month added.
-    /// Only albums can be empty; the other groupings list what exists. `among` is the catalog the
-    /// model has collected; nil collects it for this one call.
-    func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress(), among candidates: [LibraryItem]? = nil) -> [AlbumSummary] {
+    /// Only albums can be empty; the other groupings list what exists.
+    public func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress(), among candidates: [LibraryItem]? = nil) -> [AlbumSummary] {
         let members = candidates ?? items
         var summaries: [AlbumSummary]
         if grouping == .albums {
@@ -229,7 +211,7 @@ public extension LibrarySnapshot {
 
     /// The materials of one album, publisher, type or month in the reader's order, in sections when grouped.
     /// `opened` gives when each material was last opened, for sorting by it.
-    static func arrange(
+    public static func arrange(
         _ items: [LibraryItem], sortedBy sort: ItemSort, groupedBy grouping: ItemGrouping, opened: [String: Date] = [:]
     ) -> [ItemSection] {
         func sorted(_ items: [LibraryItem]) -> [LibraryItem] {
@@ -261,14 +243,12 @@ public extension LibrarySnapshot {
         return keys.map { ItemSection(id: $0, title: names[$0], items: sorted(members[$0] ?? [])) }
     }
 
-    /// The materials of one grouping. `among` is the catalog the model collected already.
-    func items(in grouping: LibraryGrouping, key: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+    public func items(in grouping: LibraryGrouping, key: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
         let members = candidates ?? items
         return grouping == .albums ? items(inAlbum: key, among: members) : members.filter { Self.group(of: $0, by: grouping)?.key == key }
     }
 
-    /// The name of one group, taken from the summaries; `among` is the catalog the model collected.
-    func groupName(_ grouping: LibraryGrouping, key: String, among candidates: [LibraryItem]? = nil) -> String {
+    public func groupName(_ grouping: LibraryGrouping, key: String, among candidates: [LibraryItem]? = nil) -> String {
         groups(by: grouping, sortedBy: .standard, among: candidates).first { $0.key == key }?.name ?? key
     }
 
@@ -293,35 +273,32 @@ public extension LibrarySnapshot {
     }
 
     /// The source of one material without building every tile, for the reader's header.
-    func source(of itemID: String) -> SourceRef? {
+    public func source(of itemID: String) -> SourceRef? {
         guard let article = articles.first(where: { $0.material.id == itemID }) else { return nil }
         guard let sourceURL = article.material.sourceURL else { return article.material.authors }
         var index = SourceIndex(catalog: browserCatalog, declared: articles.compactMap(\.material.source))
         return index.source(for: sourceURL)
     }
 
-    func items(inAlbum name: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+    public func items(inAlbum name: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
         (candidates ?? items).filter { albums(of: $0.id).contains(name) }
     }
 
-    func items(fromSource id: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+    public func items(fromSource id: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
         (candidates ?? items).filter { $0.source?.id == id }
     }
 
-    var archivedItems: [LibraryItem] {
+    public var archivedItems: [LibraryItem] {
         allItems.filter { isArchived($0.id) }
     }
 
-    /// Titles, authors, sources, albums and section headings; the body text is not searched. A screen searches
-    /// only the materials it shows, the whole library by default.
-    func items(matching query: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+    /// Titles, authors, sources, albums and section headings; the body text is not searched.
+    public func items(matching query: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
         let candidates = candidates ?? items
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return candidates }
         let folded = ArticleEntry.folded(needle)
-        func hit(_ text: String) -> Bool {
-            ArticleEntry.folded(text).contains(folded)
-        }
+        func hit(_ text: String) -> Bool { ArticleEntry.folded(text).contains(folded) }
         let articleHits = Set(articles.filter { $0.searchText.contains(folded) }.map(\.material.id))
         // Albums and sources repeat across tiles, so each name is tested once.
         let albumHits = Set(albums.filter(hit))
@@ -344,12 +321,11 @@ public extension LibrarySnapshot {
     }
 
     /// Highlights and notes grouped by material; the most recently touched material and annotation come first.
-    /// `among` is the materials collected already, every one at one pass, without the archive filter.
-    var annotationGroups: [AnnotationGroup] {
+    public var annotationGroups: [AnnotationGroup] {
         annotationGroups(among: allItems)
     }
 
-    func annotationGroups(among candidates: [LibraryItem]) -> [AnnotationGroup] {
+    public func annotationGroups(among candidates: [LibraryItem]) -> [AnnotationGroup] {
         let byItem = Dictionary(grouping: annotations, by: \.materialID)
         let known = Dictionary(candidates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let groups = byItem.compactMap { itemID, annotations -> AnnotationGroup? in
@@ -363,9 +339,8 @@ public extension LibrarySnapshot {
     }
 
     /// The annotations a search finds: all of a material the material search finds, and elsewhere those whose
-    /// paragraph or note holds the query. `among` is the materials the model collected already (the full
-    /// catalog, archive included, since notes stay for archived materials too).
-    func annotationGroups(matching query: String, among: [LibraryItem]? = nil) -> [AnnotationGroup] {
+    /// paragraph or note holds the query.
+    public func annotationGroups(matching query: String, among: [LibraryItem]? = nil) -> [AnnotationGroup] {
         let groups = annotationGroups(among: among ?? allItems)
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return groups }
@@ -382,10 +357,8 @@ public extension LibrarySnapshot {
         }
     }
 
-    /// Everything as screens see it, newest first. The pass over the browser catalog and the sort are
-    /// expensive, so screens never read this directly: `LibraryModel` collects it once per catalog
-    /// change and hands the lists out.
-    var allItems: [LibraryItem] {
+    /// Everything, newest first. Expensive to build: `LibraryModel` collects it once per catalog change.
+    public var allItems: [LibraryItem] {
         var sources = SourceIndex(catalog: browserCatalog, declared: articles.compactMap(\.material.source))
         return articles.map { article in
             let material = article.material
@@ -513,9 +486,9 @@ struct SourceIndex {
     }
 }
 
-public extension URL {
+extension URL {
     /// The page itself: a link to a heading or a paragraph of it names the same material.
-    var withoutFragment: URL {
+    public var withoutFragment: URL {
         guard fragment != nil, var parts = URLComponents(url: self, resolvingAgainstBaseURL: false) else { return self }
         parts.fragment = nil
         return parts.url ?? self
