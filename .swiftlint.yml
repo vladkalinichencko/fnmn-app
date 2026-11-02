@@ -1,8 +1,4 @@
-# FNMN: линт-ограждения на найденные баги, не общий стиль.
-#
-# SwiftLint без фильтров поверх всего репозитория находит сотни замечаний стиля (baseline: 892 на
-# 2026-11-02); этот конфиг несёт единственное намеренное правило — то, что писал тест-ограждения
-# для каждого найденного лага (см. AGENTS.md). Стиль всего репозитория в этот CI не входит.
+# Runs only the hot-path guard; the repository's style baseline is not enforced here.
 only_rules:
   - snapshot_catalog_selector_in_view
 
@@ -10,9 +6,7 @@ excluded:
   - .build
   - "**/.build/**"
   - Vendor
-  # Модель — единственное место, где сборка каталога разрешена: там лежат её обёртки и обновление.
   - App/FNMN/Store/LibraryModel.swift
-  # Тест-ограждение декларирует запрещённые строки как данные — не как вызовы.
   - Tests/FNMNCoreTests/HotPathGuardTests.swift
 
 custom_rules:

@@ -1,34 +1,42 @@
 # AGENTS.md (FNMN)
 
-Правила для агентов, работающих в этом репозитории. Живое состояние проекта: [notes/state/fnmn.md](notes/state/fnmn.md); очередь работ: [notes/tasks.md](notes/tasks.md); паттерны Apple против нашего кода: [notes/state/performance.md](notes/state/performance.md); правила исполнения задач на структуру и интерфейсы — `architect` перед изменением структуры и `coding` при реализации ([notes/plan.md](notes/plan.md)).
+Rules for agents working in this repository.
 
-## Правило ограждений
+- Project state: [notes/state/fnmn.md](notes/state/fnmn.md)
+- Work queue: [notes/tasks.md](notes/tasks.md)
+- Apple performance patterns compared with our code: [notes/state/performance.md](notes/state/performance.md)
+- Task execution rules for structure and interfaces: [notes/plan.md](notes/plan.md). Use `architect` before changing structure and `coding` when implementing.
 
-Каждый найденный дефект производительности или правильности закрывается не только правкой кода: **в том же PR появляется проверка, чтобы дефект не вернулся**. Правка без ограждения считается незаконченной. Формы по возрастанию строгости:
+## Guard rule
 
-1. **Тест-ограждение** (`Tests/FNMNCoreTests`) — воспроизводит неправильную форму кода или дорогое вычисление и падает на её возврате.
-2. **Линт-правило** (`.swiftlint.yml`, раздел `custom_rules`) — то же нарушение в форме исходника: ловит его до сборки, в редакторе и в CI.
-3. **Измерение производительности** (`PerformanceTests`, а также `CollectedCatalogSpeedTests`) — бюджет «5 мс для работы, которую запускает кадр или клавиша, 100 мс для отдельного действия».
+Fixing a performance or correctness defect is not enough. **The same PR must add a check that keeps the defect from coming back.** A fix without a guard is incomplete.
 
-## Горячие пути: как их не возвращать
+Guard types, from least to most strict:
 
-- Экраны не собирают каталог в теле view. Списки материалов — готовые наблюдаемые списки `LibraryModel`, собираемые один раз на изменение каталога: `library.items(...)`, `library.albumSummaries()`, `library.groups(...)`, `library.groupName(...)`, `library.archivedItems`. Прямые вызовы селекторов `snapshot.*`, которые собирают каталог заново (`items(`/`albumSummaries`/`unsortedItems`/`continueItems`/`groups(`/`groupName(`/`archivedItems`/`annotationGroups`), разрешены только в `App/FNMN/Store/LibraryModel.swift`.
-- Нарушение первого пункта ловят тест `HotPathGuardTests` и линт-правило `snapshot_catalog_selector_in_view` — оба обязаны оставаться зелёными.
+1. **Test guard** (`Tests/FNMNCoreTests`). Reproduces the wrong code shape or the expensive computation, and fails if it returns.
+2. **Lint rule** (`.swiftlint.yml`, `custom_rules`). Catches the same violation in the source: before the build, in the editor, and in CI.
+3. **Performance measurement** (`PerformanceTests` and `CollectedCatalogSpeedTests`). Budget: 5 ms for work that runs in a frame or on a keystroke, 100 ms for a single action.
 
-## Перед PR
+## Hot paths: how to keep them fast
 
-Из корня репозитория:
+- Do not collect the catalog in a view body. Screens read the material lists that `LibraryModel` keeps as observable properties and collects once per catalog change: `library.items(...)`, `library.albumSummaries()`, `library.groups(...)`, `library.groupName(...)`, `library.archivedItems`.
+- Call the `snapshot.*` selectors that collect the catalog (`items(`, `albumSummaries`, `unsortedItems`, `continueItems`, `groups(`, `groupName(`, `archivedItems`, `annotationGroups`) only in `App/FNMN/Store/LibraryModel.swift`.
+- `HotPathGuardTests` and the lint rule `snapshot_catalog_selector_in_view` catch violations of the rule above. Both must stay green.
+
+## Before opening a PR
+
+Run these from the repository root:
 
 ```sh
-swift test          # тесты, ограждения и измерения
-swiftlint --strict  # линт-ограждения (стиль репозитория в конфиг не входит)
-swiftformat --lint  # на изменённых файлах; нельзя массово форматировать чужие
+swift test          # tests, guards, and measurements
+swiftlint --strict  # lint guards; the repository style rules are not part of this config
+swiftformat --lint  # changed files only; do not reformat files you did not change
 ```
 
-CI ([.github/workflows/tests.yml](.github/workflows/tests.yml)) гоняет `swift test` и `swiftlint --strict` на PR и `master`.
+CI ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs `swift test` and `swiftlint --strict` on pull requests and on `master`.
 
-## Ограждения, написанные на найденные дефекты
+## Guards written for found defects
 
-| Дата | Дефект | Ограждение |
+| Date | Defect | Guard |
 |---|---|---|
-| 2026-11-02 | Листик «в коллекцию», поиск и каждый экран пересобирали весь каталог (~10–20 мс на 1500 материалов) в теле view; кадры выезда листика и ввода поиска пропадали | `HotPathGuardTests` + `.swiftlint.yml` `snapshot_catalog_selector_in_view`; `CatalogAlongsideTests` (селекторы с собранными материалами отвечают теми же списками); `CollectedCatalogSpeedTests` (путь по собранному каталогу в разы дешевле сборки) |
+| 2026-11-02 | The Add to Collection sheet, search, and every screen rebuilt the whole catalog (~10–20 ms for 1,500 materials) in a view body. Frames of the sheet's slide-in and of search typing were dropped. | `HotPathGuardTests` and the `.swiftlint.yml` rule `snapshot_catalog_selector_in_view`; `CatalogAlongsideTests` (selectors over collected materials return the same lists); `CollectedCatalogSpeedTests` (work over the collected catalog is much cheaper than collecting it) |
