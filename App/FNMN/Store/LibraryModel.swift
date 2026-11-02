@@ -27,6 +27,12 @@ enum LibraryLoadState: Equatable {
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
     private(set) var progress = ReadingProgress()
+    /// What screens show of the catalog, collected once per change of `snapshot` instead of reworked in
+    /// every view body: `allItems` is the expensive pass over the browser catalog and the sort, the other
+    /// two are its archive split. Two separate observable values, so a view of one never wakes for the other.
+    private(set) var allItems: [LibraryItem] = []
+    private(set) var catalogItems: [LibraryItem] = []
+    private(set) var archivedItems: [LibraryItem] = []
     private(set) var loadState = LibraryLoadState.idle
     /// The FNMN folder in iCloud Drive, where every material lives; until the reader points to it once,
     /// the app asks for it instead of showing the library.
@@ -49,7 +55,9 @@ final class LibraryModel {
     @ObservationIgnored private var sync = JournalSync()
     @ObservationIgnored private var journalRead: Task<Void, Never>?
     @ObservationIgnored private let device: String = {
-        if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
+        if let id = UserDefaults.standard.string(forKey: "deviceID") {
+            return id
+        }
         let id = UUID().uuidString
         UserDefaults.standard.set(id, forKey: "deviceID")
         return id
@@ -74,6 +82,7 @@ final class LibraryModel {
         defer { Signposts.library.endInterval("Load library", interval) }
         do {
             (snapshot, progress) = try await file.load()
+            refreshCatalog()
             sync = try await file.loadSync()
             await relinkCloudFolder()
             loadState = .ready
@@ -95,7 +104,9 @@ final class LibraryModel {
             scheduleSave()
             if let deleted {
                 try? await file.removeDelivery(of: deleted.entry)
-                if let original = deleted.original { try? await file.removeOriginal(original) }
+                if let original = deleted.original {
+                    try? await file.removeOriginal(original)
+                }
                 await readOriginals()
             }
         } catch {
@@ -110,8 +121,12 @@ final class LibraryModel {
         if case .savePosition = change {
             places.append(change)
         } else {
-            progress = (places + [change]).reduce(progress) { $0.applying($1) }
+            let next = (places + [change]).reduce(progress) { $0.applying($1) }
             places = []
+            // An equal value does not wake the screens watching progress.
+            if next != progress {
+                progress = next
+            }
         }
         switch change {
         case .open, .openGroup, .setRead, .readThrough, .line, .fold, .reset: record(.progress(change))
@@ -128,11 +143,15 @@ final class LibraryModel {
         if !places.isEmpty {
             var latest: [String: ProgressChange] = [:]
             for change in places {
-                if case let .savePosition(_, itemID, _) = change { latest[itemID] = change }
+                if case let .savePosition(_, itemID, _) = change {
+                    latest[itemID] = change
+                }
             }
             progress = places.reduce(progress) { $0.applying($1) }
             places = []
-            for change in latest.values { record(.progress(change)) }
+            for change in latest.values {
+                record(.progress(change))
+            }
         }
         progressUnsaved = false
         let events = journal
@@ -165,7 +184,9 @@ final class LibraryModel {
     /// The other devices' journals. A launch and a return to the app can both start a sync, and two reads at once
     /// would apply the same lines twice, so a read that finds one running waits for it instead.
     private func readJournals() async {
-        if let running = journalRead { return await running.value }
+        if let running = journalRead {
+            return await running.value
+        }
         let read = Task { await readJournalsOnce() }
         journalRead = read
         await read.value
@@ -218,6 +239,61 @@ final class LibraryModel {
         return progress.positions[itemID]
     }
 
+    // MARK: Collected catalog
+
+    /// The one place `snapshot.allItems` runs: a change of the catalog collects it here, and every screen
+    /// reads from the three lists below. This keeps the pass over the browser catalog and the sort out of
+    /// view bodies, where sheets and typing trigger them on frames.
+    private func refreshCatalog() {
+        let items = snapshot.allItems
+        let archived = Set(snapshot.archived)
+        allItems = items
+        catalogItems = items.filter { !archived.contains($0.id) }
+        archivedItems = items.filter { archived.contains($0.id) }
+    }
+
+    /// The catalog the screens list, drawn from global search; every call is a filter over what is collected.
+    func items(matching query: String) -> [LibraryItem] {
+        snapshot.items(matching: query, among: catalogItems)
+    }
+
+    func items(matching query: String, among candidates: [LibraryItem]) -> [LibraryItem] {
+        snapshot.items(matching: query, among: candidates)
+    }
+
+    func continueItems(_ progress: ReadingProgress) -> [LibraryItem] {
+        snapshot.continueItems(progress, among: catalogItems)
+    }
+
+    func unsortedItems() -> [LibraryItem] {
+        snapshot.unsortedItems(among: catalogItems)
+    }
+
+    func albumSummaries() -> [AlbumSummary] {
+        snapshot.albumSummaries(among: catalogItems)
+    }
+
+    func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress()) -> [AlbumSummary] {
+        snapshot.groups(by: grouping, sortedBy: sort, progress: progress, among: catalogItems)
+    }
+
+    func items(in grouping: LibraryGrouping, key: String) -> [LibraryItem] {
+        snapshot.items(in: grouping, key: key, among: catalogItems)
+    }
+
+    func items(inAlbum name: String) -> [LibraryItem] {
+        snapshot.items(inAlbum: name, among: catalogItems)
+    }
+
+    func items(fromSource id: String) -> [LibraryItem] {
+        snapshot.items(fromSource: id, among: catalogItems)
+    }
+
+    /// Notes live for archived materials too, so they search over the full collected catalog.
+    func annotationGroups(matching query: String) -> [AnnotationGroup] {
+        snapshot.annotationGroups(matching: query, among: allItems)
+    }
+
     /// Stores a delivery archive the server prepared, with its pictures and videos, in the place of the link
     /// or file it was made from. The archive is read in `LibraryFile`, off the main thread.
     func store(archive: URL) async throws {
@@ -242,7 +318,7 @@ final class LibraryModel {
     /// the folder is read and the other devices' journals are taken in.
     func linkLibraryFolder(_ folder: URL, onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
         _ = folder.startAccessingSecurityScopedResource()
-        UserDefaults.standard.set(try folder.bookmarkData(), forKey: Self.cloudFolderKey)
+        try UserDefaults.standard.set(folder.bookmarkData(), forKey: Self.cloudFolderKey)
         await file.useCloudFolder(folder)
         cloudFolder = folder
         try await moveIntoCloudIfNeeded()
@@ -296,7 +372,9 @@ final class LibraryModel {
 
     /// What Open Original shows: the page the material was made from, or else its file in `originals/`.
     func original(of itemID: String, page: URL?) -> Original? {
-        if let page { return .web(page) }
+        if let page {
+            return .web(page)
+        }
         return originalFile(itemID).map(Original.file)
     }
 
@@ -399,9 +477,14 @@ final class LibraryModel {
             let current = snapshot
             let updated = try await next(current)
             guard updated != current else { return }
-            if saving { try await file.save(updated, previous: current) }
+            if saving {
+                try await file.save(updated, previous: current)
+            }
             snapshot = updated
-            for change in updated.progressChanges(since: current) { apply(change) }
+            refreshCatalog()
+            for change in updated.progressChanges(since: current) {
+                apply(change)
+            }
         }
         lastWrite = Task { _ = try? await task.value }
         try await task.value

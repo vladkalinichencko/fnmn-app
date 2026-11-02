@@ -12,9 +12,9 @@ struct ShelfScreen: View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.shelf) {
             let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let annotations = AnnotationEntry.all(in: library.snapshot.annotationGroups(matching: query))
+            let annotations = AnnotationEntry.all(in: library.annotationGroups(matching: query))
                 .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }
-            let archived = library.snapshot.items(matching: query, among: library.snapshot.archivedItems)
+            let archived = library.items(matching: query, among: library.archivedItems)
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
                     if !annotations.isEmpty {
@@ -82,7 +82,7 @@ struct AnnotationsScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let entries = AnnotationEntry.all(in: library.snapshot.annotationGroups(matching: query))
+        let entries = AnnotationEntry.all(in: library.annotationGroups(matching: query))
         ScrollView {
             AnnotationColumns(entries: entries)
                 .padding(.horizontal, Tokens.gutter)
@@ -100,7 +100,7 @@ struct ArchiveScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let found = library.snapshot.items(matching: query, among: library.snapshot.archivedItems)
+        let found = library.items(matching: query, among: library.archivedItems)
         ScrollView {
             ItemGrid(items: found).padding(.horizontal, Tokens.gutter)
         }
@@ -115,7 +115,9 @@ struct ArchiveScreen: View {
 private struct AnnotationEntry: Identifiable {
     let item: LibraryItem
     let annotation: Annotation
-    var id: UUID { annotation.id }
+    var id: UUID {
+        annotation.id
+    }
 
     static func all(in groups: [AnnotationGroup]) -> [AnnotationEntry] {
         groups.flatMap { group in group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) } }

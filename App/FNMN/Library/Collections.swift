@@ -126,7 +126,6 @@ private struct AlbumFan: View {
 private struct AlbumZoomSource: ViewModifier {
     let route: Route?
 
-    @ViewBuilder
     func body(content: Content) -> some View {
         if let route {
             content.zoomSource(of: route)
@@ -142,7 +141,6 @@ private struct AlbumTileBehavior: ViewModifier {
     @Environment(LibraryModel.self) private var library
     @Environment(LibraryDialogs.self) private var dialogs
 
-    @ViewBuilder
     func body(content: Content) -> some View {
         if album.grouping == .albums {
             content
@@ -169,7 +167,7 @@ struct GroupScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let found = library.snapshot.items(matching: query, among: library.snapshot.items(in: grouping, key: key))
+        let found = library.items(matching: query, among: library.items(in: grouping, key: key))
         ScrollView {
             ArrangedItems(items: found, scope: "group:\(grouping.rawValue):\(key)")
                 .padding(.horizontal, Tokens.gutter)
@@ -189,7 +187,7 @@ struct AlbumScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let found = library.snapshot.items(matching: query, among: library.snapshot.items(inAlbum: name))
+        let found = library.items(matching: query, among: library.items(inAlbum: name))
         ScrollView {
             ArrangedItems(items: found, album: name, scope: "album:\(name)")
                 .padding(.horizontal, Tokens.gutter)
@@ -219,8 +217,8 @@ struct AlbumPicker: View {
             ScrollView {
                 LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
                     // The collections the material is already in are not offered again.
-                    let current = library.snapshot.albums(of: itemID)
-                    ForEach(library.snapshot.albumSummaries.filter { !current.contains($0.name) }) { album in
+                    let current = Set(library.snapshot.albums(of: itemID))
+                    ForEach(library.albumSummaries().filter { !current.contains($0.name) }) { album in
                         AlbumTile(album: album) {
                             dialogs.send(.dismiss)
                             Task { await library.apply(.addToAlbum(album.name, itemIDs: [itemID])) }
@@ -251,8 +249,8 @@ struct SourceScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let items = library.snapshot.items(fromSource: id)
-        let found = library.snapshot.items(matching: query, among: items)
+        let items = library.items(fromSource: id)
+        let found = library.items(matching: query, among: items)
         ScrollView {
             ArrangedItems(items: found, scope: "source:\(id)").padding(.horizontal, Tokens.gutter)
         }

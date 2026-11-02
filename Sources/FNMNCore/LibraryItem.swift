@@ -20,7 +20,9 @@ public struct SourceRef: Hashable, Identifiable, Sendable {
 
     /// Sources are one when they stand on the same page, whatever they are called; one with no page, a book's
     /// authors, is known by its name.
-    public var id: String { homepage?.absoluteString ?? name }
+    public var id: String {
+        homepage?.absoluteString ?? name
+    }
 }
 
 extension LibraryItem.Kind {
@@ -94,66 +96,97 @@ public struct AlbumSummary: Identifiable, Hashable, Sendable {
     public let count: Int
     /// Up to three materials, the newest first, fanned out on the group's tile.
     public let front: [LibraryItem]
-    public var id: String { Self.id(grouping, key) }
+    public var id: String {
+        Self.id(grouping, key)
+    }
 
     /// The id of a group without its summary, for a screen that knows only what it shows.
-    public static func id(_ grouping: LibraryGrouping, _ key: String) -> String { "\(grouping.rawValue):\(key)" }
+    public static func id(_ grouping: LibraryGrouping, _ key: String) -> String {
+        "\(grouping.rawValue):\(key)"
+    }
 }
 
 public struct AnnotationGroup: Identifiable, Sendable {
     public let item: LibraryItem
     public let annotations: [Annotation]
-    public var id: String { item.id }
+    public var id: String {
+        item.id
+    }
 }
 
-extension LibrarySnapshot {
+public extension LibrarySnapshot {
     /// Every material outside the archive, newest first.
-    public var items: [LibraryItem] {
+    var items: [LibraryItem] {
         allItems.filter { !isArchived($0.id) }
     }
 
-    public func item(_ id: String) -> LibraryItem? {
+    func item(_ id: String) -> LibraryItem? {
         allItems.first { $0.id == id }
     }
 
-    public func continueItems(_ progress: ReadingProgress) -> [LibraryItem] {
-        let opened = items.compactMap { item -> (LibraryItem, Date)? in
+    /// The opened materials that continue reading, newest first. `among` takes materials collected
+    /// already, as `LibraryModel` holds them; nil collects the catalog for this one call.
+    func continueItems(_ progress: ReadingProgress, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+        let opened = (candidates ?? items).compactMap { item -> (LibraryItem, Date)? in
             guard let reading = progress.readings[item.id], !reading.isRead, let date = reading.openedAt else { return nil }
             return (item, date)
         }
         return opened.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
-    public var unsortedItems: [LibraryItem] {
-        items.filter { albums(of: $0.id).isEmpty }
+    var unsortedItems: [LibraryItem] {
+        unsortedItems()
     }
 
-    public var albumSummaries: [AlbumSummary] {
-        let members = items
+    /// The materials in no album yet. `among` is the already collected catalog, as `LibraryModel` holds.
+    func unsortedItems(among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+        (candidates ?? items).filter { albums(of: $0.id).isEmpty }
+    }
+
+    var albumSummaries: [AlbumSummary] {
+        albumSummaries()
+    }
+
+    /// The albums with their members and covers, over materials collected already; nil with `among`
+    /// collects the catalog for this one call, which views do not do: they read the model's list.
+    /// The members gather in one pass over the materials, each into its own albums, instead of a scan
+    /// per album.
+    func albumSummaries(among candidates: [LibraryItem]? = nil) -> [AlbumSummary] {
+        let members = candidates ?? items
+        var byAlbum: [String: [LibraryItem]] = [:]
+        for item in members {
+            for name in albums(of: item.id) {
+                byAlbum[name, default: []].append(item)
+            }
+        }
         return albums.map { name in
-            let inside = members.filter { albums(of: $0.id).contains(name) }
+            let inside = byAlbum[name] ?? []
             return AlbumSummary(grouping: .albums, key: name, name: name, count: inside.count, front: Array(inside.prefix(3)))
         }
     }
 
     /// The Collections section: the same materials gathered by album, publisher, type or month added.
-    /// Only albums can be empty; the other groupings list what exists.
-    public func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress()) -> [AlbumSummary] {
+    /// Only albums can be empty; the other groupings list what exists. `among` is the catalog the
+    /// model has collected; nil collects it for this one call.
+    func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress(), among candidates: [LibraryItem]? = nil) -> [AlbumSummary] {
+        let members = candidates ?? items
         var summaries: [AlbumSummary]
         if grouping == .albums {
-            summaries = albumSummaries
+            summaries = albumSummaries(among: members)
         } else {
             var order: [String] = []
             var names: [String: String] = [:]
-            var members: [String: [LibraryItem]] = [:]
-            for item in items {
+            var membersByGroup: [String: [LibraryItem]] = [:]
+            for item in members {
                 guard let (key, name) = Self.group(of: item, by: grouping) else { continue }
-                if members[key] == nil { order.append(key) }
+                if membersByGroup[key] == nil {
+                    order.append(key)
+                }
                 names[key] = name
-                members[key, default: []].append(item)
+                membersByGroup[key, default: []].append(item)
             }
             summaries = order.map { key in
-                let inside = members[key] ?? []
+                let inside = membersByGroup[key] ?? []
                 return AlbumSummary(grouping: grouping, key: key, name: names[key] ?? key, count: inside.count, front: Array(inside.prefix(3)))
             }
         }
@@ -162,9 +195,17 @@ extension LibrarySnapshot {
         }
         switch sort {
         case .standard:
-            if grouping == .months { summaries.sort { $0.key > $1.key } } else if grouping != .albums { summaries.sort(by: byName) }
+            if grouping == .months {
+                summaries.sort { $0.key > $1.key }
+            } else if grouping != .albums {
+                summaries.sort(by: byName)
+            }
         case .name:
-            if grouping == .months { summaries.sort { $0.key > $1.key } } else { summaries.sort(by: byName) }
+            if grouping == .months {
+                summaries.sort { $0.key > $1.key }
+            } else {
+                summaries.sort(by: byName)
+            }
         case .size:
             summaries.sort { $0.count != $1.count ? $0.count > $1.count : byName($0, $1) }
         case .recent:
@@ -172,7 +213,7 @@ extension LibrarySnapshot {
             summaries.sort { newest($0) != newest($1) ? newest($0) > newest($1) : byName($0, $1) }
         case .opened:
             var opened = progress.groupsOpened
-            for item in items {
+            for item in members {
                 guard let date = progress.readings[item.id]?.openedAt else { continue }
                 let keys = grouping == .albums ? albums(of: item.id) : Self.group(of: item, by: grouping).map { [$0.key] } ?? []
                 for key in keys {
@@ -188,7 +229,7 @@ extension LibrarySnapshot {
 
     /// The materials of one album, publisher, type or month in the reader's order, in sections when grouped.
     /// `opened` gives when each material was last opened, for sorting by it.
-    public static func arrange(
+    static func arrange(
         _ items: [LibraryItem], sortedBy sort: ItemSort, groupedBy grouping: ItemGrouping, opened: [String: Date] = [:]
     ) -> [ItemSection] {
         func sorted(_ items: [LibraryItem]) -> [LibraryItem] {
@@ -210,7 +251,9 @@ extension LibrarySnapshot {
         var members: [String: [LibraryItem]] = [:]
         for item in items {
             let (key, name) = group(of: item, by: by) ?? ("", "Other")
-            if members[key] == nil { order.append(key) }
+            if members[key] == nil {
+                order.append(key)
+            }
             names[key] = name
             members[key, default: []].append(item)
         }
@@ -218,11 +261,13 @@ extension LibrarySnapshot {
         return keys.map { ItemSection(id: $0, title: names[$0], items: sorted(members[$0] ?? [])) }
     }
 
-    public func items(in grouping: LibraryGrouping, key: String) -> [LibraryItem] {
-        grouping == .albums ? items(inAlbum: key) : items.filter { Self.group(of: $0, by: grouping)?.key == key }
+    /// The materials of one grouping. `among` is the catalog the model collected already.
+    func items(in grouping: LibraryGrouping, key: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+        let members = candidates ?? items
+        return grouping == .albums ? items(inAlbum: key, among: members) : members.filter { Self.group(of: $0, by: grouping)?.key == key }
     }
 
-    public func groupName(_ grouping: LibraryGrouping, key: String) -> String {
+    func groupName(_ grouping: LibraryGrouping, key: String) -> String {
         groups(by: grouping, sortedBy: .standard).first { $0.key == key }?.name ?? key
     }
 
@@ -247,42 +292,50 @@ extension LibrarySnapshot {
     }
 
     /// The source of one material without building every tile, for the reader's header.
-    public func source(of itemID: String) -> SourceRef? {
+    func source(of itemID: String) -> SourceRef? {
         guard let article = articles.first(where: { $0.material.id == itemID }) else { return nil }
         guard let sourceURL = article.material.sourceURL else { return article.material.authors }
         var index = SourceIndex(catalog: browserCatalog, declared: articles.compactMap(\.material.source))
         return index.source(for: sourceURL)
     }
 
-    public func items(inAlbum name: String) -> [LibraryItem] {
-        items.filter { albums(of: $0.id).contains(name) }
+    func items(inAlbum name: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+        (candidates ?? items).filter { albums(of: $0.id).contains(name) }
     }
 
-    public func items(fromSource id: String) -> [LibraryItem] {
-        items.filter { $0.source?.id == id }
+    func items(fromSource id: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+        (candidates ?? items).filter { $0.source?.id == id }
     }
 
-    public var archivedItems: [LibraryItem] {
+    var archivedItems: [LibraryItem] {
         allItems.filter { isArchived($0.id) }
     }
 
     /// Titles, authors, sources, albums and section headings; the body text is not searched. A screen searches
     /// only the materials it shows, the whole library by default.
-    public func items(matching query: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
+    func items(matching query: String, among candidates: [LibraryItem]? = nil) -> [LibraryItem] {
         let candidates = candidates ?? items
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return candidates }
         let folded = ArticleEntry.folded(needle)
-        func hit(_ text: String) -> Bool { ArticleEntry.folded(text).contains(folded) }
+        func hit(_ text: String) -> Bool {
+            ArticleEntry.folded(text).contains(folded)
+        }
         let articleHits = Set(articles.filter { $0.searchText.contains(folded) }.map(\.material.id))
         // Albums and sources repeat across tiles, so each name is tested once.
         let albumHits = Set(albums.filter(hit))
         var sourceHits: [String: Bool] = [:]
         return candidates.filter { item in
-            if articleHits.contains(item.id) { return true }
-            if albums(of: item.id).contains(where: albumHits.contains) { return true }
+            if articleHits.contains(item.id) {
+                return true
+            }
+            if albums(of: item.id).contains(where: albumHits.contains) {
+                return true
+            }
             guard let source = item.source?.name else { return false }
-            if let known = sourceHits[source] { return known }
+            if let known = sourceHits[source] {
+                return known
+            }
             let found = hit(source)
             sourceHits[source] = found
             return found
@@ -290,9 +343,14 @@ extension LibrarySnapshot {
     }
 
     /// Highlights and notes grouped by material; the most recently touched material and annotation come first.
-    public var annotationGroups: [AnnotationGroup] {
+    /// `among` is the materials collected already, every one at one pass, without the archive filter.
+    var annotationGroups: [AnnotationGroup] {
+        annotationGroups(among: allItems)
+    }
+
+    func annotationGroups(among candidates: [LibraryItem]) -> [AnnotationGroup] {
         let byItem = Dictionary(grouping: annotations, by: \.materialID)
-        let known = Dictionary(allItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let known = Dictionary(candidates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let groups = byItem.compactMap { itemID, annotations -> AnnotationGroup? in
             guard let item = known[itemID] else { return nil }
             let sorted = annotations.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
@@ -304,15 +362,18 @@ extension LibrarySnapshot {
     }
 
     /// The annotations a search finds: all of a material the material search finds, and elsewhere those whose
-    /// paragraph or note holds the query.
-    public func annotationGroups(matching query: String) -> [AnnotationGroup] {
-        let groups = annotationGroups
+    /// paragraph or note holds the query. `among` is the materials the model collected already (the full
+    /// catalog, archive included, since notes stay for archived materials too).
+    func annotationGroups(matching query: String, among: [LibraryItem]? = nil) -> [AnnotationGroup] {
+        let groups = annotationGroups(among: among ?? allItems)
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return groups }
         let folded = ArticleEntry.folded(needle)
-        let found = Set(items(matching: needle, among: groups.map(\.item)).map(\.id))
+        let found = Set(items(matching: needle, among: among ?? allItems).map(\.id))
         return groups.compactMap { group in
-            if found.contains(group.id) { return group }
+            if found.contains(group.id) {
+                return group
+            }
             let hits = group.annotations.filter {
                 ArticleEntry.folded($0.text).contains(folded) || ArticleEntry.folded($0.note).contains(folded)
             }
@@ -320,7 +381,10 @@ extension LibrarySnapshot {
         }
     }
 
-    private var allItems: [LibraryItem] {
+    /// Everything as screens see it, newest first. The pass over the browser catalog and the sort are
+    /// expensive, so screens never read this directly: `LibraryModel` collects it once per catalog
+    /// change and hands the lists out.
+    var allItems: [LibraryItem] {
         var sources = SourceIndex(catalog: browserCatalog, declared: articles.compactMap(\.material.source))
         return articles.map { article in
             let material = article.material
@@ -339,7 +403,9 @@ extension LibrarySnapshot {
         }
         .sorted {
             let (a, b) = ($0.addedAt ?? .distantPast, $1.addedAt ?? .distantPast)
-            if a != b { return a > b }
+            if a != b {
+                return a > b
+            }
             // A folder import gives a whole batch one date; ties fall back to the title so the order stays put.
             let order = $0.title.localizedStandardCompare($1.title)
             return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
@@ -371,7 +437,9 @@ struct SourceIndex {
                     saved[Self.key(url)] = ref
                 }
             }
-            if let homepage = ref.homepage { enter(ref, at: homepage) }
+            if let homepage = ref.homepage {
+                enter(ref, at: homepage)
+            }
         }
         for page in declared {
             guard let host = page.homepage.host() else { continue }
@@ -382,12 +450,18 @@ struct SourceIndex {
     /// A prepared material's address is already parsed, so it is not parsed again for every tile;
     /// a site without a publisher of its own is worked out once per host.
     mutating func source(for url: URL) -> SourceRef? {
-        if let known = saved[Self.key(url)] { return known }
+        if let known = saved[Self.key(url)] {
+            return known
+        }
         guard let host = url.host(), let hostKey = Self.hostKey(url) else { return nil }
         let path = Self.segments(url)
         let above = homes[hostKey]?.filter { path.starts(with: $0.path) }
-        if let home = above?.max(by: { $0.path.count < $1.path.count }) { return home.ref }
-        if let known = sites[hostKey] { return known }
+        if let home = above?.max(by: { $0.path.count < $1.path.count }) {
+            return home.ref
+        }
+        if let known = sites[hostKey] {
+            return known
+        }
         let ref = SourceRef(name: Self.siteName(host), homepage: URL(string: "\(url.scheme ?? "https")://\(host)"))
         sites[hostKey] = ref
         return ref
@@ -414,9 +488,13 @@ struct SourceIndex {
     static func siteName(_ host: String) -> String {
         let labels = host.split(separator: ".").filter { $0 != "www" }
         guard labels.count > 1 else { return host }
-        if labels.suffix(2).joined(separator: ".") == "github.io" { return String(labels[0]) }
+        if labels.suffix(2).joined(separator: ".") == "github.io" {
+            return String(labels[0])
+        }
         let secondLevel = ["co", "com", "org", "ac", "net"]
-        if labels.count > 2, secondLevel.contains(String(labels[labels.count - 2])) { return String(labels[labels.count - 3]) }
+        if labels.count > 2, secondLevel.contains(String(labels[labels.count - 2])) {
+            return String(labels[labels.count - 3])
+        }
         return String(labels[labels.count - 2])
     }
 
@@ -427,14 +505,16 @@ struct SourceIndex {
     }
 
     static func key(_ url: URL) -> String {
-        if let video = YouTube.videoID(in: url) { return "youtube:\(video)" }
+        if let video = YouTube.videoID(in: url) {
+            return "youtube:\(video)"
+        }
         return url.withoutFragment.absoluteString
     }
 }
 
-extension URL {
+public extension URL {
     /// The page itself: a link to a heading or a paragraph of it names the same material.
-    public var withoutFragment: URL {
+    var withoutFragment: URL {
         guard fragment != nil, var parts = URLComponents(url: self, resolvingAgainstBaseURL: false) else { return self }
         parts.fragment = nil
         return parts.url ?? self
