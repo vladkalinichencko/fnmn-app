@@ -26,20 +26,20 @@ final class PerformanceTests: XCTestCase {
     }()
 
     func testSearchKeystroke() {
-        let library = Self.library
-        measure { _ = library.items(matching: "Section 17") }
+        let queries = LibraryQueries(Self.library)
+        measure { _ = queries.items(matching: "Section 17") }
     }
 
     func testBuildingEveryTile() {
         let library = Self.library
-        measure { _ = library.items }
+        measure { _ = LibraryQueries(library) }
     }
 
     func testLibraryScreenSelectors() {
-        let library = Self.library
+        let queries = LibraryQueries(Self.library)
         measure {
-            _ = library.unsortedItems
-            _ = library.albumSummaries
+            _ = queries.unsortedItems
+            _ = queries.albumSummaries
         }
     }
 

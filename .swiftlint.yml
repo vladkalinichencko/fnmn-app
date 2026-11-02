@@ -2,16 +2,15 @@
 only_rules:
   - snapshot_catalog_selector_in_view
 
+included:
+  - App
+
 excluded:
-  - .build
-  - "**/.build/**"
-  - Vendor
   - App/FNMN/Store/LibraryModel.swift
-  - Tests/FNMNCoreTests/HotPathGuardTests.swift
 
 custom_rules:
   snapshot_catalog_selector_in_view:
-    name: "Catalog rebuild in a view body"
-    regex: "snapshot\\.(items\\(|albumSummaries|unsortedItems|continueItems|groups\\(|groupName\\(|archivedItems|annotationGroups)"
-    message: "Read LibraryModel's collected list (library.items(...), library.albumSummaries(), ...) — these snapshot selectors rebuild the whole catalog, ~10 ms per 1500 materials, in a view body."
+    name: "Catalog built in a view body"
+    regex: "LibraryQueries\\("
+    message: "Read LibraryModel's queries (library.queries.items(...), library.queries.albumSummaries, ...); LibraryQueries is built once per catalog change in LibraryModel."
     severity: error

@@ -12,9 +12,9 @@ struct ShelfScreen: View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.shelf) {
             let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let annotations = AnnotationEntry.all(in: library.annotationGroups(matching: query))
+            let annotations = AnnotationEntry.all(in: library.queries.annotationGroups(matching: query))
                 .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }
-            let archived = library.items(matching: query, among: library.archivedItems)
+            let archived = library.queries.search(query, in: library.queries.archivedItems)
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
                     if !annotations.isEmpty {
@@ -82,7 +82,7 @@ struct AnnotationsScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let entries = AnnotationEntry.all(in: library.annotationGroups(matching: query))
+        let entries = AnnotationEntry.all(in: library.queries.annotationGroups(matching: query))
         ScrollView {
             AnnotationColumns(entries: entries)
                 .padding(.horizontal, Tokens.gutter)
@@ -100,7 +100,7 @@ struct ArchiveScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let found = library.items(matching: query, among: library.archivedItems)
+        let found = library.queries.search(query, in: library.queries.archivedItems)
         ScrollView {
             ItemGrid(items: found).padding(.horizontal, Tokens.gutter)
         }

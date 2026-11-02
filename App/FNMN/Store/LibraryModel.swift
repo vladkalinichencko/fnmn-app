@@ -27,9 +27,7 @@ enum LibraryLoadState: Equatable {
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
     private(set) var progress = ReadingProgress()
-    private(set) var allItems: [LibraryItem] = []
-    private(set) var catalogItems: [LibraryItem] = []
-    private(set) var archivedItems: [LibraryItem] = []
+    private(set) var queries = LibraryQueries(LibrarySnapshot())
     private(set) var loadState = LibraryLoadState.idle
     /// The FNMN folder in iCloud Drive, where every material lives; until the reader points to it once,
     /// the app asks for it instead of showing the library.
@@ -79,7 +77,7 @@ final class LibraryModel {
         defer { Signposts.library.endInterval("Load library", interval) }
         do {
             (snapshot, progress) = try await file.load()
-            refreshCatalog()
+            refreshQueries()
             sync = try await file.loadSync()
             await relinkCloudFolder()
             loadState = .ready
@@ -233,57 +231,9 @@ final class LibraryModel {
         return progress.positions[itemID]
     }
 
-    /// The only place `snapshot.allItems` runs.
-    private func refreshCatalog() {
-        let items = snapshot.allItems
-        let archived = Set(snapshot.archived)
-        allItems = items
-        catalogItems = items.filter { !archived.contains($0.id) }
-        archivedItems = items.filter { archived.contains($0.id) }
-    }
-
-    func items(matching query: String) -> [LibraryItem] {
-        snapshot.items(matching: query, among: catalogItems)
-    }
-
-    func items(matching query: String, among candidates: [LibraryItem]) -> [LibraryItem] {
-        snapshot.items(matching: query, among: candidates)
-    }
-
-    func continueItems(_ progress: ReadingProgress) -> [LibraryItem] {
-        snapshot.continueItems(progress, among: catalogItems)
-    }
-
-    func unsortedItems() -> [LibraryItem] {
-        snapshot.unsortedItems(among: catalogItems)
-    }
-
-    func albumSummaries() -> [AlbumSummary] {
-        snapshot.albumSummaries(among: catalogItems)
-    }
-
-    func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress()) -> [AlbumSummary] {
-        snapshot.groups(by: grouping, sortedBy: sort, progress: progress, among: catalogItems)
-    }
-
-    func items(in grouping: LibraryGrouping, key: String) -> [LibraryItem] {
-        snapshot.items(in: grouping, key: key, among: catalogItems)
-    }
-
-    func items(inAlbum name: String) -> [LibraryItem] {
-        snapshot.items(inAlbum: name, among: catalogItems)
-    }
-
-    func items(fromSource id: String) -> [LibraryItem] {
-        snapshot.items(fromSource: id, among: catalogItems)
-    }
-
-    func groupName(_ grouping: LibraryGrouping, key: String) -> String {
-        snapshot.groupName(grouping, key: key, among: catalogItems)
-    }
-
-    func annotationGroups(matching query: String) -> [AnnotationGroup] {
-        snapshot.annotationGroups(matching: query, among: allItems)
+    /// Rebuilds the queries the screens read; the only place `LibraryQueries` is built.
+    private func refreshQueries() {
+        queries = LibraryQueries(snapshot)
     }
 
     /// Stores a delivery archive the server prepared, with its pictures and videos, in the place of the link
@@ -473,7 +423,7 @@ final class LibraryModel {
                 try await file.save(updated, previous: current)
             }
             snapshot = updated
-            refreshCatalog()
+            refreshQueries()
             for change in updated.progressChanges(since: current) { apply(change) }
         }
         lastWrite = Task { _ = try? await task.value }

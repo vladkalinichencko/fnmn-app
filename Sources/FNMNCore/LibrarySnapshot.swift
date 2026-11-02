@@ -31,6 +31,18 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         return (samePage.first { $0.material.kind != .link } ?? samePage.first)?.material.id
     }
 
+    /// The source of one material without building every tile, for the reader's header.
+    public func source(of itemID: String) -> SourceRef? {
+        guard let article = articles.first(where: { $0.material.id == itemID }) else {
+            return nil
+        }
+        guard let sourceURL = article.material.sourceURL else {
+            return article.material.authors
+        }
+        var index = SourceIndex(catalog: browserCatalog, declared: articles.compactMap(\.material.source))
+        return index.source(for: sourceURL)
+    }
+
     /// Adds or replaces a prepared article or video. A material that is in no album yet lands in the albums
     /// the package names; otherwise the reader's albums stay. A changed text drops the old marks.
     public mutating func importPackage(_ package: ImportPackage, at date: Date, delivery: String? = nil, deliveredAt: Date? = nil) throws {

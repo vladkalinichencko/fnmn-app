@@ -20,7 +20,7 @@ struct ArrangedItems: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.sectionGap) {
             let opened = sort == .opened ? library.progress.readings.compactMapValues(\.openedAt) : [:]
-            ForEach(LibrarySnapshot.arrange(items, sortedBy: sort, groupedBy: grouping, opened: opened)) { section in
+            ForEach(LibraryQueries.arrange(items, sortedBy: sort, groupedBy: grouping, opened: opened)) { section in
                 VStack(alignment: .leading, spacing: Tokens.gap) {
                     if let title = section.title {
                         Text(title).font(.title2.weight(.black))

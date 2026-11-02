@@ -2,7 +2,7 @@
 import Foundation
 import Testing
 
-/// Screens draw from the collected catalog, so a selector over it must fit the frame budget (5 ms).
+/// Screens read `LibraryQueries` every frame, so its album summaries must fit the frame budget (5 ms).
 struct CollectedCatalogSpeedTests {
     private static let library: LibrarySnapshot = {
         var library = LibrarySnapshot()
@@ -20,12 +20,11 @@ struct CollectedCatalogSpeedTests {
     }()
 
     @Test func albumSummariesOverCollectedMaterialsFitTheFrameBudget() {
-        let library = Self.library
-        let catalog = library.items
+        let queries = LibraryQueries(Self.library)
         var best = Double.infinity
         for _ in 0 ..< 10 {
             let start = ContinuousClock.now
-            _ = library.albumSummaries(among: catalog)
+            _ = queries.albumSummaries
             best = min(best, Double((ContinuousClock.now - start) / .milliseconds(1)))
         }
         #expect(best < 5, "albumSummaries over the collected catalog took \(best) ms at best")

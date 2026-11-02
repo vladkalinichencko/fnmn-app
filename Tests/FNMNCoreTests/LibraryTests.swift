@@ -70,7 +70,7 @@ private let paperLink = ImportPackage(
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     try writeDelivery(paperLink, to: delivery)
     let imported = try await libraryFile(root).storeArticle(archive: delivery, into: LibrarySnapshot())
-    let item = try #require(imported.items(inAlbum: "HCI").first)
+    let item = try #require(LibraryQueries(imported).items(inAlbum: "HCI").first)
     #expect(item.id == paperLink.material.id)
     #expect(item.kind == .link)
     #expect(item.originalURL == paperLink.material.sourceURL)
@@ -89,7 +89,8 @@ private let paperLink = ImportPackage(
     #expect(library.articles.map(\.material.id) == [paper.material.id])
     #expect(library.albums(of: paper.material.id) == ["HCI"])
     #expect(library.isArchived(paper.material.id))
-    #expect(library.archivedItems.first?.addedAt == .distantPast)
+    let queries = LibraryQueries(library)
+    #expect(queries.archivedItems.first?.addedAt == .distantPast)
 
     try library.importPackage(paperLink, at: .now)
     #expect(library.articles.map(\.material.id) == [paper.material.id])
@@ -293,7 +294,8 @@ private let laterArticle = ImportPackage(
     #expect(package.material.kind == .link)
     #expect(package.material.title == "slides")
     let library = try await libraryFile(directory).storeMade(package, into: LibrarySnapshot())
-    #expect(library.item(package.material.id)?.kind == .link)
+    let queries = LibraryQueries(library)
+    #expect(queries.item(package.material.id)?.kind == .link)
 }
 
 @Test func aLinkKeptWithoutTheServerHasTheIDTheServerGivesIt() {
@@ -305,7 +307,8 @@ private let laterArticle = ImportPackage(
 @Test func aMaterialMadeFromAFileHasItsAuthorsForASource() throws {
     var library = LibrarySnapshot()
     try library.importPackage(namedBook, at: .now)
-    let item = try #require(library.item(namedBook.material.id))
+    let queries = LibraryQueries(library)
+    let item = try #require(queries.item(namedBook.material.id))
     #expect(item.kind == .book)
     #expect(item.source?.name == "Daniel A. Roberts")
     #expect(item.originalURL == nil)
@@ -331,7 +334,8 @@ private func blog(_ name: String?, _ address: String) -> PageSource {
     try library.importPackage(page("https://hughbzhang.com/blog/a.html"), at: .now)
     try library.importPackage(page("https://www.hughbzhang.com/blog/b.html", source: blog(nil, "https://hughbzhang.com/")), at: .now)
     try library.importPackage(page("https://hughbzhang.com/about"), at: .now)
-    let names = Dictionary(uniqueKeysWithValues: library.items.map { ($0.originalURL!.path, $0.source?.name) })
+    let queries = LibraryQueries(library)
+    let names = Dictionary(uniqueKeysWithValues: queries.items.map { ($0.originalURL!.path, $0.source?.name) })
     #expect(names["/blog/a.html"] == "Hugh Zhang · Blog")
     #expect(names["/blog/b.html"] == "Hugh Zhang · Blog")
     #expect(names["/about"] == "hughbzhang")
@@ -343,31 +347,34 @@ private func blog(_ name: String?, _ address: String) -> PageSource {
     try library.importPackage(page("https://alexzhang13.github.io/blog/2026/shape/", source: zhang), at: .now)
     try library.importPackage(page("https://alexzhang13.github.io/blog/2025/older/"), at: .now)
     try library.importPackage(page("https://alexzhang13.github.io/projects/rlm/"), at: .now)
-    let shape = try #require(library.item("article:https://alexzhang13.github.io/blog/2026/shape/")?.source)
+    let queries = LibraryQueries(library)
+    let shape = try #require(queries.item("article:https://alexzhang13.github.io/blog/2026/shape/")?.source)
     #expect(shape.name == "Alex L. Zhang")
     #expect(shape.homepage == zhang.homepage)
-    #expect(library.items(fromSource: shape.id).count == 2)
-    let older = try #require(library.item("article:https://alexzhang13.github.io/blog/2025/older/")?.source)
+    #expect(queries.items(fromSource: shape.id).count == 2)
+    let older = try #require(queries.item("article:https://alexzhang13.github.io/blog/2025/older/")?.source)
     #expect(older == shape)
     #expect(library.source(of: "article:https://alexzhang13.github.io/blog/2025/older/") == shape)
-    #expect(library.item("article:https://alexzhang13.github.io/projects/rlm/")?.source?.name == "alexzhang13")
+    #expect(queries.item("article:https://alexzhang13.github.io/projects/rlm/")?.source?.name == "alexzhang13")
 }
 
 @Test func publishersThatCallThemselvesTheSameAreToldApartByTheirPage() throws {
     var library = LibrarySnapshot()
     try library.importPackage(page("https://medium.com/@ann/one", source: blog("Medium", "https://medium.com/@ann/")), at: .now)
     try library.importPackage(page("https://medium.com/@bob/two", source: blog("Medium", "https://medium.com/@bob/")), at: .now)
-    let ann = try #require(library.item("article:https://medium.com/@ann/one")?.source)
-    let bob = try #require(library.item("article:https://medium.com/@bob/two")?.source)
+    let queries = LibraryQueries(library)
+    let ann = try #require(queries.item("article:https://medium.com/@ann/one")?.source)
+    let bob = try #require(queries.item("article:https://medium.com/@bob/two")?.source)
     #expect(ann.name == bob.name)
     #expect(ann.id != bob.id)
-    #expect(library.items(fromSource: ann.id).map(\.id) == ["article:https://medium.com/@ann/one"])
+    #expect(queries.items(fromSource: ann.id).map(\.id) == ["article:https://medium.com/@ann/one"])
 }
 
 @Test func aPublisherWithoutAFoundNameIsNamedAfterItsSite() throws {
     var library = LibrarySnapshot()
     try library.importPackage(page("https://alexzhang13.github.io/blog/2026/shape/", source: blog(nil, "https://alexzhang13.github.io/blog/")), at: .now)
-    let source = try #require(library.items.first?.source)
+    let queries = LibraryQueries(library)
+    let source = try #require(queries.items.first?.source)
     #expect(source.name == "alexzhang13")
     #expect(source.homepage == URL(string: "https://alexzhang13.github.io/blog/"))
 }
@@ -421,7 +428,10 @@ private let namedBook = ImportPackage(
     var library = LibrarySnapshot()
     try library.importPackage(namedArticle, at: .now)
     try library.importPackage(namedBook, at: .now)
-    func ids(_ query: String) -> Set<String> { Set(library.items(matching: query).map(\.id)) }
+    var queries = LibraryQueries(library)
+    func ids(_ query: String) -> Set<String> {
+        Set(queries.items(matching: query).map(\.id))
+    }
     #expect(ids(" ") == [namedArticle.material.id, namedBook.material.id])
     #expect(ids("kernel") == [namedArticle.material.id])
     #expect(ids("Alice") == [namedArticle.material.id])
@@ -438,11 +448,12 @@ private let namedBook = ImportPackage(
         body: "# Kernel Trick\n\nhidden body text"
     )
     try library.importPackage(headed, at: .now)
+    queries = LibraryQueries(library)
     #expect(ids("Kernel Trick") == ["article:headed"])
     #expect(ids("hidden body text").isEmpty)
-    let book = library.items.filter { $0.id == namedBook.material.id }
-    #expect(library.items(matching: "kernel", among: book).isEmpty)
-    #expect(library.items(matching: "roberts", among: book).map(\.id) == [namedBook.material.id])
+    let book = queries.items.filter { $0.id == namedBook.material.id }
+    #expect(queries.search("kernel", in: book).isEmpty)
+    #expect(queries.search("roberts", in: book).map(\.id) == [namedBook.material.id])
 }
 
 @Test func annotationSearchKeepsAFoundMaterialWholeAndElsewhereOnlyMatchingAnnotations() throws {
@@ -455,7 +466,8 @@ private let namedBook = ImportPackage(
     library = try library.applying(.mark(.highlight, AnnotationTarget(materialID: book, piece: 0, text: "an effective quote")))
     library = try library.applying(.note("worth a Kernel look", AnnotationTarget(materialID: book, piece: 1, text: "plain")))
     func found(_ query: String) -> [String: Int] {
-        Dictionary(uniqueKeysWithValues: library.annotationGroups(matching: query).map { ($0.id, $0.annotations.count) })
+        let queries = LibraryQueries(library)
+        return Dictionary(uniqueKeysWithValues: queries.annotationGroups(matching: query).map { ($0.id, $0.annotations.count) })
     }
     #expect(found("") == [article: 2, book: 2])
     #expect(found("kernel") == [article: 2, book: 1])
@@ -594,21 +606,27 @@ private func span(_ quote: String) -> AnnotationTarget {
     var library = LibrarySnapshot()
     try library.importPackage(article, at: .now)
     try library.importPackage(namedBook, at: .now)
-    #expect(library.unsortedItems.map(\.id) == [namedBook.material.id])
+    var queries = LibraryQueries(library)
+    #expect(queries.unsortedItems.map(\.id) == [namedBook.material.id])
     library = try library.applying(.addToAlbum("Web", itemIDs: [article.material.id]))
+    queries = LibraryQueries(library)
     library = try library.applying(.addToAlbum("Reading", itemIDs: [namedBook.material.id]))
-    #expect(library.unsortedItems.isEmpty)
-    #expect(library.items(inAlbum: "Inbox").map(\.id) == [article.material.id])
-    #expect(library.items(inAlbum: "Web").map(\.id) == [article.material.id])
+    queries = LibraryQueries(library)
+    #expect(queries.unsortedItems.isEmpty)
+    #expect(queries.items(inAlbum: "Inbox").map(\.id) == [article.material.id])
+    #expect(queries.items(inAlbum: "Web").map(\.id) == [article.material.id])
     library = try library.applying(.renameAlbum("Inbox", to: "Papers"))
-    #expect(library.items(inAlbum: "Papers").map(\.id) == [article.material.id])
+    queries = LibraryQueries(library)
+    #expect(queries.items(inAlbum: "Papers").map(\.id) == [article.material.id])
     #expect(throws: LibraryError.albumNameTaken("Web")) {
         try library.applying(.renameAlbum("Papers", to: "Web"))
     }
     library = try library.applying(.deleteAlbum("Reading"))
-    #expect(library.unsortedItems.map(\.id) == [namedBook.material.id])
+    queries = LibraryQueries(library)
+    #expect(queries.unsortedItems.map(\.id) == [namedBook.material.id])
     library = try library.applying(.removeFromAlbum("Web", itemID: article.material.id))
-    #expect(library.albumSummaries.map(\.count) == [1, 0])
+    queries = LibraryQueries(library)
+    #expect(queries.albumSummaries.map(\.count) == [1, 0])
 }
 
 @Test func readThroughKeepsEarlierParagraphsRead() {
@@ -814,13 +832,14 @@ private func prepared(_ id: String, kind: Material.Kind = .article, source: Stri
         let (package, delivered) = try prepared(id, kind: kind, source: source, at: date)
         try library.importPackage(package, at: delivered)
     }
-    let publishers = library.groups(by: .publishers, sortedBy: .standard)
+    let queries = LibraryQueries(library)
+    let publishers = queries.groups(by: .publishers, sortedBy: .standard)
     #expect(publishers.map(\.name) == ["alpha", "beta"])
     #expect(publishers.map(\.count) == [2, 1])
-    #expect(library.groups(by: .publishers, sortedBy: .size).first?.name == "alpha")
-    #expect(library.groups(by: .types, sortedBy: .name).map(\.name) == ["Articles", "Videos"])
-    #expect(library.groups(by: .months, sortedBy: .standard).count == 2)
-    let articles = library.items(in: .types, key: "article")
+    #expect(queries.groups(by: .publishers, sortedBy: .size).first?.name == "alpha")
+    #expect(queries.groups(by: .types, sortedBy: .name).map(\.name) == ["Articles", "Videos"])
+    #expect(queries.groups(by: .months, sortedBy: .standard).count == 2)
+    let articles = queries.items(in: .types, key: "article")
     #expect(articles.map(\.id) == ["c", "a"])
 }
 
@@ -830,11 +849,12 @@ private func prepared(_ id: String, kind: Material.Kind = .article, source: Stri
         let (package, delivered) = try prepared(id, source: source, at: date)
         try library.importPackage(package, at: delivered)
     }
+    let queries = LibraryQueries(library)
     let progress = ReadingProgress()
         .applying(.open(itemID: "a"), at: Date(timeIntervalSince1970: 10))
-        .applying(.openGroup(id: AlbumSummary.id(.publishers, library.item("b")!.source!.id)), at: Date(timeIntervalSince1970: 20))
-    #expect(library.groups(by: .publishers, sortedBy: .opened, progress: progress).map(\.name) == ["beta", "alpha", "gamma"])
+        .applying(.openGroup(id: AlbumSummary.id(.publishers, queries.item("b")!.source!.id)), at: Date(timeIntervalSince1970: 20))
+    #expect(queries.groups(by: .publishers, sortedBy: .opened, progress: progress).map(\.name) == ["beta", "alpha", "gamma"])
     let opened = progress.readings.compactMapValues(\.openedAt)
-    let arranged = LibrarySnapshot.arrange(library.items, sortedBy: .opened, groupedBy: .none, opened: opened)
+    let arranged = LibraryQueries.arrange(queries.items, sortedBy: .opened, groupedBy: .none, opened: opened)
     #expect(arranged.first?.items.map(\.id) == ["a", "c", "b"])
 }
