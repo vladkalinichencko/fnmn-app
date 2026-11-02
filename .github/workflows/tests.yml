@@ -1,0 +1,27 @@
+name: Tests and guards
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: swift test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift test
+        run: swift test
+
+  lint:
+    name: swiftlint guards
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      # The config carries the hot-path guards only (see .swiftlint.yml), so the run is
+      # a strict check of the found-and-guarded issues, not the repository's style baseline.
+      - name: SwiftLint
+        run: swiftlint --strict
