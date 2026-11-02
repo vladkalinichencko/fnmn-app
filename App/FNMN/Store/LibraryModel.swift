@@ -27,6 +27,7 @@ enum LibraryLoadState: Equatable {
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
     private(set) var progress = ReadingProgress()
+    private(set) var queries = LibraryQueries(LibrarySnapshot())
     private(set) var loadState = LibraryLoadState.idle
     /// The FNMN folder in iCloud Drive, where every material lives; until the reader points to it once,
     /// the app asks for it instead of showing the library.
@@ -49,7 +50,9 @@ final class LibraryModel {
     @ObservationIgnored private var sync = JournalSync()
     @ObservationIgnored private var journalRead: Task<Void, Never>?
     @ObservationIgnored private let device: String = {
-        if let id = UserDefaults.standard.string(forKey: "deviceID") { return id }
+        if let id = UserDefaults.standard.string(forKey: "deviceID") {
+            return id
+        }
         let id = UUID().uuidString
         UserDefaults.standard.set(id, forKey: "deviceID")
         return id
@@ -74,6 +77,7 @@ final class LibraryModel {
         defer { Signposts.library.endInterval("Load library", interval) }
         do {
             (snapshot, progress) = try await file.load()
+            refreshQueries()
             sync = try await file.loadSync()
             await relinkCloudFolder()
             loadState = .ready
@@ -95,7 +99,9 @@ final class LibraryModel {
             scheduleSave()
             if let deleted {
                 try? await file.removeDelivery(of: deleted.entry)
-                if let original = deleted.original { try? await file.removeOriginal(original) }
+                if let original = deleted.original {
+                    try? await file.removeOriginal(original)
+                }
                 await readOriginals()
             }
         } catch {
@@ -110,8 +116,11 @@ final class LibraryModel {
         if case .savePosition = change {
             places.append(change)
         } else {
-            progress = (places + [change]).reduce(progress) { $0.applying($1) }
+            let next = (places + [change]).reduce(progress) { $0.applying($1) }
             places = []
+            if next != progress {
+                progress = next
+            }
         }
         switch change {
         case .open, .openGroup, .setRead, .readThrough, .line, .fold, .reset: record(.progress(change))
@@ -128,7 +137,9 @@ final class LibraryModel {
         if !places.isEmpty {
             var latest: [String: ProgressChange] = [:]
             for change in places {
-                if case let .savePosition(_, itemID, _) = change { latest[itemID] = change }
+                if case let .savePosition(_, itemID, _) = change {
+                    latest[itemID] = change
+                }
             }
             progress = places.reduce(progress) { $0.applying($1) }
             places = []
@@ -165,7 +176,9 @@ final class LibraryModel {
     /// The other devices' journals. A launch and a return to the app can both start a sync, and two reads at once
     /// would apply the same lines twice, so a read that finds one running waits for it instead.
     private func readJournals() async {
-        if let running = journalRead { return await running.value }
+        if let running = journalRead {
+            return await running.value
+        }
         let read = Task { await readJournalsOnce() }
         journalRead = read
         await read.value
@@ -216,6 +229,11 @@ final class LibraryModel {
             return position
         }
         return progress.positions[itemID]
+    }
+
+    /// Rebuilds the queries the screens read; the only place `LibraryQueries` is built.
+    private func refreshQueries() {
+        queries = LibraryQueries(snapshot)
     }
 
     /// Stores a delivery archive the server prepared, with its pictures and videos, in the place of the link
@@ -296,7 +314,9 @@ final class LibraryModel {
 
     /// What Open Original shows: the page the material was made from, or else its file in `originals/`.
     func original(of itemID: String, page: URL?) -> Original? {
-        if let page { return .web(page) }
+        if let page {
+            return .web(page)
+        }
         return originalFile(itemID).map(Original.file)
     }
 
@@ -399,8 +419,11 @@ final class LibraryModel {
             let current = snapshot
             let updated = try await next(current)
             guard updated != current else { return }
-            if saving { try await file.save(updated, previous: current) }
+            if saving {
+                try await file.save(updated, previous: current)
+            }
             snapshot = updated
+            refreshQueries()
             for change in updated.progressChanges(since: current) { apply(change) }
         }
         lastWrite = Task { _ = try? await task.value }

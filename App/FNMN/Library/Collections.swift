@@ -169,7 +169,7 @@ struct GroupScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let found = library.snapshot.items(matching: query, among: library.snapshot.items(in: grouping, key: key))
+        let found = library.queries.search(query, in: library.queries.items(in: grouping, key: key))
         ScrollView {
             ArrangedItems(items: found, scope: "group:\(grouping.rawValue):\(key)")
                 .padding(.horizontal, Tokens.gutter)
@@ -177,7 +177,7 @@ struct GroupScreen: View {
         .background(Tokens.canvas)
         .noResults(for: query, when: found.isEmpty)
         .screenSearch($query)
-        .navigationTitle(library.snapshot.groupName(grouping, key: key))
+        .navigationTitle(library.queries.groupName(grouping, key: key))
         .task { library.apply(.openGroup(id: AlbumSummary.id(grouping, key))) }
     }
 }
@@ -189,7 +189,7 @@ struct AlbumScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let found = library.snapshot.items(matching: query, among: library.snapshot.items(inAlbum: name))
+        let found = library.queries.search(query, in: library.queries.items(inAlbum: name))
         ScrollView {
             ArrangedItems(items: found, album: name, scope: "album:\(name)")
                 .padding(.horizontal, Tokens.gutter)
@@ -219,8 +219,8 @@ struct AlbumPicker: View {
             ScrollView {
                 LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
                     // The collections the material is already in are not offered again.
-                    let current = library.snapshot.albums(of: itemID)
-                    ForEach(library.snapshot.albumSummaries.filter { !current.contains($0.name) }) { album in
+                    let current = Set(library.snapshot.albums(of: itemID))
+                    ForEach(library.queries.albumSummaries.filter { !current.contains($0.name) }) { album in
                         AlbumTile(album: album) {
                             dialogs.send(.dismiss)
                             Task { await library.apply(.addToAlbum(album.name, itemIDs: [itemID])) }
@@ -251,8 +251,8 @@ struct SourceScreen: View {
     @State private var query = ""
 
     var body: some View {
-        let items = library.snapshot.items(fromSource: id)
-        let found = library.snapshot.items(matching: query, among: items)
+        let items = library.queries.items(fromSource: id)
+        let found = library.queries.search(query, in: items)
         ScrollView {
             ArrangedItems(items: found, scope: "source:\(id)").padding(.horizontal, Tokens.gutter)
         }

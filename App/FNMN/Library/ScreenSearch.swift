@@ -3,7 +3,7 @@ import SwiftUI
 
 extension View {
     /// Pulling the screen down brings out a field that searches only what the screen holds: titles, authors,
-    /// sources, collections and section headings, as `LibrarySnapshot.items(matching:among:)` reads them.
+    /// sources, collections and section headings, as `LibraryQueries.search(_:in:)` reads them.
     func screenSearch(_ query: Binding<String>) -> some View {
         searchable(text: query, placement: .navigationBarDrawer(displayMode: .automatic))
     }

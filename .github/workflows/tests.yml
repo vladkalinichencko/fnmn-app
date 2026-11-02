@@ -1,0 +1,19 @@
+name: Tests and guards
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  guards:
+    name: guards
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Run the guards
+        run: python3 scripts/guards.py --app --base "origin/${{ github.base_ref || 'master' }}"

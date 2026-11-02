@@ -1,0 +1,16 @@
+# Runs only the hot-path guard; the repository's style baseline is not enforced here.
+only_rules:
+  - snapshot_catalog_selector_in_view
+
+included:
+  - App
+
+excluded:
+  - App/FNMN/Store/LibraryModel.swift
+
+custom_rules:
+  snapshot_catalog_selector_in_view:
+    name: "Catalog built in a view body"
+    regex: "LibraryQueries\\("
+    message: "Read LibraryModel's queries (library.queries.items(...), library.queries.albumSummaries, ...); LibraryQueries is built once per catalog change in LibraryModel."
+    severity: error

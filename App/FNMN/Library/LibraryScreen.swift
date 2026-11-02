@@ -13,7 +13,7 @@ struct LibraryScreen: View {
     var body: some View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.library) {
-            let found = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : library.snapshot.items(matching: query)
+            let found = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : library.queries.items(matching: query)
             ScrollView {
                 if let found {
                     ItemGrid(items: found).padding(.horizontal, Tokens.gutter)
@@ -42,12 +42,12 @@ struct LibraryScreen: View {
 
     private var sections: some View {
         VStack(alignment: .leading, spacing: Tokens.sectionGap) {
-            let continued = library.snapshot.continueItems(library.progress)
+            let continued = library.queries.continueItems(library.progress)
             if !continued.isEmpty {
                 LibrarySection("Continue") { ItemGrid(items: continued) }
             }
             let preparing = imports.jobs.filter { $0.itemID == nil && !($0.readsLibraryFolder && $0.isPreparing) }
-            let unsorted = library.snapshot.unsortedItems
+            let unsorted = library.queries.unsortedItems
             if !preparing.isEmpty || !unsorted.isEmpty {
                 LibrarySection("Unsorted") {
                     LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
@@ -60,7 +60,7 @@ struct LibraryScreen: View {
                 CollectionOptions(grouping: $grouping, sort: $sort)
             } content: {
                 LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    ForEach(library.snapshot.groups(by: grouping, sortedBy: sort, progress: library.progress)) { AlbumTile(album: $0) }
+                    ForEach(library.queries.groups(by: grouping, sortedBy: sort, progress: library.progress)) { AlbumTile(album: $0) }
                 }
             }
         }
