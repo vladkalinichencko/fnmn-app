@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     name: swift test
-    runs-on: macos-latest
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - name: Swift test
@@ -16,7 +16,7 @@ jobs:
 
   lint:
     name: swiftlint guards
-    runs-on: macos-latest
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - name: Install SwiftLint

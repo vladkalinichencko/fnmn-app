@@ -18,6 +18,6 @@ excluded:
 custom_rules:
   snapshot_catalog_selector_in_view:
     name: "Catalog rebuild in a view body"
-    regex: "snapshot\\.(items\\(|albumSummaries|unsortedItems|continueItems|groups\\(|archivedItems|annotationGroups)"
+    regex: "snapshot\\.(items\\(|albumSummaries|unsortedItems|continueItems|groups\\(|groupName\\(|archivedItems|annotationGroups)"
     message: "Read LibraryModel's collected list (library.items(...), library.albumSummaries(), ...) — these snapshot selectors rebuild the whole catalog, ~10 ms per 1500 materials, in a view body."
     severity: error

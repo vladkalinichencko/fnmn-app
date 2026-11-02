@@ -14,6 +14,7 @@ final class HotPathGuardTests: XCTestCase {
         ("snapshot.unsortedItems", "collects the catalog; read the model's list"),
         ("snapshot.continueItems", "collects the catalog; read the model's list"),
         ("snapshot.groups(", "collects the catalog; read the model's list"),
+        ("snapshot.groupName(", "collects the catalog; read the model's list"),
         ("snapshot.archivedItems", "collects the catalog; read the model's list"),
         ("snapshot.annotationGroups", "collects the catalog; read the model's list"),
     ]

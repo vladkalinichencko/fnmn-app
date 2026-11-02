@@ -12,7 +12,7 @@
 
 ## Горячие пути: как их не возвращать
 
-- Экраны не собирают каталог в теле view. Списки материалов — готовые наблюдаемые списки `LibraryModel`, собираемые один раз на изменение каталога: `library.items(...)`, `library.albumSummaries()`, `library.groups(...)`, `library.archivedItems`. Прямые вызовы селекторов `snapshot.*`, которые собирают каталог заново (`items(`/`albumSummaries`/`unsortedItems`/`continueItems`/`groups(`/`archivedItems`/`annotationGroups`), разрешены только в `App/FNMN/Store/LibraryModel.swift`.
+- Экраны не собирают каталог в теле view. Списки материалов — готовые наблюдаемые списки `LibraryModel`, собираемые один раз на изменение каталога: `library.items(...)`, `library.albumSummaries()`, `library.groups(...)`, `library.groupName(...)`, `library.archivedItems`. Прямые вызовы селекторов `snapshot.*`, которые собирают каталог заново (`items(`/`albumSummaries`/`unsortedItems`/`continueItems`/`groups(`/`groupName(`/`archivedItems`/`annotationGroups`), разрешены только в `App/FNMN/Store/LibraryModel.swift`.
 - Нарушение первого пункта ловят тест `HotPathGuardTests` и линт-правило `snapshot_catalog_selector_in_view` — оба обязаны оставаться зелёными.
 
 ## Перед PR

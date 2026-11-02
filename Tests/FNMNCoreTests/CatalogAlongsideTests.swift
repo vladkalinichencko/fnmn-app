@@ -50,6 +50,7 @@ final class CatalogAlongsideTests {
         #expect(digest(library.annotationGroups(among: collected)) == digest(library.annotationGroups))
         #expect(digest(library.annotationGroups(matching: "kernels", among: collected)) == digest(library.annotationGroups(matching: "kernels")))
         #expect(library.items(matching: "3", among: catalog) == library.items(matching: "3"))
+        #expect(try library.groupName(.publishers, key: #require(collected[0].source?.id), among: catalog) == library.groupName(.publishers, key: #require(collected[0].source?.id)))
 
         for grouping in LibraryGrouping.allCases {
             for sort in GroupSort.allCases {

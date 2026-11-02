@@ -289,6 +289,10 @@ final class LibraryModel {
         snapshot.items(fromSource: id, among: catalogItems)
     }
 
+    func groupName(_ grouping: LibraryGrouping, key: String) -> String {
+        snapshot.groupName(grouping, key: key, among: catalogItems)
+    }
+
     /// Notes live for archived materials too, so they search over the full collected catalog.
     func annotationGroups(matching query: String) -> [AnnotationGroup] {
         snapshot.annotationGroups(matching: query, among: allItems)

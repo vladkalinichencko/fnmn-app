@@ -267,8 +267,9 @@ public extension LibrarySnapshot {
         return grouping == .albums ? items(inAlbum: key, among: members) : members.filter { Self.group(of: $0, by: grouping)?.key == key }
     }
 
-    func groupName(_ grouping: LibraryGrouping, key: String) -> String {
-        groups(by: grouping, sortedBy: .standard).first { $0.key == key }?.name ?? key
+    /// The name of one group, taken from the summaries; `among` is the catalog the model collected.
+    func groupName(_ grouping: LibraryGrouping, key: String, among candidates: [LibraryItem]? = nil) -> String {
+        groups(by: grouping, sortedBy: .standard, among: candidates).first { $0.key == key }?.name ?? key
     }
 
     private static func group(of item: LibraryItem, by grouping: LibraryGrouping) -> (key: String, name: String)? {

@@ -175,7 +175,7 @@ struct GroupScreen: View {
         .background(Tokens.canvas)
         .noResults(for: query, when: found.isEmpty)
         .screenSearch($query)
-        .navigationTitle(library.snapshot.groupName(grouping, key: key))
+        .navigationTitle(library.groupName(grouping, key: key))
         .task { library.apply(.openGroup(id: AlbumSummary.id(grouping, key))) }
     }
 }
