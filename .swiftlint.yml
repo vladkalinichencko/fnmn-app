@@ -1,0 +1,23 @@
+# FNMN: линт-ограждения на найденные баги, не общий стиль.
+#
+# SwiftLint без фильтров поверх всего репозитория находит сотни замечаний стиля (baseline: 892 на
+# 2026-11-02); этот конфиг несёт единственное намеренное правило — то, что писал тест-ограждения
+# для каждого найденного лага (см. AGENTS.md). Стиль всего репозитория в этот CI не входит.
+only_rules:
+  - snapshot_catalog_selector_in_view
+
+excluded:
+  - .build
+  - "**/.build/**"
+  - Vendor
+  # Модель — единственное место, где сборка каталога разрешена: там лежат её обёртки и обновление.
+  - App/FNMN/Store/LibraryModel.swift
+  # Тест-ограждение декларирует запрещённые строки как данные — не как вызовы.
+  - Tests/FNMNCoreTests/HotPathGuardTests.swift
+
+custom_rules:
+  snapshot_catalog_selector_in_view:
+    name: "Catalog rebuild in a view body"
+    regex: "snapshot\\.(items\\(|albumSummaries|unsortedItems|continueItems|groups\\(|archivedItems|annotationGroups)"
+    message: "Read LibraryModel's collected list (library.items(...), library.albumSummaries(), ...) — these snapshot selectors rebuild the whole catalog, ~10 ms per 1500 materials, in a view body."
+    severity: error
