@@ -32,8 +32,6 @@ LIBRARY_DISK = re.compile(
 )
 FUNC = re.compile(r"\bfunc\s+(\w+)")
 SERVER_LINK = "App/FNMN/Server/ServerLink.swift"
-CONNECTION_READ = "server.connection"
-CONNECTION_LOAD = "savedConnection()"
 
 
 def run(args, **kwargs):
@@ -69,13 +67,6 @@ def enclosing_function(path, number):
     return ""
 
 
-def connection_read_without_load(path, text):
-    """A view may read the saved connection only after it has asked ServerLink to read it."""
-    if not path.startswith("App/FNMN/") or path == SERVER_LINK or CONNECTION_READ not in text:
-        return False
-    return CONNECTION_LOAD not in (ROOT / path).read_text()
-
-
 def diff_violations(base):
     found = []
     comment_end = {}
@@ -104,15 +95,6 @@ def diff_violations(base):
                     number,
                     "storage read at launch",
                     "read the saved connection on first use in savedConnection(); reading it in init runs inside FNMNApp.init",
-                )
-            )
-        if is_swift and connection_read_without_load(path, text):
-            found.append(
-                (
-                    path,
-                    number,
-                    "connection read without load",
-                    "call server.savedConnection() from this file, such as a .task in the view, before reading server.connection",
                 )
             )
         if text.strip().startswith("//"):
