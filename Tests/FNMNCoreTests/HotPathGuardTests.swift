@@ -8,17 +8,8 @@ final class HotPathGuardTests: XCTestCase {
     private static let allowed = "LibraryModel.swift"
 
     func testViewBodiesDoNotBuildTheCatalog() throws {
-        let url = URL(fileURLWithPath: #filePath)
-        let root = sequence(first: url.deletingLastPathComponent(), next: { $0.deletingLastPathComponent() })
-            .first(where: { FileManager.default.fileExists(atPath: $0.appendingPathComponent("App").path) })
-        guard let root else {
-            return XCTFail("The test needs the repository root: App/ beside Package.swift.")
-        }
-        let files = try XCTUnwrap(try FileManager.default
-            .enumerator(at: root.appending(path: "App/FNMN"), includingPropertiesForKeys: nil)?
-            .allObjects
-            .compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "swift" && $0.lastPathComponent != Self.allowed })
+        let files = try AppSources.files()
+            .filter { $0.lastPathComponent != Self.allowed }
 
         var hits: [String] = []
         for file in files {

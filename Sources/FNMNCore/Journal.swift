@@ -64,7 +64,7 @@ public func compacted(_ events: [JournalEvent]) -> [JournalEvent] {
 
 /// What a device knows of the other devices' journals: how many lines of each it has applied, and when each
 /// keyed value last changed, here or anywhere.
-public struct JournalSync: Codable, Equatable, Sendable {
+public struct JournalKnowledge: Codable, Equatable, Sendable {
     public var applied: [String: Int] = [:]
     public var clock: [String: Date] = [:]
 
@@ -80,8 +80,8 @@ public struct JournalSync: Codable, Equatable, Sendable {
 /// that key is skipped. A catalog change that no longer applies here, such as renaming an album this device has
 /// already deleted, is skipped too; a material that leaves the catalog leaves reading progress with it.
 public func merge(
-    _ events: [JournalEvent], into catalog: LibrarySnapshot, _ progress: ReadingProgress, sync: JournalSync
-) -> (catalog: LibrarySnapshot, progress: ReadingProgress, sync: JournalSync) {
+    _ events: [JournalEvent], into catalog: LibrarySnapshot, _ progress: ReadingProgress, sync: JournalKnowledge
+) -> (catalog: LibrarySnapshot, progress: ReadingProgress, sync: JournalKnowledge) {
     var catalog = catalog
     var progress = progress
     var sync = sync

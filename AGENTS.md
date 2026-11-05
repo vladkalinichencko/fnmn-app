@@ -7,18 +7,35 @@ Rules for agents working in this repository.
 - Apple performance patterns compared with our code: [notes/state/performance.md](notes/state/performance.md)
 - Task execution rules for structure and interfaces: [notes/plan.md](notes/plan.md). Use `architect` before changing structure and `coding` when implementing.
 
+## Skills to load first
+
+Before changing code, read these skills in full; they are not in the harness's skill catalog, so open the files:
+
+- `~/.agents/skills/coding/software-developer/SKILL.md` — the working loop: smallest running step, every decision explained, verification before a checkpoint.
+- `~/.agents/skills/coding/coding/SKILL.md` — the form of the code: one source of truth, ports at the boundary, tests at the seam, the code-shape rules.
+- `~/.agents/skills/coding/design/architect/SKILL.md` — before a structural change: the call, the input, the result, the owner, and the variants.
+
+If a skill and this file disagree, this file wins for this repository, and the PR says where they disagreed.
+
 ## Guard rule
 
-Fixing a performance or correctness defect is not enough. **The same PR must add a check that keeps the defect from coming back.** A fix without a guard is incomplete.
+Fixing a performance or correctness defect is not enough. **The same PR must add a check that keeps the defect from coming back, at the strongest level that can observe the whole class of the defect, not the line where it happened.** A fix without a guard is incomplete. These rules govern every new test, lint rule or check you add, whether it guards a bug, a regression found in review, or a rule the owner asked for.
 
-Guards live in one place: [scripts/guards.py](scripts/guards.py). CI runs it on every pull request and on `master`, and you run it before opening a PR. Do not copy a check into another file; add it to the script.
+Choose the level by what the check can see:
 
-Guard types, from least to most strict:
+1. **Type or ownership** — when the bug was a state that should not exist, change the shape so it cannot be constructed (one enum instead of a flag that can disagree with a value). No check to add; the compiler is the guard.
+2. **Unit test** (`App/FNMNTests`, `Tests/FNMNCoreTests`) — behavior of one class or function, including its errors and the order of its calls.
+3. **Source test** (`ArchitectureGuardTests`, `ServerLinkGuardTests`, `HotPathGuardTests`) — an invariant across files or the whole app. It reads every file, not only the diff, so it also sees code that was already there.
+4. **Lint rule** (`.swiftlint.yml`) — a call or a name in the source; runs before the build and in the editor.
+5. **Diff check** (`scripts/guards.py`, `diff_violations`) — how new code is written: style, comments, language. It only sees added lines, so **it may never be the only guard for a behavior or an interaction**; the interaction is exactly what it cannot see.
+6. **CI job** — build, toolchain, runner.
 
-1. **Diff check** (`scripts/guards.py`, `diff_violations`). Looks only at lines the change adds, so old code never fails it. Use it for a rule about how new code is written.
-2. **Lint rule** (`.swiftlint.yml`, `custom_rules`). Catches the same violation in the source: before the build, in the editor, and in CI. Use it for a rule about a call or a name.
-3. **Test guard** (`Tests/FNMNCoreTests`). Reproduces the wrong code shape or the expensive computation, and fails if it returns.
-4. **Performance measurement** (`PerformanceTests` and `CollectedCatalogSpeedTests`). Budget: 5 ms for work that runs in a frame or on a keystroke, 100 ms for a single action.
+Then:
+
+- **Prove the guard fails without the fix.** Revert the fix or plant the violation, watch the check fail, restore. The PR says which check was proven and how.
+- **Generalize one step above the bug.** Do not guard the exact line or value that broke; guard the form that allowed it. "A view read a lazy value before it was loaded" becomes "every file that reads the value must trigger the load", not "this view calls this method".
+- **One rule, one home.** If a rule is already guarded, extend that guard; do not add a second copy. A test and a lint rule may enforce the same rule only when one is the declared source of truth and the other a documented backstop.
+- **Register it.** Add a row below with the level and how the guard was proven.
 
 ## Code shape
 
@@ -34,15 +51,31 @@ Guard types, from least to most strict:
 - Screens read `library.queries`: `library.queries.items(matching:)`, `library.queries.albumSummaries`, `library.queries.groups(...)`, and so on. Every query is a filter or a sort over the stored arrays, not a rebuild.
 - Do not write `LibraryQueries(` in `App/FNMN` outside `LibraryModel.swift`.
 
+## Pipeline
+
+Every change follows the same order. Each step leaves an artifact the next step and the owner can check.
+
+| Step | What happens | Artifact |
+|---|---|---|
+| 1. Intake | One queue entry with the visible result and its acceptance check | `notes/tasks.md` |
+| 2. Reproduce | A bug starts with a failing check; a feature starts with the acceptance check | test, source test, or measurement |
+| 3. Design | Who owns the state, its shape, what contract changes; `architect` for anything structural | `APP_SPEC.md` in the same commit |
+| 4. Implement | The smallest change in the existing forms | code and tests |
+| 5. Guard | The strongest level above, proven to fail without the fix; generalize one step above the bug | test, lint or diff, plus the register row |
+| 6. Verify | `python3 scripts/guards.py --app`; manual device checks for feel | green run |
+| 7. Record | Commit story; PR with what/why/guard/proof/not-in; queue entry closed | PR and `notes/tasks.md` |
+
+A bug never skips step 2, and a fix never skips step 5. When a step cannot be done, the PR says why in the same breath as the claim.
+
 ## Before opening a PR
 
 Run from the repository root:
 
 ```sh
-python3 scripts/guards.py --app   # diff checks, swiftlint --strict, lint self-test, swift test, FNMN app build
+python3 scripts/guards.py --app   # diff checks, swiftlint --strict, lint self-test, swift test, FNMN app build and its unit tests
 ```
 
-Without `--app` the build is skipped. CI runs the same command with `--app` on each pull request.
+Without `--app` the build and the app unit tests are skipped. CI runs the same command with `--app` on each pull request.
 
 ## Guard register
 
@@ -59,3 +92,7 @@ Each defect below is closed by the check in the last column.
 | 2026-11-02 | Speed check compared two timings with no frame budget | `CollectedCatalogSpeedTests`: best of ten runs under 5 ms |
 | 2026-11-02 | Tests read a `LibraryQueries` built before the library changed | `LibraryTests`: queries are rebuilt after each change |
 | 2026-11-02 | CI ran Swift 6.3.3 while the package needs tools 6.4 | CI runner `xcode-27` |
+| 2026-11-05 | The journal sync and import were moved out of `LibraryModel` with no behavior pinned first | `JournalTests`, `LibraryTests`, `JournalSyncTests` and `LibraryImporterTests`: the disk contract and the moved classes are pinned |
+| 2026-11-05 | `LibraryModel` had grown back into the owner of journal and import disk work | `ArchitectureGuardTests`: `LibraryModel` may not call journal or import disk work |
+| 2026-11-05 | Reading the Keychain inside `ServerLink.init`, which runs in `FNMNApp.init`, delayed the first frame | `ArchitectureGuardTests`: `ServerLink.init` has no `storage.load()`; `ServerLinkTests`: `init` does not touch the storage |
+| 2026-11-05 | A view read `server.connection` before the lazy Keychain read had run, so a YouTube embed saw no server | `ServerLinkGuardTests`: a file that reads `server.connection` must call `savedConnection()` |

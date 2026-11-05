@@ -378,9 +378,11 @@
 
 ### Скорость, память, диск
 
-- [ ] Читать соединение с Mac при первом обращении, если замер запуска покажет чтение Keychain в `FNMNApp.init`.
-- [ ] Если поиск на iPhone заметно отстаёт от набора: строить список плиток раз на изменение каталога в `LibraryModel`, а не в каждом селекторе.
-- [ ] Разделить `LibraryModel` (482 строки, одна ответственность на восемь задач): синхронизацию журналов между устройствами вынести в `JournalSync`, импорт ссылок, файлов, архивов и папки iCloud в `LibraryImporter`. Запросы уже вынесены в `LibraryQueries`. Отдельный PR, тесты синхронизации и импорта написать до переноса, поведение не менять. Причина: `LibraryModel` и `LibraryItem.swift` сейчас тянут почти всё, и каждая новая функция растит оба файла.
+- [x] Соединение с Mac читается при первом обращении (`ServerLink.savedConnection()`), а не в `ServerLink.init`, который выполняется внутри `FNMNApp.init`; замер запуска не снимался.
+- [x] Сделано в PR #1 (`perf/collect-catalog-once`): `LibraryQueries` строится один раз на изменение каталога в `LibraryModel.refreshQueries()`, экраны читают `library.queries`.
+- [x] `LibraryModel` разделён: `JournalSync` ведёт журналы и `sync.json`, `LibraryImporter` — ссылки, файлы, архивы и папку FNMN; модель ведёт очередь записи и публикует каталог. Тесты синхронизации и импорта добавлены до переноса (`JournalTests`, `LibraryTests`).
+- [x] Юнит-тесты приложения: цель `FNMNTests` в `App/FNMN.xcodeproj`, тесты `ServerLink`, `JournalSync`, `LibraryImporter` и `LibraryModel`; `guards.py --app` запускает их, CI проверяет на каждом PR.
+- [x] Правила проверок: проверка ставится на уровне класса ошибки, доказывается падением без правки и обобщается на шаг выше; реестр в `AGENTS.md`, конвейер в `notes/plan.md`.
 
 ### Доводка с iPhone
 
@@ -393,7 +395,7 @@
 
 ### Доводка iPad
 
-- [ ] `aMarkThatArrivesLateDoesNotBringBackAnAnnotationDeletedHere` в `JournalTests` падает: удаление записи не запоминается, и более ранняя отметка с другого устройства создаёт её заново.
+- [x] `aMarkThatArrivesLateDoesNotBringBackAnAnnotationDeletedHere` в `JournalTests` проходит на master: удаление записи (`removed:<id>`) переживает более ранние правки (коммит `080fa4b`).
 
 ### Доводка надолго
 

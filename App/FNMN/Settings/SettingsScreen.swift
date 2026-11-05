@@ -64,8 +64,9 @@ struct SettingsScreen: View {
             }
         }
         .onAppear {
-            address = server.connection?.endpoint.absoluteString ?? ""
-            token = server.connection?.token ?? ""
+            let connection = server.savedConnection()
+            address = connection?.endpoint.absoluteString ?? ""
+            token = connection?.token ?? ""
         }
         .onChange(of: address) { check = .editing }
         .onChange(of: token) { check = .editing }

@@ -23,6 +23,8 @@ enum LibraryLoadState: Equatable {
 
 /// The one owner of the library: every change goes through `apply`, is written to disk, then published.
 /// The catalog and reading progress are separate properties, so a view that reads one never wakes for the other.
+/// The journal lives in `JournalSync` and importing in `LibraryImporter`; the model sequences both and owns
+/// what the screens read.
 @MainActor @Observable
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
@@ -40,30 +42,24 @@ final class LibraryModel {
     var failure: String?
     let storageURL: URL
     private let file: LibraryFile
+    private let importer: LibraryImporter
+    private let journal: JournalSync
     private var lastWrite: Task<Void, Never>?
     /// Saved places wait here: a reader saves one at every paragraph, and nothing on screen shows them.
     @ObservationIgnored private var places: [ProgressChange] = []
     @ObservationIgnored private var progressWrite: Task<Void, Never>?
     @ObservationIgnored private var progressUnsaved = false
-    /// This device's changes waiting to be appended to its journal, and what it knows of the other journals.
-    @ObservationIgnored private var journal: [JournalEvent] = []
-    @ObservationIgnored private var sync = JournalSync()
     @ObservationIgnored private var journalRead: Task<Void, Never>?
-    @ObservationIgnored private let device: String = {
-        if let id = UserDefaults.standard.string(forKey: "deviceID") {
-            return id
-        }
-        let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: "deviceID")
-        return id
-    }()
 
     init(
         storageURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "FNMN"),
         cacheURL: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "FNMN")
     ) {
         self.storageURL = storageURL
-        file = LibraryFile(url: storageURL, cache: cacheURL)
+        let file = LibraryFile(url: storageURL, cache: cacheURL)
+        self.file = file
+        importer = LibraryImporter(file: file)
+        journal = JournalSync(file: file)
     }
 
     /// Every window asks for the library; only the first ask, or a retry after a failure, reads it.
@@ -78,7 +74,7 @@ final class LibraryModel {
         do {
             (snapshot, progress) = try await file.load()
             refreshQueries()
-            sync = try await file.loadSync()
+            try await journal.load()
             await relinkCloudFolder()
             loadState = .ready
             await syncWithOtherDevices()
@@ -95,7 +91,7 @@ final class LibraryModel {
         let deleted = deletedMaterial(in: change)
         do {
             try await write(saving: true) { snapshot in try snapshot.applying(change) }
-            record(.library(change))
+            journal.record(.library(change))
             scheduleSave()
             if let deleted {
                 try? await file.removeDelivery(of: deleted.entry)
@@ -123,7 +119,7 @@ final class LibraryModel {
             }
         }
         switch change {
-        case .open, .openGroup, .setRead, .readThrough, .line, .fold, .reset: record(.progress(change))
+        case .open, .openGroup, .setRead, .readThrough, .line, .fold, .reset: journal.record(.progress(change))
         case .savePosition, .restart, .forget: break
         }
         scheduleSave()
@@ -143,18 +139,15 @@ final class LibraryModel {
             }
             progress = places.reduce(progress) { $0.applying($1) }
             places = []
-            for change in latest.values { record(.progress(change)) }
+            for change in latest.values {
+                journal.record(.progress(change))
+            }
         }
         progressUnsaved = false
-        let events = journal
-        journal = []
         do {
             try await file.saveProgress(progress)
-            try await file.appendJournal(events, device: device)
-            try await file.saveSync(sync)
+            try await journal.flush()
         } catch {
-            // Events that did not reach the journal wait for the next write instead of being lost.
-            journal = events + journal
             progressUnsaved = true
             failure = error.localizedDescription
         }
@@ -167,7 +160,7 @@ final class LibraryModel {
         await readJournals()
         await readOriginals()
         do {
-            try await readChangedDeliveries()
+            try await importer.readChangedDeliveries(in: cloudFolder, write: self.write)
         } catch {
             failure = error.localizedDescription
         }
@@ -186,30 +179,24 @@ final class LibraryModel {
     }
 
     private func readJournalsOnce() async {
-        guard let folder = await file.journalFolder(), FileManager.default.fileExists(atPath: folder.path) else { return }
+        guard let folder = await journal.folderToRead() else {
+            return
+        }
         do {
             try await CloudFolder.download(folder, timeout: .seconds(60))
             await saveProgress()
-            let unread = try await file.unreadJournalEvents(except: device, sync: sync)
-            guard unread.applied != sync.applied else { return }
-            sync.applied = unread.applied
+            guard let events = try await journal.unread() else {
+                return
+            }
             try await write(saving: true) { [self] snapshot in
-                let merged = merge(unread.events, into: snapshot, progress, sync: sync)
+                let merged = journal.merging(events, into: snapshot, progress)
                 progress = merged.progress
-                sync = merged.sync
                 return merged.catalog
             }
             try await file.saveProgress(progress)
-            try await file.saveSync(sync)
+            try await journal.save()
         } catch {
             failure = error.localizedDescription
-        }
-    }
-
-    private func record(_ change: JournalEvent.Change) {
-        for event in JournalEvent.events(for: change, at: .now) {
-            sync.record(event)
-            journal.append(event)
         }
     }
 
@@ -239,75 +226,31 @@ final class LibraryModel {
     /// Stores a delivery archive the server prepared, with its pictures and videos, in the place of the link
     /// or file it was made from. The archive is read in `LibraryFile`, off the main thread.
     func store(archive: URL) async throws {
-        try await write(saving: false) { [file] snapshot in try await file.storeArticle(archive: archive, into: snapshot) }
+        try await importer.store(archive: archive, write: self.write)
     }
 
     /// A link kept as it is, the card that shows it until the server prepares the page.
     func storeLink(_ url: URL) async throws {
-        try await write(saving: false) { [file] snapshot in try await file.storeMade(.link(url), into: snapshot) }
+        try await importer.storeLink(url, write: self.write)
     }
 
     /// A picked file kept as it is, with the file itself in `originals/`, until the server makes a material of it;
     /// returns the material's id.
     func storeFile(_ picked: URL) async throws -> String {
-        let package = try await file.package(ofFile: picked)
-        try await write(saving: false) { [file] snapshot in try await file.storeMade(package, into: snapshot) }
-        try await storeOriginal(picked, of: package.material.id)
-        return package.material.id
+        let materialID = try await importer.storeFile(picked, write: self.write)
+        try await storeOriginal(picked, of: materialID)
+        return materialID
     }
 
     /// Makes the FNMN folder the library's home: what an older version kept in the app moves there, then
     /// the folder is read and the other devices' journals are taken in.
     func linkLibraryFolder(_ folder: URL, onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
-        _ = folder.startAccessingSecurityScopedResource()
-        UserDefaults.standard.set(try folder.bookmarkData(), forKey: Self.cloudFolderKey)
-        await file.useCloudFolder(folder)
+        try await importer.adopt(folder)
         cloudFolder = folder
-        try await moveIntoCloudIfNeeded()
-        try await readLibraryFolder(onStep: onStep)
-        await syncWithOtherDevices()
-    }
-
-    /// Reads the FNMN folder: its catalog, then every delivery.
-    private func readLibraryFolder(onStep: @escaping @MainActor (ImportStep) -> Void) async throws {
-        guard let folder = cloudFolder else { throw LibraryError.cloudFolderMissing }
-        onStep(.readingLibraryFolder)
-        let catalog = folder.appending(path: "catalog.json")
-        if CloudFolder.contains(catalog) {
-            try await CloudFolder.download(catalog)
-            try await write(saving: true) { [file] snapshot in try await file.applyBrowserCatalog(from: folder, into: snapshot) }
-        }
-        try await readChangedDeliveries(onStep: onStep)
+        try await importer.moveIntoCloudIfNeeded(snapshot, write: self.write)
+        try await importer.readFolder(folder, onStep: onStep, write: self.write)
         await readOriginals()
-    }
-
-    /// Takes in the deliveries this device has not read as they are now: all of them on the first read, later the
-    /// ones other devices added or rewrote. The device that asked the server for a material stores it first; the
-    /// others get it here from iCloud. Each one is saved as soon as it is read, so it shows as a card at once and
-    /// a read that stops goes on from there the next time.
-    private func readChangedDeliveries(onStep: @MainActor (ImportStep) -> Void = { _ in }) async throws {
-        let deliveries = try await deliveryFiles()
-        var changed: [URL] = []
-        try await write(saving: true) { [file] snapshot in
-            let found = try await file.changedDeliveries(deliveries, in: snapshot)
-            changed = found.deliveries
-            return found.snapshot
-        }
-        for (index, delivery) in changed.enumerated() {
-            onStep(.reading(index, of: changed.count))
-            try await CloudFolder.download(delivery)
-            try await write(saving: true) { [file] snapshot in try await file.addCloudDelivery(delivery, into: snapshot) }
-        }
-    }
-
-    private func deliveryFiles() async throws -> [URL] {
-        guard let folder = cloudFolder?.appending(path: "deliveries"), CloudFolder.contains(folder) else { return [] }
-        return try await CloudFolder.files(in: folder, withExtension: "tar")
-    }
-
-    private func moveIntoCloudIfNeeded() async throws {
-        guard await file.holdsMaterialsInApp(snapshot) else { return }
-        try await write(saving: false) { [file] snapshot in try await file.moveIntoCloud(snapshot) }
+        await syncWithOtherDevices()
     }
 
     // MARK: Originals
@@ -353,9 +296,13 @@ final class LibraryModel {
     }
 
     private func readOriginals() async {
-        guard let folder = cloudFolder?.appending(path: "originals"),
-              let files = try? await CloudFolder.files(in: folder) else { return }
-        originals = Dictionary(files.map { ($0.deletingPathExtension().lastPathComponent, $0) }, uniquingKeysWith: { first, _ in first })
+        guard let folder = cloudFolder?.appending(path: "originals") else {
+            return
+        }
+        guard let files = try? await importer.originalFiles(in: folder) else {
+            return
+        }
+        originals = files
     }
 
     func coverFile(_ materialID: String) -> URL {
@@ -388,22 +335,13 @@ final class LibraryModel {
         snapshot.articles.first { $0.material.id == materialID }
     }
 
-    /// The FNMN folder is outside the app, so access to it is kept as a security-scoped bookmark and taken
-    /// again at every launch; the app holds it for as long as it runs.
-    private static let cloudFolderKey = "cloudFolderBookmark"
-
     private func relinkCloudFolder() async {
-        guard let bookmark = UserDefaults.standard.data(forKey: Self.cloudFolderKey) else { return }
-        var isStale = false
-        guard let folder = try? URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale) else { return }
-        _ = folder.startAccessingSecurityScopedResource()
-        if isStale, let fresh = try? folder.bookmarkData() {
-            UserDefaults.standard.set(fresh, forKey: Self.cloudFolderKey)
+        guard let folder = await importer.relinkedFolder() else {
+            return
         }
-        await file.useCloudFolder(folder)
         cloudFolder = folder
         do {
-            try await moveIntoCloudIfNeeded()
+            try await importer.moveIntoCloudIfNeeded(snapshot, write: self.write)
         } catch {
             failure = error.localizedDescription
         }

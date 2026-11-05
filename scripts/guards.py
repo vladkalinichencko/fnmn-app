@@ -10,6 +10,7 @@ already in the repository never fails them. Source-level rules live in .swiftlin
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -93,6 +94,19 @@ def lint_self_test():
         sys.exit("FAILED: the lint rule did not catch a LibraryQueries( in App/")
 
 
+def simulator_udid():
+    """The first available iPhone simulator, for the app unit tests."""
+    result = run(["xcrun", "simctl", "list", "devices", "available", "--json"])
+    if result.returncode != 0:
+        sys.exit(f"xcrun simctl failed: {result.stderr.strip()}")
+    devices = json.loads(result.stdout).get("devices", {})
+    for runtime in sorted(devices, reverse=True):
+        for device in devices[runtime]:
+            if device.get("isAvailable") and device["name"].startswith("iPhone"):
+                return device["udid"]
+    sys.exit("no available iPhone simulator for the app unit tests")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="master")
@@ -120,6 +134,14 @@ def main():
                 "xcodebuild", "-project", "App/FNMN.xcodeproj", "-scheme", "FNMN",
                 "-destination", "generic/platform=iOS Simulator", "-configuration", "Debug",
                 "build", "CODE_SIGNING_ALLOWED=NO",
+            ],
+        )
+        step(
+            "test FNMN app",
+            [
+                "xcodebuild", "-project", "App/FNMN.xcodeproj", "-scheme", "FNMN",
+                "-destination", f"id={simulator_udid()}", "-configuration", "Debug",
+                "-only-testing:FNMNTests", "test", "CODE_SIGNING_ALLOWED=NO",
             ],
         )
     print("All guards passed.")
