@@ -19,7 +19,7 @@ If a skill and this file disagree, this file wins for this repository, and the P
 
 ## Guard rule
 
-Fixing a performance or correctness defect is not enough. **The same PR must add a check that keeps the defect from coming back, at the strongest level that can observe the whole class of the defect, not the line where it happened.** A fix without a guard is incomplete.
+Fixing a performance or correctness defect is not enough. **The same PR must add a check that keeps the defect from coming back, at the strongest level that can observe the whole class of the defect, not the line where it happened.** A fix without a guard is incomplete. These rules govern every new test, lint rule or check you add, whether it guards a bug, a regression found in review, or a rule the owner asked for.
 
 Choose the level by what the check can see:
 
@@ -61,7 +61,7 @@ Every change follows the same order. Each step leaves an artifact the next step 
 | 2. Reproduce | A bug starts with a failing check; a feature starts with the acceptance check | test, source test, or measurement |
 | 3. Design | Who owns the state, its shape, what contract changes; `architect` for anything structural | `APP_SPEC.md` in the same commit |
 | 4. Implement | The smallest change in the existing forms | code and tests |
-| 5. Guard | The strongest level above, proven to fail without the fix | test, lint or diff, plus the register row |
+| 5. Guard | The strongest level above, proven to fail without the fix; generalize one step above the bug | test, lint or diff, plus the register row |
 | 6. Verify | `python3 scripts/guards.py --app`; manual device checks for feel | green run |
 | 7. Record | Commit story; PR with what/why/guard/proof/not-in; queue entry closed | PR and `notes/tasks.md` |
 

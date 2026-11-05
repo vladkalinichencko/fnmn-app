@@ -382,6 +382,7 @@
 - [x] Сделано в PR #1 (`perf/collect-catalog-once`): `LibraryQueries` строится один раз на изменение каталога в `LibraryModel.refreshQueries()`, экраны читают `library.queries`.
 - [x] `LibraryModel` разделён: `JournalSync` ведёт журналы и `sync.json`, `LibraryImporter` — ссылки, файлы, архивы и папку FNMN; модель ведёт очередь записи и публикует каталог. Тесты синхронизации и импорта добавлены до переноса (`JournalTests`, `LibraryTests`).
 - [x] Юнит-тесты приложения: цель `FNMNTests` в `App/FNMN.xcodeproj`, тесты `ServerLink`, `JournalSync`, `LibraryImporter` и `LibraryModel`; `guards.py --app` запускает их, CI проверяет на каждом PR.
+- [x] Правила проверок: проверка ставится на уровне класса ошибки, доказывается падением без правки и обобщается на шаг выше; реестр в `AGENTS.md`, конвейер в `notes/plan.md`.
 
 ### Доводка с iPhone
 
