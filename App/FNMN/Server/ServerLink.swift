@@ -5,9 +5,10 @@ import Observation
 @MainActor @Observable
 final class ServerLink {
     private(set) var connection: ServerConnection?
+    /// Whether the saved connection has been read; a view shows its loading state until it is true.
+    private(set) var hasReadConnection = false
     let port: any ServerPort
     private let storage: any ServerConnectionStorage
-    @ObservationIgnored private var read = false
 
     init(port: any ServerPort = ServerClient(), storage: any ServerConnectionStorage = KeychainServerConnectionStore()) {
         self.port = port
@@ -17,8 +18,8 @@ final class ServerLink {
     /// The saved connection, read from the Keychain the first time something asks for it. Reading it in `init`
     /// runs inside `FNMNApp.init`, and the synchronous Keychain call delays the first frame.
     func savedConnection() -> ServerConnection? {
-        if !read {
-            read = true
+        if !hasReadConnection {
+            hasReadConnection = true
             connection = storage.load()
         }
         return connection
@@ -27,6 +28,7 @@ final class ServerLink {
     func save(_ connection: ServerConnection) throws {
         try storage.save(connection)
         self.connection = connection
+        hasReadConnection = true
     }
 
     func check() async throws {

@@ -62,3 +62,4 @@ Each defect below is closed by the check in the last column.
 | 2026-11-05 | The journal sync and import were moved out of `LibraryModel` with no behavior pinned first | `JournalTests` and `LibraryTests`: a saved sync and a kept link survive the disk round trip |
 | 2026-11-05 | `LibraryModel` had grown back into the owner of journal and import disk work | `guards.py`: `disk work in LibraryModel` on added lines |
 | 2026-11-05 | Reading the Keychain inside `ServerLink.init`, which runs in `FNMNApp.init`, delayed the first frame | `guards.py`: `storage read at launch` on an added `storage.load()` outside `savedConnection()` |
+| 2026-11-05 | A view read `server.connection` before the lazy Keychain read had run, so a YouTube embed saw no server | `guards.py`: `connection read without load` on added `server.connection` lines outside `ServerLink.swift` |

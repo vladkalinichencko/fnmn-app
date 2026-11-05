@@ -78,6 +78,7 @@ struct VideoReaderView: View {
         }
         .onDisappear { video.send(.left) }
         .onChange(of: scenePhase) { _, phase in if phase != .active { video.send(.left) } }
+        .task { _ = server.savedConnection() }
     }
 
     @ViewBuilder
@@ -181,6 +182,9 @@ struct VideoReaderView: View {
     /// The original and, where the build has it, the download stay in the `···` menu, so the message only says what is missing.
     private var embedState: EmbedPhase {
         guard videoID != nil else { return .failed("Not a YouTube video") }
+        guard server.hasReadConnection else {
+            return .loading
+        }
         guard server.connection != nil else { return .failed("Connect the server in Settings to play here") }
         return video.state.embed
     }
