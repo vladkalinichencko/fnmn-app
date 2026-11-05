@@ -15,4 +15,9 @@ enum AppSources {
             .filter { $0.pathExtension == "swift" }
         return try XCTUnwrap(files, "The test needs the app's sources under App/FNMN.")
     }
+
+    static func file(named name: String) throws -> URL {
+        let match = try files().first { $0.lastPathComponent == name }
+        return try XCTUnwrap(match, "App/FNMN has no \(name).")
+    }
 }

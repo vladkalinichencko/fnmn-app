@@ -10,6 +10,7 @@ already in the repository never fails them. Source-level rules live in .swiftlin
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -26,12 +27,6 @@ ONE_LINE_BLOCK = re.compile(
 )
 ELSE_ONE_LINE = re.compile(r"^\s*\}\s*else\b.*\{[^{}]*\}\s*$")
 AMONG = re.compile(r"\bamong\s*:|\?\?\s*items\b")
-LIBRARY_DISK = re.compile(
-    r"\.(?:appendJournal|loadSync|saveSync|unreadJournalEvents|changedDeliveries|addCloudDelivery|"
-    r"applyBrowserCatalog|storeArticle|storeMade|moveIntoCloud|holdsMaterialsInApp|package\(ofFile)\("
-)
-FUNC = re.compile(r"\bfunc\s+(\w+)")
-SERVER_LINK = "App/FNMN/Server/ServerLink.swift"
 
 
 def run(args, **kwargs):
@@ -58,15 +53,6 @@ def added_lines(base):
             yield path, number, text
 
 
-def enclosing_function(path, number):
-    """The function a line sits in, found by the nearest declaration above it."""
-    for line in reversed((ROOT / path).read_text().split("\n")[: number - 1]):
-        match = FUNC.search(line)
-        if match:
-            return match.group(1)
-    return ""
-
-
 def diff_violations(base):
     found = []
     comment_end = {}
@@ -79,24 +65,6 @@ def diff_violations(base):
             found.append((path, number, "one-line block", "block body on one line; put the statements on their own lines"))
         if is_swift and AMONG.search(text):
             found.append((path, number, "among parameter", "a second code path for a cached list; derive the cache once instead"))
-        if path == "App/FNMN/Store/LibraryModel.swift" and LIBRARY_DISK.search(text):
-            found.append(
-                (
-                    path,
-                    number,
-                    "disk work in LibraryModel",
-                    "the model sequences the journal sync and the import; the disk mechanics live in JournalSync and LibraryImporter",
-                )
-            )
-        if path == SERVER_LINK and "storage.load()" in text and enclosing_function(path, number) != "savedConnection":
-            found.append(
-                (
-                    path,
-                    number,
-                    "storage read at launch",
-                    "read the saved connection on first use in savedConnection(); reading it in init runs inside FNMNApp.init",
-                )
-            )
         if text.strip().startswith("//"):
             length = comment_length.get(path, 0) + 1 if comment_end.get(path) == number - 1 else 1
             comment_end[path] = number
@@ -126,6 +94,19 @@ def lint_self_test():
         sys.exit("FAILED: the lint rule did not catch a LibraryQueries( in App/")
 
 
+def simulator_udid():
+    """The first available iPhone simulator, for the app unit tests."""
+    result = run(["xcrun", "simctl", "list", "devices", "available", "--json"])
+    if result.returncode != 0:
+        sys.exit(f"xcrun simctl failed: {result.stderr.strip()}")
+    devices = json.loads(result.stdout).get("devices", {})
+    for runtime in sorted(devices, reverse=True):
+        for device in devices[runtime]:
+            if device.get("isAvailable") and device["name"].startswith("iPhone"):
+                return device["udid"]
+    sys.exit("no available iPhone simulator for the app unit tests")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="master")
@@ -153,6 +134,14 @@ def main():
                 "xcodebuild", "-project", "App/FNMN.xcodeproj", "-scheme", "FNMN",
                 "-destination", "generic/platform=iOS Simulator", "-configuration", "Debug",
                 "build", "CODE_SIGNING_ALLOWED=NO",
+            ],
+        )
+        step(
+            "test FNMN app",
+            [
+                "xcodebuild", "-project", "App/FNMN.xcodeproj", "-scheme", "FNMN",
+                "-destination", f"id={simulator_udid()}", "-configuration", "Debug",
+                "-only-testing:FNMNTests", "test", "CODE_SIGNING_ALLOWED=NO",
             ],
         )
     print("All guards passed.")
