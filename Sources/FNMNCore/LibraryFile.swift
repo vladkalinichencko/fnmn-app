@@ -302,7 +302,7 @@ public actor LibraryFile {
         var snapshot = snapshot
         if !deletionsKnown {
             // An empty device name reads every device's journal, this one's too.
-            for event in try unreadJournalEvents(except: "", sync: JournalSync()).events {
+            for event in try unreadJournalEvents(except: "", sync: JournalKnowledge()).events {
                 guard case let .library(.delete(itemID)) = event.change else { continue }
                 snapshot.deletedAt[itemID] = max(snapshot.deletedAt[itemID] ?? .distantPast, event.time)
             }
@@ -432,13 +432,15 @@ public actor LibraryFile {
         cloudFolder?.appending(path: "state", directoryHint: .isDirectory)
     }
 
-    public func loadSync() throws -> JournalSync {
+    public func loadSync() throws -> JournalKnowledge {
         let url = root.appending(path: "sync.json")
-        guard FileManager.default.fileExists(atPath: url.path) else { return JournalSync() }
-        return try decoder.decode(JournalSync.self, from: Data(contentsOf: url))
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return JournalKnowledge()
+        }
+        return try decoder.decode(JournalKnowledge.self, from: Data(contentsOf: url))
     }
 
-    public func saveSync(_ sync: JournalSync) throws {
+    public func saveSync(_ sync: JournalKnowledge) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try encoder.encode(sync).write(to: root.appending(path: "sync.json"), options: .atomic)
     }
@@ -509,7 +511,7 @@ public actor LibraryFile {
     /// The other devices' changes this device has not applied yet, and how many lines of each journal are
     /// read after them. A line that does not decode stops that journal there, to be read again next time.
     /// A journal another device has folded into a new generation is gone, and so is what was known of it.
-    public func unreadJournalEvents(except device: String, sync: JournalSync) throws -> (events: [JournalEvent], applied: [String: Int]) {
+    public func unreadJournalEvents(except device: String, sync: JournalKnowledge) throws -> (events: [JournalEvent], applied: [String: Int]) {
         guard let folder = journalFolder(),
               let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
             return ([], sync.applied)

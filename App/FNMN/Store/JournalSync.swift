@@ -4,10 +4,10 @@ import Foundation
 /// This device's journal and the other devices': the changes waiting to be written to this device's own
 /// file, and what it knows of everyone else's. `LibraryModel` sequences the sync; everything about the
 /// journals themselves — recording a change, writing this device's, reading the others' and merging them —
-/// lives here. What a device knows is `FNMNCore.JournalSync`, kept in `sync.json`.
+/// lives here. What a device knows is `JournalKnowledge`, kept in `sync.json`.
 @MainActor
 final class JournalSync {
-    private var known = FNMNCore.JournalSync()
+    private var known = JournalKnowledge()
     private var pending: [JournalEvent] = []
     private let file: LibraryFile
     let device: String

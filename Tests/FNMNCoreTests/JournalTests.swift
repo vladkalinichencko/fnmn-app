@@ -34,16 +34,16 @@ private func library() throws -> LibrarySnapshot {
     let events = changes.enumerated().flatMap { JournalEvent.events(for: $1, at: Date(timeIntervalSinceReferenceDate: Double($0))) }
     try await phone.appendJournal(events, device: "phone")
 
-    let unread = try await tablet.unreadJournalEvents(except: "tablet", sync: JournalSync())
+    let unread = try await tablet.unreadJournalEvents(except: "tablet", sync: JournalKnowledge())
     #expect(unread.events == events)
-    var sync = JournalSync()
+    var sync = JournalKnowledge()
     sync.applied = unread.applied
     let merged = merge(unread.events, into: try library(), ReadingProgress(), sync: sync)
     #expect(merged.progress.positions[paper.material.id]?.pieceIndex == 1)
     #expect(merged.catalog.albums(of: paper.material.id) == ["Later"])
     #expect(merged.catalog.annotations.map(\.text) == ["First paragraph."])
     #expect(try await tablet.unreadJournalEvents(except: "tablet", sync: merged.sync).events.isEmpty)
-    #expect(try await phone.unreadJournalEvents(except: "phone", sync: JournalSync()).events.isEmpty)
+    #expect(try await phone.unreadJournalEvents(except: "phone", sync: JournalKnowledge()).events.isEmpty)
 }
 
 @Test func aLongJournalFoldsIntoANewGenerationThatGivesTheSameState() async throws {
@@ -58,8 +58,8 @@ private func library() throws -> LibrarySnapshot {
     let mark = JournalEvent(time: Date(timeIntervalSinceReferenceDate: 2.5), change: .library(.mark(.highlight, target)))
 
     try await phone.appendJournal(Array(places.prefix(3)), device: "phone", compactingAfter: 4)
-    let early = try await tablet.unreadJournalEvents(except: "tablet", sync: JournalSync())
-    var sync = JournalSync()
+    let early = try await tablet.unreadJournalEvents(except: "tablet", sync: JournalKnowledge())
+    var sync = JournalKnowledge()
     sync.applied = early.applied
     let first = merge(early.events, into: try library(), ReadingProgress(), sync: sync)
 
@@ -71,13 +71,13 @@ private func library() throws -> LibrarySnapshot {
     var lateSync = first.sync
     lateSync.applied = late.applied
     let caughtUp = merge(late.events, into: first.catalog, first.progress, sync: lateSync)
-    let whole = merge(places + [mark], into: try library(), ReadingProgress(), sync: JournalSync())
+    let whole = merge(places + [mark], into: try library(), ReadingProgress(), sync: JournalKnowledge())
     #expect(caughtUp.progress == whole.progress)
     #expect(caughtUp.catalog.annotations.map(\.marks) == whole.catalog.annotations.map(\.marks))
 }
 
 @Test func theLatestPlaceWinsWhicheverDeviceItCameFrom() throws {
-    var sync = JournalSync()
+    var sync = JournalKnowledge()
     let mine = JournalEvent(time: Date(timeIntervalSinceReferenceDate: 20), change: .progress(.savePosition(.piece(5), itemID: paper.material.id, progress: 0.5)))
     sync.record(mine)
     let progress = ReadingProgress().applying(.savePosition(.piece(5), itemID: paper.material.id, progress: 0.5))
@@ -90,7 +90,7 @@ private func library() throws -> LibrarySnapshot {
 @Test func aMaterialDeletedElsewhereTakesItsProgressWithIt() throws {
     let progress = ReadingProgress().applying(.savePosition(.piece(1), itemID: paper.material.id, progress: 0.5))
     let deleted = JournalEvent(time: .now, change: .library(.delete(itemID: paper.material.id)))
-    let merged = merge([deleted], into: try library(), progress, sync: JournalSync())
+    let merged = merge([deleted], into: try library(), progress, sync: JournalKnowledge())
     #expect(merged.catalog.articles.isEmpty)
     #expect(merged.progress == ReadingProgress())
 }
@@ -104,7 +104,7 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
         JournalEvent(time: stamp(20), change: .progress(.reset(itemID: id))),
         JournalEvent(time: stamp(30), change: .progress(.savePosition(.piece(0), itemID: id, progress: 0.1))),
     ]
-    let merged = merge(events, into: try library(), ReadingProgress(), sync: JournalSync())
+    let merged = merge(events, into: try library(), ReadingProgress(), sync: JournalKnowledge())
     #expect(merged.progress.positions[id] == .piece(0))
 }
 
@@ -116,13 +116,13 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
         JournalEvent(time: stamp(20), change: .progress(.reset(itemID: id))),
         JournalEvent(time: stamp(30), change: .progress(.line(line, itemID: id))),
     ]
-    #expect(merge(events, into: try library(), ReadingProgress(), sync: JournalSync()).progress.lines[id] == line)
-    #expect(merge(Array(events.prefix(2)), into: try library(), ReadingProgress(), sync: JournalSync()).progress.lines[id] == nil)
+    #expect(merge(events, into: try library(), ReadingProgress(), sync: JournalKnowledge()).progress.lines[id] == line)
+    #expect(merge(Array(events.prefix(2)), into: try library(), ReadingProgress(), sync: JournalKnowledge()).progress.lines[id] == nil)
 }
 
 @Test func aResetFromAnotherDeviceLeavesWhatThisDeviceReadAfterIt() throws {
     let id = paper.material.id
-    var sync = JournalSync()
+    var sync = JournalKnowledge()
     var progress = ReadingProgress()
     progress = progress.applying(.savePosition(.piece(1), itemID: id, progress: 0.5))
     sync.record(JournalEvent(time: stamp(30), change: .progress(.savePosition(.piece(1), itemID: id, progress: 0.5))))
@@ -133,7 +133,7 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
 
 @Test func anOlderPlateFromAnotherDeviceDoesNotUndoAResetHere() throws {
     let id = paper.material.id
-    var sync = JournalSync()
+    var sync = JournalKnowledge()
     sync.record(JournalEvent(time: stamp(20), change: .progress(.reset(itemID: id))))
     let late = JournalEvent(time: stamp(10), change: .progress(.savePosition(.piece(1), itemID: id, progress: 0.5)))
     let merged = merge([late], into: try library(), ReadingProgress(), sync: sync)
@@ -169,11 +169,11 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
     let target = AnnotationTarget(materialID: paper.material.id, piece: 0, text: "First paragraph.")
     let marked = JournalEvent(time: stamp(1), change: .library(.mark(.highlight, target)))
     // The tablet took the phone's mark in and deletes what it now holds.
-    let onTablet = merge([marked], into: try library(), ReadingProgress(), sync: JournalSync())
+    let onTablet = merge([marked], into: try library(), ReadingProgress(), sync: JournalKnowledge())
     let removed = JournalEvent(time: stamp(2), change: .library(.removeAnnotation(onTablet.catalog.annotations[0].id)))
     // The phone made the mark itself and takes the tablet's deletion in.
     let onPhone = try library().applying(.mark(.highlight, target), at: stamp(1))
-    let merged = merge([removed], into: onPhone, ReadingProgress(), sync: JournalSync())
+    let merged = merge([removed], into: onPhone, ReadingProgress(), sync: JournalKnowledge())
     #expect(merged.catalog.annotations.isEmpty)
 }
 
@@ -182,7 +182,7 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
     // The tablet marked the paragraph at 1; its journal reaches this device only after the annotation was deleted at 2.
     let marked = JournalEvent(time: stamp(1), change: .library(.mark(.highlight, target)))
     var catalog = try library().applying(.mark(.highlight, target), at: stamp(0.5))
-    var sync = JournalSync()
+    var sync = JournalKnowledge()
     let id = catalog.annotations[0].id
     catalog = try catalog.applying(.removeAnnotation(id), at: stamp(2))
     sync.record(JournalEvent(time: stamp(2), change: .library(.removeAnnotation(id))))
