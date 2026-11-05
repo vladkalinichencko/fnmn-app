@@ -140,6 +140,31 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
     #expect(merged.progress.positions[id] == nil)
 }
 
+@Test func savedKnowledgeOfTheJournalsSurvivesTheDiskRoundTrip() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    let phone = LibraryFile(url: root.appending(path: "phone"))
+    let tablet = LibraryFile(url: root.appending(path: "tablet"))
+    await phone.useCloudFolder(cloud)
+    await tablet.useCloudFolder(cloud)
+    let target = AnnotationTarget(materialID: paper.material.id, piece: 0, text: "First paragraph.")
+    let events = JournalEvent.events(for: .library(.mark(.highlight, target)), at: stamp(1))
+    try await phone.appendJournal(events, device: "phone")
+
+    // The tablet reads with the knowledge it saved last time, not with what it holds in memory.
+    let known = try await tablet.loadSync()
+    let unread = try await tablet.unreadJournalEvents(except: "tablet", sync: known)
+    #expect(unread.events == events)
+    var after = known
+    after.applied = unread.applied
+    let merged = merge(unread.events, into: try library(), ReadingProgress(), sync: after)
+    try await tablet.saveSync(merged.sync)
+
+    let reloaded = try await tablet.loadSync()
+    #expect(reloaded == merged.sync)
+    #expect(try await tablet.unreadJournalEvents(except: "tablet", sync: reloaded).events.isEmpty)
+}
+
 @Test func anAnnotationDeletedOnOneDeviceIsGoneOnTheOther() throws {
     let target = AnnotationTarget(materialID: paper.material.id, piece: 0, text: "First paragraph.")
     let marked = JournalEvent(time: stamp(1), change: .library(.mark(.highlight, target)))

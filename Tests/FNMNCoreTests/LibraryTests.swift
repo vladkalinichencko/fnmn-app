@@ -304,6 +304,20 @@ private let laterArticle = ImportPackage(
     #expect(link.material.title == "dl.acm.org/doi/1")
 }
 
+@Test func aLinkKeptAsItIsBecomesADeliveryInItsOwnRight() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let url = try #require(URL(string: "https://dl.acm.org/doi/1"))
+    let library = try await libraryFile(root).storeMade(.link(url), into: LibrarySnapshot())
+    let queries = LibraryQueries(library)
+    let item = try #require(queries.unsortedItems.first)
+    #expect(item.id == "link:https://dl.acm.org/doi/1")
+    #expect(item.kind == .link)
+    #expect(item.originalURL == url)
+    let entry = try #require(library.articles.first)
+    #expect(entry.delivery != nil)
+    #expect(try await libraryFile(root).load().catalog == library)
+}
+
 @Test func aMaterialMadeFromAFileHasItsAuthorsForASource() throws {
     var library = LibrarySnapshot()
     try library.importPackage(namedBook, at: .now)
