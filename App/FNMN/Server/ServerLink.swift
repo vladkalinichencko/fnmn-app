@@ -7,11 +7,21 @@ final class ServerLink {
     private(set) var connection: ServerConnection?
     let port: any ServerPort
     private let storage: any ServerConnectionStorage
+    @ObservationIgnored private var read = false
 
     init(port: any ServerPort = ServerClient(), storage: any ServerConnectionStorage = KeychainServerConnectionStore()) {
         self.port = port
         self.storage = storage
-        connection = storage.load()
+    }
+
+    /// The saved connection, read from the Keychain the first time something asks for it. Reading it in `init`
+    /// runs inside `FNMNApp.init`, and the synchronous Keychain call delays the first frame.
+    func savedConnection() -> ServerConnection? {
+        if !read {
+            read = true
+            connection = storage.load()
+        }
+        return connection
     }
 
     func save(_ connection: ServerConnection) throws {
@@ -24,7 +34,9 @@ final class ServerLink {
     }
 
     func configured() throws -> ServerConnection {
-        guard let connection else { throw ServerConnectionError.notConfigured }
+        guard let connection = savedConnection() else {
+            throw ServerConnectionError.notConfigured
+        }
         return connection
     }
 }
