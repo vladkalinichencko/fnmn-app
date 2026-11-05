@@ -26,6 +26,12 @@ ONE_LINE_BLOCK = re.compile(
 )
 ELSE_ONE_LINE = re.compile(r"^\s*\}\s*else\b.*\{[^{}]*\}\s*$")
 AMONG = re.compile(r"\bamong\s*:|\?\?\s*items\b")
+LIBRARY_DISK = re.compile(
+    r"\.(?:appendJournal|loadSync|saveSync|unreadJournalEvents|changedDeliveries|addCloudDelivery|"
+    r"applyBrowserCatalog|storeArticle|storeMade|moveIntoCloud|holdsMaterialsInApp|package\(ofFile)\("
+)
+FUNC = re.compile(r"\bfunc\s+(\w+)")
+SERVER_LINK = "App/FNMN/Server/ServerLink.swift"
 
 
 def run(args, **kwargs):
@@ -52,6 +58,15 @@ def added_lines(base):
             yield path, number, text
 
 
+def enclosing_function(path, number):
+    """The function a line sits in, found by the nearest declaration above it."""
+    for line in reversed((ROOT / path).read_text().split("\n")[: number - 1]):
+        match = FUNC.search(line)
+        if match:
+            return match.group(1)
+    return ""
+
+
 def diff_violations(base):
     found = []
     comment_end = {}
@@ -64,6 +79,24 @@ def diff_violations(base):
             found.append((path, number, "one-line block", "block body on one line; put the statements on their own lines"))
         if is_swift and AMONG.search(text):
             found.append((path, number, "among parameter", "a second code path for a cached list; derive the cache once instead"))
+        if path == "App/FNMN/Store/LibraryModel.swift" and LIBRARY_DISK.search(text):
+            found.append(
+                (
+                    path,
+                    number,
+                    "disk work in LibraryModel",
+                    "the model sequences the journal sync and the import; the disk mechanics live in JournalSync and LibraryImporter",
+                )
+            )
+        if path == SERVER_LINK and "storage.load()" in text and enclosing_function(path, number) != "savedConnection":
+            found.append(
+                (
+                    path,
+                    number,
+                    "storage read at launch",
+                    "read the saved connection on first use in savedConnection(); reading it in init runs inside FNMNApp.init",
+                )
+            )
         if text.strip().startswith("//"):
             length = comment_length.get(path, 0) + 1 if comment_end.get(path) == number - 1 else 1
             comment_end[path] = number

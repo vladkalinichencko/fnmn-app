@@ -59,3 +59,6 @@ Each defect below is closed by the check in the last column.
 | 2026-11-02 | Speed check compared two timings with no frame budget | `CollectedCatalogSpeedTests`: best of ten runs under 5 ms |
 | 2026-11-02 | Tests read a `LibraryQueries` built before the library changed | `LibraryTests`: queries are rebuilt after each change |
 | 2026-11-02 | CI ran Swift 6.3.3 while the package needs tools 6.4 | CI runner `xcode-27` |
+| 2026-11-05 | The journal sync and import were moved out of `LibraryModel` with no behavior pinned first | `JournalTests` and `LibraryTests`: a saved sync and a kept link survive the disk round trip |
+| 2026-11-05 | `LibraryModel` had grown back into the owner of journal and import disk work | `guards.py`: `disk work in LibraryModel` on added lines |
+| 2026-11-05 | Reading the Keychain inside `ServerLink.init`, which runs in `FNMNApp.init`, delayed the first frame | `guards.py`: `storage read at launch` on an added `storage.load()` outside `savedConnection()` |
