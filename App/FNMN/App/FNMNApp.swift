@@ -7,6 +7,7 @@ struct FNMNApp: App {
     @State private var library: LibraryModel
     @State private var server: ServerLink
     @State private var imports: ImportJobs
+    @State private var digests: DigestModel
 
     init() {
         let library = LibraryModel()
@@ -14,6 +15,7 @@ struct FNMNApp: App {
         _library = State(initialValue: library)
         _server = State(initialValue: server)
         _imports = State(initialValue: ImportJobs(library: library, server: server))
+        _digests = State(initialValue: DigestModel(device: library.deviceID))
     }
 
     var body: some Scene {
@@ -22,6 +24,7 @@ struct FNMNApp: App {
                 .environment(library)
                 .environment(server)
                 .environment(imports)
+                .environment(digests)
         }
     }
 }
@@ -30,6 +33,7 @@ struct FNMNApp: App {
 private struct WindowRoot: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ImportJobs.self) private var imports
+    @Environment(DigestModel.self) private var digests
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigation = WindowNavigation()
     @State private var dialogs = LibraryDialogs()
@@ -61,16 +65,24 @@ private struct WindowRoot: View {
         .task { await library.load() }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .background: Task { await library.saveProgress() }
+            case .background:
+                Task {
+                    await library.saveProgress()
+                    await digests.settle()
+                }
             case .active where library.loadState == .ready:
                 takeSharedItems()
-                Task { await library.syncWithOtherDevices() }
+                Task {
+                    await library.syncWithOtherDevices()
+                    await digests.sync(folder: library.cloudFolder)
+                }
             default: break
             }
         }
         .onChange(of: library.loadState) { _, state in
             guard state == .ready else { return }
             takeSharedItems()
+            Task { await digests.sync(folder: library.cloudFolder) }
             guard pendingContinue else { return }
             pendingContinue = false
             continueReading()

@@ -62,6 +62,11 @@ final class LibraryModel {
         journal = JournalSync(file: file)
     }
 
+    /// This device's id, written once by the journal; the digest's engagement journal is named by it too.
+    var deviceID: String {
+        journal.device
+    }
+
     /// Every window asks for the library; only the first ask, or a retry after a failure, reads it.
     func load() async {
         switch loadState {

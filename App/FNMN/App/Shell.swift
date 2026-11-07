@@ -5,7 +5,7 @@ import SwiftUI
 typealias LibraryItem = FNMNCore.LibraryItem
 
 enum ShellTab: Hashable {
-    case library, shelf
+    case library, digest, shelf
 }
 
 /// Where a tab's navigation stack can go.
@@ -19,19 +19,32 @@ enum Route: Hashable {
     case archive
 }
 
+/// Where the digest tab's stack can go: one post with its thread, and the sources the Mac reads.
+enum DigestRoute: Hashable {
+    case thread(String)
+    case sources
+}
+
 /// The window's own place in the app: its tab and the stack of each tab.
 @MainActor @Observable
 final class WindowNavigation {
     var tab = ShellTab.library
     var library: [Route] = []
+    var digest: [DigestRoute] = []
     var shelf: [Route] = []
 
     /// Pushes onto the stack of the visible tab.
     func open(_ route: Route) {
         switch tab {
         case .library: library.append(route)
+        case .digest: break
         case .shelf: shelf.append(route)
         }
+    }
+
+    /// Pushes onto the digest tab's stack.
+    func open(_ route: DigestRoute) {
+        digest.append(route)
     }
 
     /// Opens a route from outside the app on a fresh Library stack.
@@ -98,6 +111,9 @@ struct AppShell: View {
         TabView(selection: $navigation.tab) {
             Tab("Library", systemImage: "books.vertical", value: ShellTab.library) {
                 LibraryScreen()
+            }
+            Tab("Digest", systemImage: "newspaper", value: ShellTab.digest) {
+                DigestScreen()
             }
             Tab("Shelf", systemImage: "bookmark", value: ShellTab.shelf) {
                 ShelfScreen()
