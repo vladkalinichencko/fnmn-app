@@ -90,6 +90,8 @@ private struct WindowRoot: View {
         .onOpenURL { url in
             if url.scheme == "fnmn", url.host == "continue" {
                 if library.loadState == .ready { continueReading() } else { pendingContinue = true }
+            } else if url.scheme == "fnmn", url.host == "digest" {
+                navigation.tab = .digest
             } else if let shared = CaptureHandoff.sharedURL(from: url) {
                 dialogs.send(.addLink(shared.absoluteString))
             }

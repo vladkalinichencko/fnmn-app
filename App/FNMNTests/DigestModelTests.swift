@@ -60,7 +60,9 @@ final class DigestModelTests: XCTestCase {
         func add(_ name: String, _ data: Data) {
             var header = [UInt8](repeating: 0, count: 512)
             func put(_ text: String, at offset: Int) {
-                for (index, byte) in text.utf8.enumerated() { header[offset + index] = byte }
+                for (index, byte) in text.utf8.enumerated() {
+                    header[offset + index] = byte
+                }
             }
             put(name, at: 0)
             put("0000644", at: 100)

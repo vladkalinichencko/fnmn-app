@@ -53,4 +53,16 @@ final class ArchitectureGuardTests: XCTestCase {
         let saved = try XCTUnwrap(body(of: "func savedConnection(", in: source))
         XCTAssertTrue(saved.contains("storage.load()"), "savedConnection() no longer reads the saved connection")
     }
+
+    /// The magazine draws its posts with SwiftUI, never with a browser: a web view would bring the network's
+    /// own page, its scripts and its layout into a tab that must look like the rest of the app.
+    func testTheDigestTabDrawsWithSwiftUINotWebViews() throws {
+        let digest = try AppSources.files().filter { $0.path.contains("/Digest/") }
+        XCTAssertFalse(digest.isEmpty, "App/FNMN/Digest holds no sources; the guard would pass on nothing")
+        for file in digest {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            XCTAssertFalse(source.contains("import WebKit"), "\(file.lastPathComponent) imports WebKit; the digest draws natively")
+            XCTAssertFalse(source.contains("WKWebView"), "\(file.lastPathComponent) opens a web view; the digest draws natively")
+        }
+    }
 }

@@ -15,5 +15,7 @@ jobs:
           fetch-depth: 0
       - name: Install SwiftLint
         run: brew install swiftlint
+      - name: Install the server's Python packages
+        run: python3 -m pip install -r server/requirements.txt
       - name: Run the guards
         run: python3 scripts/guards.py --app --base "origin/${{ github.base_ref || 'master' }}"

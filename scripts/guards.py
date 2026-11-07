@@ -74,11 +74,17 @@ def diff_violations(base):
     return found
 
 
-def step(title, args):
+def step(title, args, cwd=ROOT):
     print(f"==> {title}", flush=True)
-    result = subprocess.run(args, cwd=ROOT)
+    result = subprocess.run(args, cwd=cwd)
     if result.returncode != 0:
         sys.exit(f"FAILED: {title}")
+
+
+def server_python() -> str:
+    """The repository's server environment when it is there; CI installs the same packages for python3."""
+    venv = ROOT / ".venv/bin/python"
+    return str(venv) if venv.exists() else sys.executable
 
 
 def lint_self_test():
@@ -127,6 +133,11 @@ def main():
     lint_self_test()
     step("swiftlint --strict", ["swiftlint", "--strict"])
     step("swift test", ["swift", "test"])
+    step(
+        "digest server tests",
+        [server_python(), "-m", "unittest", "tests.test_digest_store", "tests.test_digest_sources", "tests.test_digest_build"],
+        cwd=ROOT / "server",
+    )
     if options.app:
         step(
             "build FNMN app",
