@@ -1,0 +1,26 @@
+{
+  "folders": ["ml", "design", "tech"],
+  "sources": [
+    {
+      "id": "x/karpathy",
+      "network": "x",
+      "handle": "karpathy",
+      "name": "Andrej Karpathy",
+      "folders": ["ml"]
+    },
+    {
+      "id": "x/_akhaliq",
+      "network": "x",
+      "handle": "_akhaliq",
+      "name": "AK",
+      "folders": ["ml"]
+    },
+    {
+      "id": "telegram/durov",
+      "network": "telegram",
+      "channel": "durov",
+      "name": "Pavel Durov",
+      "folders": ["tech"]
+    }
+  ]
+}

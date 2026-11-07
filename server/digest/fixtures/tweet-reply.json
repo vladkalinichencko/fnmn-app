@@ -1,0 +1,26 @@
+{
+  "__typename": "Tweet",
+  "id_str": "1900000000000000002",
+  "text": "@hardmaru this is exactly the split I meant",
+  "created_at": "2026-11-07T10:00:00.000Z",
+  "lang": "en",
+  "favorite_count": 12,
+  "conversation_count": 1,
+  "user": {"id_str": "12", "name": "Andrej Karpathy", "screen_name": "karpathy"},
+  "in_reply_to_screen_name": "hardmaru",
+  "in_reply_to_status_id_str": "1900000000000000000",
+  "in_reply_to_user_id_str": "99",
+  "parent": {
+    "__typename": "Tweet",
+    "id_str": "1900000000000000000",
+    "text": "A post being answered.",
+    "created_at": "2026-11-06T20:00:00.000Z",
+    "user": {"id_str": "99", "name": "hardmaru", "screen_name": "hardmaru"},
+    "favorite_count": 100,
+    "conversation_count": 3,
+    "retweet_count": 7
+  },
+  "mediaDetails": [],
+  "entities": {},
+  "display_text_range": [0, 42]
+}

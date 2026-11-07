@@ -1,0 +1,37 @@
+{
+  "__typename": "Tweet",
+  "id_str": "1900000000000000001",
+  "text": "The catalog is the model. Everything else is a view of it. https://t.co/abc",
+  "created_at": "2026-11-07T09:30:00.000Z",
+  "lang": "en",
+  "favorite_count": 812,
+  "conversation_count": 24,
+  "retweet_count": 51,
+  "user": {
+    "id_str": "12",
+    "name": "Andrej Karpathy",
+    "screen_name": "karpathy",
+    "is_blue_verified": true
+  },
+  "mediaDetails": [
+    {
+      "type": "photo",
+      "media_url_https": "https://pbs.twimg.com/media/example-photo.jpg",
+      "original_info": {"width": 1600, "height": 900},
+      "sizes": {"large": {"w": 1600, "h": 900, "resize": "fit"}}
+    }
+  ],
+  "quoted_tweet": {
+    "__typename": "Tweet",
+    "id_str": "1900000000000000000",
+    "text": "A post being quoted.",
+    "created_at": "2026-11-06T20:00:00.000Z",
+    "user": {"id_str": "99", "name": "hardmaru", "screen_name": "hardmaru"},
+    "favorite_count": 100,
+    "conversation_count": 3,
+    "retweet_count": 7,
+    "mediaDetails": []
+  },
+  "entities": {},
+  "display_text_range": [0, 71]
+}
