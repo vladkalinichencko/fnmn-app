@@ -251,7 +251,7 @@ public actor LibraryFile {
 
     /// A delivery archive the server prepared for this phone joins the others in the FNMN folder.
     public func storeArticle(archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let package = try DeliveryArchive(url: archive).unpack { _, _ in nil }
+        let package = try DeliveryArchive(url: archive).unpack { (_: ImportPackage, _) in nil }
         let destination = try requireCloudFolder().appending(path: "deliveries").appending(path: Self.deliveryName(package.material.id))
         try placeInCloud(archive, at: destination)
         let next = try addCloudDelivery(destination, into: snapshot)
@@ -280,7 +280,7 @@ public actor LibraryFile {
         let cover = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: cover) }
         var hasCover = false
-        let package = try DeliveryArchive(url: archive).unpack { package, path in
+        let package = try DeliveryArchive(url: archive).unpack { (package: ImportPackage, path: String) in
             guard case let .articleFile(_, coverPath)? = package.cover, coverPath == path else { return nil }
             hasCover = true
             return cover
@@ -413,7 +413,7 @@ public actor LibraryFile {
             guard let archive = deliveryURL(of: entry) else { throw LibraryError.cloudFolderMissing }
             let incoming = folder.appendingPathExtension("incoming")
             try? FileManager.default.removeItem(at: incoming)
-            let package = try DeliveryArchive(url: archive).unpack { _, path in
+            let package = try DeliveryArchive(url: archive).unpack { (_: ImportPackage, path: String) in
                 guard let file = Self.contained(path, in: incoming) else { throw LibraryError.escapedPath }
                 return file
             }

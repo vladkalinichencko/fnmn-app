@@ -11,14 +11,18 @@ public struct DeliveryArchive: Sendable {
     }
 
     /// Reads the package, then copies every other entry to the file `destination` names for it;
-    /// an entry it names no file for is skipped.
-    public func unpack(filesInto destination: (ImportPackage, String) throws -> URL?) throws -> ImportPackage {
+    /// an entry it names no file for is skipped. Each kind of delivery decodes its own package, so articles
+    /// and digests read through the same one pass.
+    public func unpack<Package: Decodable>(
+        decoder: JSONDecoder = JSONDecoder(),
+        filesInto destination: (Package, String) throws -> URL?
+    ) throws -> Package {
         let archive = try FileHandle(forReadingFrom: url)
         defer { try? archive.close() }
         guard let first = try Self.nextEntry(in: archive), first.name == "package.json", first.isFile else {
             throw DeliveryArchiveError.missingPackage
         }
-        let package = try JSONDecoder().decode(ImportPackage.self, from: try Self.read(first.size, from: archive))
+        let package = try decoder.decode(Package.self, from: try Self.read(first.size, from: archive))
         try Self.skipPadding(after: first.size, in: archive)
         while let entry = try Self.nextEntry(in: archive) {
             if entry.isFile, let file = try destination(package, entry.name) {

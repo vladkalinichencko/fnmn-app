@@ -4,6 +4,11 @@ import Testing
 
 /// Writes a delivery the way the server's `write_delivery` does: USTAR, `package.json` first, then the files.
 func writeDelivery(_ package: ImportPackage, files: [(String, Data)] = [], to url: URL) throws {
+    try writeTar(package: try JSONEncoder().encode(package), files: files, to: url)
+}
+
+/// The same uncompressed USTAR archive for any package JSON, so a digest reads through the same reader.
+func writeTar(package: Data, files: [(String, Data)] = [], to url: URL) throws {
     var archive = Data()
     func add(_ name: String, _ data: Data) {
         var header = [UInt8](repeating: 0, count: 512)
@@ -25,7 +30,7 @@ func writeDelivery(_ package: ImportPackage, files: [(String, Data)] = [], to ur
         archive.append(data)
         archive.append(Data(count: (512 - data.count % 512) % 512))
     }
-    add("package.json", try JSONEncoder().encode(package))
+    add("package.json", package)
     for (name, data) in files { add(name, data) }
     archive.append(Data(count: 1024))
     try archive.write(to: url)
@@ -61,6 +66,6 @@ private let package = ImportPackage(
     let archive = folder.appending(path: "a.tar")
     try Data(count: 1024).write(to: archive)
     #expect(throws: DeliveryArchiveError.missingPackage) {
-        try DeliveryArchive(url: archive).unpack { _, path in folder.appending(path: path) }
+        try DeliveryArchive(url: archive).unpack { (_: ImportPackage, path: String) in folder.appending(path: path) }
     }
 }
