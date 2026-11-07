@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from lxml import html
 
 from package import Report
-from digest.sources import SourceFailure, SourceResult, save_photo
+from digest.reading import SourceFailure, SourceResult, save_photo
 from digest.store import Post, iso
 from web import Web
 

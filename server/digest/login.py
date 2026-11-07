@@ -12,7 +12,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from digest.sources import profile
+from digest.reading import profile
 
 LOGIN = {
     "x": "https://x.com/login",

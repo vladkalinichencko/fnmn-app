@@ -35,7 +35,7 @@ server/digest/
   build.py             окно с прошлой сборки -> поставка в FNMN/digests/
   train.py             журнал реакций + хранилище -> модель CoreML
   store.py             посты и сборки: JSONL, дедупликация, окна
-  sources.py           контракт источника и постоянный профиль браузера
+  reading.py           контракт источника и постоянный профиль браузера
   x.py, telegram.py, instagram.py
 ```
 

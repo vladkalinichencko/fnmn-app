@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from digest import instagram, telegram, x
-from digest.sources import SourceFailure, browser
+from digest.reading import SourceFailure, browser
 from digest.store import Store, iso
 from web import LIVE
 

@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parent.parent
 SCOPE = ["App", "Sources", "Tests", "AGENTS.md", ".swiftlint.yml", ".github"]
@@ -27,6 +28,9 @@ ONE_LINE_BLOCK = re.compile(
 )
 ELSE_ONE_LINE = re.compile(r"^\s*\}\s*else\b.*\{[^{}]*\}\s*$")
 AMONG = re.compile(r"\bamong\s*:|\?\?\s*items\b")
+# Generated trees that must never be tracked: the digest store's working files, browser profiles with the
+# logged-in sessions, build products and Python caches.
+RUNTIME_PATHS = ("/out/", "/profiles/", "/__pycache__/", "/.build/", "/.venv/")
 
 
 def run(args, **kwargs):
@@ -72,6 +76,59 @@ def diff_violations(base):
             if length == MAX_COMMENT_RUN + 1:
                 found.append((path, number, "comment block", f"more than {MAX_COMMENT_RUN} comment lines in a row"))
     return found
+
+
+def python_shadowing(root=ROOT):
+    """A module inside a server package whose name is also a module at the server root is reached by a bare
+    `from <name> import` as the root one, so the package's own file can only be imported by its full name.
+    That is how `digest/sources.py` silently read the article link classifier instead of its own contract."""
+    server = root / "server"
+    top_level = {path.name for path in server.glob("*.py") if path.name != "__init__.py"}
+    problems = []
+    for path in sorted(server.glob("*/**/*.py")):
+        parts = path.relative_to(server).parts
+        if parts[0] == "tests" or "__pycache__" in parts:
+            continue
+        if path.name in top_level:
+            problems.append(f"{path.relative_to(root)} shares its name with server/{path.name}; a bare import reads the root one")
+    return problems
+
+
+def tracked_runtime_files(root=ROOT):
+    """Generated files that git tracks: the working store, a logged-in browser profile, build products, caches.
+    A profile in the repository would carry someone's sessions with it."""
+    listed = subprocess.run(["git", "ls-files"], cwd=root, text=True, capture_output=True)
+    if listed.returncode != 0:
+        return []
+    return [path for path in listed.stdout.splitlines() if any(part in f"/{path}" for part in RUNTIME_PATHS)]
+
+
+def source_checks():
+    problems = python_shadowing() + [f"{path} is tracked but generated" for path in tracked_runtime_files()]
+    for problem in problems:
+        print(problem)
+    if problems:
+        sys.exit(f"FAILED: {len(problems)} source problem(s)")
+
+
+def source_self_test():
+    """The same checks, on a tree grown to break them: a shadowed module name and a tracked working file."""
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        (root / "server" / "digest").mkdir(parents=True)
+        (root / "server" / "package.py").write_text("")
+        (root / "server" / "digest" / "package.py").write_text("")
+        if not python_shadowing(root):
+            sys.exit("FAILED: the shadowing check missed a module named like a root module")
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        working = root / "server" / "digest" / "out" / "posts.jsonl"
+        working.parent.mkdir(parents=True)
+        working.write_text("")
+        subprocess.run(["git", "add", "-f", str(working)], cwd=root, check=True)
+        if not tracked_runtime_files(root):
+            sys.exit("FAILED: the runtime check missed a tracked working file")
 
 
 def step(title, args, cwd=ROOT):
@@ -129,13 +186,16 @@ def main():
     if violations:
         sys.exit(f"FAILED: {len(violations)} diff violation(s)")
 
+    print("==> source checks", flush=True)
+    source_checks()
+    source_self_test()
     print("==> lint self-test", flush=True)
     lint_self_test()
     step("swiftlint --strict", ["swiftlint", "--strict"])
     step("swift test", ["swift", "test"])
     step(
-        "digest server tests",
-        [server_python(), "-m", "unittest", "tests.test_digest_store", "tests.test_digest_sources", "tests.test_digest_build"],
+        "server tests",
+        [server_python(), "-m", "unittest", "discover", "-s", "tests"],
         cwd=ROOT / "server",
     )
     if options.app:

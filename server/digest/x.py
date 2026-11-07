@@ -13,7 +13,7 @@ from datetime import datetime
 import httpx
 
 from package import Report
-from digest.sources import SourceFailure, SourceResult, save_photo
+from digest.reading import SourceFailure, SourceResult, save_photo
 from digest.store import Post, iso
 from web import Web
 

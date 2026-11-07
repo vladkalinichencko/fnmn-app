@@ -54,15 +54,20 @@ final class ArchitectureGuardTests: XCTestCase {
         XCTAssertTrue(saved.contains("storage.load()"), "savedConnection() no longer reads the saved connection")
     }
 
-    /// The magazine draws its posts with SwiftUI, never with a browser: a web view would bring the network's
-    /// own page, its scripts and its layout into a tab that must look like the rest of the app.
-    func testTheDigestTabDrawsWithSwiftUINotWebViews() throws {
-        let digest = try AppSources.files().filter { $0.path.contains("/Digest/") }
-        XCTAssertFalse(digest.isEmpty, "App/FNMN/Digest holds no sources; the guard would pass on nothing")
-        for file in digest {
+    /// A web view may appear only where the app already decided it belongs: the live crop of a source page and
+    /// the embedded YouTube player. Every other screen draws with SwiftUI, so a new one has to be added here on
+    /// purpose, and the whole app is read, not the lines a change adds.
+    func testWebViewsAppearOnlyInTheLiveCropAndThePlayer() throws {
+        let allowed: Set<String> = ["LiveCropView.swift", "VideoReaderView.swift"]
+        for file in try AppSources.files() {
             let source = try String(contentsOf: file, encoding: .utf8)
-            XCTAssertFalse(source.contains("import WebKit"), "\(file.lastPathComponent) imports WebKit; the digest draws natively")
-            XCTAssertFalse(source.contains("WKWebView"), "\(file.lastPathComponent) opens a web view; the digest draws natively")
+            guard source.contains("import WebKit") || source.contains("WKWebView") else {
+                continue
+            }
+            XCTAssertTrue(
+                allowed.contains(file.lastPathComponent),
+                "\(file.lastPathComponent) opens a web view; only the live crop and the embedded player may, and a third place is a decision to write down here"
+            )
         }
     }
 }
