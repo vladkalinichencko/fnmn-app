@@ -56,6 +56,10 @@ The question for every check: which values can reach this line, where do they co
 - Write comments in English, and only where the code cannot say why. A comment block is at most four lines.
 - Do not reformat lines or files the change does not need to touch.
 
+## Across the boundary
+
+The server and the app model different things. To the server a page is `claude`, `chatgpt`, `substack` or a plain site, because each is parsed differently; to the app it is one article with a title and a text. Do not unify those classifications, their tables or their parsers across the process boundary, and do not share a host table between Swift and Python. The two sides agree on the wire format — `package.json`, the delivery archive, the file names — and on nothing else. A rule that exists only to keep two different models in step is a third model.
+
 ## Hot paths: how to keep them fast
 
 - `LibraryQueries` (`Sources/FNMNCore/LibraryQueries.swift`) is the read side of the library. Building it walks and sorts the whole catalog, so only `LibraryModel` builds it, once per catalog change, in `refreshQueries()`.
