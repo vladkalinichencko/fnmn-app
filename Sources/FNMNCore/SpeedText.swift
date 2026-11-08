@@ -191,8 +191,7 @@ public struct SpeedText: Sendable {
         if ["$$", "\\[", "\\(", "![", "<img", "<table", "<iframe", "<video"].contains(where: segment.contains) { return true }
         if segment.split(separator: "\n").contains(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("|") }) { return true }
         return segment.replacing("\\$", with: "").matches(of: /\$([^$\n]+?)\$/).contains { match in
-            let latex = String(match.1)
-            return latex.contains(/[\\^_{}=+<>]/) || !latex.contains(/\p{L}{3,}/)
+            !InlineMath.looksLikeProse(String(match.1))
         }
     }
 
