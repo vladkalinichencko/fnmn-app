@@ -23,7 +23,7 @@ public struct LibraryQueries: Sendable {
 
     public func continueItems(_ progress: ReadingProgress) -> [LibraryItem] {
         let opened = items.compactMap { item -> (LibraryItem, Date)? in
-            guard let reading = progress.readings[item.id], !reading.isRead, let date = reading.openedAt else {
+            guard progress.status(of: item.id).isStarted, let date = progress.readings[item.id]?.openedAt else {
                 return nil
             }
             return (item, date)

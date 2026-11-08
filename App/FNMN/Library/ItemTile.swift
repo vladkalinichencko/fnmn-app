@@ -162,14 +162,12 @@ struct ItemActions: View {
             }
         }
         if item.kind != .link {
-            let isRead = library.progress.readings[item.id]?.isRead ?? false
-            Button(isRead ? "Mark as Unread" : "Mark as Read", systemImage: isRead ? "circle" : "checkmark.circle") {
-                library.apply(.setRead(!isRead, itemID: item.id))
-                Task { await library.apply(.setArchived(!isRead, itemID: item.id)) }
+            let status = library.progress.status(of: item.id)
+            Button(status.isRead ? "Mark as Unread" : "Mark as Read", systemImage: status.isRead ? "circle" : "checkmark.circle") {
+                library.apply(.setRead(!status.isRead, itemID: item.id))
+                Task { await library.apply(.setArchived(!status.isRead, itemID: item.id)) }
             }
-            let reading = library.progress.readings[item.id]
-            let started = reading?.openedAt != nil || library.progress.positions[item.id] != nil || library.progress.readThrough[item.id] != nil
-            if started, !isRead {
+            if status.isStarted {
                 Button("Remove from Continue", systemImage: "arrow.counterclockwise") {
                     library.apply(.reset(itemID: item.id))
                 }

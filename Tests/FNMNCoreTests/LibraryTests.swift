@@ -258,6 +258,57 @@ private let laterArticle = ImportPackage(
     #expect(progress.readings[article.material.id]?.isRead == false)
 }
 
+@Test func aMaterialIsUnreadUntilSomethingHappensToIt() {
+    #expect(ReadingProgress().status(of: article.material.id) == .unread)
+}
+
+@Test func openingSavingAPlaceOrMarkingReadThroughCountsAsStarted() {
+    let opened = ReadingProgress().applying(.open(itemID: article.material.id), at: .now)
+    #expect(opened.status(of: article.material.id) == .started)
+
+    var placed = ReadingProgress()
+    placed.positions[article.material.id] = ReadingPosition(blockID: "b1")
+    #expect(placed.status(of: article.material.id) == .started)
+
+    let marked = ReadingProgress().applying(.readThrough(piece: 2, itemID: article.material.id), at: .now)
+    #expect(marked.status(of: article.material.id) == .started)
+}
+
+@Test func markingReadWinsOverEverythingElseTheMaterialHolds() {
+    let progress = ReadingProgress()
+        .applying(.open(itemID: article.material.id), at: .now)
+        .applying(.readThrough(piece: 2, itemID: article.material.id), at: .now)
+        .applying(.setRead(true, itemID: article.material.id), at: .now)
+    #expect(progress.status(of: article.material.id) == .read)
+}
+
+@Test func aReadMaterialLeavesContinueAndTheDeepLinkAlike() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article, at: .now)
+    try library.importPackage(laterArticle, at: .now)
+    var progress = ReadingProgress()
+        .applying(.open(itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 1))
+        .applying(.open(itemID: laterArticle.material.id), at: Date(timeIntervalSinceReferenceDate: 2))
+        .applying(.setRead(true, itemID: laterArticle.material.id), at: Date(timeIntervalSinceReferenceDate: 3))
+    #expect(LibraryQueries(library).continueItems(progress).map(\.id) == [article.material.id])
+    #expect(library.continuedID(progress) == article.material.id)
+
+    progress = progress.applying(.setRead(true, itemID: article.material.id), at: Date(timeIntervalSinceReferenceDate: 4))
+    #expect(LibraryQueries(library).continueItems(progress).isEmpty)
+    #expect(library.continuedID(progress) == nil)
+}
+
+@Test func anArchivedMaterialIsNotTheOneContinueOpens() throws {
+    var library = LibrarySnapshot()
+    try library.importPackage(article, at: .now)
+    var progress = ReadingProgress()
+    progress.positions[article.material.id] = ReadingPosition(blockID: "b1")
+    #expect(library.continuedID(progress) == article.material.id)
+
+    library.archived = [article.material.id]
+    #expect(library.continuedID(progress) == nil)
+}
+
 @Test func openingAndReadStateSurviveDiskRoundTrip() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory.appending(path: "library.json"))

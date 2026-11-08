@@ -1,5 +1,24 @@
 import Foundation
 
+/// How far a material is read, from the catalog and the progress together. The tile menu, Continue and the
+/// continue deep link all ask this, and before this value they answered it differently.
+public enum ItemStatus: Equatable, Sendable {
+    /// Nothing opened it.
+    case unread
+    /// Opened, kept a place, or marked read through, and not marked read.
+    case started
+    /// Marked read, which also takes it out of Continue.
+    case read
+
+    public var isRead: Bool {
+        self == .read
+    }
+
+    public var isStarted: Bool {
+        self == .started
+    }
+}
+
 /// Where the reader is in each material. It changes at every paragraph, so it lives apart from the catalog
 /// and is saved in its own file. Only `applying(_:)` changes it.
 public struct ReadingProgress: Codable, Equatable, Sendable {
@@ -62,6 +81,17 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
             next.readings[itemID] = nil
         }
         return next
+    }
+
+    /// The one answer to "how far is this material read". A material marked read is not started, whatever else it holds.
+    public func status(of itemID: String) -> ItemStatus {
+        if readings[itemID]?.isRead == true {
+            return .read
+        }
+        if readings[itemID]?.openedAt != nil || positions[itemID] != nil || readThrough[itemID] != nil {
+            return .started
+        }
+        return .unread
     }
 
     /// Without the reading line on screen, a paragraph is read when the material is marked read, when it scrolled
@@ -179,14 +209,20 @@ extension LibrarySnapshot {
         return changes
     }
 
-    /// The material the reader opened last, or else the first one with a saved place.
+    /// The material the reader opened last and has not marked read, or else the first one with a saved place.
     public func continuedID(_ progress: ReadingProgress) -> String? {
         let known = Set(articles.map(\.material.id))
         let opened = progress.readings.compactMap { materialID, reading -> (String, Date)? in
-            guard let openedAt = reading.openedAt, known.contains(materialID), !isArchived(materialID) else { return nil }
+            guard let openedAt = reading.openedAt, known.contains(materialID), !isArchived(materialID) else {
+                return nil
+            }
+            guard progress.status(of: materialID).isStarted else {
+                return nil
+            }
             return (materialID, openedAt)
         }
         if let materialID = opened.max(by: { $0.1 < $1.1 })?.0 { return materialID }
-        return articles.first(where: { progress.positions[$0.material.id] != nil })?.material.id
+        let withPlace = articles.filter { !isArchived($0.material.id) && progress.status(of: $0.material.id).isStarted }
+        return withPlace.first { progress.positions[$0.material.id] != nil }?.material.id
     }
 }
