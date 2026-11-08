@@ -584,6 +584,9 @@ Tests first, then one rule per commit. The behaviour each rule must keep is pinn
 - [x] U31. `PostText`, `PostOpenButton`, `PostAuthorLine`; the card and the thread compose them, and `ArchitectureGuardTests` keeps a third card from building its own (3b1cc70).
 - [x] U32. One `ocr_jobs.run` for both re-OCR passes and one `grounding.strip`/`blocks`; `test_grounding`, `test_ocr_jobs`, `test_compile` (c737a3c).
 - [x] U33. The pdf-book tests run in `guards.py`, so the OCR scripts have a check in CI (c737a3c).
+- [ ] U34. `LibraryFile` (730 lines) keeps five workflows under one owner: deliveries, articles, originals, journals and the legacy migration. Cut by owner: `ArticleFiles`, `JournalFiles`, `Originals`; `LibraryFile` keeps the actor and delegates. Acceptance: each workflow still reads as a sequence of named calls (`storeArticle` → unpack → place → add → save), the moved code keeps its tests, and the journal/path/name rows of the audit stay green.
+- [x] U35. Two steps hide inside `LibraryModel`: folding the queued places in `saveProgress`, and removing a deleted material's delivery and original in `apply`. Name them, so both functions read as calls (4e72dec).
+- [x] U36. The app's folders show the flow: `App/` (entry and tabs), `Store/` (state), `Sync/` (device and disk), `Import/` (one import from a tap to a card), screens beside them; `APP_SPEC` says which folder is which.
 
 ### Unification pass 4 (branch `unification`, 2026-11-08)
 

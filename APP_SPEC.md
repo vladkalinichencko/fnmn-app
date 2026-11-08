@@ -37,20 +37,22 @@ Keychain             (взаимодействие)        ▲
 
 ```text
 App/FNMN/
-  App/        FNMNApp, AppShell (вкладки), WindowNavigation, Tokens (отступы, радиусы)
-  Store/      LibraryModel (каталог и прогресс, apply), JournalSync (журналы устройств),
-              LibraryImporter (импорт ссылок, файлов, архивов и папки FNMN),
-              ImportJobs (задачи сервера и Live Activity), CloudFolder, ImageFiles (миниатюры)
+  App/        FNMNApp, WindowRoot, AppShell (вкладки), WindowNavigation, Tokens (отступы, радиусы), Features
+  Store/      LibraryModel (каталог и прогресс, apply), LoadState, ImageFiles (миниатюры)
+  Sync/       JournalSync (журналы устройств), DeliverySync (один обход поставок), CloudFolder (iCloud)
+  Import/     ImportJobs (задачи и Live Activity), LibraryImporter (ссылки, файлы, поставки, папка FNMN)
   Server/     ServerLink, ServerPort + ServerClient, ServerConnection + Keychain
   Library/    LibraryScreen, AlbumScreen, SourceScreen, ScreenSearch, ItemGrid, ItemTile, AlbumTile,
               AlbumPicker, AddMenu, LinkSheet, LibraryCoordinator
   Reader/     ItemScreen, ReaderCoordinator, MaterialReader, ReadingSession, BlockView, ReadingLineView, MediaViewer, MarkedMarkdown, ReaderSettings, LiveCropView, ChatGPTHandoff
   Video/      VideoCoordinator, VideoReaderView (встроенный YouTube, системный плеер, подписи)
-  Digest/     DigestScreen, PostCard, ThreadScreen, SourcesScreen, DigestModel, InterestClassifier
+  Digest/     DigestScreen, PostCard, PostParts, ThreadScreen, SourcesScreen, DigestModel, InterestClassifier
   Shelf/      ShelfScreen, AnnotationList
   Settings/   SettingsScreen
   Intents/    ReadingIntents
 ```
+
+Поток импорта читается сверху вниз по папкам: `Import/ImportJobs` принимает действие, `Import/LibraryImporter` готовит каталог и поставки, `Sync/DeliverySync` проходит по архивам; `Sync/JournalSync` и `Sync/DeliverySync` — то, что пересекает границу устройства или диска. Точка входа и вкладки — `App/FNMNApp` и `App/Shell`.
 
 | Было | Стало |
 |---|---|
