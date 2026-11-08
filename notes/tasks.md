@@ -587,6 +587,10 @@ Tests first, then one rule per commit. The behaviour each rule must keep is pinn
 - [ ] U34. `LibraryFile` (730 lines) keeps five workflows under one owner: deliveries, articles, originals, journals and the legacy migration. Cut by owner: `ArticleFiles`, `JournalFiles`, `Originals`; `LibraryFile` keeps the actor and delegates. Acceptance: each workflow still reads as a sequence of named calls (`storeArticle` → unpack → place → add → save), the moved code keeps its tests, and the journal/path/name rows of the audit stay green.
 - [x] U35. Two steps hide inside `LibraryModel`: folding the queued places in `saveProgress`, and removing a deleted material's delivery and original in `apply`. Name them, so both functions read as calls (4e72dec).
 - [x] U36. The app's folders show the flow: `App/` (entry and tabs), `Store/` (state), `Sync/` (device and disk), `Import/` (one import from a tap to a card), screens beside them; `APP_SPEC` says which folder is which.
+- [x] U37. The reader's column is one state: `laidOut` or `jumping(to:hiding:)`; `opening` and `hidesColumn` are read from it (5533aec).
+- [x] U38. The library's window state is one value: `LibraryPhase` folds `loadState` and the folder; a deep link waits for a real `ready` (885d604).
+- [x] U39. A failed server check says whether the address was saved (3e39946).
+- [ ] U40. Left from the state-machine note: video source and seek, item status, import job phases, speed playback, note editor, Live Activity, deep-link latch, dialog draft, web content identity.
 
 ### Unification pass 4 (branch `unification`, 2026-11-08)
 

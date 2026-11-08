@@ -1,5 +1,7 @@
 # Implicit state machines
 
+Line references in this note predate the 2026-11-08 folder move and the `LoadState` rename; the claims were checked again on 2026-11-08, and items 1, 3 and 11 are now closed.
+
 Question: which state in the app is a machine that nobody named?
 
 Scope: every Swift file under `App/FNMN` and `Sources/FNMNCore` (64 files, about 10,600 lines). I read every type that owns mutable state, every `@State`, `@AppStorage`, `@Observable`, task handle and static cache, and the tests only where they pin a transition.
@@ -47,6 +49,8 @@ What can go wrong: if `.opened` is never sent for a pending jump, `.scrolled` ig
 
 Shape: one enum, for example `column: .laidOut / .jumping(to: Int, hiding: Bool)`, with `.scrolled` switching on it instead of testing an optional. `place` stays a separate value, because it is reading data, not layout.
 
+*Closed in 5533aec:* `ReaderState.column` is `laidOut` or `jumping(to:hiding:)`; `opening` and `hidesColumn` are computed from it, and `ReaderStateTests` covers a scroll before the jump, a second `.opened`, and a plate closing into a non-hiding jump.
+
 ## 2. Video source and pending seek
 
 Two machines are stacked here.
@@ -85,6 +89,8 @@ The screen state is the product:
 `load()` is guarded by the enum, so a second window waits instead of loading twice ([L66-L71](../../App/FNMN/Store/LibraryModel.swift#L66-L71)). But `syncWithOtherDevices()` runs after `ready` is published ([L75-L88](../../App/FNMN/Store/LibraryModel.swift#L75-L88)), so `ready` also does not mean "the other devices' changes are in".
 
 Shape: `enum LibraryState { needsFolder, loading, ready, failed(String) }` with the folder as a case, or a computed `isUsable` that `WindowRoot` switches on. Keep `failure` separate: it is a message, not a state.
+
+*Closed in 885d604:* `LibraryPhase` (`loading`, `needsFolder`, `ready`, `failed`) computed once from `loadState` and `cloudFolder`; `WindowRoot` switches on it, and a deep link waits for `ready` instead of firing on a folderless library.
 
 ## 4. Item status
 
@@ -180,6 +186,8 @@ Shape: `enum Activity { idle, requested(id: String, step: ImportStep), running(t
 `onChange(of: address)` and `onChange(of: token)` reset to `.editing` ([L71-L72](../../App/FNMN/Settings/SettingsScreen.swift#L71-L72)), so the enum tracks the form, not the saved server. That is the right call, but it means `.connected` is also only "the last check passed", not "this form is saved and working".
 
 Shape: `enum Check { editing, checking, connected, failed(message, saved: Bool) }`, or keep the credential out of the check state and show a separate "Saved" badge.
+
+*Closed in 3e39946:* `ConnectionCheck.failed(String, saved: Bool)`; the screen says whether the address and token were written before the check failed.
 
 ## 12. Deep link before load
 
