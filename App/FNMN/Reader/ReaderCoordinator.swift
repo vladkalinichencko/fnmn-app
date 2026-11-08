@@ -1,6 +1,13 @@
 import FNMNCore
 import SwiftUI
 
+/// Where the column stands. A jump waits for the column's rows; `hiding` is the first jump, which the column is
+/// not shown for.
+enum Column: Equatable {
+    case laidOut
+    case jumping(to: Int, hiding: Bool)
+}
+
 /// Everything an open document's screen does with it: the plate mode, the headings folded, the paragraph reading
 /// stopped at and the block the column is scrolled to.
 struct ReaderState: Equatable {
@@ -11,13 +18,26 @@ struct ReaderState: Equatable {
     var place: Int?
     /// The block at the top of the column: the one the person scrolled to, or the one an action moves the column to.
     var scrollID: Int?
+    /// Where the column stands, and whether a jump is still waiting for its rows. A lazy column drops a position
+    /// given before its rows exist and opens at the top, so `.scrolled` means nothing until `.opened` lands.
+    var column = Column.laidOut
     /// Opened at a note rather than to read on: scrolling looks around and leaves the place where reading stopped.
     var keepsPlace = false
-    /// The block the column goes to once it is laid out. A lazy column drops a position given before its rows
-    /// exist and opens at the top, so the jump waits for `.opened`, and until then the top is not taken as the place.
-    var opening: Int?
-    /// The column stays unseen until it has gone to `opening`, where the jump would show.
-    var hidesColumn = false
+    /// The block the column goes to once it is laid out, if a jump is pending.
+    var opening: Int? {
+        if case let .jumping(to, _) = column {
+            return to
+        }
+        return nil
+    }
+
+    /// The column stays unseen until its first jump lands.
+    var hidesColumn: Bool {
+        if case .jumping(_, hiding: true) = column {
+            return true
+        }
+        return false
+    }
     /// The reader moves a line down the text instead of each block graying once it scrolls past the top.
     var showsLine = false
     var line: ReadingLine?
@@ -66,12 +86,11 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
     var state = state
     switch action {
     case .opened:
-        guard let opening = state.opening else { return state }
-        state.opening = nil
-        state.hidesColumn = false
-        state.scrollID = opening
+        guard case let .jumping(to, _) = state.column else { return state }
+        state.column = .laidOut
+        state.scrollID = to
     case let .scrolled(index):
-        guard state.opening == nil else { return state }
+        guard state.column == .laidOut else { return state }
         state.scrollID = index
         // The column under a plate shown alone is not what is read.
         if document.blocks.indices.contains(index), !state.keepsPlace, state.shownPlate == nil {
@@ -125,7 +144,7 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         // The column goes to the plate shown, so the sections holding it open, and the column, once its rows are
         // there, goes to it as it does when the material opens.
         state.folded.subtract(document.headings(holding: plate))
-        state.opening = plate
+        state.column = .jumping(to: plate, hiding: false)
     case let .turnPlate(forward):
         // A margin note being written holds the plate until it is done.
         guard state.mode == .reading, let plate = state.shownPlate,
@@ -160,7 +179,7 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
             state.shownPlate = document.plate(holding: line.piece)
         } else {
             state.folded.subtract(document.headings(holding: line.piece))
-            state.opening = line.piece
+            state.column = .jumping(to: line.piece, hiding: false)
         }
     case .mark, .note, .settleLine, .ask, .copyPrompt:
         break
@@ -215,8 +234,9 @@ final class ReaderCoordinator {
         state.folded = (note ?? place).map {
             saved.subtracting(document.headings(holding: $0)).union(document.headings(endingAbove: $0))
         } ?? saved
-        state.opening = (note ?? place).flatMap { readingPlaceTarget(place: $0, visible: visible) }
-        state.hidesColumn = state.opening != nil
+        if let target = (note ?? place).flatMap({ readingPlaceTarget(place: $0, visible: visible) }) {
+            state.column = .jumping(to: target, hiding: true)
+        }
         state.line = library.progress.lines[materialID]
         if note == nil, place != nil, state.line?.piece != place { state.line = nil }
         state = readerReduce(state, .showLine(showsLine), document: document)
