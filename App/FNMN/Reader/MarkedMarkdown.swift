@@ -40,7 +40,9 @@ struct MarkedMarkdown: MarkupParser {
 
     private static func range(of span: TextSpan, in text: AttributedString) -> Range<AttributedString.Index>? {
         let plain = String(text.characters)
-        guard let found = span.range(in: plain) else { return nil }
+        guard let found = span.range(in: plain) else {
+            return nil
+        }
         let start = plain.distance(from: plain.startIndex, to: found.lowerBound)
         let end = plain.distance(from: plain.startIndex, to: found.upperBound)
         let from = text.characters.index(text.startIndex, offsetBy: start)
