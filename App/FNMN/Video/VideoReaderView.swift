@@ -333,7 +333,7 @@ private struct SystemPlayer: UIViewControllerRepresentable {
 }
 
 /// YouTube's player on a local page whose address is the server's: YouTube requires an embedding page it can identify.
-private struct YouTubeEmbedView: UIViewRepresentable {
+struct YouTubeEmbedView: UIViewRepresentable {
     let videoID: String
     let origin: URL
     let start: Double
@@ -364,9 +364,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         context.coordinator.onPhase = onPhase
         context.coordinator.onPause = onPause
         if context.coordinator.loaded != videoID {
-            context.coordinator.loaded = videoID
-            context.coordinator.resumeAt = start
-            view.loadHTMLString(Self.page(videoID: videoID, origin: origin, start: start), baseURL: origin)
+            context.coordinator.start(videoID, origin: origin, start: start, in: view)
         }
         if phase == .ready {
             if let value = seekTo {
@@ -391,6 +389,20 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         var onSeconds: (@MainActor (Double) -> Void)?
         var onPhase: (@MainActor (EmbedPhase) -> Void)?
         var onPause: (@MainActor () -> Void)?
+        /// The page on screen: its number comes back with every message, and its navigation owns the failures.
+        private var generation = WebGeneration()
+        private var navigation: WKNavigation?
+
+        /// Starts the page and stamps it with a new number, so a callback from the page it replaces is dropped.
+        func start(_ videoID: String, origin: URL, start: Double, in view: WKWebView) {
+            loaded = videoID
+            resumeAt = start
+            let generation = generation.next()
+            navigation = view.loadHTMLString(
+                page(videoID: videoID, origin: origin, start: start, generation: generation),
+                baseURL: origin
+            )
+        }
 
         /// The exact saved second, applied once the player is ready; the page itself can only start on a whole second.
         func takeResume() -> Double? {
@@ -399,7 +411,12 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard let body = message.body as? [String: Any], let kind = body["kind"] as? String else { return }
+            guard let body = message.body as? [String: Any], let kind = body["kind"] as? String else {
+                return
+            }
+            guard generation.accepts(body["generation"] as? Int) else {
+                return
+            }
             switch kind {
             case "ready": onPhase?(.ready)
             case "time": if let value = body["seconds"] as? Double { onSeconds?(value) }
@@ -410,15 +427,23 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         }
 
         func webView(_ view: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            onPhase?(.failed(error.localizedDescription))
+            failed(navigation, error)
         }
 
         func webView(_ view: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            failed(navigation, error)
+        }
+
+        /// A load the app has replaced fails as cancelled, and that failure is not the page's.
+        private func failed(_ failed: WKNavigation?, _ error: Error) {
+            guard let navigation, failed === navigation else {
+                return
+            }
             onPhase?(.failed(error.localizedDescription))
         }
     }
 
-    private static func page(videoID: String, origin: URL, start: Double) -> String {
+    static func page(videoID: String, origin: URL, start: Double, generation: Int) -> String {
         let startAt = max(0, Int(start.rounded(.down)))
         let host = origin.scheme.map { "\($0)://\(origin.host() ?? "")" } ?? origin.absoluteString
         return """
@@ -430,7 +455,7 @@ private struct YouTubeEmbedView: UIViewRepresentable {
         <iframe id="player" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen
           src="https://www.youtube.com/embed/\(videoID)?enablejsapi=1&playsinline=1&rel=0&start=\(startAt)&origin=\(host)"></iframe>
         <script>
-        function post(payload){ window.webkit.messageHandlers.fnmn.postMessage(payload); }
+        function post(payload){ payload.generation = \(generation); window.webkit.messageHandlers.fnmn.postMessage(payload); }
         window.fnmnSeek = function(){};
         window.fnmnCue = function(){};
         var tag = document.createElement('script');

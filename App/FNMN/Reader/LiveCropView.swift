@@ -59,7 +59,7 @@ struct LiveCropView: View {
     }
 }
 
-private struct LiveCropWebView: UIViewRepresentable {
+struct LiveCropWebView: UIViewRepresentable {
     let url: URL
     let selector: String?
     @Binding var phase: CropPhase
@@ -73,13 +73,6 @@ private struct LiveCropWebView: UIViewRepresentable {
         configuration.allowsInlineMediaPlayback = true
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.add(context.coordinator, name: "crop")
-        // The figure is cut out as soon as the page's markup is parsed, not after every picture, font and script
-        // of the whole page has loaded; it keeps reporting its height while the rest arrives.
-        configuration.userContentController.addUserScript(WKUserScript(
-            source: Coordinator.script(selector: selector),
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
-        ))
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         // A figure wider or taller than its frame is moved by the finger; one that fits stays still.
@@ -88,42 +81,61 @@ private struct LiveCropWebView: UIViewRepresentable {
         view.scrollView.contentInsetAdjustmentBehavior = .never
         view.isOpaque = false
         // The phase starts as `.loading`, so the first load needs no state change from the update pass.
-        context.coordinator.loaded = url
-        load(url, in: view)
+        context.coordinator.start(url, selector: selector, in: view)
         return view
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
         context.coordinator.onPhase = { phase = $0 }
         guard context.coordinator.loaded != url else { return }
-        context.coordinator.loaded = url
-        load(url, in: view)
+        context.coordinator.start(url, selector: selector, in: view)
         // A view update must not write state; the new page's phase is set right after it.
         Task { @MainActor in phase = .loading }
     }
 
-    /// A page the article carries is read from its own folder, which it may read from; a page of the web is fetched.
-    private func load(_ url: URL, in view: WKWebView) {
-        if url.isFileURL {
-            view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
-        } else {
-            view.load(URLRequest(url: url))
-        }
-    }
-
-    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
-        view.configuration.userContentController.removeScriptMessageHandler(forName: "crop")
+    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {        view.configuration.userContentController.removeScriptMessageHandler(forName: "crop")
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var loaded: URL?
         var onPhase: ((CropPhase) -> Void)?
+        /// The page on screen: its number comes back with every message, and its navigation owns the failures.
+        private var generation = WebGeneration()
+        private var navigation: WKNavigation?
+
+        /// Starts the page and stamps it with a new number, so a callback from the page it replaces is dropped.
+        func start(_ url: URL, selector: String?, in view: WKWebView) {
+            loaded = url
+            let generation = generation.next()
+            let controller = view.configuration.userContentController
+            // The figure is cut out as soon as the page's markup is parsed, not after every picture, font and script
+            // of the whole page has loaded; it keeps reporting its height while the rest arrives.
+            controller.removeAllUserScripts()
+            controller.addUserScript(WKUserScript(
+                source: Self.script(selector: selector, generation: generation),
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            ))
+            if url.isFileURL {
+                navigation = view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+            } else {
+                navigation = view.load(URLRequest(url: url))
+            }
+        }
 
         func webView(_ view: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            onPhase?(.failed(error.localizedDescription))
+            failed(navigation, error)
         }
 
         func webView(_ view: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            failed(navigation, error)
+        }
+
+        /// A load the app has replaced fails as cancelled, and that failure is not the page's.
+        private func failed(_ failed: WKNavigation?, _ error: Error) {
+            guard let navigation, failed === navigation else {
+                return
+            }
             onPhase?(.failed(error.localizedDescription))
         }
 
@@ -135,7 +147,12 @@ private struct LiveCropWebView: UIViewRepresentable {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard let body = message.body as? [String: Any] else { return }
+            guard let body = message.body as? [String: Any] else {
+                return
+            }
+            guard generation.accepts(body["generation"] as? Int) else {
+                return
+            }
             if body["kind"] as? String == "missing" {
                 onPhase?(.failed("The figure is not on this page."))
                 return
@@ -146,14 +163,15 @@ private struct LiveCropWebView: UIViewRepresentable {
             }
         }
 
-        static func script(selector: String?) -> String {
+        static func script(selector: String?, generation: Int) -> String {
             let encoded = (try? JSONEncoder().encode(selector)) ?? Data("null".utf8)
             let literal = String(decoding: encoded, as: UTF8.self)
             return """
             (function crop() {
               const selector = \(literal);
+              const generation = \(generation);
               function report(height) {
-                window.webkit.messageHandlers.crop.postMessage({kind: "height", height: height});
+                window.webkit.messageHandlers.crop.postMessage({kind: "height", height: height, generation: generation});
               }
               if (!selector) {
                 // A whole page, such as an app the article carries, grows as its styles and scripts arrive.
@@ -170,7 +188,7 @@ private struct LiveCropWebView: UIViewRepresentable {
                   window.addEventListener("load", crop);
                   return;
                 }
-                window.webkit.messageHandlers.crop.postMessage({kind: "missing"});
+                window.webkit.messageHandlers.crop.postMessage({kind: "missing", generation: generation});
                 return;
               }
               const keep = new Set();
