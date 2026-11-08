@@ -49,10 +49,6 @@ enum PendingRoute: Equatable {
     case none
     case continueReading
 
-    func arriving() -> PendingRoute {
-        .continueReading
-    }
-
     func consume(_ phase: LibraryPhase, continued: () -> Route?) -> (PendingRoute, Route?) {
         guard self == .continueReading, phase == .ready else {
             return (self, nil)

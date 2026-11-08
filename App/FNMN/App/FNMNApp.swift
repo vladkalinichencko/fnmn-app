@@ -96,7 +96,7 @@ private struct WindowRoot: View {
         }
         .onOpenURL { url in
             if url.scheme == "fnmn", url.host == "continue" {
-                navigation.pending = navigation.pending.arriving()
+                navigation.pending = .continueReading
                 navigation.showPending(phase: library.phase) {
                     continuedRoute()
                 }

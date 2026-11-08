@@ -37,9 +37,4 @@ final class PendingRouteTests: XCTestCase {
         XCTAssertEqual(rest, .none)
         XCTAssertNil(route)
     }
-
-    func testASecondHandOffReplacesTheFirst() {
-        XCTAssertEqual(PendingRoute.none.arriving(), .continueReading)
-        XCTAssertEqual(PendingRoute.continueReading.arriving(), .continueReading)
-    }
 }

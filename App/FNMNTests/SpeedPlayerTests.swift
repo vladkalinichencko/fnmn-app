@@ -16,35 +16,42 @@ final class SpeedPlayerTests: XCTestCase {
     func testAPlayerWithNoTextDoesNothing() {
         let player = SpeedPlayer()
         XCTAssertEqual(player.mode, .loading)
-        XCTAssertFalse(player.hasClock)
 
         player.play()
         XCTAssertEqual(player.mode, .loading)
-        XCTAssertFalse(player.hasClock)
     }
 
-    func testLoadingWaitsAndPlayingRunsWithAClock() async {
+    func testLoadingWaitsAndPlayingRuns() async {
         let player = await loaded()
         XCTAssertEqual(player.mode, .paused)
-        XCTAssertFalse(player.hasClock)
 
-        player.play()
-        XCTAssertEqual(player.mode, .playing)
-        XCTAssertTrue(player.hasClock)
-
-        player.pause()
-        XCTAssertEqual(player.mode, .paused)
-        XCTAssertFalse(player.hasClock)
-    }
-
-    func testPlayingTwiceKeepsOneClock() async {
-        let player = await loaded()
-        player.play()
         player.play()
         XCTAssertEqual(player.mode, .playing)
 
         player.pause()
-        XCTAssertFalse(player.hasClock)
+        XCTAssertEqual(player.mode, .paused)
+    }
+
+    func testPausedWordsStandStill() async {
+        let player = await loaded()
+        let before = player.frame
+        try? await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(player.frame, before)
+    }
+
+    func testPlayingWordsMoveOn() async {
+        let player = await loaded()
+        player.play()
+        try? await Task.sleep(for: .milliseconds(300))
+        XCTAssertGreaterThan(player.frame.lowerBound, 0)
+        player.pause()
+    }
+
+    func testPlayingTwiceChangesNothing() async {
+        let player = await loaded()
+        player.play()
+        player.play()
+        XCTAssertEqual(player.mode, .playing)
     }
 
     func testPausingAWaitingPlayerChangesNothing() async {
@@ -60,7 +67,6 @@ final class SpeedPlayerTests: XCTestCase {
 
         player.play()
         XCTAssertEqual(player.mode, .paused)
-        XCTAssertFalse(player.hasClock)
     }
 
     func testAStopWaitsForContinueAndSurvivesAPause() async {
@@ -71,7 +77,6 @@ final class SpeedPlayerTests: XCTestCase {
         }
         XCTAssertEqual(player.mode, .stopped)
         XCTAssertEqual(player.token?.isStop, true)
-        XCTAssertFalse(player.hasClock)
         player.pause()
         XCTAssertEqual(player.mode, .stopped)
     }
@@ -89,7 +94,7 @@ final class SpeedPlayerTests: XCTestCase {
         XCTAssertEqual(player.token?.isStop, false)
     }
 
-    func testTheWordsFinishAtTheEndAndKeepNoClock() async {
+    func testTheWordsFinishAtTheEnd() async {
         let player = await loaded("One.")
         player.play()
         XCTAssertEqual(player.mode, .playing)
@@ -98,6 +103,5 @@ final class SpeedPlayerTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(50))
         }
         XCTAssertEqual(player.mode, .ended)
-        XCTAssertFalse(player.hasClock)
     }
 }

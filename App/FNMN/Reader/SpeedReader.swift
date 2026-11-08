@@ -58,10 +58,6 @@ final class SpeedPlayer {
         mode == .playing
     }
 
-    var hasClock: Bool {
-        clock != nil
-    }
-
     /// The text is split into tokens off the main thread: a book is hundreds of thousands of words.
     func load(_ document: ReaderDocument, from start: ReadingLine) async {
         guard text == nil else { return }
