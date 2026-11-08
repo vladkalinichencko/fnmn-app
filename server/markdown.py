@@ -149,6 +149,14 @@ def first_heading(markdown: str) -> str | None:
     return next((plain_title(line[2:]) for line in markdown.splitlines() if line.startswith("# ")), None)
 
 
+def material_title(title: str | None, body: str, fallback: str) -> str:
+    """The name every screen shows: the page's own title without the site it ends with, else the first heading
+    of the text, else the address it came from."""
+    if title and title.strip():
+        return page_title(title)
+    return first_heading(body) or fallback
+
+
 def tex_delimiters(markdown: str) -> str:
     """Turns `\\[ … \\]` into `$$ … $$` and `\\( … \\)` into `$ … $`, leaving code and existing `$` math untouched.
     A line break `\\\\[4pt]` inside LaTeX is not an opening bracket. A `$…$` written inside the brackets, as in

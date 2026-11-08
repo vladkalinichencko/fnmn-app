@@ -25,7 +25,8 @@ def read(name: str, data: bytes, web: Web, report: Report) -> Document:
     if suffix == ".pdf":
         return pdf.transcribe(data, None, None, report)
     if suffix in TEXT:
-        return Document(_text(data), Path(name).stem)
+        # A text file's name is the fallback, not a page title: its first heading names it when it has one.
+        return Document(_text(data), None)
     if suffix in PAGES:
         source = _text(data)
         # A picture beside the page on the phone did not come with it, so its address fails and it leaves the text.

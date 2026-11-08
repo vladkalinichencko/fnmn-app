@@ -1,6 +1,6 @@
 import unittest
 
-from markdown import bold_runs, had_site_header, headings, join_display_math, normalize, plain_title, tex_delimiters, without_page_chrome
+from markdown import bold_runs, had_site_header, headings, join_display_math, material_title, normalize, plain_title, tex_delimiters, without_page_chrome
 
 
 class MarkdownTests(unittest.TestCase):
@@ -70,6 +70,20 @@ class MarkdownTests(unittest.TestCase):
     def test_normalize_leaves_plain_prose_alone(self):
         text = "# Title\n\nOne paragraph.\n\nTwo paragraph."
         self.assertEqual(normalize(text), text)
+
+
+class MaterialTitleTests(unittest.TestCase):
+    def test_the_page_title_wins_and_loses_the_site(self):
+        self.assertEqual(material_title("Momentum – vfxblog", "# Another\n\nText", "example.com"), "Momentum")
+
+    def test_without_a_page_title_the_first_heading_names_it(self):
+        self.assertEqual(material_title(None, "# Momentum\n\nText", "example.com"), "Momentum")
+
+    def test_a_page_title_of_spaces_falls_through(self):
+        self.assertEqual(material_title("   ", "# Momentum\n\nText", "example.com"), "Momentum")
+
+    def test_without_either_the_address_names_it(self):
+        self.assertEqual(material_title(None, "Text only", "example.com"), "example.com")
 
 
 if __name__ == "__main__":

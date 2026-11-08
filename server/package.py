@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
-from markdown import first_heading, normalize, page_title
+from markdown import material_title, normalize
 
 
 Report = Callable[[str, int | None, int | None], None]
@@ -233,11 +233,10 @@ def _document_package(material_id: str, url: str | None, document: Document, fol
     if not document.markdown.strip():
         raise ValueError("article markdown is empty")
     body = normalize(document.markdown)
-    heading = first_heading(body) or (document.title and page_title(document.title))
     material = {
         "id": material_id,
         "kind": "article",
-        "title": heading or fallback,
+        "title": material_title(document.title, body, fallback),
         "sourceURL": url,
         "byline": document.author,
     }
