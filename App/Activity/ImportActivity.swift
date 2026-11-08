@@ -1,6 +1,5 @@
 import BackgroundTasks
 
-/// What the system's continued-processing task offers: the step it shows, and one completion.
 @MainActor
 protocol ImportActivityTask: AnyObject {
     func setTaskCompleted(success: Bool)
@@ -11,7 +10,6 @@ protocol ImportActivityTask: AnyObject {
 /// polling the server while it is in the background.
 @MainActor
 enum ImportActivity {
-    /// Asked for and not adopted yet, bound to the system's task, or ended before the system adopted it.
     @MainActor
     enum State {
         case idle
@@ -26,7 +24,6 @@ enum ImportActivity {
             case expire(task: any ImportActivityTask)
         }
 
-        /// A task the system never adopted still has to be completed, with the status the import ended with.
         func send(_ event: Event) -> State {
             switch event {
             case let .adopt(task, id):
@@ -92,7 +89,6 @@ enum ImportActivity {
 
     private(set) static var state = State.idle
 
-    /// A second start completes whatever was running: the system holds one task per request.
     static func start(title: String, step: ImportStep) {
         state = state.send(.end(success: true))
         let id = "local.fnmn.reader.import.\(UUID().uuidString)"

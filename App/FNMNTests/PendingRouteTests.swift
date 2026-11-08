@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// A hand-off from outside the app waits for a usable library and opens exactly once.
 final class PendingRouteTests: XCTestCase {
     func testALibraryThatIsNotReadyKeepsTheRouteWaiting() {
         let (rest, route) = PendingRoute.continueReading.consume(.needsFolder) {

@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// A note that syncs in while the field is open must not replace what the person is typing, and closing saves once.
 final class NoteEditTests: XCTestCase {
     func testAClosedNoteTakesWhatTheStoreHas() {
         var note = NoteEdit(saved: "first")

@@ -24,8 +24,6 @@ enum SpeedPauses: String, CaseIterable, Identifiable {
     }
 }
 
-/// What speed reading is doing: the text is still being split, the words wait, they run, they rest on a block shown
-/// whole, or the text is at its end.
 enum SpeedPlayback: Equatable {
     case loading
     case paused
@@ -41,7 +39,6 @@ final class SpeedPlayer {
     private(set) var text: SpeedText?
     /// The tokens on screen.
     private(set) var frame = 0..<0
-    /// Playing is the only mode with a clock; `enter` starts and cancels it.
     private(set) var mode = SpeedPlayback.loading
     /// The last token shown so far. Going back a sentence leaves it where it is, so rereading takes nothing read away.
     private(set) var furthest: Int?
@@ -61,7 +58,6 @@ final class SpeedPlayer {
         mode == .playing
     }
 
-    /// The clock runs only while the words do; a waiting, stopped or finished player keeps none.
     var hasClock: Bool {
         clock != nil
     }
@@ -130,7 +126,6 @@ final class SpeedPlayer {
         play()
     }
 
-    /// The one writer of the mode; the clock exists exactly while the words run.
     private func enter(_ next: SpeedPlayback) {
         mode = next
         guard next == .playing else {
@@ -148,7 +143,6 @@ final class SpeedPlayer {
         if playing {
             play()
         } else if mode == .stopped {
-            // The block that waited is behind the words now, so the player waits for the person instead.
             enter(.paused)
         }
     }
@@ -183,14 +177,10 @@ final class SpeedPlayer {
     }
 }
 
-/// One finger on the words: a press that rests long enough shows the whole block and the words wait, and only that
-/// press starts them again when it lifts. Anything else the finger does leaves the press at rest.
 struct Press: Equatable {
     enum Phase: Equatable {
         case idle
-        /// A finger is down and the words still run.
         case down
-        /// The finger rested: the block shows whole and the words wait.
         case holding
     }
 
@@ -201,7 +191,6 @@ struct Press: Equatable {
         phase == .holding
     }
 
-    /// A finger landed; one that is already down changes nothing.
     mutating func land() {
         guard phase == .idle else {
             return
@@ -209,7 +198,6 @@ struct Press: Equatable {
         phase = .down
     }
 
-    /// The rest is over. Returns whether it took effect, since the finger may have lifted first.
     mutating func hold(playing: Bool) -> Bool {
         guard phase == .down else {
             return false
@@ -219,7 +207,6 @@ struct Press: Equatable {
         return true
     }
 
-    /// The finger lifted. Returns whether the words run on, and leaves the press ready for the next one.
     mutating func lift() -> Bool {
         let resume = phase == .holding && resumes
         phase = .idle

@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// A press shows the whole block while a finger rests, and only a press that actually rested starts the words again.
 final class PressTests: XCTestCase {
     func testARestingPressWhilePlayingStartsTheWordsAgainOnLift() {
         var press = Press()

@@ -2,7 +2,6 @@ import FNMNCore
 import XCTest
 @testable import FNMN
 
-/// Speed reading has one mode, and the clock exists exactly while the words run.
 @MainActor
 final class SpeedPlayerTests: XCTestCase {
     private func loaded(_ markdown: String = "One two three.\n\nFour five six.\n\nSeven eight nine.") async -> SpeedPlayer {
@@ -73,8 +72,6 @@ final class SpeedPlayerTests: XCTestCase {
         XCTAssertEqual(player.mode, .stopped)
         XCTAssertEqual(player.token?.isStop, true)
         XCTAssertFalse(player.hasClock)
-
-        // A locked screen pauses what plays; a block waiting for Continue is not playing and must stay waiting.
         player.pause()
         XCTAssertEqual(player.mode, .stopped)
     }

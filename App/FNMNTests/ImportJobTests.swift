@@ -1,8 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// The job's place is part of its phase: a job cannot show on a card it has not been given, and a failed job
-/// cannot be moved to one.
 final class ImportJobTests: XCTestCase {
     private let id = UUID()
     private let url = URL(string: "https://example.com/a")!

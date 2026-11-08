@@ -45,17 +45,14 @@ extension DigestRoute {
     }
 }
 
-/// A route from outside the app that arrived before the library could show it.
 enum PendingRoute: Equatable {
     case none
     case continueReading
 
-    /// A second hand-off replaces the first: the person's last request is the one that opens.
     func arriving() -> PendingRoute {
         .continueReading
     }
 
-    /// Opens once, on the first usable library; an unusable one keeps it waiting.
     func consume(_ phase: LibraryPhase, continued: () -> Route?) -> (PendingRoute, Route?) {
         guard self == .continueReading, phase == .ready else {
             return (self, nil)
@@ -71,7 +68,6 @@ final class WindowNavigation {
     var library: [Route] = []
     var digest: [DigestRoute] = []
     var shelf: [Route] = []
-    /// A hand-off waiting for the library; it opens once and is gone.
     var pending = PendingRoute.none
 
     /// Pushes onto the stack of the visible tab.
@@ -94,9 +90,7 @@ final class WindowNavigation {
         library = [route]
     }
 
-    /// Shows a hand-off once the library can take it, and only once.
-    func showPending(phase: LibraryPhase, continued: () -> Route?) {
-        let (rest, route) = pending.consume(phase, continued: continued)
+    func showPending(phase: LibraryPhase, continued: () -> Route?) {        let (rest, route) = pending.consume(phase, continued: continued)
         pending = rest
         if let route {
             show(route)

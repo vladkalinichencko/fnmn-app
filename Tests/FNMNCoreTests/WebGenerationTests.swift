@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMNCore
 
-/// A page that has been replaced must not write the phase of the page that replaced it.
 final class WebGenerationTests: XCTestCase {
     func testEveryLoadGetsItsOwnNumber() {
         var generation = WebGeneration()

@@ -1,13 +1,8 @@
 import Foundation
 
-/// How far a material is read, from the catalog and the progress together. The tile menu, Continue and the
-/// continue deep link all ask this, and before this value they answered it differently.
 public enum ItemStatus: Equatable, Sendable {
-    /// Nothing opened it.
     case unread
-    /// Opened, kept a place, or marked read through, and not marked read.
     case started
-    /// Marked read, which also takes it out of Continue.
     case read
 
     public var isRead: Bool {
@@ -83,7 +78,6 @@ public struct ReadingProgress: Codable, Equatable, Sendable {
         return next
     }
 
-    /// The one answer to "how far is this material read". A material marked read is not started, whatever else it holds.
     public func status(of itemID: String) -> ItemStatus {
         if readings[itemID]?.isRead == true {
             return .read
@@ -209,7 +203,6 @@ extension LibrarySnapshot {
         return changes
     }
 
-    /// The material the reader opened last and has not marked read, or else the first one with a saved place.
     public func continuedID(_ progress: ReadingProgress) -> String? {
         let known = Set(articles.map(\.material.id))
         let opened = progress.readings.compactMap { materialID, reading -> (String, Date)? in

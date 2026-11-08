@@ -150,7 +150,6 @@ private struct LibraryDialogsModifier: ViewModifier {
 
 /// The payload each alert keeps from the moment it was shown.
 private extension LibraryDialog {
-    /// The name being typed in the create or rename alert.
     var draft: String {
         switch self {
         case let .namingAlbum(_, draft), let .renamingAlbum(_, draft): draft

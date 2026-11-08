@@ -14,7 +14,6 @@ enum ConnectionCheck: Equatable {
         case checkFailed(String)
     }
 
-    /// The address and token are written before the check runs, so only a failed save says they are not saved.
     func send(_ event: Event) -> ConnectionCheck {
         switch event {
         case .edited:
@@ -26,10 +25,6 @@ enum ConnectionCheck: Equatable {
         case let .checkFailed(message):
             return .failed(message, saved: true)
         }
-    }
-
-    var isChecking: Bool {
-        self == .checking
     }
 }
 
@@ -85,7 +80,7 @@ struct SettingsScreen: View {
                     Button("Close", systemImage: "xmark") { dialogs.send(.dismiss) }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", systemImage: "checkmark", action: saveAndCheck).disabled(check.isChecking)
+                    Button("Save", systemImage: "checkmark", action: saveAndCheck).disabled(check == .checking)
                 }
             }
         }

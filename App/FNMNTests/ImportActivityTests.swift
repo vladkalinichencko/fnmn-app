@@ -1,8 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// The background task is one machine: it is completed once, with the status the import actually ended with,
-/// even when the system adopts the request after the import is over.
 @MainActor
 final class ImportActivityTests: XCTestCase {
     private final class FakeTask: ImportActivityTask {

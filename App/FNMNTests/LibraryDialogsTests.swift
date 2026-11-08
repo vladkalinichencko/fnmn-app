@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// The name being typed lives in the dialog, so the alert and the reducer cannot disagree about it.
 final class LibraryDialogsTests: XCTestCase {
     func testANewCollectionStartsEmptyAndKeepsWhatIsTyped() {
         let dialog = dialogReduce(.none, .nameAlbum(adding: nil))

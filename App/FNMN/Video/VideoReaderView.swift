@@ -11,9 +11,7 @@ struct VideoReaderView: View {
     @Environment(ImportJobs.self) private var imports
     @Environment(\.scenePhase) private var scenePhase
     let video: VideoCoordinator
-    /// The saved file once this device has it. It counts only while the file is on the device: the system may let
-    /// the bytes go again, and then the file has to come down once more.
-    @State private var downloaded: URL?
+    @State private var downloading: URL?
     @State private var stageHeight: CGFloat = 0
 
     private var hasCaptions: Bool { !video.cues.isEmpty }
@@ -132,9 +130,10 @@ struct VideoReaderView: View {
             // The file saved on another device, or let go by this one, comes down from iCloud before it plays.
             VideoPlaceholder { Loading() }
                 .task(id: file) {
+                    downloading = file
+                    defer { downloading = nil }
                     do {
                         try await CloudFolder.download(file, timeout: .seconds(1800))
-                        downloaded = file
                     } catch {
                         library.failure = error.localizedDescription
                     }
@@ -180,10 +179,9 @@ struct VideoReaderView: View {
         }
     }
 
-    /// Read from the library and the disk each time the screen draws, so an evicted file is downloaded again.
     private var source: VideoSource {
-        VideoSource.of(original: library.originalFile(materialID), downloaded: downloaded) { file in
-            CloudFolder.isOnDevice(file)
+        VideoSource.of(original: library.originalFile(materialID), downloading: downloading) { file in
+            CloudFolder.isLocal(file)
         }
     }
 
@@ -312,8 +310,6 @@ private struct SystemPlayer: UIViewControllerRepresentable {
             return
         }
         let done = onSeekDone
-        // A seek the system dropped is still owed: the next update makes it again, so no jump is lost on a player
-        // that had no item yet.
         player.seek(to: CMTime(seconds: value, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { finished in
             guard finished else {
                 return
@@ -406,11 +402,9 @@ struct YouTubeEmbedView: UIViewRepresentable {
         var onSeconds: (@MainActor (Double) -> Void)?
         var onPhase: (@MainActor (EmbedPhase) -> Void)?
         var onPause: (@MainActor () -> Void)?
-        /// The page on screen: its number comes back with every message, and its navigation owns the failures.
         private var generation = WebGeneration()
         private var navigation: WKNavigation?
 
-        /// Starts the page and stamps it with a new number, so a callback from the page it replaces is dropped.
         func start(_ videoID: String, origin: URL, start: Double, in view: WKWebView) {
             loaded = videoID
             resumeAt = start
@@ -451,7 +445,6 @@ struct YouTubeEmbedView: UIViewRepresentable {
             failed(navigation, error)
         }
 
-        /// A load the app has replaced fails as cancelled, and that failure is not the page's.
         private func failed(_ failed: WKNavigation?, _ error: Error) {
             guard let navigation, failed === navigation else {
                 return

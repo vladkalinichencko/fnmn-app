@@ -71,7 +71,7 @@ else { YouTube embed }
 
 Shape: `enum Source { local(URL, ready: Bool), downloading(URL), embed(EmbedPhase) }` computed once, and `enum Seek { none, pending(Double), applied }`. The view then branches on one value.
 
-*Closed in 6aa8223:* `VideoSource.of(original:downloaded:onDevice:)` is read from the disk on every draw, so a file the system let go comes down again; `videoReduce` drops `seekTo` on `.embed(.failed)` and on `.left`, and `SystemPlayer` reports a seek done only when the system applied it. `VideoSourceTests` and `VideoStateTests` pin both; proven by keeping the seek on a failed page and on leaving.
+*Closed in 6aa8223:* `VideoSource.of(original:downloading:onDevice:)` is read from the disk on every draw, so a file the system let go comes down again; `videoReduce` drops `seekTo` on `.embed(.failed)` and on `.left`, and `SystemPlayer` reports a seek done only when the system applied it. `VideoSourceTests` and `VideoStateTests` pin both; proven by keeping the seek on a failed page and on leaving.
 
 ## 3. Library readiness
 

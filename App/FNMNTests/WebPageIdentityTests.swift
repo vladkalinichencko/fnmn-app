@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// Each page reports which load it belongs to, so a figure replaced mid-load cannot write the new page's phase.
 final class WebPageIdentityTests: XCTestCase {
     func testEveryCropMessageReportsItsGeneration() {
         let script = LiveCropWebView.Coordinator.script(selector: ".figure", generation: 7)

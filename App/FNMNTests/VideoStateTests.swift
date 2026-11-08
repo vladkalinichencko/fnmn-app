@@ -1,31 +1,29 @@
 import XCTest
 @testable import FNMN
 
-/// The video screen plays a file only while its bytes are on the device, and a seek that failed is not applied later.
 final class VideoSourceTests: XCTestCase {
     private let file = URL(fileURLWithPath: "/tmp/originals/video.mp4")
 
     func testAFileOnTheDevicePlays() {
-        let source = VideoSource.of(original: file, downloaded: file) { _ in true }
+        let source = VideoSource.of(original: file, downloading: nil) { _ in true }
         XCTAssertEqual(source, .local(file))
     }
 
     func testAFileListedOnlyByICloudComesDownFirst() {
-        let source = VideoSource.of(original: file, downloaded: nil) { _ in true }
+        let source = VideoSource.of(original: file, downloading: nil) { _ in false }
         XCTAssertEqual(source, .coming(file))
     }
 
-    func testAFileTheSystemLetGoComesDownAgain() {
-        let source = VideoSource.of(original: file, downloaded: file) { _ in false }
+    func testAFileBeingFetchedIsNotPlayedYet() {
+        let source = VideoSource.of(original: file, downloading: file) { _ in true }
         XCTAssertEqual(source, .coming(file))
     }
 
     func testAVideoWithoutAFilePlaysEmbedded() {
-        XCTAssertEqual(VideoSource.of(original: nil, downloaded: nil) { _ in true }, .embed)
+        XCTAssertEqual(VideoSource.of(original: nil, downloading: nil) { _ in true }, .embed)
     }
 }
 
-/// A seek is a request to a player that is coming up; it holds until that player takes it, and no longer.
 final class VideoStateTests: XCTestCase {
     private let cues = [
         VideoCue(id: "one", startSeconds: 0, text: "One."),

@@ -359,8 +359,6 @@ struct PlateView: View {
     }
 }
 
-/// The note in the margin. The field holds the person's text; a note that arrives from another device while the
-/// field is open does not replace what they typed, and closing the field saves the text once.
 struct NoteEdit: Equatable {
     private(set) var saved: String
     private(set) var draft: String
@@ -379,7 +377,6 @@ struct NoteEdit: Equatable {
         draft = text
     }
 
-    /// The store has a new note. A draft the person is still writing wins over it.
     mutating func arrived(_ note: String) {
         guard !isEditing || draft == saved else {
             return
@@ -388,7 +385,6 @@ struct NoteEdit: Equatable {
         draft = note
     }
 
-    /// The field closed. Returns the text to save, or nil when nothing changed.
     mutating func finish() -> String? {
         isEditing = false
         guard draft != saved else {
@@ -398,7 +394,6 @@ struct NoteEdit: Equatable {
         return saved
     }
 
-    /// The view went away with the field open: the text is still the person's to keep.
     mutating func abandon() -> String? {
         guard isEditing else {
             return nil

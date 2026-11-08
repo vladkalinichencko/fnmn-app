@@ -15,7 +15,6 @@ struct ImportJob: Identifiable, Equatable {
         case videoFile(itemID: String, url: URL)
     }
 
-    /// Where the job shows: its own tile in Unsorted until the card exists, then that card.
     enum Place: Equatable {
         case tile
         case card(String)
@@ -30,7 +29,6 @@ struct ImportJob: Identifiable, Equatable {
     let input: Input
     var phase: Phase
 
-    /// The card the job shows on, once it exists.
     var itemID: String? {
         switch phase {
         case let .preparing(_, on: .card(itemID)), let .failed(_, on: .card(itemID)):
@@ -38,14 +36,6 @@ struct ImportJob: Identifiable, Equatable {
         case .preparing(_, on: .tile), .failed(_, on: .tile):
             nil
         }
-    }
-
-    /// A video's card exists before the job starts; a link or a file gets its card when the library takes it.
-    static func place(for input: Input) -> Place {
-        if let itemID = input.itemID {
-            return .card(itemID)
-        }
-        return .tile
     }
 
     var title: String {
@@ -92,7 +82,7 @@ func importReduce(_ jobs: [ImportJob], _ action: ImportAction) -> [ImportJob] {
     }
     switch action {
     case let .submit(input, id):
-        jobs.insert(ImportJob(id: id, input: input, phase: .preparing(input.firstStep, on: ImportJob.place(for: input))), at: 0)
+        jobs.insert(ImportJob(id: id, input: input, phase: .preparing(input.firstStep, on: input.place)), at: 0)
     case let .placed(id, itemID):
         update(id) { job in
             guard case let .preparing(step, _) = job.phase else {
@@ -272,6 +262,13 @@ extension ImportJob {
 }
 
 extension ImportJob.Input {
+    var place: ImportJob.Place {
+        if let itemID {
+            return .card(itemID)
+        }
+        return .tile
+    }
+
     var firstStep: ImportStep {
         switch self {
         case .link, .videoFile: .sending

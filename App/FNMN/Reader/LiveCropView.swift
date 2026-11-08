@@ -99,17 +99,13 @@ struct LiveCropWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var loaded: URL?
         var onPhase: ((CropPhase) -> Void)?
-        /// The page on screen: its number comes back with every message, and its navigation owns the failures.
         private var generation = WebGeneration()
         private var navigation: WKNavigation?
 
-        /// Starts the page and stamps it with a new number, so a callback from the page it replaces is dropped.
         func start(_ url: URL, selector: String?, in view: WKWebView) {
             loaded = url
             let generation = generation.next()
             let controller = view.configuration.userContentController
-            // The figure is cut out as soon as the page's markup is parsed, not after every picture, font and script
-            // of the whole page has loaded; it keeps reporting its height while the rest arrives.
             controller.removeAllUserScripts()
             controller.addUserScript(WKUserScript(
                 source: Self.script(selector: selector, generation: generation),
@@ -131,7 +127,6 @@ struct LiveCropWebView: UIViewRepresentable {
             failed(navigation, error)
         }
 
-        /// A load the app has replaced fails as cancelled, and that failure is not the page's.
         private func failed(_ failed: WKNavigation?, _ error: Error) {
             guard let navigation, failed === navigation else {
                 return

@@ -24,11 +24,6 @@ enum CloudFolder {
         }
     }
 
-    /// Whether the file is on this device, rather than a name iCloud still holds.
-    static func isOnDevice(_ file: URL) -> Bool {
-        isLocal(file)
-    }
-
     /// Whether the file is in the folder, on the device or still only in iCloud.
     static func contains(_ file: URL) -> Bool {
         FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)
@@ -84,7 +79,7 @@ enum CloudFolder {
 
     /// A URL keeps the values it read until the run loop turns, and a check off the main thread has no run loop,
     /// so each check reads them afresh; otherwise a file that has since downloaded would stay missing.
-    private static func isLocal(_ url: URL) -> Bool {
+    static func isLocal(_ url: URL) -> Bool {
         var url = url
         url.removeAllCachedResourceValues()
         let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
