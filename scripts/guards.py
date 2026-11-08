@@ -100,8 +100,8 @@ def browser_sandbox(root=ROOT):
     problems = []
     for path in sorted((root / "server" / "digest").glob("*.py")):
         source = path.read_text(encoding="utf-8")
-        if "launch_persistent_context" in source and "chromiumSandbox=True" not in source:
-            problems.append(f"{path.relative_to(root)} launches Chrome without chromiumSandbox=True")
+        if "launch_persistent_context" in source and "chromium_sandbox=True" not in source:
+            problems.append(f"{path.relative_to(root)} launches Chrome without chromium_sandbox=True")
     return problems
 
 
@@ -157,7 +157,7 @@ def source_self_test():
         (root / "server" / "digest").mkdir(parents=True)
         (root / "server" / "digest" / "probe.py").write_text("playwright.chromium.launch_persistent_context('x')\n")
         if not browser_sandbox(root):
-            sys.exit("FAILED: the browser check missed a Chrome launch without chromiumSandbox=True")
+            sys.exit("FAILED: the browser check missed a Chrome launch without chromium_sandbox=True")
     with TemporaryDirectory() as folder:
         root = Path(folder)
         (root / "server" / "digest").mkdir(parents=True)

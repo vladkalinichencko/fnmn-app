@@ -31,7 +31,7 @@ def main(argv: list[str]) -> int:
     print(f"Opening {LOGIN[network]}. Log in, then come back here and press Enter.")
     with sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(
-            str(folder), channel="chrome", headless=False, chromiumSandbox=True
+            str(folder), channel="chrome", headless=False, chromium_sandbox=True
         )
         try:
             page = context.pages[0] if context.pages else context.new_page()

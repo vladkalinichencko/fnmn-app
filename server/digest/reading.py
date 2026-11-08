@@ -52,7 +52,7 @@ def browser(network: str) -> Iterator[Page]:
             str(profile(network)),
             channel="chrome",
             headless=True,
-            chromiumSandbox=True,
+            chromium_sandbox=True,
             viewport={"width": 1280, "height": 1600},
         )
         try:
