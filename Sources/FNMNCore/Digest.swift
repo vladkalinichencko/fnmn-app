@@ -312,15 +312,13 @@ extension DigestPackage {
         guard !query.isEmpty else {
             return posts.filter { !hidden.contains($0.id) }
         }
-        let lowered = query.lowercased()
+        let folded = TextFold.folded(query)
         return posts.filter { post in
             guard !hidden.contains(post.id) else {
                 return false
             }
-            let text = post.text?.lowercased().contains(lowered) ?? false
-            return text
-                || post.author.name.lowercased().contains(lowered)
-                || post.author.handle.lowercased().contains(lowered)
+            let fields = [post.text ?? "", post.author.name, post.author.handle]
+            return fields.contains { TextFold.folded($0).contains(folded) }
         }
     }
 }

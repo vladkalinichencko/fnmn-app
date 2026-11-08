@@ -287,6 +287,25 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(package.posts(matching: "", hidden: ["x/1"]).map(\.id) == ["x/2"])
 }
 
+@Test func searchFoldsCaseAndDiacritics() {
+    let post = DigestPackage.Post(
+        id: "x/1",
+        network: .x,
+        author: .init(handle: "ada", name: "Ada Lovelace"),
+        permalink: URL(string: "https://x.com/ada/status/1")!,
+        postedAt: Date(timeIntervalSince1970: 1_000),
+        text: "A café in Zürich",
+        folders: ["ml"]
+    )
+    let package = DigestPackage(
+        id: "digest-1",
+        window: .init(from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000)),
+        posts: [post]
+    )
+    #expect(package.posts(matching: "cafe").map(\.id) == ["x/1"])
+    #expect(package.posts(matching: "ZURICH").map(\.id) == ["x/1"])
+}
+
 @Test func everyEngagementKindSurvivesTheJournal() throws {
     let encoder = encoder()
     let decoder = JSONDecoder()

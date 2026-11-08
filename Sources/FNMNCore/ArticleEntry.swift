@@ -35,13 +35,8 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
         let markdown = ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks)
         let fields = [package.material.title, package.material.sourceURL?.absoluteString ?? "", package.material.byline ?? ""]
             + package.sections.map(\.title) + ArticleBody.headings(in: markdown).map(\.title)
-        searchText = Self.folded(fields.joined(separator: "\n"))
+        searchText = TextFold.folded(fields.joined(separator: "\n"))
         textDigest = Self.digest(package)
-    }
-
-    /// A query folded the same way; searching is then a plain substring test.
-    static func folded(_ text: String) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
     }
 
     private static func digest(_ package: ImportPackage) -> String {
