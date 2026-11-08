@@ -56,6 +56,73 @@ The question for every check: which values can reach this line, where do they co
 - Write no comments in the code, neither `///` nor `//`. A name or a shape that needs a sentence beside it is the thing to change. `guards.py` refuses a comment on an added line.
 - Do not reformat lines or files the change does not need to touch.
 
+## Growing the code that is already there
+
+A feature lands in the shape that already owns the thing: the enum gets a case, the case gets the value, the reducer gets an action. A second type beside the old one is the last resort, and it needs a sentence saying why the old shape could not hold the new fact.
+
+**A case carries the fact that belongs with it.** `phase` and `itemID` as two fields of an import job can disagree: a failed job takes a card, and `finished` closes a failed job. The place belongs inside `Phase` — `preparing(ImportStep, on: Place)`, `failed(String, on: Place)` — with `itemID` read over it. The reducer, the tile and the tests use the same two words, `tile` and `card`.
+
+**A view field moves into the case that already names it.** The collection-name draft was `@State albumName` in the view, beside `LibraryDialog`. The dialog already had `namingAlbum` and `renamingAlbum`, so the draft joined both cases and typing became one more case of the existing `DialogAction` (`typeAlbumName`). The text field now binds to the dialog, and no view remembers to clear anything.
+
+**A boolean becomes a read of the state it described.** `SpeedPlayer.isPlaying` was a stored flag beside a clock task, and the clock could outlive the flag. The player already had one mode of operation, so `isPlaying` became `mode == .playing`, and `enter` — the only writer of `mode` — starts and cancels the clock. The view still reads `isPlaying`; the truth moved into the mode.
+
+**The rule joins the rules that already live together.** "How far is this material read" was answered in four places. The answer belongs beside `isPieceRead`, `readShare` and `openingPiece`, so `ReadingProgress.status(of:)` and `ItemStatus` went there, and Continue, the tile menu and the continue deep link read it. A shared value in `FNMNCore` is right when both sides ask the same question; it is wrong when it only saves a line.
+
+**A new small value is right when two screens answer identically.** Two web views each kept a hand-rolled "which page is loaded" latch, so a late message from a replaced page wrote the new page's phase. One `WebGeneration` in the core carries the page's number into the page and back with every message, and the coordinator accepts only the current one. The figure's script and the player's page now report the same kind of number.
+
+What follows from those examples, one line each:
+
+- The name says the rule, so no comment does: `ItemStatus.isStarted`, `Input.place`, `VideoSource.coming`.
+- One writer per value: `enter` for the mode and the clock, `send` for a state, `apply` for the library.
+- Derive, never store: `itemID` from the phase, the video source from the disk, the continue route from the snapshot at the moment it opens.
+- No wrapper that renames one call, no method that ignores `self`, no property that only a test reads. `CloudFolder.isOnDevice` became `isLocal` made internal, `PendingRoute.arriving()` became an assignment, `SpeedPlayer.hasClock` became two tests that watch the words stand still and move on.
+- Effects start and stop with a transition, never beside it.
+
+## Machines nobody named
+
+Most screen state is already a machine; the fields just do not say so. The signs:
+
+- Two fields must agree: `phase` with `itemID`, `dialog` with `albumName`, `holding` with `touchStart`, `holdTimer` and `playedBeforeHold`.
+- One flag means two things: `.opening` was both "the first open, column hidden" and "a later jump, column visible".
+- A view's `onChange` or `onAppear` writes state a reducer should own: a draft cleared on cancel and on create but not on dismiss.
+- A stop, a wait or a failure lives in the content rather than in a state: `token.isStop` was the only trace of "waiting for Continue", so a pause could rewrite it.
+
+Then:
+
+1. **Name the states in the product's words** — the ones the screen shows: `loading`, `paused`, `playing`, `stopped`, `ended`; `tile`, `card`; `requested`, `running`, `ended`. A state with no screen is not a state of this machine.
+2. **Put identity inside the state.** `Phase` carries the place, `WebGeneration` the page's number, `ImportActivity.State.ended(id:success:)` the request it outlived. An identifier beside the state is the defect that keeps coming back.
+3. **One writer, effects at the edge.** `enter` starts and cancels the clock; `send` is the only way in; the view reads and sends. An effect that can exist in a state that does not name it is the bug: a paused player with a live clock, a background task nobody bound.
+4. **The view switches once, on the value.** `switch library.phase`, `switch source`, `case let .preparing(step, _)`. Computed booleans (`isPlaying`, `isHolding`, `isRead`) are reads for the view, not a second state.
+5. **Data that is not state stays out.** `frame`, `furthest` and the saved note text stay plain fields; the machine answers what the screen may do next, not where the tokens are.
+6. **Guard the transition table.** A unit test drives the reducer with the illegal combination planted: a failed job given a card, a stop rewritten by `pause()`, a typed note replaced by a synced one, a seek on a failed page, a request adopted after its end completed as success. Prove every one by restoring the old behavior and watching the test fail.
+
+Before, four fields for one gesture:
+
+```swift
+@State private var holding = false
+@State private var touchStart: Date?
+@State private var holdTimer: Task<Void, Never>?
+@State private var playedBeforeHold = false
+```
+
+After, one value whose transitions say what the view must do:
+
+```swift
+struct Press: Equatable {
+    enum Phase: Equatable { case idle, down, holding }
+
+    mutating func land()
+    mutating func hold(playing: Bool) -> Bool
+    mutating func lift() -> Bool
+}
+```
+
+The view reads `press.isHolding`, calls `press.hold(playing: player.isPlaying)` from the timer, and `press.lift()` decides whether the words run on. A finger that lifted before the timer leaves nothing behind, which the four fields could not promise.
+
+Before, three statics that could disagree (`step`, `backgroundID`, `background`) with a late adoption that completed `background` as success; after, one `ImportActivity.State` — `idle`, `requested`, `running`, `ended` — behind `send`, with the system task behind `ImportActivityTask` so a test binds a fake one and pins the status a late adoption gets.
+
+Not every cluster earns this. The plate's `side` beside the reducer is a gesture leading the state by one animation, on purpose; the file-format migration runs once and its states are the shapes on disk; layout values (`drag`, `stageHeight`, `noteHeight`) only move a view. Naming those would add a type that lives for one frame or one launch.
+
 ## Across the boundary
 
 The server and the app model different things. To the server a page is `claude`, `chatgpt`, `substack` or a plain site, because each is parsed differently; to the app it is one article with a title and a text. Do not unify those classifications, their tables or their parsers across the process boundary, and do not share a host table between Swift and Python. The two sides agree on the wire format — `package.json`, the delivery archive, the file names — and on nothing else. A rule that exists only to keep two different models in step is a third model.
