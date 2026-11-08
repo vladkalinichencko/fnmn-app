@@ -109,7 +109,7 @@ struct DigestScreen: View {
     }
 
     private func results(of digest: Digest) -> some View {
-        let found = digests.posts(matching: query, in: digest.package)
+        let found = digest.package.posts(matching: query, hidden: digests.hidden)
         return LazyVGrid(columns: Self.columns, spacing: Tokens.gap) {
             ForEach(found) { post in
                 PostCard(post: post, digest: digest, read: digests.seen.contains(post.id))
