@@ -3,7 +3,6 @@ this module writes it, block by block and inline piece by inline piece, with the
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +23,7 @@ from adapters.page_article import (
     widget,
 )
 from markdown import CLOSING_PUNCTUATION, OPENING_PUNCTUATION, punctuation
+from package import asset_path
 
 _ASSET_EXTENSIONS = {".gif", ".png", ".jpg", ".jpeg", ".webp", ".svg", ".mp4", ".webm", ".mov"}
 
@@ -179,8 +179,7 @@ def _stored(page_url: str, src: str, downloads: dict[str, str]) -> str:
     suffix = Path(urlparse(absolute).path).suffix.lower()
     if suffix not in _ASSET_EXTENSIONS:
         suffix = ""
-    name = hashlib.sha256(absolute.encode()).hexdigest()[:16]
-    path = f"assets/{name}{suffix}"
+    path = asset_path(absolute, suffix)
     downloads[path] = absolute
     return path
 

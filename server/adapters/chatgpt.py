@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from urllib.parse import urlparse
 
-from package import Document, Report
+from package import Document, Report, asset_path
 from web import Web
 
 _SHARE = re.compile(r"/share/([A-Za-z0-9-]+)")
@@ -158,7 +157,7 @@ def _app(payload: str, files: dict[str, bytes]) -> str:
     content = block.get("content")
     if block.get("language") != "html" or not isinstance(content, str) or not content.strip():
         return ""
-    path = f"assets/interactive-{hashlib.sha256(content.encode()).hexdigest()[:16]}.html"
+    path = asset_path(content, ".html", "interactive-")
     files[path] = _APP_PAGE.replace("{content}", content).encode()
     return f"\n\n```fnmn-interactive\n{path}\n```\n\n"
 
