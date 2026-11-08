@@ -81,6 +81,18 @@ class TelegramTests(unittest.TestCase):
                 self.assertTrue(post.posted_at.endswith("Z"))
                 self.assertTrue(post.text)
 
+    def test_the_page_reader_uses_the_profile(self):
+        def refuse(url):
+            raise OSError("the profile page is the only reader")
+
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            result = telegram.collect(
+                {"id": "telegram/telegram", "network": "telegram", "channel": "telegram", "folders": ["tech"]},
+                FakeWeb(text=refuse), store, ["tech"], lambda stage: None, page=FakePage(fixture("telegram.html")),
+            )
+            self.assertEqual(len(result.posts), 3)
+
 
 class XTests(unittest.TestCase):
     def test_a_plain_tweet_hydrates(self):

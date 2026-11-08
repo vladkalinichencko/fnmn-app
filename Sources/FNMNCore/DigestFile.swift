@@ -99,7 +99,12 @@ public actor DigestFile {
     }
 
     private func folder(of id: String) -> URL {
-        cache.appending(path: "digests").appending(path: id)
+        cache.appending(path: "digests").appending(path: Self.name(of: id))
+    }
+
+    /// A digest id names a folder, so a slash is written as a dash.
+    private static func name(of id: String) -> String {
+        id.replacingOccurrences(of: "/", with: "-")
     }
 
     /// The package's own fields name a folder, so they are checked before anything is written.
@@ -108,7 +113,7 @@ public actor DigestFile {
             throw DigestFileError.unsupportedSchema(package.schema)
         }
         let id = package.id
-        guard !id.isEmpty, id != ".", id != "..", !id.hasPrefix("/"), !id.contains("/"), !id.contains("\\") else {
+        guard !id.isEmpty, id != ".", id != "..", !id.hasPrefix("/"), !id.contains("\\") else {
             throw DigestFileError.unsafeID(id)
         }
     }

@@ -9,7 +9,7 @@ from datetime import datetime
 from lxml import html
 
 from package import Report
-from digest.reading import SourceFailure, SourceResult, save_photo
+from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo
 from digest.store import Post, iso
 from web import Web
 
@@ -25,16 +25,24 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     name = None
     before = None
     skipped = 0
+    fetch = page_fetch(page) if page is not None else None
     for _ in range(MAX_PAGES):
         report(f"reading t.me/{channel}")
         url = PAGE.format(channel=channel) + (f"?before={before}" if before else "")
-        document = html.fromstring(web.text(url))
+        if page is not None:
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+            except Exception as error:
+                raise SourceFailure(f"t.me/{channel} did not load: {error}") from error
+            document = html.fromstring(page.content())
+        else:
+            document = html.fromstring(web.text(url))
         messages = document.xpath('//div[contains(@class,"tgme_widget_message_wrap")]')
         if not messages:
             raise SourceFailure(f"t.me/{channel} showed no messages; is the channel public?")
         page_ids = []
         for message in messages:
-            post = _post(message, channel, source, web, store, folders)
+            post = _post(message, channel, source, web, store, folders, fetch)
             if post is None:
                 skipped += 1
                 continue
@@ -55,7 +63,7 @@ def _older(document) -> str | None:
     return match.group(1) if match else None
 
 
-def _post(message, channel: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:
+def _post(message, channel: str, source: dict, web: Web, store, folders: list[str], fetch=None) -> Post | None:
     data_post = message.xpath(".//*[@data-post]/@data-post")
     if not data_post:
         return None
@@ -71,12 +79,12 @@ def _post(message, channel: str, source: dict, web: Web, store, folders: list[st
     for index, style in enumerate(message.xpath('.//a[contains(@class,"tgme_widget_message_photo_wrap")]/@style')[:4]):
         url = _background(style)
         if url:
-            saved = save_photo(web, store, post_id, index, url)
+            saved = save_photo(web, store, post_id, index, url, fetch)
             if saved:
                 media.append(saved)
             else:
                 errors += 1
-    video, video_errors = _video(message, post_id, web, store)
+    video, video_errors = _video(message, post_id, web, store, fetch)
     errors += video_errors
     if not text and not media and not video:
         return None
@@ -97,12 +105,12 @@ def _post(message, channel: str, source: dict, web: Web, store, folders: list[st
     )
 
 
-def _video(message, post_id: str, web: Web, store) -> tuple[dict | None, int]:
+def _video(message, post_id: str, web: Web, store, fetch=None) -> tuple[dict | None, int]:
     thumbs = message.xpath('.//*[contains(@class,"tgme_widget_message_video_thumb")]/@style')
     if not thumbs:
         return None, 0
     url = _background(thumbs[0])
-    poster = save_photo(web, store, post_id, "poster", url) if url else None
+    poster = save_photo(web, store, post_id, "poster", url, fetch) if url else None
     errors = 1 if url and poster is None else 0
     lengths = message.xpath('.//*[contains(@class,"tgme_widget_message_video_duration")]/text()')
     return {"poster": poster, "duration": _seconds(lengths[0]) if lengths else None}, errors

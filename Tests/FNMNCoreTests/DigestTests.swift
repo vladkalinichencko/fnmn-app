@@ -213,12 +213,19 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
 @Test func aDigestIDThatCannotBeAFolderIsRefused() async throws {
     let root = try temporaryFolder()
     let file = DigestFile(url: root, cache: root)
-    for id in ["", ".", "..", "../x", "a/b", "/tmp/x", "a\\b"] {
+    for id in ["", ".", "..", "/tmp/x", "a\\b"] {
         let tar = try writeDigest(package(id: id), files: [])
         await #expect(throws: DigestFileError.unsafeID(id)) {
             _ = try await file.add(tar: tar)
         }
     }
+}
+
+@Test func aDigestIDWithASlashLandsInOneFolder() async throws {
+    let root = try temporaryFolder()
+    let file = DigestFile(url: root, cache: root)
+    let added = try await file.add(tar: try writeDigest(package(id: "digest/one"), files: []))
+    #expect(added.folder.lastPathComponent == "digest-one")
 }
 
 @Test func aDigestFromANewerSchemaIsRefused() async throws {

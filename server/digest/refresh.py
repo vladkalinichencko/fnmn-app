@@ -69,7 +69,7 @@ def _source(source_id: str, subscriptions: dict | None = None) -> dict:
 
 def _collect(module, source: dict, folders: list[str]) -> list[Post]:
     report = lambda stage: None
-    if source["network"] in ("x", "instagram"):
+    if source["network"] in ("x", "instagram", "telegram"):
         with browser(source["network"]) as page:
             return module.collect(source, LIVE, Store(), folders, report, page=page).posts
     return module.collect(source, LIVE, Store(), folders, report).posts

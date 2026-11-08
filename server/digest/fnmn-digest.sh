@@ -6,7 +6,7 @@
 #   server/digest/fnmn-digest.sh status   show the agents and the newest delivery
 #   server/digest/fnmn-digest.sh monitor  read every source once, now
 #   server/digest/fnmn-digest.sh build    build a digest if the schedule is due, now
-#   server/digest/fnmn-digest.sh login x|instagram   log the reader in once
+#   server/digest/fnmn-digest.sh login x|instagram|telegram   log the reader in once
 set -euo pipefail
 
 DIGEST="${0:A:h}"
@@ -91,10 +91,10 @@ case "${1:-}" in
     cd "$SERVER" && "$PYTHON" -m digest.train
     ;;
   login)
-    cd "$SERVER" && "$PYTHON" -m digest.login "${2:?usage: fnmn-digest.sh login x|instagram}"
+    cd "$SERVER" && "$PYTHON" -m digest.login "${2:?usage: fnmn-digest.sh login x|instagram|telegram}"
     ;;
   *)
-    echo "usage: fnmn-digest.sh on|off|status|monitor|build|train|login x|instagram"
+    echo "usage: fnmn-digest.sh on|off|status|monitor|build|train|login x|instagram|telegram"
     exit 2
     ;;
 esac

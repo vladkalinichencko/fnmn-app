@@ -179,8 +179,8 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             }
         }
 
-        /// The post this one quotes or answers, and which of those it is. The context post carries no context
-        /// of its own: the server flattens a chain into the one post that started it.
+        /// The post this one quotes, repeats or answers, and which of those it is. The context post carries
+        /// no context of its own: the server flattens a chain into the one post that started it.
         public struct Context: Codable, Equatable, Sendable {
             public let kind: Kind
             public let post: ContextPost?
@@ -191,7 +191,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             }
 
             public enum Kind: String, Codable, CaseIterable, Sendable {
-                case quote, reply
+                case quote, reply, repost
             }
         }
 

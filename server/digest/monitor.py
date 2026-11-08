@@ -55,7 +55,7 @@ def _run(source: dict, folders: list[str], store: Store, verbose: bool) -> dict:
             print(f"{source['id']}: {stage}")
 
     try:
-        if source["network"] in ("x", "instagram"):
+        if source["network"] in ("x", "instagram", "telegram"):
             with browser(source["network"]) as page:
                 result = module.collect(source, LIVE, store, source.get("folders", []), report, page=page)
         else:

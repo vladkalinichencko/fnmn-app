@@ -23,18 +23,20 @@ server/digest/fnmn-digest.sh train    # обучить классификато�
 
 ## Вход в сети
 
-X и Instagram читаются постоянным профилем Chromium на сеть: `server/digest/profiles/<network>/`.
+X, Instagram и Telegram читаются постоянным профилем Chromium на сеть: `server/digest/profiles/<network>/`.
 Один раз на Mac:
 
 ```sh
 server/digest/fnmn-digest.sh login x
 server/digest/fnmn-digest.sh login instagram
+server/digest/fnmn-digest.sh login telegram
 ```
 
 Открывается окно Chrome со страницей входа; после входа нажать Enter в терминале. Дальше всё идёт headless
 на этом профиле. Dia не трогается: его cookie зашифрованы ключом браузера и принадлежат живой сессии.
 
-Telegram публичные каналы читаются без входа через `t.me/s/<channel>`.
+Telegram публичные каналы открываются и без входа через `t.me/s/<channel>`; профиль нужен для каналов,
+которые без сессии не показывают ленту.
 
 ## Подписки
 
@@ -67,7 +69,7 @@ uv pip install --python ../.venv/bin/python -r ../requirements.txt
 
 ## Что проверено
 
-- Разбор `t.me/s` — на живой странице `t.me/telegram` (сохранена в `fixtures/telegram.html`).
+- Разбор `t.me/s` — на живой странице `t.me/telegram` (сохранена в `fixtures/telegram.html`). Вход в Telegram нужен только каналам без публичной ленты.
 - Ответ `cdn.syndication.twimg.com/tweet-result` — живой (fixtures/tweet-20.json); формы с фото, цитатой и
   ответом — по типам react-tweet, синтетические.
 - Разметка ленты X и страницы Instagram — не проверена вживую: нужен вход. Первый `monitor` после `login` —

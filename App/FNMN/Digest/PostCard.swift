@@ -202,6 +202,7 @@ struct PostCard: View {
     static func icon(_ kind: DigestPackage.Post.Context.Kind) -> String {
         switch kind {
         case .reply: "arrowshape.turn.up.left"
+        case .repost: "arrow.2.squarepath"
         case .quote: "quote.opening"
         }
     }
@@ -210,6 +211,7 @@ struct PostCard: View {
         let handle = context.post.map { "@\($0.author.handle)" } ?? "a post that is gone"
         return switch context.kind {
         case .reply: "Replying to \(handle)"
+        case .repost: "Reposting \(handle)"
         case .quote: "Quoting \(handle)"
         }
     }

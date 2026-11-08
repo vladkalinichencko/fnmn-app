@@ -17,12 +17,13 @@ from digest.reading import profile
 LOGIN = {
     "x": "https://x.com/login",
     "instagram": "https://www.instagram.com/accounts/login/",
+    "telegram": "https://t.me/",
 }
 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 1 or argv[0] not in LOGIN:
-        print("usage: python -m digest.login x|instagram")
+        print("usage: python -m digest.login x|instagram|telegram")
         return 2
     network = argv[0]
     folder = profile(network)
