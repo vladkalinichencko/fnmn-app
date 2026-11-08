@@ -28,9 +28,13 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* a `JournalFile` actor in `FNMNCore` parameterised by folder name, element type, and compaction policy, used by both. The digest needs no compaction, which is a parameter, not a second writer.
 
+*Closed in 1261132:* `JSONLines` owns the line and the append; the library keeps its coordination and its generation, the digest its atomic first write.
+
 **6. Path containment.** `LibraryFile.contained` (`LibraryFile.swift:627`) refuses an empty path, a leading `/`, or any path containing `..`; `DigestFile.check` (`DigestFile.swift:109`) refuses an empty path, a leading `/`, or a `..` path *part*. So `a..b.png` is refused by one and accepted by the other. Two rules for "a name inside a package may not climb out", and they already differ.
 
 *One home:* the stricter function, in `FNMNCore`, called by both, with one test over the same list of hostile paths.
+
+*Closed in 41ac307:* `PackagePath.isSafe` and `resolves`, with `PackagePathTests`. The media endpoint's name check guards a URL segment, not a package path, and stays.
 
 **7. Pending writes and their flush.** `LibraryModel` holds `places`, `progressWrite`, `progressUnsaved` and flushes in `saveProgress()`; `DigestModel` holds `pending`, `indexSave`, and flushes in `settle()` / `writePending()`. Both debounce a save, both requeue on failure (`pending = events + pending` in both), both are flushed when the app leaves the foreground. The mechanism is the same; only the payload and the delay differ.
 
@@ -45,6 +49,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 **9. Bucket by a key, keep first-seen order.** `LibraryQueries.groups(by:)` (`LibraryQueries.swift:54`) builds `order`/`names`/`membersByGroup`; `LibraryQueries.arrange` (`LibraryQueries.swift:212`) builds `order`/`names`/`members` and sorts the same keys, months descending, the rest by localized name; `DigestPackage.sections` (`Digest.swift:250`) builds `order`/`groups`; `SourcesScreen.folders(of:)` (`SourcesScreen.swift:84`) filters per folder; `StoredAnnotations.merging` (`AnnotationMigration.swift`) builds the same order-then-buckets loop for paragraphs. Five copies of one algorithm, and the sorting rule for month keys is written twice.
 
 *One home:* `orderedBuckets<Element>(_ items: [Element], by key: (Element) -> (key: String, name: String)?) -> [(key, name, [Element])]` in `FNMNCore`, with the caller choosing the final sort. `albumSummaries` and `groups` then also share one `AlbumSummary` construction instead of two.
+
+*Partly closed in bf51e6d:* `OrderedGroups` serves `groups`, `arrange` and `sections`. `SourcesScreen.folders` and the legacy-annotation merge still bucket on their own.
 
 **10. Two search normalisations.** `LibraryQueries.search` folds case, diacritics and width (`ArticleEntry.folded`); `DigestPackage.posts(matching:)` lowercases only. Typing `café` finds an article and misses a post; typing `Cafe` misses both. The two tabs answer the same question with two rules.
 
@@ -110,9 +116,13 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* `assets.path(for: blob_or_name, suffix=..., prefix=None)` in `package.py`, which both adapters already import.
 
+*Closed in dcdf2a4:* `asset_path(seed, suffix, prefix)`; the four adapters call it and the names are unchanged.
+
 **23. The USTAR writer.** `package._add` (`:196`) and `digest.build._add` (`:120`) are the same eight lines. `package.write_delivery` writes USTAR and then renames `*.incoming` over the target; `digest.build._write` writes USTAR and then renames `*.tar.part` over the target. One format, two writers, two temporary-name conventions, both aimed at the same iCloud folder.
 
 *One home:* `write_delivery` with a file-source variant (the digest copies media from disk rather than holding bytes), so the digest builder calls it instead of assembling its own archive.
+
+*Closed in dcdf2a4:* `write_delivery_from(path, package, files)`; the builder lost its `_add`, `_add_path` and `os.replace`.
 
 ## Server: network drivers
 

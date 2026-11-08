@@ -563,3 +563,14 @@ From [research/duplication-audit.md](research/duplication-audit.md), easiest fir
 - [x] U9. One `InlineMath.looksLikeProse` for the price-or-formula test, used by `MarkedMarkdown` and `SpeedText`; a single letter is a variable, and the test says so.
 
 The rest of the audit (grouping, Markdown splitting, journal writer, path rule, archive writer, yt-dlp, OCR loop, the merged post card) is not in this PR; it stays in the note with its one-home shape.
+
+### Unification pass 2 (branch `refactor/unification-2`, 2026-11-08)
+
+Tests first, then one rule per commit. The behaviour each rule must keep is pinned in `PackagePathTests`, `GroupingTests`, `DigestTests`, `CloudLibraryTests`, `test_html_markdown.AssetNameTests` and `test_digest_build`.
+
+- [x] U10. One `PackagePath` for a delivery's file names: `..` and `.` are refused, `a..b.jpg` stays a name; the library resolves, the digest checks.
+- [x] U11. One `JSONLines` appender for the library's journal and the digest's engagement; a newline inside a field stays one line.
+- [x] U12. One `OrderedGroups` for the collections, the screen's arrangement and the magazine's sections; first-seen order, declared folders keep their place, empty ones drop.
+- [x] U13. One `asset_path` for the four adapters; the names are unchanged.
+- [x] U14. One `write_delivery_from` for the digest's media and model; a digest now reads through the article reader.
+- [ ] U15. Left: one route stack, one post card, one Markdown splitter, one yt-dlp driver, one OCR loop.
