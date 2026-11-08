@@ -12,7 +12,7 @@ struct LibraryScreen: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        RouteStack(path: $navigation.library) {
+        RouteStack(path: $navigation.library, hidesTabBar: { $0.hidesTabBar }) {
             let found = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : library.queries.items(matching: query)
             ScrollView {
                 if let found {
@@ -37,6 +37,8 @@ struct LibraryScreen: View {
                     }
                 }
             }
+        } destination: { route in
+            RouteScreen(route: route)
         }
     }
 
