@@ -17,6 +17,7 @@ AGENTS="$HOME/Library/LaunchAgents"
 LOGS="$HOME/Library/Logs/FNMN"
 MONITOR=local.fnmn.digest.monitor
 BUILDER=local.fnmn.digest.builder
+TRAINER=local.fnmn.digest.trainer
 
 agent() {
   local label=$1; shift
@@ -49,25 +50,35 @@ case "${1:-}" in
     mkdir -p "$AGENTS" "$LOGS" "$DIGEST/out"
     agent $MONITOR "$PYTHON" -m digest.monitor
     agent $BUILDER "$PYTHON" -m digest.build
+    agent $TRAINER "$PYTHON" -m digest.train
     /usr/libexec/PlistBuddy -c "Add :StartInterval integer 7200" "$AGENTS/$MONITOR.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval array" "$AGENTS/$BUILDER.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0 dict" "$AGENTS/$BUILDER.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Hour integer 8" "$AGENTS/$BUILDER.plist"
+    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Minute integer 0" "$AGENTS/$BUILDER.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:1 dict" "$AGENTS/$BUILDER.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:1:Hour integer 20" "$AGENTS/$BUILDER.plist"
+    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:1:Minute integer 0" "$AGENTS/$BUILDER.plist"
+    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval array" "$AGENTS/$TRAINER.plist"
+    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0 dict" "$AGENTS/$TRAINER.plist"
+    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Hour integer 21" "$AGENTS/$TRAINER.plist"
+    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Minute integer 0" "$AGENTS/$TRAINER.plist"
     start $MONITOR
     start $BUILDER
-    echo "The digest monitor runs every two hours; the builder at 08:00 and 20:00."
+    start $TRAINER
+    echo "The digest monitor runs every two hours; the builder at 08:00 and 20:00; the trainer at 21:00."
     ;;
   off)
     launchctl bootout "gui/$UID/$MONITOR" 2>/dev/null || true
     launchctl bootout "gui/$UID/$BUILDER" 2>/dev/null || true
-    rm -f "$AGENTS/$MONITOR.plist" "$AGENTS/$BUILDER.plist"
+    launchctl bootout "gui/$UID/$TRAINER" 2>/dev/null || true
+    rm -f "$AGENTS/$MONITOR.plist" "$AGENTS/$BUILDER.plist" "$AGENTS/$TRAINER.plist"
     echo "The digest agents are off."
     ;;
   status)
     launchctl print "gui/$UID/$MONITOR" 2>/dev/null | grep -E "state|last exit" || echo "$MONITOR: not loaded"
     launchctl print "gui/$UID/$BUILDER" 2>/dev/null | grep -E "state|last exit" || echo "$BUILDER: not loaded"
+    launchctl print "gui/$UID/$TRAINER" 2>/dev/null | grep -E "state|last exit" || echo "$TRAINER: not loaded"
     ls -1t "$HOME/Library/Mobile Documents/com~apple~CloudDocs/FNMN/digests" 2>/dev/null | head -3 || echo "no deliveries yet"
     ;;
   monitor)
@@ -76,11 +87,14 @@ case "${1:-}" in
   build)
     cd "$SERVER" && "$PYTHON" -m digest.build
     ;;
+  train)
+    cd "$SERVER" && "$PYTHON" -m digest.train
+    ;;
   login)
     cd "$SERVER" && "$PYTHON" -m digest.login "${2:?usage: fnmn-digest.sh login x|instagram}"
     ;;
   *)
-    echo "usage: fnmn-digest.sh on|off|status|monitor|build|login x|instagram"
+    echo "usage: fnmn-digest.sh on|off|status|monitor|build|train|login x|instagram"
     exit 2
     ;;
 esac

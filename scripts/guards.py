@@ -94,6 +94,32 @@ def python_shadowing(root=ROOT):
     return problems
 
 
+def browser_sandbox(root=ROOT):
+    """Every persistent Chrome the digest opens must keep its sandbox. Playwright passes `--no-sandbox` by
+    default, which Chrome reports as an unsupported flag; one launch without the option brings it back."""
+    problems = []
+    for path in sorted((root / "server" / "digest").glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "launch_persistent_context" in source and "chromiumSandbox=True" not in source:
+            problems.append(f"{path.relative_to(root)} launches Chrome without chromiumSandbox=True")
+    return problems
+
+
+def digest_script_checks(root=ROOT):
+    """The digest's calendar agents must name their minute. launchd treats a missing key as a wildcard, so an
+    `Hour`-only entry fires every minute of that hour."""
+    path = root / "server" / "digest" / "fnmn-digest.sh"
+    if not path.exists():
+        return []
+    source = path.read_text(encoding="utf-8")
+    problems = []
+    for match in re.finditer(r"StartCalendarInterval:(\d+):Hour", source):
+        prefix = f"StartCalendarInterval:{match.group(1)}:Minute"
+        if prefix not in source:
+            problems.append(f"server/digest/fnmn-digest.sh sets {match.group(0)} without a Minute")
+    return problems
+
+
 def tracked_runtime_files(root=ROOT):
     """Generated files that git tracks: the working store, a logged-in browser profile, build products, caches.
     A profile in the repository would carry someone's sessions with it."""
@@ -104,7 +130,12 @@ def tracked_runtime_files(root=ROOT):
 
 
 def source_checks():
-    problems = python_shadowing() + [f"{path} is tracked but generated" for path in tracked_runtime_files()]
+    problems = (
+        python_shadowing()
+        + browser_sandbox()
+        + digest_script_checks()
+        + [f"{path} is tracked but generated" for path in tracked_runtime_files()]
+    )
     for problem in problems:
         print(problem)
     if problems:
@@ -112,7 +143,8 @@ def source_checks():
 
 
 def source_self_test():
-    """The same checks, on a tree grown to break them: a shadowed module name and a tracked working file."""
+    """The same checks, on a tree grown to break them: a shadowed module name, a sandboxed launch and a
+    tracked working file."""
     with TemporaryDirectory() as folder:
         root = Path(folder)
         (root / "server" / "digest").mkdir(parents=True)
@@ -120,6 +152,18 @@ def source_self_test():
         (root / "server" / "digest" / "package.py").write_text("")
         if not python_shadowing(root):
             sys.exit("FAILED: the shadowing check missed a module named like a root module")
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        (root / "server" / "digest").mkdir(parents=True)
+        (root / "server" / "digest" / "probe.py").write_text("playwright.chromium.launch_persistent_context('x')\n")
+        if not browser_sandbox(root):
+            sys.exit("FAILED: the browser check missed a Chrome launch without chromiumSandbox=True")
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        (root / "server" / "digest").mkdir(parents=True)
+        (root / "server" / "digest" / "fnmn-digest.sh").write_text("Add :StartCalendarInterval:0:Hour integer 8\n")
+        if not digest_script_checks(root):
+            sys.exit("FAILED: the schedule check missed an Hour without a Minute")
     with TemporaryDirectory() as folder:
         root = Path(folder)
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)

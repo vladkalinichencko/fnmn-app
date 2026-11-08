@@ -3,7 +3,10 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import httpx
+
 from digest import instagram, telegram, x
+from digest.reading import save_photo
 from digest.store import Store
 from tests.test_digest_store import png
 from web import Web
@@ -94,6 +97,21 @@ class XTests(unittest.TestCase):
 
     def test_a_tweet_that_is_gone_is_skipped(self):
         self.assertIsNone(x._tweet(FakeWeb(text=lambda url: json.dumps({"__typename": "TweetTombstone"})), "1"))
+
+
+class PictureTests(unittest.TestCase):
+    def test_a_picture_the_network_refuses_is_left_out(self):
+        def refuse(url):
+            request = httpx.Request("GET", url)
+            raise httpx.HTTPStatusError("403", request=request, response=httpx.Response(403, request=request))
+
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            web = FakeWeb(bytes=refuse)
+            self.assertIsNone(save_photo(web, store, "x/1", 0, "https://pbs.twimg.com/media/a.jpg"))
+            post = x._post(json.loads(fixture("tweet-quote.json")), "karpathy", source(), web, store, ["ml"])
+            self.assertEqual(post.media, [])
+            self.assertTrue(post.text)
 
 
 class InstagramTests(unittest.TestCase):

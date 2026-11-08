@@ -106,10 +106,7 @@ final class LibraryImporter {
     }
 
     private func deliveryFiles(in folder: URL?) async throws -> [URL] {
-        guard let folder, CloudFolder.contains(folder.appending(path: "deliveries")) else {
-            return []
-        }
-        return try await CloudFolder.files(in: folder.appending(path: "deliveries"), withExtension: "tar")
+        try await CloudFolder.archives(in: folder, subfolder: "deliveries")
     }
 
     /// The files materials were made from and saved videos, in the FNMN folder's `originals/`, by the name

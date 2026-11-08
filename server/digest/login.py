@@ -30,12 +30,15 @@ def main(argv: list[str]) -> int:
     print(f"Opening {LOGIN[network]}. Log in, then come back here and press Enter.")
     with sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(
-            str(folder), channel="chrome", headless=False
+            str(folder), channel="chrome", headless=False, chromiumSandbox=True
         )
         try:
             page = context.pages[0] if context.pages else context.new_page()
             page.goto(LOGIN[network])
             input()
+            print(f"The window is on {page.url} — {page.title()}")
+            if "/login" in page.url or "/accounts/login" in page.url:
+                print("Still on the login page: the profile did not take the session.")
         finally:
             context.close()
     print(f"The {network} profile is kept in {folder}.")

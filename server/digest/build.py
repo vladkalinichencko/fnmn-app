@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Pack the new posts into a digest delivery")
     parser.add_argument("--folder", default=str(FNMN))
     parser.add_argument("--root", default=None, help="the store's folder, for tests")
+    parser.add_argument("--subscriptions", default=None, help="the subscriptions file, for tests")
     parser.add_argument("--now", default=None, help="ISO time to build as, for tests")
     parser.add_argument("--force", action="store_true", help="build even when the schedule is not due")
     options = parser.parse_args(argv)
@@ -42,16 +43,31 @@ def main(argv: list[str] | None = None) -> int:
     if not options.force and not due(store, now):
         print("the next build time has not come yet")
         return 0
-    for post in pending:
-        _check(post)
-    package = _package(pending, store, _subscriptions(), now)
+    subscriptions = _subscriptions(Path(options.subscriptions) if options.subscriptions else HERE / "subscriptions.json")
+    skipped = {post.id: reason for post in pending if (reason := _unshowable(post))}
+    buildable = [post for post in pending if post.id not in skipped]
+    if not buildable:
+        store.record_build({"at": iso(now), "post_ids": list(skipped), "skipped": skipped, "file": None})
+        for post_id, reason in skipped.items():
+            print(f"{post_id}: skipped: {reason}")
+        print("nothing showable to build")
+        return 0
+    package = _package(buildable, store, subscriptions, now)
     folder = Path(options.folder) / "digests"
     folder.mkdir(parents=True, exist_ok=True)
     name = f"{package['id']}.tar"
-    _write(package, pending, store, folder / name)
-    store.record_build({"id": package["id"], "at": iso(now), "post_ids": [post.id for post in pending], "file": name})
+    _write(package, buildable, store, folder / name)
+    store.record_build({
+        "id": package["id"],
+        "at": iso(now),
+        "post_ids": [post.id for post in pending],
+        "skipped": skipped,
+        "file": name,
+    })
     _prune(folder)
-    print(f"{folder / name}: {len(pending)} posts")
+    for post_id, reason in skipped.items():
+        print(f"{post_id}: skipped: {reason}")
+    print(f"{folder / name}: {len(buildable)} posts")
     return 0
 
 
@@ -71,8 +87,8 @@ def next_build_time(after: datetime) -> datetime:
     return tomorrow.replace(hour=BUILD_HOURS[0], minute=0, second=0, microsecond=0)
 
 
-def _subscriptions() -> dict:
-    return json.loads((HERE / "subscriptions.json").read_text(encoding="utf-8"))
+def _subscriptions(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _package(posts: list[Post], store: Store, subscriptions: dict, now: datetime) -> dict:
@@ -133,13 +149,17 @@ def _add_path(archive: tarfile.TarFile, name: str, path: Path) -> None:
         archive.addfile(info, file)
 
 
-def _check(post: Post) -> None:
-    """A post the magazine cannot show is a source bug, and the build stops on it instead of shipping a card
-    that opens nothing."""
+def _unshowable(post: Post) -> str | None:
+    """Why the magazine would draw a card that opens nothing; `None` when it would draw a real one."""
     if not post.permalink:
-        raise ValueError(f"{post.id} has no permalink")
-    if not post.text and not post.media and not post.video:
-        raise ValueError(f"{post.id} has neither text nor media")
+        return "no permalink"
+    if post.text or post.media:
+        return None
+    if post.video and post.video.get("poster"):
+        return None
+    if post.video:
+        return "a video with no poster"
+    return "neither text nor media"
 
 
 def _prune(folder: Path) -> None:

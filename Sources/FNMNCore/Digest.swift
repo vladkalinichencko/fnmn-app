@@ -4,6 +4,8 @@ import Foundation
 /// first entry is `package.json` and whose other entries are the post media and the classifier model.
 /// The dates arrive as ISO 8601 in UTC, so `DigestFile` reads it with its own decoder.
 public struct DigestPackage: Codable, Equatable, Sendable {
+    public static let supportedSchema = 1
+
     public let schema: Int
     public let id: String
     public let window: Window
@@ -29,6 +31,20 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         self.sources = sources
         self.model = model
         self.posts = posts
+    }
+
+    /// The network a post or a source comes from. The server writes these three; a fourth is a contract
+    /// change, not an unknown string to draw.
+    public enum Network: String, Codable, CaseIterable, Sendable {
+        case x, telegram, instagram
+
+        public var name: String {
+            switch self {
+            case .x: "X"
+            case .telegram: "Telegram"
+            case .instagram: "Instagram"
+            }
+        }
     }
 
     /// The stretch of time the digest covers: the posts posted after the last build.
@@ -59,13 +75,13 @@ public struct DigestPackage: Codable, Equatable, Sendable {
     /// did not answer) or `failed` (the source broke), and `detail` carries the reason.
     public struct Source: Codable, Equatable, Identifiable, Sendable {
         public let id: String
-        public let network: String
+        public let network: Network
         public let name: String
         public let folders: [String]
-        public let status: String
+        public let status: Status
         public let detail: String?
 
-        public init(id: String, network: String, name: String, folders: [String], status: String, detail: String? = nil) {
+        public init(id: String, network: Network, name: String, folders: [String], status: Status, detail: String? = nil) {
             self.id = id
             self.network = network
             self.name = name
@@ -73,12 +89,16 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             self.status = status
             self.detail = detail
         }
+
+        public enum Status: String, Codable, CaseIterable, Sendable {
+            case ok, stale, failed
+        }
     }
 
     /// One post as the digest carries it, with the post it quotes, repeats or answers kept inside.
     public struct Post: Codable, Equatable, Identifiable, Sendable {
         public let id: String
-        public let network: String
+        public let network: Network
         public let author: Author
         public let permalink: URL
         public let postedAt: Date
@@ -93,7 +113,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 
         public init(
             id: String,
-            network: String,
+            network: Network,
             author: Author,
             permalink: URL,
             postedAt: Date,
@@ -157,19 +177,23 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         /// The post this one quotes, repeats or answers, and which of those it is. The context post carries
         /// no context of its own: the server flattens a chain into the one post that started it.
         public struct Context: Codable, Equatable, Sendable {
-            public let kind: String
+            public let kind: Kind
             public let post: ContextPost?
 
-            public init(kind: String, post: ContextPost? = nil) {
+            public init(kind: Kind, post: ContextPost? = nil) {
                 self.kind = kind
                 self.post = post
+            }
+
+            public enum Kind: String, Codable, CaseIterable, Sendable {
+                case quote, reply, repost
             }
         }
 
         /// A quoted or answered post: what a card shows of it, without a context or comments of its own.
         public struct ContextPost: Codable, Equatable, Sendable {
             public let id: String
-            public let network: String
+            public let network: Network
             public let author: Author
             public let permalink: URL
             public let postedAt: Date
@@ -180,7 +204,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 
             public init(
                 id: String,
-                network: String,
+                network: Network,
                 author: Author,
                 permalink: URL,
                 postedAt: Date,
@@ -245,8 +269,9 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 extension DigestPackage {
     public static let otherFolder = "Other"
 
-    /// The magazine's sections: the package's folders in order, then any label the classifier named that the
-    /// subscriptions do not, and never an empty one.
+    /// The magazine's sections: the package's folders in order, then any folder a post names that the package
+    /// does not list, and never an empty one. A classifier label counts only when it names one of the package's
+    /// folders.
     public func sections(labels: [String: String], hidden: Set<String>) -> [Section] {
         var order = folders
         var groups: [String: [Post]] = [:]
@@ -274,14 +299,18 @@ extension DigestPackage {
         return post.folders.first ?? Self.otherFolder
     }
 
-    /// The posts whose text or author contains the query; an empty query returns every post.
-    public func posts(matching query: String) -> [Post] {
+    /// The posts whose text or author contains the query and that are not hidden; an empty query returns
+    /// every shown post.
+    public func posts(matching query: String, hidden: Set<String> = []) -> [Post] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
-            return posts
+            return posts.filter { !hidden.contains($0.id) }
         }
         let lowered = query.lowercased()
         return posts.filter { post in
+            guard !hidden.contains(post.id) else {
+                return false
+            }
             let text = post.text?.lowercased().contains(lowered) ?? false
             return text
                 || post.author.name.lowercased().contains(lowered)
@@ -339,7 +368,7 @@ public struct DigestIndex: Codable, Equatable, Sendable {
 /// One thing the reader did with a post, written for the Mac's next training. The text stays on the Mac,
 /// joined by the post id.
 public struct DigestEngagement: Codable, Equatable, Sendable {
-    public enum Kind: String, Codable, Sendable {
+    public enum Kind: String, Codable, CaseIterable, Sendable {
         case opened, saved, hidden
     }
 

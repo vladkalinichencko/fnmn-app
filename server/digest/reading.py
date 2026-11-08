@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
+import httpx
 from playwright.sync_api import Page, sync_playwright
 
 from digest.store import Post
@@ -51,7 +52,7 @@ def browser(network: str) -> Iterator[Page]:
             str(profile(network)),
             channel="chrome",
             headless=True,
-            args=["--disable-blink-features=AutomationControlled"],
+            chromiumSandbox=True,
             viewport={"width": 1280, "height": 1600},
         )
         try:
@@ -68,7 +69,7 @@ def save_photo(web: Web, store, post_id: str, index: int | str, url: str) -> dic
     the post instead of stopping it: the card then shows the text without that picture."""
     try:
         data = web.bytes(url)
-    except OSError:
+    except (OSError, httpx.HTTPError):
         return None
     extension = "png" if url.split("?")[0].lower().endswith(".png") else "jpg"
     return store.save_media(post_id, index, data, extension)

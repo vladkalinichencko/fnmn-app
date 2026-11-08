@@ -40,7 +40,7 @@ struct ThreadScreen: View {
     }
 
     /// The post being answered or quoted, set smaller than the one the thread was opened for.
-    private func parentCard(_ post: DigestPackage.Post.ContextPost, kind: String) -> some View {
+    private func parentCard(_ post: DigestPackage.Post.ContextPost, kind: DigestPackage.Post.Context.Kind) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(post.author.name)
@@ -51,7 +51,7 @@ struct ThreadScreen: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                Text(kind == "reply" ? "Replying to" : "Quoting")
+                Text(kind == .reply ? "Replying to" : kind == .repost ? "Reposting" : "Quoting")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

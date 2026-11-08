@@ -24,7 +24,7 @@ struct DigestScreen: View {
                         }
                     }
                 }
-                .task { await digests.open() }
+                .task { await digests.sync(folder: library.cloudFolder) }
         }
     }
 
@@ -46,7 +46,11 @@ struct DigestScreen: View {
             ContentUnavailableView {
                 Label("No digest yet", systemImage: "newspaper")
             } description: {
-                Text("The Mac builds one twice a day and leaves it in the FNMN folder.")
+                Text(digests.lastError ?? "The Mac builds one twice a day and leaves it in the FNMN folder.")
+            } actions: {
+                Button("Refresh") {
+                    Task { await digests.sync(folder: library.cloudFolder) }
+                }
             }
         case .ready:
             magazine
@@ -55,6 +59,20 @@ struct DigestScreen: View {
 
     private var magazine: some View {
         ScrollView {
+            if let error = digests.lastError {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button("Retry") {
+                        Task { await digests.sync(folder: library.cloudFolder) }
+                    }
+                    .font(.caption)
+                }
+                .padding(.horizontal, Tokens.gutter)
+                .padding(.top, Tokens.gap)
+            }
             if let digest = digests.current {
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     sections(of: digest)

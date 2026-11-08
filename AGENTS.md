@@ -37,6 +37,17 @@ Then:
 - **One rule, one home.** If a rule is already guarded, extend that guard; do not add a second copy. A test and a lint rule may enforce the same rule only when one is the declared source of truth and the other a documented backstop.
 - **Register it.** Add a row below with the level and how the guard was proven.
 
+### One step above is a domain, not a neighbour
+
+A check that names the value that broke is a second copy of the bug. Move up to the domain the value came from, and let the domain's size do the work.
+
+- **Wrong:** a source check that greps `record(.saved` because one menu forgot to record a save. It knows that menu and nothing else, so the next menu that saves silently passes.
+- **Right:** the finite parameter is exercised end to end. `DigestEngagement.Kind` is `CaseIterable`; one test sends every case through `DigestModel.record` and reads the journal back, and asserts one line per `Kind.allCases.count`. A new case fails until the writer handles it, and the test names no case.
+- **Wrong:** a test that one view calls one method, or a grep for that method in that view. The interaction is exactly what a source read cannot see; the next view repeats the mistake.
+- **Right:** one writer. The save is a value that carries its engagement (`PostAction.saved(engagement)`), and the only writer consumes it, so a save without a journal line does not typecheck. When one writer is not reachable yet, the next best check is the user path (a UI test on the button), never a diff check.
+
+The question for every check: which values can reach this line, where do they come from, and does the check fail when a new one appears? "The function is called somewhere" is not coverage; a function with a finite parameter is covered only when every value of that parameter has gone through it.
+
 ## Code shape
 
 - One implementation per query. Do not add a second overload that exists only to accept a cached list (for example `among:` with a fallback to the collecting path). Make the cache once, and let the query read it.
@@ -103,3 +114,15 @@ Each defect below is closed by the check in the last column.
 | 2026-11-07 | The server's tests never ran in CI, so server-side guards could not fail a pull request | `guards.py`: the server's whole test suite on every run; CI installs `server/requirements.txt` |
 | 2026-11-08 | `digest/sources.py` shared its name with the server's root `sources.py`, so `from sources import …` inside the digest read the article link classifier and the parsers failed on an import error | `guards.py`: `source checks`, a module inside a server package may not be named like a module at the server root; self-test plants `server/digest/package.py` |
 | 2026-11-08 | A commit swept the monitor's working store and a probe model into git, and a logged-in browser profile would have followed | `guards.py`: `source checks` refuses tracked files under `/out/`, `/profiles/`, `__pycache__`, `.build`, `.venv`; self-test tracks a planted `out/` file |
+| 2026-11-08 | A digest of text-only posts could not be unpacked, and that one delivery then blocked every later one | `DigestTests`: a tar with only `package.json` is added; `DigestModelTests`: a text-only delivery is taken; proven by the same tar failing `moveItem` before the staging folder was created |
+| 2026-11-08 | The launch sync read no index and wrote it back empty, so every post lost its read mark and every delivery was fetched again | `DigestModelTests`: a saved index and a fresh model keep `seen`/`hidden` through `sync`, and a purged cache is restored; proven by the probe that returned `seen: []` before the single `load` |
+| 2026-11-08 | One unreadable delivery set the whole tab to failed and hid the deliveries that did read | `DigestModelTests`: a schema-2 tar beside a good one leaves the good magazine on screen and a `lastError` |
+| 2026-11-08 | A package id or a newer schema could name a folder outside the digest or be read as an older one | `DigestTests`: empty, `.`, `..`, `/`, `a/b`, `a\b` and schema 2 are refused before writing |
+| 2026-11-08 | A hidden post left the sections but stayed in search | `DigestTests`: search takes the hidden set; `DigestModelTests`: the screen's query passes it |
+| 2026-11-08 | Save to Library never wrote the `saved` engagement the training weights | `DigestModelTests`: every `Kind` case goes through `record` and the journal, and `digests.save` is the one save path |
+| 2026-11-08 | One picture with HTTP 403 threw out of the source and lost its whole batch | `test_digest_sources`: a Web that raises `HTTPStatusError` leaves the picture out and keeps the post; proven by the exception escaping `save_photo` before the `httpx.HTTPError` catch |
+| 2026-11-08 | One post with neither text nor media stopped every later build | `test_digest_build`: the post is skipped with a reason, the next build runs, and a video without a poster is skipped; proven by two builds on one text-less post raising twice |
+| 2026-11-08 | The build test read the machine's live subscriptions | `test_digest_build`: the build reads `--subscriptions` from a temporary file |
+| 2026-11-08 | The login window launched Chrome with Playwright's `--no-sandbox` | `guards.py`: `browser sandbox` reads every digest module that opens a persistent context; self-test plants a launch without `chromiumSandbox=True` |
+| 2026-11-08 | The launchd builder set `Hour` without `Minute`, so it fired every minute of that hour | `guards.py`: `digest schedule` wants a `Minute` beside every `StartCalendarInterval` `Hour`; self-test plants an `Hour` alone |
+| 2026-11-08 | Random bytes, names and sizes reached the digest reader | `DigestChaosTests` and `FuzzTests`: random tars, traversal names, a 200 KB file, a real package from the Mac, random image bytes and captions |

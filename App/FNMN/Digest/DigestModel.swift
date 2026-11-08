@@ -22,11 +22,13 @@ final class DigestModel {
     private(set) var labels: [String: String] = [:]
     private(set) var seen: Set<String> = []
     private(set) var hidden: Set<String> = []
-    var failure: String?
+    /// The last sync's failures, while the magazine it already had stays on screen.
+    private(set) var lastError: String?
     private let file: DigestFile
     private let device: String
     @ObservationIgnored private var index = DigestIndex()
     @ObservationIgnored private var folder: URL?
+    @ObservationIgnored private var loaded = false
     @ObservationIgnored private var pending: [DigestEngagement] = []
     @ObservationIgnored private var indexSave: Task<Void, Never>?
     @ObservationIgnored private var scoring: Task<Void, Never>?
@@ -50,47 +52,37 @@ final class DigestModel {
         digests.lazy.compactMap { digest in digest.package.posts.first { $0.id == postID } }.first
     }
 
-    /// What this device already has, from the cache; the tab asks once, and the ask is cheap and offline.
-    func open() async {
-        guard state == .idle else {
-            return
-        }
-        state = .loading
-        do {
-            index = try await file.loadIndex()
-            seen = index.seen
-            hidden = index.hidden
-            digests = try await file.packages()
-            state = .ready
-            scoreIfNeeded()
-        } catch {
-            state = .failed(error.localizedDescription)
-        }
-    }
-
     /// Reads the FNMN folder's digests: what the Mac added since the last sync is downloaded from iCloud,
-    /// unpacked, and scored. Called at launch, on returning to the app, and by pull to refresh.
+    /// unpacked, and scored. The only entry: the tab, the launch and the pull all call it; a nil folder reads
+    /// what is already in the cache.
     func sync(folder: URL?) async {
         guard !syncing else {
             return
         }
         syncing = true
         defer { syncing = false }
+        if state == .idle {
+            state = .loading
+        }
         if let folder {
             self.folder = folder
         }
         do {
+            try await load()
             if let folder {
-                try await take(in: folder)
+                let failures = await take(in: folder)
+                lastError = failures.isEmpty ? nil : failures.joined(separator: "; ")
             }
             digests = try await file.packages()
-            if state != .ready {
-                state = .ready
-            }
+            state = .ready
             scoreIfNeeded()
             await writePending()
         } catch {
-            state = .failed(error.localizedDescription)
+            if state == .ready {
+                lastError = error.localizedDescription
+            } else {
+                state = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -109,6 +101,13 @@ final class DigestModel {
         scheduleIndexSave()
     }
 
+    /// The one save path: the engagement is recorded here, so a menu cannot save a post without telling the
+    /// Mac's next training about it. Returns the link the library imports.
+    func save(_ post: DigestPackage.Post, digest: Digest) -> URL {
+        record(.saved, post: post, digest: digest)
+        return post.permalink
+    }
+
     /// Writes what is waiting before the app leaves the foreground.
     func settle() async {
         index.seen = seen
@@ -118,27 +117,59 @@ final class DigestModel {
         await writePending()
     }
 
-    /// The posts of the open digest after the search field's text; an empty query returns them all.
+    /// The posts of the open digest after the search field's text, minus the hidden ones.
     func posts(matching query: String, in package: DigestPackage) -> [DigestPackage.Post] {
-        package.posts(matching: query)
+        package.posts(matching: query, hidden: hidden)
     }
 
-    private func take(in folder: URL) async throws {
-        let directory = folder.appending(path: "digests")
-        guard CloudFolder.contains(directory) else {
+    private func load() async throws {
+        guard !loaded else {
             return
         }
-        let tars = try await CloudFolder.files(in: directory, withExtension: "tar")
-        let known = Set(index.imported.map(\.file))
-        for tar in tars where !known.contains(tar.lastPathComponent) {
-            try await CloudFolder.download(tar)
-            let digest = try await file.add(tar: tar)
-            index.imported.append(.init(file: tar.lastPathComponent, id: digest.id, at: .now))
+        index = try await file.loadIndex()
+        seen = index.seen
+        hidden = index.hidden
+        digests = try await file.packages()
+        loaded = true
+    }
+
+    /// Takes the deliveries the index does not hold, and the ones whose unpacked copy the system removed.
+    /// One bad delivery is a line of `lastError`; the others still land, and the magazine stays on screen.
+    private func take(in folder: URL) async -> [String] {
+        let tars: [URL]
+        do {
+            tars = try await CloudFolder.archives(in: folder, subfolder: "digests")
+        } catch {
+            return ["the digests folder could not be read: \(error.localizedDescription)"]
+        }
+        var failures: [String] = []
+        var imported: [String: String] = [:]
+        for entry in index.imported {
+            imported[entry.file] = entry.id
+        }
+        var unpacked = Set((try? await file.packages())?.map(\.id) ?? [])
+        for tar in tars {
+            let name = tar.lastPathComponent
+            if let id = imported[name], unpacked.contains(id) {
+                continue
+            }
+            do {
+                try await CloudFolder.download(tar)
+                let digest = try await file.add(tar: tar)
+                unpacked.insert(digest.id)
+                if imported[name] == nil {
+                    index.imported.append(.init(file: name, id: digest.id, at: .now))
+                    imported[name] = digest.id
+                }
+            } catch {
+                failures.append("\(name): \(error.localizedDescription)")
+            }
         }
         if !tars.isEmpty {
-            try await file.evict(keeping: 5)
-            try await file.saveIndex(index)
+            try? await file.evict(keeping: 5)
+            try? await file.saveIndex(index)
         }
+        return failures
     }
 
     private func scoreIfNeeded() {

@@ -29,6 +29,20 @@ enum CloudFolder {
         FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)
     }
 
+    /// The delivery archives under one of the FNMN folder's subfolders, by name; a folder that is not there
+    /// holds none. The library and the digest list their deliveries the same way.
+    @concurrent
+    static func archives(in folder: URL?, subfolder: String) async throws -> [URL] {
+        guard let folder else {
+            return []
+        }
+        let directory = folder.appending(path: subfolder)
+        guard contains(directory) else {
+            return []
+        }
+        return try await files(in: directory, withExtension: "tar")
+    }
+
     /// The folder's files, or those with the extension, by the names they have once downloaded, in name order.
     @concurrent
     static func files(in folder: URL, withExtension pathExtension: String? = nil) async throws -> [URL] {

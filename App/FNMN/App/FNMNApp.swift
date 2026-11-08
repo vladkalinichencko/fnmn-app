@@ -87,6 +87,12 @@ private struct WindowRoot: View {
             pendingContinue = false
             continueReading()
         }
+        .onChange(of: library.cloudFolder) { _, folder in
+            guard let folder else {
+                return
+            }
+            Task { await digests.sync(folder: folder) }
+        }
         .onOpenURL { url in
             if url.scheme == "fnmn", url.host == "continue" {
                 if library.loadState == .ready { continueReading() } else { pendingContinue = true }

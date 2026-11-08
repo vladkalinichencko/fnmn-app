@@ -7,10 +7,11 @@ Mac следит за выбранными каналами Telegram и акка
 ## Что запускается
 
 ```sh
-server/digest/fnmn-digest.sh on       # агенты: монитор каждые 2 часа, сборка в 08:00 и 20:00
+server/digest/fnmn-digest.sh on       # агенты: монитор каждые 2 часа, сборка в 08:00 и 20:00, обучение в 21:00
 server/digest/fnmn-digest.sh status   # агенты и три последние поставки
 server/digest/fnmn-digest.sh monitor  # прочитать все источники один раз, сейчас
 server/digest/fnmn-digest.sh build    # собрать дайджест, если время пришло
+server/digest/fnmn-digest.sh train    # обучить классификатор на журнале реакций
 ```
 
 Вручную, из `server/`:
@@ -49,13 +50,14 @@ Telegram публичные каналы читаются без входа че
 ## Классификатор
 
 ```sh
-uv pip install --python ../.venv/bin/python -r digest/requirements.txt
+uv pip install --python ../.venv/bin/python -r ../requirements.txt
 ../.venv/bin/python -m digest.train --dry-run   # сколько строк и каких папок
 ../.venv/bin/python -m digest.train             # out/classifier.mlmodel + out/model.json
 ```
 
 Модель учится на тексте постов: метка — первая папка источника; скрытый пост не идёт в обучение, сохранённый
-считается трижды, открытый дважды. Следующая сборка кладёт модель в поставку, телефон считает её `NLModel`.
+считается трижды, открытый дважды. Тренер запускается агентом в 21:00, после вечерней сборки; следующая сборка
+кладёт модель в поставку, телефон считает её `NLModel`.
 Пока строк меньше двадцати, дайджест едет без модели, и журнал раскладывается по папкам источников.
 
 ## Что проверено

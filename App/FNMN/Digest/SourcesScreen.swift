@@ -49,7 +49,7 @@ struct SourcesScreen: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
-            Text(source.network == "telegram" ? "Channel" : "Account")
+            Text(source.network == .telegram ? "Channel" : "Account")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -61,17 +61,17 @@ struct SourcesScreen: View {
     /// A source that could not be read says why under its name.
     private func detail(of source: DigestPackage.Source) -> String {
         switch source.status {
-        case "ok": source.id
-        case "stale": "Partially read: \(source.detail ?? "the network answered slowly")"
-        default: "Not read: \(source.detail ?? "the source failed")"
+        case .ok: source.id
+        case .stale: "Partially read: \(source.detail ?? "the network answered slowly")"
+        case .failed: "Not read: \(source.detail ?? "the source failed")"
         }
     }
 
-    private func color(of status: String) -> Color {
+    private func color(of status: DigestPackage.Source.Status) -> Color {
         switch status {
-        case "ok": .green
-        case "stale": .orange
-        default: .red
+        case .ok: .green
+        case .stale: .orange
+        case .failed: .red
         }
     }
 

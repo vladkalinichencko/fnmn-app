@@ -1,4 +1,5 @@
 import json
+import random
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -73,6 +74,42 @@ class StoreTests(unittest.TestCase):
     def test_safe_names_keep_the_store_on_one_level(self):
         self.assertEqual(safe("x/1587-0"), "x-1587-0")
         self.assertNotIn("/", safe("../x/1"))
+
+
+class FuzzTests(unittest.TestCase):
+    def test_image_size_survives_random_bytes(self):
+        generator = random.Random(7)
+        for _ in range(500):
+            data = generator.randbytes(generator.randrange(0, 2048))
+            size = image_size(data)
+            self.assertTrue(size is None or (size[0] > 0 and size[1] > 0))
+
+    def test_safe_names_never_escape(self):
+        generator = random.Random(11)
+        alphabet = "abcXYZ019/\\..\x00 -_:/?#"
+        for _ in range(500):
+            name = "".join(generator.choice(alphabet) for _ in range(generator.randrange(0, 40)))
+            cleaned = safe(name)
+            self.assertNotIn("/", cleaned)
+            self.assertNotIn("\\", cleaned)
+            self.assertNotEqual(cleaned, "..")
+
+    def test_a_media_name_stays_under_media(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            saved = store.save_media("../../x", 0, png(2, 2), "png")
+            self.assertTrue(saved["path"].startswith("media/"))
+            self.assertNotIn("/", Path(saved["path"]).name)
+            self.assertTrue((store.root / saved["path"]).exists())
+
+    def test_a_caption_survives_random_text(self):
+        from digest.instagram import _caption
+
+        generator = random.Random(13)
+        alphabet = "abc\"': ,\n\u0434\u0430\u0439\U0001f600"
+        for _ in range(500):
+            text = "".join(generator.choice(alphabet) for _ in range(generator.randrange(0, 200)))
+            self.assertTrue(isinstance(_caption(text), str) or _caption(text) is None)
 
 
 if __name__ == "__main__":

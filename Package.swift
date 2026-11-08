@@ -7,6 +7,10 @@ let package = Package(
     products: [.library(name: "FNMNCore", targets: ["FNMNCore"])],
     targets: [
         .target(name: "FNMNCore"),
-        .testTarget(name: "FNMNCoreTests", dependencies: ["FNMNCore"]),
+        .testTarget(
+            name: "FNMNCoreTests",
+            dependencies: ["FNMNCore"],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )

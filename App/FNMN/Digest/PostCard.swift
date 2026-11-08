@@ -23,7 +23,7 @@ struct PostCard: View {
                 StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
                     .opacity(read ? Tokens.readOpacity : 1)
             }
-            if let video = post.video {
+            if let video = post.video, video.poster != nil {
                 poster(video)
             }
             pictures
@@ -114,7 +114,7 @@ struct PostCard: View {
 
     private func contextLine(_ context: DigestPackage.Post.Context) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: context.kind == "reply" ? "arrowshape.turn.up.left" : "quote.opening")
+            Image(systemName: Self.icon(context.kind))
                 .font(.caption)
             Text(Self.contextLabel(context))
                 .font(.caption)
@@ -152,7 +152,8 @@ struct PostCard: View {
 
     @ViewBuilder private var menu: some View {
         Button("Save to Library", systemImage: "books.vertical") {
-            imports.send(.submit(.link(post.permalink), id: UUID()))
+            let link = digests.save(post, digest: digest)
+            imports.send(.submit(.link(link), id: UUID()))
         }
         Button("Open in \(Self.network(post.network))", systemImage: "arrow.up.right.square") {
             openURL(post.permalink)
@@ -167,21 +168,24 @@ struct PostCard: View {
         Tokens.concentric(Tokens.plateRadius, inset: Tokens.tilePadding)
     }
 
-    static func network(_ name: String) -> String {
-        switch name {
-        case "x": "X"
-        case "telegram": "Telegram"
-        case "instagram": "Instagram"
-        default: name
+    static func network(_ name: DigestPackage.Network) -> String {
+        name.name
+    }
+
+    static func icon(_ kind: DigestPackage.Post.Context.Kind) -> String {
+        switch kind {
+        case .reply: "arrowshape.turn.up.left"
+        case .repost: "arrow.2.squarepath"
+        case .quote: "quote.opening"
         }
     }
 
     static func contextLabel(_ context: DigestPackage.Post.Context) -> String {
         let handle = context.post.map { "@\($0.author.handle)" } ?? "a post that is gone"
         return switch context.kind {
-        case "reply": "Replying to \(handle)"
-        case "repost": "Reposting \(handle)"
-        default: "Quoting \(handle)"
+        case .reply: "Replying to \(handle)"
+        case .repost: "Reposting \(handle)"
+        case .quote: "Quoting \(handle)"
         }
     }
 

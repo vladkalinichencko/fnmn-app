@@ -25,7 +25,14 @@ def post(post_id: str, text: str = "A small model that reads the whole catalog."
 
 class BuildTests(unittest.TestCase):
     def build(self, root: Path, fnmn: Path, *extra: str) -> int:
-        return build.main(["--root", str(root), "--folder", str(fnmn), "--force", *extra])
+        subscriptions = Path(root).parent / "subscriptions.json"
+        subscriptions.write_text(
+            json.dumps({"folders": ["ml", "design", "tech"], "sources": []}),
+            encoding="utf-8",
+        )
+        return build.main([
+            "--root", str(root), "--folder", str(fnmn), "--subscriptions", str(subscriptions), "--force", *extra,
+        ])
 
     def test_a_build_writes_one_delivery_with_every_new_post_and_its_picture(self):
         with TemporaryDirectory() as folder:
@@ -65,14 +72,40 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(self.build(root, fnmn), 0)
             self.assertEqual(len(list((fnmn / "digests").glob("digest-*.tar"))), 1)
 
-    def test_a_post_the_magazine_could_not_show_stops_the_build(self):
+    def test_a_post_the_magazine_could_not_show_is_skipped_and_the_next_build_runs(self):
         with TemporaryDirectory() as folder:
             root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
             empty = post("x/1", text="")
             Store(root).append([empty])
-            with self.assertRaises(ValueError):
-                self.build(root, fnmn)
+            self.assertEqual(self.build(root, fnmn), 0)
             self.assertEqual(list((fnmn / "digests").glob("digest-*.tar")), [])
+            self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "neither text nor media"})
+            Store(root).append([post("x/2")])
+            self.assertEqual(self.build(root, fnmn), 0)
+            self.assertEqual(len(list((fnmn / "digests").glob("digest-*.tar"))), 1)
+
+    def test_a_video_without_a_poster_is_skipped(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            video = post("x/1", text="")
+            video.video = {"poster": None, "duration": 42}
+            Store(root).append([video])
+            self.assertEqual(self.build(root, fnmn), 0)
+            self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "a video with no poster"})
+
+    def test_the_build_reads_its_subscriptions_file(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            Store(root).append([post("x/1")])
+            subscriptions = Path(folder) / "subs.json"
+            subscriptions.write_text(json.dumps({"folders": ["alpha"], "sources": []}), encoding="utf-8")
+            build.main([
+                "--root", str(root), "--folder", str(fnmn), "--subscriptions", str(subscriptions), "--force",
+            ])
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertEqual(package["folders"], ["alpha"])
 
     def test_pruning_keeps_the_newest_deliveries(self):
         with TemporaryDirectory() as folder:

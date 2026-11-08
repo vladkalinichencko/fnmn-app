@@ -32,11 +32,13 @@ public actor DigestFile {
     /// The files land in a staging folder first, so a read that stops halfway leaves no half a digest behind.
     public func add(tar: URL) throws -> Digest {
         let staging = cache.appending(path: "digest-staging-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: staging) }
         let package = try DeliveryArchive(url: tar).unpack(decoder: Self.decoder()) { (package: DigestPackage, path: String) throws -> URL? in
             try Self.check(path)
             return staging.appending(path: path)
         }
+        try Self.check(package)
         let destination = folder(of: package.id)
         let parent = destination.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -97,12 +99,18 @@ public actor DigestFile {
     }
 
     private func folder(of id: String) -> URL {
-        cache.appending(path: "digests").appending(path: Self.name(of: id))
+        cache.appending(path: "digests").appending(path: id)
     }
 
-    /// A digest id names a folder, so the slash of a timestamp is written as a dash.
-    private static func name(of id: String) -> String {
-        id.replacingOccurrences(of: "/", with: "-")
+    /// The package's own fields name a folder, so they are checked before anything is written.
+    private static func check(_ package: DigestPackage) throws {
+        guard package.schema == DigestPackage.supportedSchema else {
+            throw DigestFileError.unsupportedSchema(package.schema)
+        }
+        let id = package.id
+        guard !id.isEmpty, id != ".", id != "..", !id.hasPrefix("/"), !id.contains("/"), !id.contains("\\") else {
+            throw DigestFileError.unsafeID(id)
+        }
     }
 
     /// A delivery names its files by relative paths; a name that climbs out of the digest's folder is refused.
@@ -128,10 +136,14 @@ public actor DigestFile {
 
 public enum DigestFileError: Error, Equatable, LocalizedError {
     case unsafePath(String)
+    case unsafeID(String)
+    case unsupportedSchema(Int)
 
     public var errorDescription: String? {
         switch self {
         case let .unsafePath(path): "The digest names a file outside its folder (\(path))."
+        case let .unsafeID(id): "The digest names an id that cannot be a folder (\(id))."
+        case let .unsupportedSchema(schema): "The digest uses schema \(schema); this app reads schema \(DigestPackage.supportedSchema)."
         }
     }
 }

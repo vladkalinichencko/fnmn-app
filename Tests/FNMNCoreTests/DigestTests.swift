@@ -15,7 +15,7 @@ private func post(
     context: DigestPackage.Post.Context? = nil
 ) -> DigestPackage.Post {
     DigestPackage.Post(
-        id: id, network: "x", author: author, permalink: permalink, postedAt: date,
+        id: id, network: .x, author: author, permalink: permalink, postedAt: date,
         text: text, media: media, context: context, folders: [folder]
     )
 }
@@ -88,12 +88,12 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     let decoded = try decoder.decode(DigestPackage.self, from: Data(json.utf8))
     #expect(decoded.id == "digest-2026-11-08T08:00:00Z")
     #expect(decoded.folders == ["ml", "design"])
-    #expect(decoded.sources[1].status == "stale")
+    #expect(decoded.sources[1].status == .stale)
     #expect(decoded.model?.examples == 231)
     let post = try #require(decoded.posts.first)
     #expect(post.media.first?.width == 1280)
     #expect(post.video?.duration == 42)
-    #expect(post.context?.kind == "quote")
+    #expect(post.context?.kind == .quote)
     #expect(post.context?.post?.author.handle == "hardmaru")
     #expect(post.comments.first?.text == "This explains it.")
     #expect(post.stats?.likes == 100)
@@ -125,7 +125,7 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     let root = try temporaryFolder()
     let file = DigestFile(url: root, cache: root)
     let tar = try FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).tar")
-    try writeTar(package: try encoder().encode(package()), files: [("../evil.jpg", Data("x".utf8))], to: tar)
+    try writeTar(package: encoder().encode(package()), files: [("../evil.jpg", Data("x".utf8))], to: tar)
     await #expect(throws: DigestFileError.unsafePath("../evil.jpg")) {
         _ = try await file.add(tar: tar)
     }
@@ -200,4 +200,57 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(package.posts(matching: "catalog").map(\.id) == ["x/1"])
     #expect(package.posts(matching: "karpathy").count == 2)
     #expect(package.posts(matching: "  ").count == 2)
+}
+
+@Test func aTextOnlyDigestUnpacks() async throws {
+    let root = try temporaryFolder()
+    let file = DigestFile(url: root, cache: root)
+    let digest = try await file.add(tar: try writeDigest(package(), files: []))
+    #expect(digest.package.posts.count == 1)
+    #expect(try await file.packages().count == 1)
+}
+
+@Test func aDigestIDThatCannotBeAFolderIsRefused() async throws {
+    let root = try temporaryFolder()
+    let file = DigestFile(url: root, cache: root)
+    for id in ["", ".", "..", "../x", "a/b", "/tmp/x", "a\\b"] {
+        let tar = try writeDigest(package(id: id), files: [])
+        await #expect(throws: DigestFileError.unsafeID(id)) {
+            _ = try await file.add(tar: tar)
+        }
+    }
+}
+
+@Test func aDigestFromANewerSchemaIsRefused() async throws {
+    let root = try temporaryFolder()
+    let file = DigestFile(url: root, cache: root)
+    let newer = DigestPackage(
+        schema: DigestPackage.supportedSchema + 1,
+        id: "digest-newer",
+        window: .init(from: postedAt, to: postedAt)
+    )
+    await #expect(throws: DigestFileError.unsupportedSchema(DigestPackage.supportedSchema + 1)) {
+        _ = try await file.add(tar: try writeDigest(newer, files: []))
+    }
+}
+
+@Test func searchSkipsHiddenPosts() {
+    let package = package(posts: [
+        post("x/1", text: "A catalog post."),
+        post("x/2", text: "Another catalog post."),
+    ])
+    #expect(package.posts(matching: "catalog", hidden: ["x/2"]).map(\.id) == ["x/1"])
+    #expect(package.posts(matching: "", hidden: ["x/1"]).map(\.id) == ["x/2"])
+}
+
+@Test func everyEngagementKindSurvivesTheJournal() throws {
+    let encoder = encoder()
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    for kind in DigestEngagement.Kind.allCases {
+        let event = DigestEngagement(kind: kind, postID: "x/1", digestID: "digest-1")
+        let decoded = try decoder.decode(DigestEngagement.self, from: try encoder.encode(event))
+        #expect(decoded.kind == kind)
+        #expect(decoded.postID == "x/1")
+    }
 }

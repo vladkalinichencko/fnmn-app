@@ -16,3 +16,4 @@ App/FNMN.xcodeproj/project.xcworkspace/
 .recall/
 
 server/digest/out/
+server/digest/profiles/
