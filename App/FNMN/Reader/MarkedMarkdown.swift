@@ -68,7 +68,9 @@ struct MarkedMarkdown: MarkupParser {
             }
             if let inline = match.output.3 ?? match.output.5 {
                 let latex = flattened(String(inline))
-                if InlineMath.looksLikeProse(latex) { return "\\$" + latex + "\\$" }
+                if InlineMath.looksLikeProse(latex) {
+                    return "\\$" + latex + "\\$"
+                }
                 // A formula this long would run past the line's end, where a line of text cannot scroll.
                 if latex.count > Self.longestInline { return "\n\n$$" + escaped(latex) + "$$\n\n" }
                 return "$" + escaped(latex) + "$"
