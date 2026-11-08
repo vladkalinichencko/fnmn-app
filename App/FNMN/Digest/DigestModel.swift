@@ -9,6 +9,11 @@ enum DigestLoadState: Equatable {
     case failed(String)
 }
 
+enum DigestSyncState: Equatable {
+    case idle
+    case syncing
+}
+
 /// The one owner of the social digests on this device: the deliveries the Mac left in the FNMN folder, the
 /// digests unpacked in the cache, the topics the classifier gave their posts, and the engagement this device
 /// writes back for the Mac's next training. `LibraryModel` owns the folder; this model asks it nothing and
@@ -16,6 +21,8 @@ enum DigestLoadState: Equatable {
 @MainActor @Observable
 final class DigestModel {
     private(set) var state = DigestLoadState.idle
+    /// Whether a sync is running; the tab shows a small spinner, and a second pull waits for this one.
+    private(set) var syncState = DigestSyncState.idle
     /// Newest window first.
     private(set) var digests: [Digest] = []
     /// The folder each post's text belongs to, by the model the newest digest carried.
@@ -36,7 +43,6 @@ final class DigestModel {
     @ObservationIgnored private var pending: [DigestEngagement] = []
     @ObservationIgnored private var indexSave: Task<Void, Never>?
     @ObservationIgnored private var scoring: Task<Void, Never>?
-    @ObservationIgnored private var syncing = false
 
     init(device: String, file: DigestFile = DigestFile(), server: ServerLink? = nil) {
         self.device = device
@@ -105,11 +111,11 @@ final class DigestModel {
     /// unpacked, and scored. The only entry: the tab, the launch and the pull all call it; a nil folder reads
     /// what is already in the cache.
     func sync(folder: URL?) async {
-        guard !syncing else {
+        guard syncState == .idle else {
             return
         }
-        syncing = true
-        defer { syncing = false }
+        syncState = .syncing
+        defer { syncState = .idle }
         if state == .idle {
             state = .loading
         }

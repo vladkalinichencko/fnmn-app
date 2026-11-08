@@ -23,6 +23,12 @@ struct DigestScreen: View {
                             navigation.digest.append(.sources)
                         }
                     }
+                    if digests.syncState == .syncing {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
                 }
                 .task { await digests.sync(folder: library.cloudFolder) }
         }

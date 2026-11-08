@@ -103,6 +103,7 @@ final class DigestModelTests: XCTestCase {
         let digests = model()
         await digests.sync(folder: folder)
         XCTAssertEqual(digests.state, .ready)
+        XCTAssertEqual(digests.syncState, .idle)
         XCTAssertEqual(digests.digests.map(\.id), ["digest-2026-11-08T08-00-00Z"])
         let index = try await DigestFile(url: root, cache: root).loadIndex()
         XCTAssertEqual(index.imported.map(\.file), ["digest-1.tar"])
