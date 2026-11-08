@@ -41,14 +41,21 @@ struct PostCard: View {
         .plate(cornerRadius: Tokens.plateRadius)
         .contentShape(RoundedRectangle(cornerRadius: Tokens.plateRadius))
         .onTapGesture {
-            guard opensThread else {
-                return
-            }
-            navigation.open(.thread(post.id))
+            openThread()
         }
         .contextMenu {
             menu
         }
+        .accessibilityAction(named: "Open the thread") {
+            openThread()
+        }
+    }
+
+    private func openThread() {
+        guard opensThread else {
+            return
+        }
+        navigation.open(.thread(post.id))
     }
 
     private var header: some View {

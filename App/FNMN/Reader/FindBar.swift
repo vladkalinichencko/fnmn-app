@@ -7,13 +7,14 @@ struct FindBar: View {
 
     var body: some View {
         let find = reader.state.find ?? FindState()
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
             TextField("Find in Material", text: Binding(
                 get: { find.query },
                 set: { reader.send(.findQuery($0)) }
             ))
+            .textFieldStyle(.plain)
             .focused($focused)
             .submitLabel(.search)
             .onSubmit { reader.send(.findStep(1)) }
@@ -21,23 +22,23 @@ struct FindBar: View {
                 .font(.footnote.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Button {
-                reader.send(.findStep(-1))
-            } label: {
-                Image(systemName: "chevron.up")
-            }
-            .disabled(find.current == nil)
-            Button {
-                reader.send(.findStep(1))
-            } label: {
-                Image(systemName: "chevron.down")
-            }
-            .disabled(find.current == nil)
-            Button("Done") { reader.send(.find(false)) }
+                .contentTransition(.numericText())
+            Button("Previous Match", systemImage: "chevron.up") { reader.send(.findStep(-1)) }
+                .frame(width: 32, height: 44)
+                .disabled(find.current == nil)
+            Button("Next Match", systemImage: "chevron.down") { reader.send(.findStep(1)) }
+                .frame(width: 32, height: 44)
+                .disabled(find.current == nil)
+            Button("Done", systemImage: "xmark") { reader.send(.find(false)) }
+                .frame(width: 32, height: 44)
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .padding(.horizontal, 14)
+        .glassEffect(.regular, in: .capsule)
         .padding(.horizontal, Tokens.gutter)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.vertical, 6)
         .onAppear { focused = true }
     }
 

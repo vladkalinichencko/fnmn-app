@@ -272,6 +272,7 @@ struct SpeedReader: View {
                 .padding(.top, 12)
             stage
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.smooth(duration: 0.25), value: player.resting)
             controls
                 .padding(.bottom, 8)
         }
@@ -297,26 +298,28 @@ struct SpeedReader: View {
     }
 
     private var bar: some View {
-        HStack {
-            Button("Done") {
-                player.pause()
-                saveShown()
-                reader.send(.speedReading(false))
-            }
-            .buttonStyle(.glass)
-            Spacer()
-            Menu("Speed Reading Options", systemImage: "slider.horizontal.3") {
-                Picker(selection: $pauses) {
-                    ForEach(SpeedPauses.allCases) { Text($0.name).tag($0) }
-                } label: {
-                    Label("Pauses", systemImage: "pause.circle")
-                    Text(pauses.name)
+        GlassEffectContainer(spacing: 12) {
+            HStack {
+                Button("Done") {
+                    player.pause()
+                    saveShown()
+                    reader.send(.speedReading(false))
                 }
-                .pickerStyle(.menu)
-                ReaderAppearanceControls()
+                .buttonStyle(.glass)
+                Spacer()
+                Menu("Speed Reading Options", systemImage: "slider.horizontal.3") {
+                    Picker(selection: $pauses) {
+                        ForEach(SpeedPauses.allCases) { Text($0.name).tag($0) }
+                    } label: {
+                        Label("Pauses", systemImage: "pause.circle")
+                        Text(pauses.name)
+                    }
+                    .pickerStyle(.menu)
+                    ReaderAppearanceControls()
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glass)
             }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.glass)
         }
         .padding(.top, 8)
     }

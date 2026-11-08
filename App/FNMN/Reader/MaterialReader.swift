@@ -13,8 +13,10 @@ struct MaterialReader: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 if reader.state.find != nil {
                     FindBar(reader: reader)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
+            .animation(.smooth(duration: 0.22), value: reader.state.find != nil)
             .modifier(ReaderAppearanceModifier())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
