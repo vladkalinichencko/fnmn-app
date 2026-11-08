@@ -24,7 +24,17 @@ from pathlib import Path
 from adapters.youtube import video_id_from_url
 from importer import import_link
 from markdown import first_heading, had_site_header, normalize, page_title, plain_title
-from package import Delivery, Video, link_delivery, package, read_delivery, write_delivery, write_if_changed
+from package import (
+    Delivery,
+    Video,
+    delivery_name,
+    link_delivery,
+    package,
+    read_delivery,
+    stable_id,
+    write_delivery,
+    write_if_changed,
+)
 from web import LIVE
 
 ALBUMS = Path(__file__).parent / "browser_albums.tsv"
@@ -58,7 +68,7 @@ def prepare(row: dict, output: Path, enrich_videos: bool = False, refetch: bool 
     """Fetches one material. `refetch` reads a prepared web page again under the current rules; if the site
     no longer answers, or answers with less text than it gave before, the prepared delivery stays."""
     url = row["url"]
-    destination = _delivery(output, row)
+    destination = _article_path(output, url)
     if destination.exists() and not (
         enrich_videos and video_id_from_url(url) and not read_delivery(destination).package.get("body")
     ) and not (refetch and not video_id_from_url(url)):
@@ -79,15 +89,33 @@ def link_unprepared(rows: list[dict], output: Path) -> int:
     """Every material that was never prepared becomes a link delivery, without asking its site again."""
     count = 0
     for row in rows:
-        destination = _delivery(output, row)
+        destination = _link_path(output, row["url"])
         if not destination.exists():
             write_delivery(destination, link_delivery(row["url"], row["title"], row["folders"]))
             count += 1
     return count
 
 
-def _delivery(output: Path, row: dict) -> Path:
-    return output / "deliveries" / (hashlib.sha256(row["url"].encode()).hexdigest() + ".tar")
+def _path(output: Path, material_id: str) -> Path:
+    return output / "deliveries" / delivery_name(material_id)
+
+
+def _claim_legacy(output: Path, target: Path, url: str, kind: str) -> Path:
+    """A delivery prepared before the id rule is named by the URL; rename it to the id name, once."""
+    legacy = output / "deliveries" / (hashlib.sha256(url.encode()).hexdigest() + ".tar")
+    if target.exists() or not legacy.exists():
+        return target
+    if read_delivery(legacy).package["material"]["kind"] == kind:
+        legacy.rename(target)
+    return target
+
+
+def _article_path(output: Path, url: str) -> Path:
+    return _claim_legacy(output, _path(output, stable_id("article", url)), url, "article")
+
+
+def _link_path(output: Path, url: str) -> Path:
+    return _claim_legacy(output, _path(output, f"link:{url}"), url, "link")
 
 
 def _old_delivery(path: Path) -> Delivery:
@@ -105,10 +133,13 @@ def seed_videos(library: dict, rows: list[dict], output: Path) -> int:
         video_id = video_id_from_url(url)
         if video_id is None:
             continue
-        destination = _delivery(output, row)
+        delivery = package(url, Video(video_id, titles[url]), row["folders"])
+        destination = _claim_legacy(
+            output, _path(output, delivery.package["material"]["id"]), url, "video"
+        )
         if destination.exists():
             continue
-        write_delivery(destination, package(url, Video(video_id, titles[url]), row["folders"]))
+        write_delivery(destination, delivery)
         count += 1
     return count
 
@@ -118,15 +149,21 @@ def repackage(rows: list[dict], output: Path) -> int:
     becomes an archive and the JSON goes."""
     count = 0
     for row in rows:
-        destination = _delivery(output, row)
-        old = destination.with_suffix(".json")
+        url = row["url"]
+        legacy = output / "deliveries" / hashlib.sha256(url.encode()).hexdigest()
+        old = legacy.with_suffix(".json")
         if old.exists():
             prepared = _old_delivery(old)
-        elif destination.exists():
-            prepared = read_delivery(destination)
+            material = prepared.package["material"]
+            material.setdefault("id", stable_id("article", url) if prepared.package.get("body") else f"link:{url}")
+        elif legacy.with_suffix(".tar").exists():
+            prepared = read_delivery(legacy.with_suffix(".tar"))
         else:
             continue
         delivery = prepared.package
+        destination = _claim_legacy(
+            output, _path(output, delivery["material"]["id"]), url, delivery["material"].get("kind", "article")
+        )
         delivery["folders"] = row["folders"]
         if delivery.get("body"):
             if had_site_header(delivery["body"]) or delivery["material"]["title"] == row["title"]:

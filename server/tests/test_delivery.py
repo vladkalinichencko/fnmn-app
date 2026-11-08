@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from package import Delivery, read_delivery, write_delivery
+from package import Delivery, delivery_name, read_delivery, stable_id, write_delivery
 from collect.prepare_browser_library import repackage
 from collect.publish_books import publish
 
@@ -74,7 +74,8 @@ class DeliveryTests(unittest.TestCase):
         }))
         self.assertEqual(repackage([{"url": url, "title": "Other", "folders": ["Web"]}], self.folder), 1)
         self.assertFalse(old.exists())
-        delivery = read_delivery(old.with_suffix(".tar"))
+        prepared = deliveries / delivery_name(stable_id("article", url))
+        delivery = read_delivery(prepared)
         self.assertEqual(delivery.files, {"assets/p.png": b"png"})
         self.assertEqual(delivery.package["folders"], ["Web"])
         self.assertNotIn("files", delivery.package)
