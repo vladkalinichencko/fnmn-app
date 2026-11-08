@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 
 from digest import build, train
 from digest.store import Store
+from package import read_delivery
 from tests.fakes import post
 from tests.test_digest_store import png
 
@@ -51,6 +52,16 @@ class BuildTests(unittest.TestCase):
                 self.assertTrue(item["text"] or item["media"] or item["video"])
             self.assertEqual(package["posts"][0]["media"][0]["width"], 640)
             self.assertTrue(package["posts"][0]["postedAt"].endswith("Z"))
+
+    def test_the_digest_reads_through_the_article_delivery_reader(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            Store(root).append([post("x/1")])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            delivery = read_delivery(archive)
+            self.assertEqual(delivery.package["schema"], 1)
+            self.assertIn("posts", delivery.package)
 
     def test_a_second_build_with_nothing_new_writes_nothing(self):
         with TemporaryDirectory() as folder:
