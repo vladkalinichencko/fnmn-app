@@ -2,12 +2,13 @@
 
 import re
 
+from grounding import strip as strip_grounding
+
 
 MATH_REGION = re.compile(
     r'\$\$.*?\$\$|\\\[.*?\\\]|\\\(.*?\\\)|(?<!\$)\$(?!\$).*?(?<!\$)\$(?!\$)'
     r'|\\begin\{(aligned|cases|gather|equation\*?)\}.*?\\end\{\1\}',
     re.S)
-GROUNDING = re.compile(r'<\|ref\|>.*?<\|/ref\|><\|det\|>.*?<\|/det\|>\s*', re.S)
 FORMULA_TYPES = {'unbalanced_group', 'unbalanced_left_right'}
 
 
@@ -50,11 +51,7 @@ def math_issues(text):
 
 
 def select_formula(text):
-    matches = list(GROUNDING.finditer(text))
-    if matches:
-        text = '\n\n'.join(
-            text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip()
-            for i, match in enumerate(matches))
+    text = strip_grounding(text)
     regions = [match.group(0) for match in MATH_REGION.finditer(text)]
     if len(regions) != 1 or math_issues(regions[0]):
         return None

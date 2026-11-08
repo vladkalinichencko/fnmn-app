@@ -251,6 +251,11 @@ def main():
         [server_python(), "-m", "unittest", "discover", "-s", "tests"],
         cwd=ROOT / "server",
     )
+    step(
+        "pdf-book tests",
+        [server_python(), "-m", "unittest", "discover", "-s", "pdf-book", "-p", "test_*.py"],
+        cwd=ROOT / "server",
+    )
     if options.app:
         step(
             "build FNMN app",

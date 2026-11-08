@@ -12,10 +12,10 @@ import unicodedata
 import pymupdf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from grounding import blocks as grounding_blocks  # noqa: E402
 from math_issues import math_issues  # noqa: E402
 
 
-GROUNDING = re.compile(r'<\|ref\|>(.*?)<\|/ref\|><\|det\|>(.*?)<\|/det\|>\s*')
 LABEL = re.compile(r'\(([A-Za-zε∞]?\d+(?:\.\d+)+)\)[,.]?')
 
 
@@ -46,12 +46,7 @@ def scale(bbox, page):
 
 
 def read_ocr(text):
-    matches = list(GROUNDING.finditer(text))
-    if (text[:matches[0].start()] if matches else text).strip():
-        raise ValueError('OCR text outside grounding blocks')
-    return [{'kind': match[1], 'bbox': json.loads(match[2])[0],
-             'text': text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip()}
-            for i, match in enumerate(matches)]
+    return grounding_blocks(text)
 
 
 def pdf_blocks(page):
