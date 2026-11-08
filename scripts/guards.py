@@ -106,8 +106,8 @@ def browser_sandbox(root=ROOT):
 
 
 def digest_script_checks(root=ROOT):
-    """The digest's calendar agents must name their minute. launchd treats a missing key as a wildcard, so an
-    `Hour`-only entry fires every minute of that hour."""
+    """The digest's calendar agents must name their minute, and the builder's hours must come from the builder
+    itself. launchd treats a missing key as a wildcard, so an `Hour`-only entry fires every minute of that hour."""
     path = root / "server" / "digest" / "fnmn-digest.sh"
     if not path.exists():
         return []
@@ -117,6 +117,8 @@ def digest_script_checks(root=ROOT):
         prefix = f"StartCalendarInterval:{match.group(1)}:Minute"
         if prefix not in source:
             problems.append(f"server/digest/fnmn-digest.sh sets {match.group(0)} without a Minute")
+    if "from digest.build import BUILD_HOURS" not in source:
+        problems.append("server/digest/fnmn-digest.sh writes fixed builder hours; read digest.build.BUILD_HOURS")
     return problems
 
 
@@ -164,6 +166,13 @@ def source_self_test():
         (root / "server" / "digest" / "fnmn-digest.sh").write_text("Add :StartCalendarInterval:0:Hour integer 8\n")
         if not digest_script_checks(root):
             sys.exit("FAILED: the schedule check missed an Hour without a Minute")
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        (root / "server" / "digest").mkdir(parents=True)
+        script = "Add :StartCalendarInterval:0:Hour integer 8\nAdd :StartCalendarInterval:0:Minute integer 0\n"
+        (root / "server" / "digest" / "fnmn-digest.sh").write_text(script)
+        if not digest_script_checks(root):
+            sys.exit("FAILED: the schedule check missed builder hours that do not come from BUILD_HOURS")
     with TemporaryDirectory() as folder:
         root = Path(folder)
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)

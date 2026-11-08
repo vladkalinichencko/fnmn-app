@@ -11,13 +11,12 @@ import json
 import time
 from pathlib import Path
 
-from digest import instagram, telegram, x
-from digest.reading import browser
+from digest.monitor import SOURCES
+from digest.reading import browser, needs_browser
 from digest.store import Post, Store
 from web import LIVE
 
 HERE = Path(__file__).resolve().parent
-SOURCES = {"x": x, "telegram": telegram, "instagram": instagram}
 ATTEMPTS = 3
 
 
@@ -69,7 +68,7 @@ def _source(source_id: str, subscriptions: dict | None = None) -> dict:
 
 def _collect(module, source: dict, folders: list[str]) -> list[Post]:
     report = lambda stage: None
-    if source["network"] in ("x", "instagram", "telegram"):
+    if needs_browser(source["network"]):
         with browser(source["network"]) as page:
             return module.collect(source, LIVE, Store(), folders, report, page=page).posts
     return module.collect(source, LIVE, Store(), folders, report).posts

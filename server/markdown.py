@@ -89,11 +89,11 @@ def _spaced_bold(paragraph: str) -> str:
         before = paragraph[i - 1] if i > 0 else " "
         after = paragraph[i + 2] if i + 2 < len(paragraph) else " "
         if k % 2 == 0:
-            if (before.isalnum() and _punctuation(after) and after not in CLOSING_PUNCTUATION) or (
+            if (before.isalnum() and punctuation(after) and after not in CLOSING_PUNCTUATION) or (
                 before in ")]" and (after.isalnum() or after in "«—–")
             ):
                 paragraph = paragraph[:i] + " " + paragraph[i:]
-        elif _punctuation(before) and before not in OPENING_PUNCTUATION and after.isalnum():
+        elif punctuation(before) and before not in OPENING_PUNCTUATION and after.isalnum():
             paragraph = paragraph[: i + 2] + " " + paragraph[i + 2 :]
     return paragraph
 
@@ -107,7 +107,7 @@ def _joins_bold(paragraph: str, run: re.Match) -> bool:
     return marks % 2 == 1
 
 
-def _punctuation(character: str) -> bool:
+def punctuation(character: str) -> bool:
     return not character.isalnum() and not character.isspace()
 
 

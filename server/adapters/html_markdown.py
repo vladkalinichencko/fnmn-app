@@ -23,7 +23,7 @@ from adapters.page_article import (
     selector,
     widget,
 )
-from markdown import CLOSING_PUNCTUATION, OPENING_PUNCTUATION
+from markdown import CLOSING_PUNCTUATION, OPENING_PUNCTUATION, punctuation
 
 _ASSET_EXTENSIONS = {".gif", ".png", ".jpg", ".jpeg", ".webp", ".svg", ".mp4", ".webm", ".mov"}
 
@@ -253,10 +253,10 @@ def _joined(parts: list[str | _Emphasis]) -> str:
         # A mark next to another emphasis's marks is one run of stars with them, so it is the text inside that counts.
         first, last = inner.lstrip("*")[:1] or "*", inner.rstrip("*")[-1:] or "*"
         written += lead
-        if before.isalnum() and _punctuation(first) and first not in CLOSING_PUNCTUATION:
+        if before.isalnum() and punctuation(first) and first not in CLOSING_PUNCTUATION:
             written += " "
         written += part.mark + inner + part.mark
-        if after.isalnum() and _punctuation(last) and last not in OPENING_PUNCTUATION:
+        if after.isalnum() and punctuation(last) and last not in OPENING_PUNCTUATION:
             written += " "
         written += trail
     return written
@@ -269,10 +269,6 @@ def _first_character(parts: list[str | _Emphasis]) -> str:
             return part[0]
         return part.text[0] if part.text[0].isspace() else part.mark[0]
     return " "
-
-
-def _punctuation(character: str) -> bool:
-    return not character.isalnum() and not character.isspace()
 
 
 def _wrapped(text: str, opening: str, closing: str) -> str:

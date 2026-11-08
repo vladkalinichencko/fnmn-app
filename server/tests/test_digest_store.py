@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from digest.store import Post, Store, image_size, iso, safe
+from digest.store import Store, image_size, iso, safe
+from tests.fakes import post
 
 
 def png(width: int = 4, height: int = 3) -> bytes:
@@ -18,19 +19,6 @@ def jpeg(width: int = 7, height: int = 5) -> bytes:
     app0 = b"\xff\xe0" + (16).to_bytes(2, "big") + b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
     sof0 = b"\xff\xc0" + (17).to_bytes(2, "big") + b"\x08" + height.to_bytes(2, "big") + width.to_bytes(2, "big") + b"\x03\x01\x11\x00\x02\x11\x01\x03\x11\x01"
     return b"\xff\xd8" + app0 + sof0 + b"\xff\xd9"
-
-
-def post(post_id: str = "x/1") -> Post:
-    return Post(
-        id=post_id,
-        network="x",
-        source="x/karpathy",
-        author={"handle": "karpathy", "name": "Andrej Karpathy"},
-        permalink=f"https://x.com/karpathy/status/{post_id.split('/')[-1]}",
-        posted_at="2026-11-07T09:30:00Z",
-        text="A small model that reads the whole catalog.",
-        folders=["ml"],
-    )
 
 
 class StoreTests(unittest.TestCase):

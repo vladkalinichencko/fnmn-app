@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 import jobs
+from digest.store import Store
 
 
 class ImportRequest(BaseModel):
@@ -101,7 +102,7 @@ def refresh_digest(request: DigestRefreshRequest) -> dict:
 def digest_media(name: str) -> FileResponse:
     if Path(name).name != name or name in (".", ".."):
         raise HTTPException(404, "no such picture")
-    path = Path(__file__).resolve().parent / "digest" / "out" / "media" / name
+    path = Store().media_dir / name
     if not path.is_file():
         raise HTTPException(404, "no such picture")
     return FileResponse(path)

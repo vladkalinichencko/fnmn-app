@@ -43,6 +43,14 @@ def profile(network: str) -> Path:
     return PROFILES / network
 
 
+BROWSER = {"x", "instagram", "telegram"}
+"""The networks read through a logged-in profile; Telegram also has a public page."""
+
+
+def needs_browser(network: str) -> bool:
+    return network in BROWSER
+
+
 @contextmanager
 def browser(network: str) -> Iterator[Page]:
     """The logged-in profile of one network, headless, one page. Chrome without a window names itself
