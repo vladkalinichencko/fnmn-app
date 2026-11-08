@@ -268,7 +268,7 @@ public struct LibraryQueries: Sendable {
                 id: material.id,
                 kind: LibraryItem.Kind(material.kind),
                 title: material.title,
-                source: material.sourceURL.map { sources.source(for: $0) } ?? material.authors,
+                source: material.declaredSource ?? material.sourceURL.map { sources.source(for: $0) } ?? material.authors,
                 originalURL: material.sourceURL,
                 // The moment the server wrote the delivery, to the second; the moment this device imported it is
                 // the same for a whole folder read at once, and says nothing of the order they were saved in.

@@ -35,6 +35,15 @@ extension LibraryItem.Kind {
 }
 
 extension Material {
+    /// The source the server named for the page, if it named one. A homepage alone adds nothing to the URL, and
+    /// the catalog may know a better name for that blog, so a nameless source falls through to it.
+    var declaredSource: SourceRef? {
+        guard let source, let name = source.name else {
+            return nil
+        }
+        return SourceRef(name: name, homepage: source.homepage)
+    }
+
     /// A material made from a file has no site behind it, so its authors stand where an article's site does.
     var authors: SourceRef? {
         byline.map { SourceRef(name: $0, homepage: nil) }

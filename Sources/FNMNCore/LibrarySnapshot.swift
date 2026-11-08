@@ -36,6 +36,9 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         guard let article = articles.first(where: { $0.material.id == itemID }) else {
             return nil
         }
+        if let declared = article.material.declaredSource {
+            return declared
+        }
         guard let sourceURL = article.material.sourceURL else {
             return article.material.authors
         }
