@@ -11,11 +11,11 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
+from collect import ytdlp
 from collect.browser_links_export import dia_bookmarks, safari_reading_list, safari_tab_groups
 
 
@@ -135,22 +135,11 @@ def selected_links(home: Path) -> list[dict]:
 
 
 def youtube_playlist(url: str) -> dict:
-    command = ["yt-dlp", "--flat-playlist", "--skip-download", "--dump-single-json", "--no-warnings", url]
-    process = subprocess.run(command, capture_output=True, text=True)
-    if process.returncode:
-        raise RuntimeError((process.stderr.strip().splitlines() or ["yt-dlp failed"])[-1])
-    return json.loads(process.stdout)
+    return ytdlp.info(url)
 
 
 def youtube_channel(url: str) -> tuple[str, str]:
-    command = [
-        "yt-dlp", "--skip-download", "--no-warnings",
-        "--print", "%(.{channel,uploader,channel_url,uploader_url})#j", url,
-    ]
-    process = subprocess.run(command, capture_output=True, text=True)
-    if process.returncode:
-        raise RuntimeError((process.stderr.strip().splitlines() or ["yt-dlp failed"])[-1])
-    metadata = json.loads(process.stdout)
+    metadata = ytdlp.field(url, "%(.{channel,uploader,channel_url,uploader_url})#j")
     channel_url = metadata.get("uploader_url") or metadata.get("channel_url")
     if not channel_url:
         raise RuntimeError("YouTube returned no channel URL")

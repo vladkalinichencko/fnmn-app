@@ -12,7 +12,7 @@ struct DigestScreen: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        DigestStack(path: $navigation.digest) {
+        RouteStack(path: $navigation.digest, hidesTabBar: { $0.hidesTabBar }) {
             content
                 .background(Tokens.canvas)
                 .screenSearch($query)
@@ -31,6 +31,13 @@ struct DigestScreen: View {
                     }
                 }
                 .task { await digests.sync(folder: library.cloudFolder) }
+        } destination: { route in
+            switch route {
+            case let .thread(id):
+                ThreadScreen(postID: id)
+            case .sources:
+                SourcesScreen()
+            }
         }
     }
 
@@ -122,33 +129,4 @@ struct DigestScreen: View {
 
     /// A card is never narrower than about 330 points, so a phone holds one and an iPad two or three.
     private static let columns = [GridItem(.adaptive(minimum: 330, maximum: 640), spacing: Tokens.gap)]
-}
-
-/// The digest tab's own stack: a thread and the sources push over the magazine, and the tab bar hides while a
-/// thread is the top of the stack, as it does over a material.
-private struct DigestStack<Root: View>: View {
-    @Binding var path: [DigestRoute]
-    @ViewBuilder let root: () -> Root
-
-    private var showsThread: Bool {
-        if case .thread? = path.last {
-            return true
-        }
-        return false
-    }
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            root()
-                .navigationDestination(for: DigestRoute.self) { route in
-                    switch route {
-                    case let .thread(id):
-                        ThreadScreen(postID: id)
-                    case .sources:
-                        SourcesScreen()
-                    }
-                }
-        }
-        .toolbarVisibility(showsThread ? .hidden : .automatic, for: .tabBar)
-    }
 }

@@ -17,10 +17,10 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import shutil
-import subprocess
 import sys
 from pathlib import Path
+
+from collect import ytdlp
 
 LIBRARY = "https://www.youtube.com/feed/playlists"
 
@@ -34,43 +34,9 @@ def playlist_source(playlist_id: str) -> str:
     return f"https://www.youtube.com/playlist?list={playlist_id}"
 
 
-def dump_json_lines(command: list[str]) -> list[dict]:
-    if shutil.which("yt-dlp") is None:
-        raise RuntimeError("yt-dlp not found on PATH (pip install -r server/requirements.txt)")
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    assert process.stdout is not None
-    entries: list[dict] = []
-    for line in process.stdout:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(entry, dict):
-            entries.append(entry)
-    _, stderr = process.communicate()
-    if process.returncode != 0:
-        raise RuntimeError((stderr.strip().splitlines() or ["yt-dlp failed"])[-1])
-    return entries
-
-
-def auth_flags(cookies_from_browser: str | None, cookies_file: str | None) -> list[str]:
-    flags: list[str] = []
-    if cookies_from_browser:
-        flags += ["--cookies-from-browser", cookies_from_browser]
-    if cookies_file:
-        flags += ["--cookies", cookies_file]
-    return flags
-
-
 def list_library(cookies_from_browser: str | None, cookies_file: str | None) -> list[dict]:
-    command = ["yt-dlp", "--flat-playlist", "--skip-download", "--dump-json", "--no-warnings"]
-    command += auth_flags(cookies_from_browser, cookies_file)
-    command.append(LIBRARY)
     playlists = []
-    for entry in dump_json_lines(command):
+    for entry in ytdlp.entries(LIBRARY, cookies_from_browser=cookies_from_browser, cookies_file=cookies_file):
         playlist_id = entry.get("id")
         if not isinstance(playlist_id, str) or not playlist_id:
             continue
@@ -79,11 +45,12 @@ def list_library(cookies_from_browser: str | None, cookies_file: str | None) -> 
 
 
 def videos_in_playlist(playlist: dict, cookies_from_browser: str | None, cookies_file: str | None) -> list[dict]:
-    command = ["yt-dlp", "--flat-playlist", "--skip-download", "--dump-json", "--no-warnings"]
-    command += auth_flags(cookies_from_browser, cookies_file)
-    command.append(playlist_source(playlist["id"]))
     rows = []
-    for entry in dump_json_lines(command):
+    for entry in ytdlp.entries(
+        playlist_source(playlist["id"]),
+        cookies_from_browser=cookies_from_browser,
+        cookies_file=cookies_file,
+    ):
         video_id = entry.get("id")
         if not isinstance(video_id, str) or not video_id:
             continue

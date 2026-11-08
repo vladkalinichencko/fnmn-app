@@ -62,6 +62,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* the splitter in `ArticleBody`, with `SpeedText` calling it and mapping its pieces to tokens.
 
+*Closed in 109841d:* `MarkdownParts.split`, with the heading and rule rules beside it; the tests pin a heading after text, a fence with blank lines and a `$$` block.
+
 **12. "Is `$…$` a formula or a price".** `MarkedMarkdown.isPrice` (`MarkedMarkdown.swift:89`) says a formula is prose when it has no TeX punctuation and holds a word of three or more letters. `SpeedText.isRich` (`SpeedText.swift:188`) says the opposite side of the same test with the same two conditions, one negated. The renderer and the speed reader can disagree about the same paragraph.
 
 *One home:* one predicate over the inner text, in `FNMNCore`, used by both.
@@ -77,6 +79,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 **14. Two navigation stacks.** `RouteStack` (`Shell.swift:139`) binds `[Route]`, builds a `NavigationStack`, maps routes, hides the tab bar on the routes that own the screen. `DigestStack` (`DigestScreen.swift:90`) binds `[DigestRoute]`, builds a `NavigationStack`, maps routes, hides the tab bar for a thread. The second is the first with a different generic.
 
 *One home:* one generic `RouteStack<Route: Hashable>` taking a destinations closure and a `hidesTabBar` predicate.
+
+*Closed in 6002fd7:* `RouteStack<Path, Root, Destination>`, `Route.hidesTabBar` and `DigestRoute.hidesTabBar`, with `RouteHidingTests`.
 
 **15. Formatting a duration.** `PostCard.length` (`PostCard.swift:188`) writes `m:ss` by hand; `CueRow` (`VideoReaderView.swift`) formats `Duration.seconds(...)` with `.time(pattern:)`. Two answers for "seconds as a clock", one of which rounds and one of which truncates.
 
@@ -129,6 +133,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 **24. Driving yt-dlp.** `collect/playlist_export.dump_json_lines` (`:37`) runs the CLI with `--dump-json` and parses JSON lines; `collect/watchlater_urls.build_command` (`:27`) builds the same command with the same cookie flags; `collect/browser_library` runs `subprocess.run` twice (`:137`, `:145`) with `--dump-single-json` and `--print`. Cookie flags exist in two shapes (`auth_flags` and an inline splice). Error handling repeats "last non-empty stderr line" three times.
 
 *One home:* `collect/ytdlp.py` with `entries(url, cookies...)`, `info(url)`, `print_field(url, template)`, and the one error message. The adapters' direct `yt_dlp` import is a different layer (library, not CLI) and can stay.
+
+*Closed in 7aaea62:* `command`, `run`, `entries`, `parse_entries`, `info`, `field`, `last_line`; `test_ytdlp` covers the command order and the parsing.
 
 ## Server: digest data
 

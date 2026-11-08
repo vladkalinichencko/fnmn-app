@@ -25,6 +25,26 @@ enum DigestRoute: Hashable {
     case sources
 }
 
+extension Route {
+    /// A material, an album, a publisher or a type grows out of its tile and needs no tabs.
+    var hidesTabBar: Bool {
+        switch self {
+        case .item, .album, .source, .group: true
+        case .annotations, .archive: false
+        }
+    }
+}
+
+extension DigestRoute {
+    /// A thread is read on its own, so the tab bar goes while one is the top of the stack.
+    var hidesTabBar: Bool {
+        if case .thread = self {
+            return true
+        }
+        return false
+    }
+}
+
 /// The window's own place in the app: its tab and the stack of each tab.
 @MainActor @Observable
 final class WindowNavigation {
@@ -125,34 +145,38 @@ struct AppShell: View {
     }
 }
 
-/// A tab's stack: every screen of the library is reachable from any tab the same way.
-struct RouteStack<Root: View>: View {
-    @Binding var path: [Route]
-    @ViewBuilder let root: () -> Root
+/// A tab's stack: the root screen, the screens its path opens, and whether the bar hides on the top one. It
+/// follows the path, not the screen's own appearance, which a swipe back with the zoom transition does not
+/// always report.
+struct RouteStack<Path: Hashable, Root: View, Destination: View>: View {
+    @Binding var path: [Path]
+    let hidesTabBar: (Path) -> Bool
+    let root: Root
+    let destination: (Path) -> Destination
 
-    /// A material, an album, a publisher or a type grows out of its tile and needs no tabs, so the bar is hidden
-    /// while one is the top of the stack; it follows the path, not the screen's own appearance, which a swipe
-    /// back with the zoom transition does not always report.
-    private var showsMaterial: Bool {
-        switch path.last {
-        case .item?, .album?, .source?, .group?: true
-        case .annotations?, .archive?, nil: false
-        }
+    init(
+        path: Binding<[Path]>,
+        hidesTabBar: @escaping (Path) -> Bool,
+        @ViewBuilder root: () -> Root,
+        @ViewBuilder destination: @escaping (Path) -> Destination
+    ) {
+        _path = path
+        self.hidesTabBar = hidesTabBar
+        self.root = root()
+        self.destination = destination
     }
 
     var body: some View {
         NavigationStack(path: $path) {
-            root()
-                .navigationDestination(for: Route.self) { route in
-                    RouteScreen(route: route)
-                }
+            root
+                .navigationDestination(for: Path.self) { destination($0) }
         }
-        .toolbarVisibility(showsMaterial ? .hidden : .automatic, for: .tabBar)
+        .toolbarVisibility(path.last.map(hidesTabBar) ?? false ? .hidden : .automatic, for: .tabBar)
     }
 }
 
 /// A material, an album, a publisher or a type grows out of its tile.
-private struct RouteScreen: View {
+struct RouteScreen: View {
     let route: Route
 
     var body: some View {
