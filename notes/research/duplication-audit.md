@@ -14,6 +14,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* the server's parser is the contract; the Swift copy is needed only because `SourceIndex.key` groups links offline. Give it a test that runs both over one list of URLs.
 
+*Partly closed in 57f5af7:* one fixture of addresses runs through both parsers. The two implementations stay until question 1 in `notes/research/source-identity.md` is answered.
+
 **3. Delivery file name.** `delivery_name` (`server/package.py:142`), a second identical copy (`server/collect/reparse_library.py:89`), `_delivery` (`server/collect/prepare_browser_library.py:89`), and `LibraryFile.deliveryName` (`Sources/FNMNCore/LibraryFile.swift:384`). The prepare script hashes `row["url"]`; the other three hash the material id. For a link they differ (`https://…` against `link:https://…`), so the same material has two legal archive names depending on which writer made it. Nothing breaks today because the app stores the name it read, but any future writer that recomputes the name creates a second archive for one material.
 
 *One home:* `package.delivery_name`, imported by both collect scripts; the prepare script passes the material id it already builds. Across the wire it stays a contract, and the existing `DeliveryArchiveTests` should pin the rule on the Swift side.
@@ -44,6 +46,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* `enum LoadState<Value>` with `idle, loading, ready(Value), failed(String)`, plus the one `ContentUnavailableView` that draws the failure and its retry. `ArticleText` earns its own type because two ready values exist; the rest do not.
 
+*Partly closed in c50d948:* `LoadState` serves the library and the digest. `EmbedPhase`, `CropPhase` and `ConnectionCheck` still describe themselves, and each carries a different ready value.
+
 ## Library queries and grouping
 
 **9. Bucket by a key, keep first-seen order.** `LibraryQueries.groups(by:)` (`LibraryQueries.swift:54`) builds `order`/`names`/`membersByGroup`; `LibraryQueries.arrange` (`LibraryQueries.swift:212`) builds `order`/`names`/`members` and sorts the same keys, months descending, the rest by localized name; `DigestPackage.sections` (`Digest.swift:250`) builds `order`/`groups`; `SourcesScreen.folders(of:)` (`SourcesScreen.swift:84`) filters per folder; `StoredAnnotations.merging` (`AnnotationMigration.swift`) builds the same order-then-buckets loop for paragraphs. Five copies of one algorithm, and the sorting rule for month keys is written twice.
@@ -55,6 +59,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 **10. Two search normalisations.** `LibraryQueries.search` folds case, diacritics and width (`ArticleEntry.folded`); `DigestPackage.posts(matching:)` lowercases only. Typing `café` finds an article and misses a post; typing `Cafe` misses both. The two tabs answer the same question with two rules.
 
 *One home:* the folding helper, already in `ArticleEntry`, used by both.
+
+*Closed in ce79d59:* `TextFold.folded`; both searches call it, and a test finds `café` from `cafe`.
 
 ## Markdown interpretation
 
@@ -166,6 +172,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 **30. Test web double.** `FakeWeb` in `server/tests/test_digest_sources.py:22` re-implements `tests/fakes.py:4 web(...)`, which the other five test modules use. The digest one also subclasses the `NamedTuple`, which the shared helper avoids.
 
+*Closed in 5554335:* `fake_web` calls `tests.fakes.web`.
+
 **31. The Activity target has no producer.** `ImportActivityAttributes` and `ImportActivityWidget` (with `Ring`, `ShareDone`) are a progress UI, but `ImportActivity` now uses `BGContinuedProcessingTask` and never starts an Activity; nothing calls `Activity<ImportActivityAttributes>`. It is a second, unused drawing of a job's share done, next to `ProgressLine`/`JobStatus`.
 
 ## Already single, and worth keeping
@@ -214,6 +222,8 @@ Eleven commits landed after the first pass, `9319bf4..9fb771b`. One of the first
 *Closed in 07d6196:* the shell asks `digest.build` for the hours, and `digest_script_checks` fails a script that writes fixed builder hours.
 
 **35. `DigestModel.refresh` writes digest files.** `DigestFile` documents itself as "the one writer of the digest files" (`DigestFile.swift:3`) and owns `check(path)` for every name a delivery brings. `refresh` (`DigestModel.swift:91`) creates `media/` and writes `refresh-<name>` into `digest.url(of:)` with `FileManager`, on the main actor, while the `DigestFile` actor may be evicting or replacing that same folder. A second writer of one folder is what the file's own doc forbids.
+
+*Closed in ddcb859:* `DigestFile.saveMedia`; the model passes bytes and a name, and a test refuses `../x.jpg`.
 
 **36. The cache is decoded three to four times per sync.** `load()` reads every `package.json` (`DigestModel.swift:183`), `take` reads them again for `unpacked` (`:194`), `evict(keeping:)` reads them a third time, and `sync` reads them once more after `take`. After `load()` the model already holds exactly the ids `unpacked` wants, and `evict` could take the list it is given.
 

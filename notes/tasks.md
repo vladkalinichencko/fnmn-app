@@ -581,3 +581,15 @@ Tests first, then one rule per commit. The behaviour each rule must keep is pinn
 - [x] U17. One `collect/ytdlp.py` for the three collectors: the command, the JSON lines and the last error line.
 - [x] U18. One `RouteStack` for the library, the shelf and the digest; `Route.hidesTabBar` is a property of the route.
 - [ ] U19. Left: the post card and the OCR loop, then the audit's cross-cutting items.
+
+### Unification pass 4 (branch `unification`, 2026-11-08)
+
+One branch, one PR, a commit per step.
+
+- [x] U20. One `LoadState` for the library and the digest; the compiler covers the states and the model tests cover the transitions.
+- [x] U21. One `TextFold` for search; `café` and `cafe` find the same post and the same article.
+- [x] U22. `DigestFile.saveMedia`: a refetched picture writes through the digest's writer and its path rule.
+- [x] U23. One `youtube-urls.json` fixture that both parsers are tested against, so the two address lists cannot drift.
+- [x] U24. `fake_web` uses `tests.fakes.web`; the digest tests stop subclassing `Web`.
+- [x] U25. `notes/research/source-identity.md`: the four decisions (source kind, publisher, title, delivery name) with options, costs and a pick.
+- [ ] U26. Waiting on the owner's answers in U25; then the winning option is one commit each.
