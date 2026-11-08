@@ -24,6 +24,16 @@ enum SpeedPauses: String, CaseIterable, Identifiable {
     }
 }
 
+/// What speed reading is doing: the text is still being split, the words wait, they run, they rest on a block shown
+/// whole, or the text is at its end.
+enum SpeedPlayback: Equatable {
+    case loading
+    case paused
+    case playing
+    case stopped
+    case ended
+}
+
 /// The clock of speed reading: which tokens are on screen, whether they run on by themselves, and how far the text
 /// has been shown. What was shown becomes read only when the reader sends it to the coordinator.
 @MainActor @Observable
@@ -31,7 +41,8 @@ final class SpeedPlayer {
     private(set) var text: SpeedText?
     /// The tokens on screen.
     private(set) var frame = 0..<0
-    private(set) var isPlaying = false
+    /// Playing is the only mode with a clock; `enter` starts and cancels it.
+    private(set) var mode = SpeedPlayback.loading
     /// The last token shown so far. Going back a sentence leaves it where it is, so rereading takes nothing read away.
     private(set) var furthest: Int?
     var wordsPerMinute = 250
@@ -39,10 +50,19 @@ final class SpeedPlayer {
     var wordsPerFrame = 1 {
         didSet {
             // A paused frame takes the new size at once; a running one at the next step.
-            if !isPlaying, let text { frame = text.frame(at: frame.lowerBound, words: wordsPerFrame) }
+            if mode != .playing, let text { frame = text.frame(at: frame.lowerBound, words: wordsPerFrame) }
         }
     }
     @ObservationIgnored private var clock: Task<Void, Never>?
+
+    var isPlaying: Bool {
+        mode == .playing
+    }
+
+    /// The clock runs only while the words do; a waiting, stopped or finished player keeps none.
+    var hasClock: Bool {
+        clock != nil
+    }
 
     /// The text is split into tokens off the main thread: a book is hundreds of thousands of words.
     func load(_ document: ReaderDocument, from start: ReadingLine) async {
@@ -50,6 +70,7 @@ final class SpeedPlayer {
         let text = await Task.detached(priority: .userInitiated) { SpeedText(document: document, from: start) }.value
         self.text = text
         frame = text.frame(at: 0, words: wordsPerFrame)
+        enter(.paused)
     }
 
     var token: SpeedToken? {
@@ -74,16 +95,14 @@ final class SpeedPlayer {
 
     /// Words run on from the frame on screen. A block shown whole waits for Continue.
     func play() {
-        guard !isPlaying, let token, !token.isStop else { return }
-        isPlaying = true
+        guard mode != .playing, let token, !token.isStop else { return }
         markShown()
-        clock = Task { [weak self] in await self?.run() }
+        enter(.playing)
     }
 
     func pause() {
-        isPlaying = false
-        clock?.cancel()
-        clock = nil
+        guard mode == .playing else { return }
+        enter(.paused)
     }
 
     func sentenceBack() {
@@ -101,6 +120,17 @@ final class SpeedPlayer {
         guard !isAtEnd else { return }
         show(frame.upperBound)
         play()
+    }
+
+    /// The one writer of the mode; the clock exists exactly while the words run.
+    private func enter(_ next: SpeedPlayback) {
+        mode = next
+        guard next == .playing else {
+            clock?.cancel()
+            clock = nil
+            return
+        }
+        clock = Task { [weak self] in await self?.run() }
     }
 
     private func jump(to index: Int) {
@@ -128,15 +158,60 @@ final class SpeedPlayer {
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled, isPlaying else { return }
             guard !isAtEnd else {
-                isPlaying = false
+                enter(.ended)
                 return
             }
             show(frame.upperBound)
             if token?.isStop == true {
-                isPlaying = false
+                enter(.stopped)
                 return
             }
         }
+    }
+}
+
+/// One finger on the words: a press that rests long enough shows the whole block and the words wait, and only that
+/// press starts them again when it lifts. Anything else the finger does leaves the press at rest.
+struct Press: Equatable {
+    enum Phase: Equatable {
+        case idle
+        /// A finger is down and the words still run.
+        case down
+        /// The finger rested: the block shows whole and the words wait.
+        case holding
+    }
+
+    private(set) var phase = Phase.idle
+    private var resumes = false
+
+    var isHolding: Bool {
+        phase == .holding
+    }
+
+    /// A finger landed; one that is already down changes nothing.
+    mutating func land() {
+        guard phase == .idle else {
+            return
+        }
+        phase = .down
+    }
+
+    /// The rest is over. Returns whether it took effect, since the finger may have lifted first.
+    mutating func hold(playing: Bool) -> Bool {
+        guard phase == .down else {
+            return false
+        }
+        phase = .holding
+        resumes = playing
+        return true
+    }
+
+    /// The finger lifted. Returns whether the words run on, and leaves the press ready for the next one.
+    mutating func lift() -> Bool {
+        let resume = phase == .holding && resumes
+        phase = .idle
+        resumes = false
+        return resume
     }
 }
 
@@ -155,10 +230,8 @@ struct SpeedReader: View {
     @AppStorage(ReaderAppearance.speedPausesKey) private var pauses = SpeedPauses.regular
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
     /// The current block shows whole while a finger rests on the words.
-    @State private var holding = false
-    @State private var touchStart: Date?
+    @State private var press = Press()
     @State private var holdTimer: Task<Void, Never>?
-    @State private var playedBeforeHold = false
 
     private static let speeds = 150...600
     /// Above this speed, studies find less of the text understood.
@@ -261,13 +334,13 @@ struct SpeedReader: View {
                 } else {
                     words(in: text, token: token)
                         .overlay {
-                            if holding {
+                            if press.isHolding {
                                 plate(token.block)
                                     .background(ReaderBackgroundColor())
                                     .transition(.opacity)
                             }
                         }
-                        .animation(.smooth(duration: 0.2), value: holding)
+                        .animation(.smooth(duration: 0.2), value: press.isHolding)
                 }
             } else {
                 Text("Nothing left to read.")
@@ -303,25 +376,25 @@ struct SpeedReader: View {
     private var touch: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                guard touchStart == nil else {
+                guard press.phase == .idle else {
                     if abs(value.translation.width) > 12 || abs(value.translation.height) > 12 { holdTimer?.cancel() }
                     return
                 }
-                touchStart = .now
+                press.land()
                 holdTimer = Task {
                     try? await Task.sleep(for: .seconds(0.4))
-                    guard !Task.isCancelled else { return }
-                    playedBeforeHold = player.isPlaying
+                    guard !Task.isCancelled, press.hold(playing: player.isPlaying) else { return }
                     player.pause()
-                    holding = true
                 }
             }
             .onEnded { value in
                 holdTimer?.cancel()
-                touchStart = nil
-                if holding {
-                    holding = false
-                    if playedBeforeHold { player.play() }
+                let wasHolding = press.isHolding
+                let resume = press.lift()
+                if wasHolding {
+                    if resume {
+                        player.play()
+                    }
                     return
                 }
                 let dx = value.translation.width, dy = value.translation.height
