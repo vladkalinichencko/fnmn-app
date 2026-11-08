@@ -80,10 +80,7 @@ final class DigestModel {
             for item in media {
                 let name = (item.path as NSString).lastPathComponent
                 let data = try await server.port.digestMedia(name, connection: connection)
-                let path = "media/refresh-\(name)"
-                let url = digest.url(of: path)
-                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try data.write(to: url, options: .atomic)
+                let path = try await file.saveMedia(data, as: "refresh-\(name)", of: digest)
                 local.append(.init(path: path, width: item.width, height: item.height))
             }
             refreshed[post.id] = local

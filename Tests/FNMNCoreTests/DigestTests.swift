@@ -184,6 +184,18 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(try decoder.decode(DigestEngagement.self, from: Data(lines[0].utf8)).postID == id)
 }
 
+@Test func aRefreshedPictureLandsInTheDigestAndAHostileNameIsRefused() async throws {
+    let root = try temporaryFolder()
+    let file = DigestFile(url: root, cache: root)
+    let digest = try await file.add(tar: try writeDigest(package()))
+    let path = try await file.saveMedia(Data("picture".utf8), as: "refresh-1.jpg", of: digest)
+    #expect(path == "media/refresh-1.jpg")
+    #expect(try Data(contentsOf: digest.url(of: path)) == Data("picture".utf8))
+    await #expect(throws: DigestFileError.unsafePath("media/../x.jpg")) {
+        _ = try await file.saveMedia(Data("x".utf8), as: "../x.jpg", of: digest)
+    }
+}
+
 @Test func evictionKeepsTheNewestDigests() async throws {
     let root = try temporaryFolder()
     let file = DigestFile(url: root, cache: root)
