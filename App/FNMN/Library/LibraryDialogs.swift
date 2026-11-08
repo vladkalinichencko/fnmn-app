@@ -7,8 +7,8 @@ enum LibraryDialog: Equatable {
     case none
     case addingLink(String)
     case pickingFile
-    case namingAlbum(adding: String?)
-    case renamingAlbum(String)
+    case namingAlbum(adding: String?, draft: String)
+    case renamingAlbum(name: String, draft: String)
     case pickingAlbum(itemID: String)
     case confirmingDelete(itemID: String)
     case confirmingAlbumDelete(String)
@@ -20,6 +20,7 @@ enum DialogAction {
     case pickFile
     case nameAlbum(adding: String?)
     case renameAlbum(String)
+    case typeAlbumName(String)
     case pickAlbum(itemID: String)
     case confirmDelete(itemID: String)
     case confirmAlbumDelete(String)
@@ -31,8 +32,14 @@ func dialogReduce(_ dialog: LibraryDialog, _ action: DialogAction) -> LibraryDia
     switch action {
     case let .addLink(draft): .addingLink(draft)
     case .pickFile: .pickingFile
-    case let .nameAlbum(itemID): .namingAlbum(adding: itemID)
-    case let .renameAlbum(name): .renamingAlbum(name)
+    case let .nameAlbum(itemID): .namingAlbum(adding: itemID, draft: "")
+    case let .renameAlbum(name): .renamingAlbum(name: name, draft: name)
+    case let .typeAlbumName(text):
+        switch dialog {
+        case let .namingAlbum(adding, _): .namingAlbum(adding: adding, draft: text)
+        case let .renamingAlbum(name, _): .renamingAlbum(name: name, draft: text)
+        default: dialog
+        }
     case let .pickAlbum(itemID): .pickingAlbum(itemID: itemID)
     case let .confirmDelete(itemID): .confirmingDelete(itemID: itemID)
     case let .confirmAlbumDelete(name): .confirmingAlbumDelete(name)
@@ -64,7 +71,6 @@ private struct LibraryDialogsModifier: ViewModifier {
     @Environment(LibraryDialogs.self) private var dialogs
     @Environment(LibraryModel.self) private var library
     @Environment(ImportJobs.self) private var imports
-    @State private var albumName = ""
 
     func body(content: Content) -> some View {
         content
@@ -90,14 +96,14 @@ private struct LibraryDialogsModifier: ViewModifier {
                     .presentationDetents([.medium, .large])
             }
             .alert("New Collection", isPresented: dialogs.isShowing { if case .namingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.albumTarget) { itemID in
-                TextField("Name", text: $albumName)
+                TextField("Name", text: draftBinding)
                 Button("Create") { createAlbum(adding: itemID) }
-                Button("Cancel", role: .cancel) { albumName = "" }
+                Button("Cancel", role: .cancel) { dialogs.send(.dismiss) }
             }
             .alert("Rename Collection", isPresented: dialogs.isShowing { if case .renamingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.renamedAlbum) { name in
-                TextField("Name", text: $albumName)
+                TextField("Name", text: draftBinding)
                 Button("Rename") { rename(name) }
-                Button("Cancel", role: .cancel) { albumName = "" }
+                Button("Cancel", role: .cancel) { dialogs.send(.dismiss) }
             }
             .confirmationDialog(
                 "Delete this material?",
@@ -122,14 +128,14 @@ private struct LibraryDialogsModifier: ViewModifier {
             } message: { _ in
                 Text("Materials stay in the library.")
             }
-            .onChange(of: dialogs.dialog) { _, dialog in
-                if case let .renamingAlbum(name) = dialog { albumName = name }
-            }
+    }
+
+    private var draftBinding: Binding<String> {
+        Binding(get: { dialogs.dialog.draft }, set: { dialogs.send(.typeAlbumName($0)) })
     }
 
     private func createAlbum(adding itemID: String?) {
-        let name = albumName
-        albumName = ""
+        let name = dialogs.dialog.draft
         Task {
             await library.apply(.createAlbum(name))
             if let itemID { await library.apply(.addToAlbum(name, itemIDs: [itemID])) }
@@ -137,21 +143,34 @@ private struct LibraryDialogsModifier: ViewModifier {
     }
 
     private func rename(_ name: String) {
-        let newName = albumName
-        albumName = ""
+        let newName = dialogs.dialog.draft
         Task { await library.apply(.renameAlbum(name, to: newName)) }
     }
 }
 
 /// The payload each alert keeps from the moment it was shown.
 private extension LibraryDialog {
+    /// The name being typed in the create or rename alert.
+    var draft: String {
+        switch self {
+        case let .namingAlbum(_, draft), let .renamingAlbum(_, draft): draft
+        default: ""
+        }
+    }
+
     /// `.some(nil)` is a new album on its own; `.some(id)` also adds that material to it.
     var albumTarget: String?? {
-        if case let .namingAlbum(itemID) = self { itemID } else { nil }
+        if case let .namingAlbum(itemID, _) = self {
+            return itemID
+        }
+        return nil
     }
 
     var renamedAlbum: String? {
-        if case let .renamingAlbum(name) = self { name } else { nil }
+        if case let .renamingAlbum(name, _) = self {
+            return name
+        }
+        return nil
     }
 
     var deletedItem: String? {

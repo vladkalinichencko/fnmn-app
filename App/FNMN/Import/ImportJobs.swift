@@ -59,7 +59,10 @@ struct ImportJob: Identifiable, Equatable {
 
     /// The share done, when the stage knows it.
     var fraction: Double? {
-        if case let .preparing(step, _) = phase { step.fraction } else { nil }
+        if case let .preparing(step, _) = phase {
+            return step.fraction
+        }
+        return nil
     }
 
     /// Reading the library folder shows as the cards it adds, not as a tile, until it fails.
@@ -92,24 +95,32 @@ func importReduce(_ jobs: [ImportJob], _ action: ImportAction) -> [ImportJob] {
         jobs.insert(ImportJob(id: id, input: input, phase: .preparing(input.firstStep, on: ImportJob.place(for: input))), at: 0)
     case let .placed(id, itemID):
         update(id) { job in
-            guard case let .preparing(step, _) = job.phase else { return }
+            guard case let .preparing(step, _) = job.phase else {
+                return
+            }
             job.phase = .preparing(step, on: .card(itemID))
         }
     case let .progressed(id, step):
         update(id) { job in
-            guard case let .preparing(_, place) = job.phase else { return }
+            guard case let .preparing(_, place) = job.phase else {
+                return
+            }
             job.phase = .preparing(step, on: place)
         }
     case let .finished(id):
         jobs.removeAll { $0.id == id && $0.isPreparing }
     case let .failed(id, message):
         update(id) { job in
-            guard case let .preparing(_, place) = job.phase else { return }
+            guard case let .preparing(_, place) = job.phase else {
+                return
+            }
             job.phase = .failed(message, on: place)
         }
     case let .retry(id):
         update(id) { job in
-            guard case let .failed(_, place) = job.phase else { return }
+            guard case let .failed(_, place) = job.phase else {
+                return
+            }
             job.phase = .preparing(job.input.firstStep, on: place)
         }
     case let .dismiss(id):
@@ -242,7 +253,9 @@ final class ImportJobs {
             Task { await ImportActivity.end(status: failed ? "Failed" : "Ready") }
             shownJobID = nil
         }
-        guard let shown, case let .preparing(step, _) = shown.phase else { return }
+        guard let shown, case let .preparing(step, _) = shown.phase else {
+            return
+        }
         if shownJobID == nil {
             shownJobID = shown.id
             ImportActivity.start(title: shown.title, step: step)
