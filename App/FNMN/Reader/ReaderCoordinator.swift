@@ -86,11 +86,15 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
     var state = state
     switch action {
     case .opened:
-        guard case let .jumping(to, _) = state.column else { return state }
+        guard case let .jumping(to, _) = state.column else {
+            return state
+        }
         state.column = .laidOut
         state.scrollID = to
     case let .scrolled(index):
-        guard state.column == .laidOut else { return state }
+        guard state.column == .laidOut else {
+            return state
+        }
         state.scrollID = index
         // The column under a plate shown alone is not what is read.
         if document.blocks.indices.contains(index), !state.keepsPlace, state.shownPlate == nil {
