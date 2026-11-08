@@ -255,6 +255,14 @@ final class DigestModelTests: XCTestCase {
         XCTAssertEqual(found.map(\.id), ["x/2"])
     }
 
+    func testAPosterLengthReadsAsMinutesAndSeconds() {
+        XCTAssertEqual(PostCard.length(0), "0:00")
+        XCTAssertEqual(PostCard.length(59), "0:59")
+        XCTAssertEqual(PostCard.length(59.6), "1:00")
+        XCTAssertEqual(PostCard.length(61), "1:01")
+        XCTAssertEqual(PostCard.length(3_600), "60:00")
+    }
+
     func testEveryNetworkAndContextKindHasADisplay() {
         for network in DigestPackage.Network.allCases {
             XCTAssertFalse(network.name.isEmpty)

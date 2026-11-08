@@ -54,6 +54,17 @@ final class ArchitectureGuardTests: XCTestCase {
         XCTAssertTrue(saved.contains("storage.load()"), "savedConnection() no longer reads the saved connection")
     }
 
+    /// A post's author line, its text and the button that opens it are drawn in one place: the card and the
+    /// thread compose them. The whole app is read, so a third card is caught too.
+    func testPostCardsShareTheirParts() throws {
+        for file in ["PostCard.swift", "ThreadScreen.swift"] {
+            let source = try contents(of: file)
+            XCTAssertTrue(source.contains("PostAuthorLine("), "\(file) builds its own author line")
+            XCTAssertTrue(source.contains("PostText("), "\(file) builds its own post text")
+            XCTAssertTrue(source.contains("PostOpenButton("), "\(file) builds its own open button")
+        }
+    }
+
     /// A web view may appear only where the app already decided it belongs: the live crop of a source page and
     /// the embedded YouTube player. Every other screen draws with SwiftUI, so a new one has to be added here on
     /// purpose, and the whole app is read, not the lines a change adds.

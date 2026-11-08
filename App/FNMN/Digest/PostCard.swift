@@ -21,7 +21,7 @@ struct PostCard: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             if let text = post.text {
-                StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
+                PostText(text: text)
                     .opacity(read ? Tokens.readOpacity : 1)
             }
             if let video = post.video, video.poster != nil {
@@ -52,15 +52,7 @@ struct PostCard: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(post.author.name)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-            Text("@\(post.author.handle)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer(minLength: 8)
+        PostAuthorLine(name: post.author.name, handle: post.author.handle) {
             Text("\(post.network.name) · \(post.postedAt.formatted(.relative(presentation: .numeric)))")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
@@ -164,14 +156,7 @@ struct PostCard: View {
                 }
             }
             Spacer()
-            Button {
-                openURL(post.permalink)
-            } label: {
-                Image(systemName: "arrow.up.right")
-                    .font(.callout)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open the post in \(post.network.name)")
+            PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)", font: .callout)
         }
         .font(.caption2)
         .foregroundStyle(.tertiary)

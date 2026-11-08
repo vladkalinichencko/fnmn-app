@@ -42,33 +42,18 @@ struct ThreadScreen: View {
     /// The post being answered or quoted, set smaller than the one the thread was opened for.
     private func parentCard(_ post: DigestPackage.Post.ContextPost, kind: DigestPackage.Post.Context.Kind) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(post.author.name)
-                    .font(.footnote.weight(.semibold))
-                    .lineLimit(1)
-                Text("@\(post.author.handle)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
+            PostAuthorLine(name: post.author.name, handle: post.author.handle, size: .compact) {
                 Text(kind.action)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
             if let text = post.text {
-                StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
+                PostText(text: text)
                     .font(.footnote)
             }
             HStack {
                 Spacer()
-                Button {
-                    openURL(post.permalink)
-                } label: {
-                    Image(systemName: "arrow.up.right")
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open the post that is quoted")
+                PostOpenButton(url: post.permalink, label: "Open the post that is quoted")
             }
             .foregroundStyle(.tertiary)
         }
@@ -89,14 +74,7 @@ struct ThreadScreen: View {
                             .font(.caption.weight(.semibold))
                         Spacer()
                         if let link = comment.permalink {
-                            Button {
-                                openURL(link)
-                            } label: {
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption2)
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.tertiary)
+                            PostOpenButton(url: link, label: "Open the reply", font: .caption2)
                         }
                     }
                     Text(comment.text)
@@ -108,6 +86,4 @@ struct ThreadScreen: View {
             }
         }
     }
-
-    @Environment(\.openURL) private var openURL
 }
