@@ -11,8 +11,9 @@ struct VideoReaderView: View {
     @Environment(ImportJobs.self) private var imports
     @Environment(\.scenePhase) private var scenePhase
     let video: VideoCoordinator
-    /// The saved video file once it is on this device.
-    @State private var playable: URL?
+    /// The saved file once this device has it. It counts only while the file is on the device: the system may let
+    /// the bytes go again, and then the file has to come down once more.
+    @State private var downloaded: URL?
     @State private var stageHeight: CGFloat = 0
 
     private var hasCaptions: Bool { !video.cues.isEmpty }
@@ -126,18 +127,19 @@ struct VideoReaderView: View {
     @ViewBuilder
     private var player: some View {
         let video = video
-        if let file = library.originalFile(materialID), file != playable {
+        switch source {
+        case let .coming(file):
             // The file saved on another device, or let go by this one, comes down from iCloud before it plays.
             VideoPlaceholder { Loading() }
                 .task(id: file) {
                     do {
                         try await CloudFolder.download(file, timeout: .seconds(1800))
-                        playable = file
+                        downloaded = file
                     } catch {
                         library.failure = error.localizedDescription
                     }
                 }
-        } else if let file = library.originalFile(materialID) {
+        case let .local(file):
             SystemPlayer(
                 url: file,
                 start: video.start,
@@ -147,7 +149,7 @@ struct VideoReaderView: View {
                 onPause: { video.send(.paused) }
             )
             .aspectRatio(16 / 9, contentMode: .fit)
-        } else {
+        case .embed:
             ZStack {
                 if let videoID, let origin = server.connection?.endpoint {
                     YouTubeEmbedView(
@@ -175,6 +177,13 @@ struct VideoReaderView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Read from the library and the disk each time the screen draws, so an evicted file is downloaded again.
+    private var source: VideoSource {
+        VideoSource.of(original: library.originalFile(materialID), downloaded: downloaded) { file in
+            CloudFolder.isOnDevice(file)
         }
     }
 
@@ -299,10 +308,18 @@ private struct SystemPlayer: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
-        guard let value = seekTo, let player = controller.player else { return }
-        player.seek(to: CMTime(seconds: value, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        guard let value = seekTo, let player = controller.player else {
+            return
+        }
         let done = onSeekDone
-        Task { @MainActor in done() }
+        // A seek the system dropped is still owed: the next update makes it again, so no jump is lost on a player
+        // that had no item yet.
+        player.seek(to: CMTime(seconds: value, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { finished in
+            guard finished else {
+                return
+            }
+            Task { @MainActor in done() }
+        }
     }
 
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {

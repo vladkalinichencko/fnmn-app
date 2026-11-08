@@ -13,6 +13,37 @@ enum EmbedPhase: Equatable {
     case failed(String)
 }
 
+/// What plays a video: the file on this device, a file the library lists that this device still has to take from
+/// iCloud, or YouTube when there is no file.
+enum VideoSource: Equatable {
+    case local(URL)
+    case coming(URL)
+    case embed
+
+    /// The file is only a file this device plays once it is on the device: iCloud lists a name before the bytes come
+    /// down, and the system may let the bytes go again.
+    static func of(original: URL?, downloaded: URL?, onDevice: (URL) -> Bool) -> VideoSource {
+        guard let original else {
+            return .embed
+        }
+        guard downloaded == original, onDevice(original) else {
+            return .coming(original)
+        }
+        return .local(original)
+    }
+}
+
+extension EmbedPhase {
+    /// A seek belongs to a player that is coming up; a page that failed has nothing to seek in, so the seek is not
+    /// kept to be applied later on a page that has moved on.
+    var keepsSeek: Bool {
+        if case .failed = self {
+            return false
+        }
+        return true
+    }
+}
+
 /// What the video screen shows: the line being spoken, where the transcript is scrolled, whether it follows
 /// the video, a seek the player still has to make, the embedded player's phase and whether captions show.
 /// The playing second is not here: it changes twice a second, and nothing on screen draws it.
@@ -77,10 +108,15 @@ func videoReduce(_ state: VideoState, _ action: VideoAction, cues: [VideoCue]) -
         state.pinnedCue = id
     case let .embed(phase):
         state.embed = phase
+        if !phase.keepsSeek {
+            state.seekTo = nil
+        }
     case let .showCaptions(shows):
         state.showsCaptions = shows
-    case .paused, .left:
+    case .paused:
         break
+    case .left:
+        state.seekTo = nil
     }
     return state
 }
