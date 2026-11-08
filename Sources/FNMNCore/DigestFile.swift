@@ -120,8 +120,7 @@ public actor DigestFile {
 
     /// A delivery names its files by relative paths; a name that climbs out of the digest's folder is refused.
     private static func check(_ path: String) throws {
-        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard !path.hasPrefix("/"), !parts.contains(".."), !path.isEmpty else {
+        guard PackagePath.isSafe(path) else {
             throw DigestFileError.unsafePath(path)
         }
     }

@@ -625,11 +625,7 @@ public actor LibraryFile {
 
     /// A relative path from a package, only when it stays inside the folder.
     static func contained(_ path: String, in folder: URL) -> URL? {
-        let folder = folder.standardizedFileURL
-        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return nil }
-        let destination = folder.appending(path: path).standardizedFileURL
-        guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
-        return destination
+        PackagePath.resolves(path, in: folder)
     }
 
     private func absorbLegacyNotes(_ notes: [Note], into snapshot: inout LibrarySnapshot) -> Bool {
