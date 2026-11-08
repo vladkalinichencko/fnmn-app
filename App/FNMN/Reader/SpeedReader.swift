@@ -50,7 +50,9 @@ final class SpeedPlayer {
     var wordsPerFrame = 1 {
         didSet {
             // A paused frame takes the new size at once; a running one at the next step.
-            if mode != .playing, let text { frame = text.frame(at: frame.lowerBound, words: wordsPerFrame) }
+            if mode != .playing, let text {
+                frame = text.frame(at: frame.lowerBound, words: wordsPerFrame)
+            }
         }
     }
     @ObservationIgnored private var clock: Task<Void, Never>?
@@ -95,18 +97,24 @@ final class SpeedPlayer {
 
     /// Words run on from the frame on screen. A block shown whole waits for Continue.
     func play() {
-        guard mode != .playing, let token, !token.isStop else { return }
+        guard mode != .playing, let token, !token.isStop else {
+            return
+        }
         markShown()
         enter(.playing)
     }
 
     func pause() {
-        guard mode == .playing else { return }
+        guard mode == .playing else {
+            return
+        }
         enter(.paused)
     }
 
     func sentenceBack() {
-        guard let text else { return }
+        guard let text else {
+            return
+        }
         jump(to: text.sentenceStart(before: frame.lowerBound))
     }
 
@@ -377,13 +385,17 @@ struct SpeedReader: View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard press.phase == .idle else {
-                    if abs(value.translation.width) > 12 || abs(value.translation.height) > 12 { holdTimer?.cancel() }
+                    if abs(value.translation.width) > 12 || abs(value.translation.height) > 12 {
+                        holdTimer?.cancel()
+                    }
                     return
                 }
                 press.land()
                 holdTimer = Task {
                     try? await Task.sleep(for: .seconds(0.4))
-                    guard !Task.isCancelled, press.hold(playing: player.isPlaying) else { return }
+                    guard !Task.isCancelled, press.hold(playing: player.isPlaying) else {
+                        return
+                    }
                     player.pause()
                 }
             }
