@@ -7,7 +7,9 @@ import Foundation
 @MainActor
 protocol DeliveryTarget {
     /// The folder under the FNMN folder: `deliveries` for articles, `digests` for the digest.
-    var subfolder: String { get }
+    var subfolder: String {
+        get
+    }
     /// The archives this target still has to read, in the folder's order.
     func changed(_ archives: [URL]) async throws -> [URL]
     func add(_ archive: URL, index: Int, total: Int) async throws

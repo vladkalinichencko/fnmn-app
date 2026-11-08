@@ -17,6 +17,7 @@ struct PostCard: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
+        let media = digests.media(for: post)
         VStack(alignment: .leading, spacing: 10) {
             header
             if let text = post.text {
@@ -26,7 +27,10 @@ struct PostCard: View {
             if let video = post.video, video.poster != nil {
                 poster(video)
             }
-            pictures
+            if (post.mediaErrors ?? 0) > 0, media.isEmpty {
+                mediaPlaceholder
+            }
+            pictures(media)
             if let context = post.context {
                 contextLine(context)
             }
@@ -64,16 +68,39 @@ struct PostCard: View {
         }
     }
 
-    @ViewBuilder private var pictures: some View {
-        if post.media.count == 1, let only = post.media.first {
+    @ViewBuilder private func pictures(_ media: [DigestPackage.Post.Media]) -> some View {
+        if media.count == 1, let only = media.first {
             picture(only, square: false)
-        } else if !post.media.isEmpty {
+        } else if !media.isEmpty {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2)], spacing: 2) {
-                ForEach(post.media, id: \.path) { item in
+                ForEach(media, id: \.path) { item in
                     picture(item, square: true)
                 }
             }
         }
+    }
+
+    /// A picture the source would not serve keeps the post on screen and offers the Mac another try.
+    private var mediaPlaceholder: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "photo.badge.exclamationmark")
+                .foregroundStyle(.secondary)
+            Text("Picture unavailable")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            if digests.refreshing.contains(post.id) {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button("Retry") {
+                    Task { await digests.refresh(post, digest: digest) }
+                }
+                .font(.caption)
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private func picture(_ item: DigestPackage.Post.Media, square: Bool) -> some View {

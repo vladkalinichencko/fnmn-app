@@ -37,6 +37,7 @@ class Post:
     comments: list[dict] = field(default_factory=list)
     stats: dict | None = None
     folders: list[str] = field(default_factory=list)
+    media_errors: int = 0
 
 
 def wire(post: Post) -> dict:
@@ -54,6 +55,7 @@ def wire(post: Post) -> dict:
         "comments": post.comments,
         "stats": post.stats,
         "folders": post.folders,
+        "mediaErrors": post.media_errors,
     }
 
 

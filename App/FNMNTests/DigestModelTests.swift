@@ -290,4 +290,76 @@ final class DigestModelTests: XCTestCase {
         XCTAssertNotNil(loaded.error)
         XCTAssertTrue(loaded.labels.isEmpty)
     }
+
+    func testARefreshBringsOnePicture() async throws {
+        let folder = root.appending(path: "FNMN")
+        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
+        let port = FakeServerPort()
+        port.media = [.init(path: "media/p.jpg", width: 2, height: 2)]
+        let connection = try ServerConnection(address: "https://example.com", token: "token")
+        let server = ServerLink(port: port, storage: FakeStorage(connection: connection))
+        let digests = DigestModel(device: "phone", file: DigestFile(url: root, cache: root), server: server)
+        await digests.sync(folder: folder)
+        let post = try XCTUnwrap(digests.post("x/1"))
+        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
+        await digests.refresh(post, digest: digest)
+        XCTAssertEqual(digests.media(for: post).map(\.path), ["media/refresh-p.jpg"])
+        XCTAssertEqual(try Data(contentsOf: digest.url(of: "media/refresh-p.jpg")), Data("picture".utf8))
+        XCTAssertTrue(digests.refreshing.isEmpty)
+    }
+}
+
+@MainActor
+private final class FakeServerPort: ServerPort {
+    var media: [DigestPackage.Post.Media] = []
+    var data = Data("picture".utf8)
+
+    func check(connection: ServerConnection) async throws {
+    }
+
+    func startJob(url: URL, connection: ServerConnection) async throws -> ServerJob {
+        throw URLError(.unsupportedURL)
+    }
+
+    func startFileJob(file: URL, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> ServerJob {
+        throw URLError(.unsupportedURL)
+    }
+
+    func job(_ id: String, connection: ServerConnection) async throws -> ServerJob {
+        throw URLError(.unsupportedURL)
+    }
+
+    func delivery(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL {
+        throw URLError(.unsupportedURL)
+    }
+
+    func startVideoDownload(url: URL, connection: ServerConnection) async throws -> ServerJob {
+        throw URLError(.unsupportedURL)
+    }
+
+    func videoFile(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL {
+        throw URLError(.unsupportedURL)
+    }
+
+    func forget(_ id: String, connection: ServerConnection) async throws {
+    }
+
+    func refreshDigestPost(_ postID: String, connection: ServerConnection) async throws -> [DigestPackage.Post.Media] {
+        media
+    }
+
+    func digestMedia(_ name: String, connection: ServerConnection) async throws -> Data {
+        data
+    }
+}
+
+private struct FakeStorage: ServerConnectionStorage {
+    let connection: ServerConnection
+
+    func load() -> ServerConnection? {
+        connection
+    }
+
+    func save(_ connection: ServerConnection) throws {
+    }
 }

@@ -110,6 +110,9 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         public let stats: Stats?
         /// The folders of the source it came from; the classifier's label wins when it names one of them.
         public let folders: [String]
+        /// Pictures the source would not serve when the post was collected. The card shows a placeholder and
+        /// can ask the Mac to fetch the post again.
+        public let mediaErrors: Int?
 
         public init(
             id: String,
@@ -123,7 +126,8 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             context: Context? = nil,
             comments: [Comment] = [],
             stats: Stats? = nil,
-            folders: [String] = []
+            folders: [String] = [],
+            mediaErrors: Int? = nil
         ) {
             self.id = id
             self.network = network
@@ -137,6 +141,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             self.comments = comments
             self.stats = stats
             self.folders = folders
+            self.mediaErrors = mediaErrors
         }
 
         public struct Author: Codable, Equatable, Sendable {

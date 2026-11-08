@@ -13,7 +13,7 @@ from datetime import datetime
 import httpx
 
 from package import Report
-from digest.reading import SourceFailure, SourceResult, save_photo
+from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo
 from digest.store import Post, iso
 from web import Web
 
@@ -32,6 +32,7 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     ids = _timeline(page, handle)
     posts: list[Post] = []
     note = None
+    fetch = page_fetch(page)
     for status_id in ids:
         try:
             payload = _tweet(web, status_id)
@@ -45,7 +46,7 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
             break
         if payload is None:
             continue
-        post = _post(payload, handle, source, web, store, folders)
+        post = _post(payload, handle, source, web, store, folders, fetch)
         if post is not None:
             posts.append(post)
         time.sleep(REQUEST_PAUSE)
@@ -88,7 +89,7 @@ def _tweet(web: Web, status_id: str) -> dict | None:
     return payload if payload.get("__typename") == "Tweet" else None
 
 
-def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:
+def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: list[str], fetch=None) -> Post | None:
     status_id = payload.get("id_str")
     if not status_id:
         return None
@@ -99,7 +100,7 @@ def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: li
     }
     post_id = f"x/{status_id}"
     text = (payload.get("text") or "").strip() or None
-    media, video = _media(payload, post_id, web, store)
+    media, video, errors = _media(payload, post_id, web, store, fetch)
     stats = {
         "likes": payload.get("favorite_count"),
         "reposts": payload.get("retweet_count"),
@@ -118,25 +119,31 @@ def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: li
         context=_context(payload),
         stats=stats,
         folders=folders,
+        media_errors=errors,
     )
 
 
-def _media(payload: dict, post_id: str, web: Web, store) -> tuple[list[dict], dict | None]:
+def _media(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[list[dict], dict | None, int]:
     media: list[dict] = []
     video = None
+    errors = 0
     for index, item in enumerate((payload.get("mediaDetails") or [])[:4]):
         kind = item.get("type")
         url = item.get("media_url_https")
         if not url:
             continue
         if kind == "photo":
-            saved = save_photo(web, store, post_id, index, f"{url}?name=large")
+            saved = save_photo(web, store, post_id, index, f"{url}?name=large", fetch)
             if saved:
                 media.append(saved)
+            else:
+                errors += 1
         elif kind in ("video", "animated_gif") and video is None:
-            poster = save_photo(web, store, post_id, "poster", url)
+            poster = save_photo(web, store, post_id, "poster", url, fetch)
+            if poster is None:
+                errors += 1
             video = {"poster": poster, "duration": _duration(payload)}
-    return media, video
+    return media, video, errors
 
 
 def _duration(payload: dict) -> float | None:

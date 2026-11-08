@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -27,6 +28,10 @@ class ImportRequest(BaseModel):
 
 class VideoRequest(BaseModel):
     url: str
+
+
+class DigestRefreshRequest(BaseModel):
+    post_id: str
 
 
 def require_token(authorization: str | None = Header(default=None)) -> None:
@@ -77,6 +82,29 @@ def forget_job(job_id: str) -> None:
 @app.post("/videos", status_code=202)
 def start_video(request: VideoRequest) -> dict:
     return jobs.submit(request.url, [], kind="videoFile").status()
+
+
+@app.post("/digest/refresh")
+def refresh_digest(request: DigestRefreshRequest) -> dict:
+    from digest.refresh import refresh
+
+    try:
+        media = refresh(request.post_id)
+    except LookupError as error:
+        raise HTTPException(404, "no such post") from error
+    except Exception as error:
+        raise HTTPException(409, str(error)) from error
+    return {"media": media}
+
+
+@app.get("/digest/media/{name}")
+def digest_media(name: str) -> FileResponse:
+    if Path(name).name != name or name in (".", ".."):
+        raise HTTPException(404, "no such picture")
+    path = Path(__file__).resolve().parent / "digest" / "out" / "media" / name
+    if not path.is_file():
+        raise HTTPException(404, "no such picture")
+    return FileResponse(path)
 
 
 @app.get("/jobs/{job_id}/file")

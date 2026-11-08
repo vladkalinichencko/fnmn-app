@@ -22,10 +22,15 @@ final class DigestModel {
     private(set) var labels: [String: String] = [:]
     /// The one record of what this device read, hid and took in; the views read it through `seen` and `hidden`.
     private(set) var index = DigestIndex()
+    /// Pictures a Retry fetched from the Mac, by post; the card reads them through `media(for:)`.
+    private(set) var refreshed: [String: [DigestPackage.Post.Media]] = [:]
+    /// The posts whose Retry is running.
+    private(set) var refreshing: Set<String> = []
     /// The last sync's failures, while the magazine it already had stays on screen.
     private(set) var lastError: String?
     private let file: DigestFile
     private let device: String
+    private let server: ServerLink?
     @ObservationIgnored private var folder: URL?
     @ObservationIgnored private var loaded = false
     @ObservationIgnored private var pending: [DigestEngagement] = []
@@ -33,9 +38,10 @@ final class DigestModel {
     @ObservationIgnored private var scoring: Task<Void, Never>?
     @ObservationIgnored private var syncing = false
 
-    init(device: String, file: DigestFile = DigestFile()) {
+    init(device: String, file: DigestFile = DigestFile(), server: ServerLink? = nil) {
         self.device = device
         self.file = file
+        self.server = server
     }
 
     var current: Digest? {
@@ -48,6 +54,42 @@ final class DigestModel {
 
     var hidden: Set<String> {
         index.hidden
+    }
+
+    /// The pictures the card draws: the ones a Retry brought from the Mac, else the ones in the delivery.
+    func media(for post: DigestPackage.Post) -> [DigestPackage.Post.Media] {
+        refreshed[post.id] ?? post.media
+    }
+
+    /// Asks the Mac to fetch one post again, then copies the pictures into this digest's folder. Only the post
+    /// is fetched; the rest of the magazine is untouched.
+    func refresh(_ post: DigestPackage.Post, digest: Digest) async {
+        guard let server else {
+            lastError = "Set up the Mac server to fetch this picture again."
+            return
+        }
+        guard !refreshing.contains(post.id) else {
+            return
+        }
+        do {
+            let connection = try server.configured()
+            refreshing.insert(post.id)
+            defer { refreshing.remove(post.id) }
+            let media = try await server.port.refreshDigestPost(post.id, connection: connection)
+            var local: [DigestPackage.Post.Media] = []
+            for item in media {
+                let name = (item.path as NSString).lastPathComponent
+                let data = try await server.port.digestMedia(name, connection: connection)
+                let path = "media/refresh-\(name)"
+                let url = digest.url(of: path)
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: url, options: .atomic)
+                local.append(.init(path: path, width: item.width, height: item.height))
+            }
+            refreshed[post.id] = local
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     /// The digest a post belongs to, for the thread screen and for recording what the reader did with it.

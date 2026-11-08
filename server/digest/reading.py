@@ -13,7 +13,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 import httpx
 from playwright.sync_api import Page, sync_playwright
@@ -64,12 +64,25 @@ def browser(network: str) -> Iterator[Page]:
             context.close()
 
 
-def save_photo(web: Web, store, post_id: str, index: int | str, url: str) -> dict | None:
+def save_photo(web: Web, store, post_id: str, index: int | str, url: str, fetch: Callable[[str], bytes] | None = None) -> dict | None:
     """One picture of a post, written under its own name. A picture the network will not serve is left out of
     the post instead of stopping it: the card then shows the text without that picture."""
     try:
-        data = web.bytes(url)
+        data = fetch(url) if fetch is not None else web.bytes(url)
     except (OSError, httpx.HTTPError):
         return None
     extension = "png" if url.split("?")[0].lower().endswith(".png") else "jpg"
     return store.save_media(post_id, index, data, extension)
+
+
+def page_fetch(page) -> Callable[[str], bytes]:
+    """Downloads through the logged-in page's own request context, so a CDN sees the profile's cookies."""
+    def fetch(url: str) -> bytes:
+        try:
+            response = page.context.request.get(url, timeout=30_000)
+        except Exception as error:
+            raise OSError(str(error)) from error
+        if response.status >= 400:
+            raise OSError(f"the picture returned HTTP {response.status}")
+        return response.body()
+    return fetch

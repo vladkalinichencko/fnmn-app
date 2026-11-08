@@ -67,13 +67,17 @@ def _post(message, channel: str, source: dict, web: Web, store, folders: list[st
     posted = iso(datetime.fromisoformat(times[0]))
     text = _markdown(message.xpath('.//div[contains(@class,"tgme_widget_message_text")]'))
     media = []
+    errors = 0
     for index, style in enumerate(message.xpath('.//a[contains(@class,"tgme_widget_message_photo_wrap")]/@style')[:4]):
         url = _background(style)
         if url:
             saved = save_photo(web, store, post_id, index, url)
             if saved:
                 media.append(saved)
-    video = _video(message, post_id, web, store)
+            else:
+                errors += 1
+    video, video_errors = _video(message, post_id, web, store)
+    errors += video_errors
     if not text and not media and not video:
         return None
     owner = message.xpath('.//*[contains(@class,"tgme_widget_message_owner_name")]//text()')
@@ -89,17 +93,19 @@ def _post(message, channel: str, source: dict, web: Web, store, folders: list[st
         media=media,
         video=video,
         folders=folders,
+        media_errors=errors,
     )
 
 
-def _video(message, post_id: str, web: Web, store) -> dict | None:
+def _video(message, post_id: str, web: Web, store) -> tuple[dict | None, int]:
     thumbs = message.xpath('.//*[contains(@class,"tgme_widget_message_video_thumb")]/@style')
     if not thumbs:
-        return None
+        return None, 0
     url = _background(thumbs[0])
     poster = save_photo(web, store, post_id, "poster", url) if url else None
+    errors = 1 if url and poster is None else 0
     lengths = message.xpath('.//*[contains(@class,"tgme_widget_message_video_duration")]/text()')
-    return {"poster": poster, "duration": _seconds(lengths[0]) if lengths else None}
+    return {"poster": poster, "duration": _seconds(lengths[0]) if lengths else None}, errors
 
 
 def _background(style: str) -> str | None:

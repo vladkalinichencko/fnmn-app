@@ -15,6 +15,10 @@ protocol ServerPort {
     func videoFile(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL
     /// Tells the server to remove the job and its file.
     func forget(_ id: String, connection: ServerConnection) async throws
+    /// Re-fetches one digest post's pictures on the Mac; the entries name files the phone can download.
+    func refreshDigestPost(_ postID: String, connection: ServerConnection) async throws -> [DigestPackage.Post.Media]
+    /// One picture of a refreshed digest post, by the file name the Mac returned.
+    func digestMedia(_ name: String, connection: ServerConnection) async throws -> Data
 }
 
 extension ServerPort {
@@ -127,6 +131,25 @@ struct ServerClient: ServerPort {
         try accept(response, data: data)
     }
 
+    func refreshDigestPost(_ postID: String, connection: ServerConnection) async throws -> [DigestPackage.Post.Media] {
+        var request = authorizedRequest(path: "digest/refresh", connection: connection)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(DigestRefreshRequest(postID: postID))
+        request.timeoutInterval = 300
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try accept(response, data: data)
+        return try JSONDecoder().decode(DigestMediaResponse.self, from: data).media
+    }
+
+    func digestMedia(_ name: String, connection: ServerConnection) async throws -> Data {
+        var request = authorizedRequest(path: "digest/media/\(name)", connection: connection)
+        request.timeoutInterval = 120
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try accept(response, data: data)
+        return data
+    }
+
     func startVideoDownload(url: URL, connection: ServerConnection) async throws -> ServerJob {
         var request = authorizedRequest(path: "videos", connection: connection)
         request.httpMethod = "POST"
@@ -187,6 +210,14 @@ struct ServerClient: ServerPort {
     private struct Health: Decodable { let status: String }
     private struct JobRequest: Encodable { let url: URL; let folders: [String] }
     private struct VideoRequest: Encodable { let url: URL }
+    private struct DigestRefreshRequest: Encodable {
+        let postID: String
+
+        enum CodingKeys: String, CodingKey {
+            case postID = "post_id"
+        }
+    }
+    private struct DigestMediaResponse: Decodable { let media: [DigestPackage.Post.Media] }
     private struct FailureBody: Decodable { let detail: String }
 }
 

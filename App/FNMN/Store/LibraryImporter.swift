@@ -138,5 +138,6 @@ private final class LibraryDeliveries: DeliveryTarget {
         try await write(true) { [file] snapshot in try await file.addCloudDelivery(archive, into: snapshot) }
     }
 
-    func finish(_ archives: [URL]) async throws {}
+    func finish(_ archives: [URL]) async throws {
+    }
 }

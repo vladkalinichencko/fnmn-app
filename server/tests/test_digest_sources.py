@@ -28,12 +28,29 @@ class FakeWeb(Web):
         return super().__new__(cls, text or (lambda url: ""), bytes or (lambda url: png()), None, None)
 
 
+class FakeResponse:
+    status = 200
+
+    def body(self):
+        return png()
+
+
+class FakeRequest:
+    def get(self, url, timeout=None):
+        return FakeResponse()
+
+
+class FakeContext:
+    request = FakeRequest()
+
+
 class FakePage:
     """What the parsers ask of a Playwright page: the markup after a navigation."""
 
     def __init__(self, markup: str):
         self.markup = markup
         self.url = "https://example.com"
+        self.context = FakeContext()
 
     def goto(self, url, **kwargs):
         return None
@@ -135,6 +152,7 @@ class PictureTests(unittest.TestCase):
             self.assertIsNone(save_photo(web, store, "x/1", 0, "https://pbs.twimg.com/media/a.jpg"))
             post = x._post(json.loads(fixture("tweet-quote.json")), "karpathy", source(), web, store, ["ml"])
             self.assertEqual(post.media, [])
+            self.assertEqual(post.media_errors, 1)
             self.assertTrue(post.text)
 
 
@@ -156,6 +174,19 @@ class InstagramTests(unittest.TestCase):
     def test_a_description_without_a_caption_keeps_the_text(self):
         self.assertIsNone(instagram._caption(None))
         self.assertEqual(instagram._caption("12 likes"), "12 likes")
+
+    def test_a_media_download_uses_the_page_context(self):
+        def refuse(url):
+            raise OSError("the article client is not the logged-in page")
+
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = instagram._post(
+                FakePage(fixture("instagram-post.html")), "studio", "CxYzAbCdEfG",
+                {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
+                FakeWeb(bytes=refuse), store, ["design"],
+            )
+            self.assertEqual(len(post.media), 1)
 
     def test_a_post_without_a_time_is_skipped(self):
         markup = (

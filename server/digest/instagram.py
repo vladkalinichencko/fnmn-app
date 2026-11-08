@@ -10,7 +10,7 @@ from datetime import datetime
 from lxml import html
 
 from package import Report
-from digest.reading import SourceFailure, SourceResult, save_photo
+from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo
 from digest.store import Post, iso
 from web import Web
 
@@ -89,10 +89,14 @@ def _post(page, handle: str, shortcode: str, source: dict, web: Web, store, fold
     title = _meta(document, "og:title") or handle
     post_id = f"instagram/{handle}/{shortcode}"
     media = []
+    errors = 0
+    fetch = page_fetch(page)
     if image:
-        saved = save_photo(web, store, post_id, 0, image)
+        saved = save_photo(web, store, post_id, 0, image, fetch)
         if saved:
             media.append(saved)
+        else:
+            errors += 1
     times = document.xpath("//time/@datetime")
     if not times:
         return None
@@ -107,6 +111,7 @@ def _post(page, handle: str, shortcode: str, source: dict, web: Web, store, fold
         text=_caption(caption),
         media=media,
         folders=folders,
+        media_errors=errors,
     )
 
 

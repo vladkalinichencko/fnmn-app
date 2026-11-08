@@ -157,7 +157,7 @@ def _unshowable(post: Post) -> str | None:
     """Why the magazine would draw a card that opens nothing; `None` when it would draw a real one."""
     if not post.permalink:
         return "no permalink"
-    if post.text or post.media:
+    if post.text or post.media or post.media_errors:
         return None
     if post.video and post.video.get("poster"):
         return None
@@ -179,7 +179,7 @@ def _available(post: Post, store: Store) -> str | None:
     if poster and not (store.root / poster["path"]).exists():
         print(f"{post.id}: missing {poster['path']}")
         post.video["poster"] = None
-    if post.text or post.media or (post.video and post.video.get("poster")):
+    if post.text or post.media or post.media_errors or (post.video and post.video.get("poster")):
         return None
     return "missing media"
 

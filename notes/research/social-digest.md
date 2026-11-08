@@ -33,6 +33,7 @@ server/digest/
   login.py             ручной вход в профиль сети (один раз)
   monitor.py           прогон: каждый источник -> новые посты -> хранилище
   build.py             окно с прошлой сборки -> поставка в FNMN/digests/
+  refresh.py           один пост: заново прочитать источник и отдать файлы
   train.py             журнал реакций + хранилище -> модель CoreML
   classifier/Train.swift  CreateML: строки -> classifier.mlmodel
   store.py             посты и сборки: JSONL, дедупликация, окна
