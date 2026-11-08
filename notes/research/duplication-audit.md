@@ -78,6 +78,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* a `DigestNetwork` enum in `FNMNCore`, decoded from the raw string, carrying name and account kind.
 
+*Closed in 9319bf4:* `DigestPackage.Network` carries the name, and `Source.Status` and `Context.Kind` became enums with it. The "Channel or Account" label is still a condition in `SourcesScreen`, now over an enum.
+
 ## Server: pages
 
 **17. Parse a page, ignoring its XML declaration.** `html.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", source, count=1))` appears at `adapters/article.py:39`, `adapters/article.py:78` (with `base_url`), `adapters/html_markdown.py:32`, and `publisher.py:46`. Four copies of a six-token incantation; a fifth parser added later will copy it again.
@@ -122,6 +124,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* `Post` with an explicit `to_wire()` (one function, no second rename), and `ContextPost` built from the same function with a field subset.
 
+*Partly closed in c01cb3e:* `media_errors` went into `wire` only, so the nested rename in `wire_context` still carries every context field by hand.
+
 **26. Image size at build time.** `digest/store.image_size` (`:162`) reads PNG/GIF/JPEG headers so each card can lay itself out before decoding; `ImageFiles.headerSize` (`App/FNMN/Store/ImageFiles.swift`) reads the same headers on the phone with ImageIO. Two header readers for one question, and the shipped size is advisory only.
 
 *One home:* the phone can read the header of a file it has already downloaded; the server can keep the size as a fallback for formats ImageIO will not open. Today both exist and neither is declared the source of truth.
@@ -162,3 +166,99 @@ The five reducers (`importReduce`, `dialogReduce`, `readerReduce`, `videoReduce`
 6. **Digest card, stack, and post wire shape** (items 13, 14, 25) — the branch is unmerged, so this is cheapest before it lands.
 
 Each merge needs the guard from `AGENTS.md`: a source test that fails when a second implementation appears (a second `sha256(…)+".tar"`, a second `LibraryQueries(`-style construction, a file that renames a post field by hand), not a test of the one call site that was cleaned up.
+
+## Second pass: the branch's later commits (2026-11-08)
+
+Eleven commits landed after the first pass, `9319bf4..9fb771b`. One of the first audit's items closed (16, the network names), three other defects the branch had opened closed with it, and the same commits added new copies of three rules and left two comments saying the opposite of what the code does. Items 1–31 stand unless this section says otherwise, and line numbers are from `9fb771b`.
+
+### Closed since the first pass
+
+**The delivery loop** — not in the first audit, found while reading the branch: `LibraryImporter.readChangedDeliveries` and `DigestModel.take` each listed, downloaded, skipped and imported archives. `33aa33c` made `DeliverySync` the one loop and `LibraryDeliveries`/`DigestDeliveries` the two adapters. This is the shape the rest of this note asks for: one algorithm, two parameter sets, and the adapters keep only the policy that differs.
+
+**`seen`/`hidden` were a second copy of `DigestIndex`** — a save could write the older set. They are computed from `index` now (`9319bf4`), so the copy cannot exist.
+
+**Network, status and context kind were strings with a `default`** — `DigestPackage.Network`, `Source.Status` and `Context.Kind` are enums, so a fourth network fails to decode instead of drawing as "Quoting" (item 16).
+
+**Save to Library did not record the engagement** — `DigestModel.save` is the one call that records `.saved`; see the AGENTS section for why the guard behind it is weaker than the register says.
+
+### New duplication
+
+**32. The context label, twice.** `PostCard.contextLabel` (`PostCard.swift:210`) switches reply, repost and quote to "Replying to", "Reposting", "Quoting"; `ThreadScreen.parentCard` (`ThreadScreen.swift:54`) writes the same three labels as a nested ternary and drops the handle. The icon switch beside it has no second copy, so only the words have drifted. One home: `Context.Kind.label(following: String?)`, with the card and the thread both calling it.
+
+*Closed in 173f513:* `Context.Kind.action` holds the three words; the card keeps its sentence and the thread shows the words alone.
+
+**33. The source table and its browser rule, twice.** `monitor.py:22` and `refresh.py:20` both declare `SOURCES = {"x": x, "telegram": telegram, "instagram": instagram}`, and both decide which networks open a browser (`monitor._run`, `refresh._collect`). The tuple is `("x", "instagram", "telegram")` in both, so Telegram now opens a profile it did not need before — a decision made by editing two copies. `reading.py` is the declared home of the source contract and should own the table and a `needs_browser(network)` beside it.
+
+*Closed in 07d6196:* `monitor.SOURCES` is the only table and `refresh` imports it; `needs_browser` sits in `reading.py`, and a test asserts both modules share the one dict.
+
+**34. The build hours, twice.** `build.BUILD_HOURS = (8, 20)` (`build.py:25`) decides `due()` and `next_build_time`; `fnmn-digest.sh:57,60` writes 8 and 20 into the launchd plist, and `:64` writes the trainer's 21. `digest_script_checks` proves every `Hour` has a `Minute`; it cannot see that the hours disagree with the builder, so changing one leaves the other firing at the old time.
+
+*Closed in 07d6196:* the shell asks `digest.build` for the hours, and `digest_script_checks` fails a script that writes fixed builder hours.
+
+**35. `DigestModel.refresh` writes digest files.** `DigestFile` documents itself as "the one writer of the digest files" (`DigestFile.swift:3`) and owns `check(path)` for every name a delivery brings. `refresh` (`DigestModel.swift:91`) creates `media/` and writes `refresh-<name>` into `digest.url(of:)` with `FileManager`, on the main actor, while the `DigestFile` actor may be evicting or replacing that same folder. A second writer of one folder is what the file's own doc forbids.
+
+**36. The cache is decoded three to four times per sync.** `load()` reads every `package.json` (`DigestModel.swift:183`), `take` reads them again for `unpacked` (`:194`), `evict(keeping:)` reads them a third time, and `sync` reads them once more after `take`. After `load()` the model already holds exactly the ids `unpacked` wants, and `evict` could take the list it is given.
+
+*Partly closed in 173f513:* `load` reads only the index, `take` reuses `digests`, and the cache is read again only after an archive was taken. `evict` still lists it on the first new delivery.
+
+**37. Two "is this file known" checks in `DigestDeliveries`.** `changed` builds `imported[file] = id` as a dictionary (`:271`), `add` re-asks with `contains(where:)` (`:287`). One rule, two shapes, O(1) against O(n). The index also exists twice during a sync — `DigestModel.index` and `DigestDeliveries.index` — and the model copies it back after the loop, which is the shadow copy the AGENTS section warns about.
+
+*Closed in 173f513:* one `imported` map feeds `changed` and `add`; the index is still passed into the adapter and read back once.
+
+**38. `service.digest_media` knows the store's layout.** `service.py:104` builds `digest/out/media/<name>`; `Store` owns `OUT` and `media_dir` (`store.py:17,88`). Moving the store leaves an endpoint that 404s every picture.
+
+*Closed in 07d6196:* the endpoint asks `Store().media_dir`, and `test_a_picture_in_the_store_is_served` proves the path.
+
+**39. Test support, copied.** `App/FNMNTests/DigestModelTests.writeTar` (`:62`) is a second 40-line USTAR writer beside `Tests/FNMNCoreTests/DeliveryArchiveTests.writeTar`; the package and app test targets cannot share code, so the copies cannot converge without a shared test-support target. In the server tests three modules define their own `post()` factory (`test_digest_store`, `test_digest_build`, `test_digest_refresh`) and two define their own ISO 8601 encoder. In `LibraryImporterTests` the same four-line `LibraryImporter.Write` closure is written four times (`:32`, `:49`, `:57`, `:74`) and could be one helper on the test class.
+
+*Partly closed in 173f513 and 07d6196:* one `post()` factory in `fakes.py` and one `Published` helper. The tar writer stays in each target; sharing it needs a product both test bundles can import.
+
+**40. The source-scan loop, three times.** `ServerLinkGuardTests`, `HotPathGuardTests` and `ArchitectureGuardTests.testWebViewsAppearOnlyInTheLiveCropAndThePlayer` each read every app file, split lines and collect hits. `AppSources` already shares the file list; one `AppSources.hits(of:excluding:)` would make the next guard one sentence.
+
+**41. Pass-throughs.** `DigestModel.posts(matching:in:)` forwards to `DigestPackage.posts(matching:hidden:)`, and `PostCard.network(_:)` returns `name.name`. Both add a name without a decision.
+
+*Closed in 173f513:* both deleted; the screen asks the package for its posts and the card reads `post.network.name`.
+
+**42. Three closures that call one method.** `DigestScreen` spells `Task { await digests.sync(folder: library.cloudFolder) }` for Try Again, Refresh and the error row's Retry. One action that reads the folder in one place would keep the folder out of three view closures.
+
+**43. Only the first delivery failure is shown.** `DeliverySync.run` returns every failure; `LibraryImporter.readChangedDeliveries` throws `.first` and drops the rest, while the digest joins all of them into `lastError`. The library's reader learns about one bad archive and never about the second.
+
+*Closed in 173f513:* the library joins every failure, and `testEveryUnreadableDeliveryIsNamed` names both archives.
+
+### AGENTS.md against the code
+
+**The new "one writer" section and the save path disagree.** AGENTS.md now says the right shape is a value that carries its engagement (`PostAction.saved(engagement)`) so a save without a journal line does not typecheck. No `PostAction` exists: `PostCard` calls `digests.save(...)` and then `imports.send(...)`, and the register row says "`digests.save` is the one save path" guarded by `DigestModelTests`. That test proves the model records every `Kind`; it cannot see a second view that calls `imports.send` without `save`. Either build the value — then the compiler is the guard — or write the row as the convention it is.
+
+**A register row names a test that guards a different thing.** "`seen`/`hidden` were a second copy of the index" is fixed by computed properties, a type/shape fix at level 1. `testRecordingAMarkNotifiesTheReader` proves observation, not the absence of the copy. The row should say the compiler is the guard and the test the backstop, as the "one rule, one home" rule already requires.
+
+**`reading.py`'s contract doc is false.** "Telegram reads public pages through `web` and takes no page" (`reading.py:5-7`), while `monitor` and `refresh` pass a page and `telegram.collect` uses it. The queue's "comments that lie" item closed three comments; this is a fourth, added by `5a2893b`.
+
+**`syncState`'s comment is false.** "a second pull waits for this one" (`DigestModel.swift:24`) while `sync` returns at `:114`. Either await the running task — `LibraryModel.readJournals` already does — or say the second pull is dropped.
+
+**The schedule guard proves less than the row implies.** `digest_script_checks` proves the plist has a `Minute`; it does not prove the hours match `BUILD_HOURS` (item 34). The row reads as if the whole schedule is guarded.
+
+### Skill mismatches
+
+Against `coding`:
+
+- **Same race, two answers.** `LibraryModel.readJournals` awaits the read that is already running; `DigestModel.sync` drops the new one. The skill's stale-response rule asks for one defined behavior for overlapping work, and the repo now ships both.
+- **One source of truth, one writer.** Item 35 (refresh writes the cache) and item 37 (the index held twice) are the two seam shapes the skill names as where bugs live.
+- **Sameness parameterized.** Items 32, 33, 40 and 42 are one rule written twice with a literal changed, which the skill calls a defect rather than reuse.
+- **What holds, and should not be touched.** Every wait is a named state (`DigestLoadState`, `DigestSyncState`, `CropPhase`, `EmbedPhase`); every task has an owner and cancels (`scoring`, `indexSave`, `progressWrite`); the sync loop is a real port with two adapters. These are the parts the branch got right.
+
+Against `software-developer`:
+
+- **"Report only what was checked."** The two register rows above claim a guard for a class the check cannot see. The work is right; the sentence is stronger than the proof.
+- **"Surgical changes" and "restore only what is necessary".** `5a2893b` restored the repost label by copying the label chain into `ThreadScreen` instead of reusing `contextLabel`, which is how item 32 appeared.
+- **"Start from the smallest thing that runs."** `DeliverySync` is the good case: two loops became one without changing either adapter's policy. `refresh` is the other case: it reached for `FileManager` inside the model instead of an operation on `DigestFile`.
+- **Verification.** The branch runs `guards.py` (diff checks, source checks, whole server suite) and the new tests fail without their fixes, as the register says. The three skill paths in AGENTS.md exist and match the harness revision, so the mismatch is in what the rows claim, not in which skills are read.
+
+### What I would do first
+
+1. **`DigestFile` owns the refresh write** (items 35, 6): one actor writes the cache, one path rule covers packages and refreshed media.
+2. **One sync behavior** (the `syncState` comment): await the running sync, as the library's journal read already does, or document the drop and make the pull say so.
+3. **Move the source table and the schedule to one home** (items 33, 34): `reading.py` for the table and the browser rule, one constant consumed by both `build.py` and the plist writer.
+4. **Reuse the card, the label and the stack** (items 32, 13, 14): one post card with variants, one `Context.Kind.label`, one generic stack.
+5. **Share test support** (item 39): a small target both test bundles import, holding the tar writer, the post factory and the ISO encoder.
+6. **Then the first pass's items 5, 6, 9, 10, 11, 12**, which none of the later commits touched.
+
