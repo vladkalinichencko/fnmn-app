@@ -28,6 +28,7 @@ enum SpeedPlayback: Equatable {
     case loading
     case paused
     case playing
+    case resting(Int)
     case stopped
     case ended
 }
@@ -56,6 +57,13 @@ final class SpeedPlayer {
 
     var isPlaying: Bool {
         mode == .playing
+    }
+
+    var resting: Int? {
+        if case let .resting(block) = mode {
+            return block
+        }
+        return nil
     }
 
     /// The text is split into tokens off the main thread: a book is hundreds of thousands of words.
@@ -97,7 +105,7 @@ final class SpeedPlayer {
     }
 
     func pause() {
-        guard mode == .playing else {
+        guard mode == .playing || resting != nil else {
             return
         }
         enter(.paused)
@@ -123,10 +131,10 @@ final class SpeedPlayer {
     }
 
     private func enter(_ next: SpeedPlayback) {
+        clock?.cancel()
+        clock = nil
         mode = next
         guard next == .playing else {
-            clock?.cancel()
-            clock = nil
             return
         }
         clock = Task { [weak self] in await self?.run() }
@@ -150,27 +158,42 @@ final class SpeedPlayer {
     }
 
     private func markShown() {
-        guard !frame.isEmpty else { return }
+        guard !frame.isEmpty else {
+            return
+        }
         furthest = max(furthest ?? 0, frame.upperBound - 1)
     }
 
-    /// Each frame stays for its own time, read at every step so a new speed takes effect on the next word.
     private func run() async {
-        while isPlaying, let text {
+        while mode == .playing, let text {
             let seconds = text.duration(of: frame, wordsPerMinute: wordsPerMinute, pauses: pauses)
             try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled, isPlaying else { return }
+            guard !Task.isCancelled, mode == .playing else {
+                return
+            }
             guard !isAtEnd else {
                 enter(.ended)
                 return
             }
+            let finished = frame
             show(frame.upperBound)
             if token?.isStop == true {
                 enter(.stopped)
                 return
             }
+            guard let block = text.endedBlock(at: finished) else {
+                continue
+            }
+            mode = .resting(block)
+            try? await Task.sleep(for: .seconds(Self.restSeconds))
+            guard !Task.isCancelled, case .resting = mode else {
+                return
+            }
+            mode = .playing
         }
     }
+
+    private static let restSeconds: Double = 1.6
 }
 
 struct Press: Equatable {
@@ -221,13 +244,22 @@ struct SpeedReader: View {
     let reader: ReaderCoordinator
     let start: ReadingLine
     @State private var player = SpeedPlayer()
-    @AppStorage(ReaderAppearance.speedKey) private var wordsPerMinute = 250
-    @AppStorage(ReaderAppearance.speedWordsKey) private var wordsPerFrame = 1
-    @AppStorage(ReaderAppearance.speedPausesKey) private var pauses = SpeedPauses.regular
+    @AppStorage private var wordsPerMinute: Int
+    @AppStorage private var wordsPerFrame: Int
+    @AppStorage private var pauses: SpeedPauses
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
     /// The current block shows whole while a finger rests on the words.
     @State private var press = Press()
     @State private var holdTimer: Task<Void, Never>?
+
+    init(reader: ReaderCoordinator, start: ReadingLine) {
+        self.reader = reader
+        self.start = start
+        let kind = reader.kind
+        _wordsPerMinute = AppStorage(wrappedValue: 250, ReaderAppearance.SpeedSetting.wordsPerMinute.key(kind))
+        _wordsPerFrame = AppStorage(wrappedValue: 1, ReaderAppearance.SpeedSetting.wordsPerFrame.key(kind))
+        _pauses = AppStorage(wrappedValue: .regular, ReaderAppearance.SpeedSetting.pauses.key(kind))
+    }
 
     private static let speeds = 150...600
     /// Above this speed, studies find less of the text understood.
@@ -318,7 +350,10 @@ struct SpeedReader: View {
     @ViewBuilder
     private var stage: some View {
         if let text = player.text {
-            if let token = player.token {
+            if let resting = player.resting {
+                plate(resting)
+                    .transition(.opacity)
+            } else if let token = player.token {
                 if token.isStop {
                     VStack(spacing: Tokens.gap) {
                         plate(token.block)

@@ -246,6 +246,7 @@ final class ReaderCoordinator {
     let title: String
     let source: SourceRef?
     let baseURL: URL
+    let kind: FNMNCore.Material.Kind
     private(set) var state: ReaderState
     /// Sends the column to a block's top once, set by the column itself. A scroll position kept in state would be
     /// gone to again on every change of the column's content: opening a section put the block the column had opened
@@ -270,12 +271,13 @@ final class ReaderCoordinator {
     /// The column opens at the note it was opened at, or else at the place reading stopped, which with the reading
     /// line is the line's block. A line saved in another block than the column opens at starts again at its top.
     /// Read one plate at a time, the material shows the plate of that same block.
-    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, place: Int?, note: Int?, showsLine: Bool, onePlate: Bool, library: LibraryModel, plainText: @escaping @Sendable (String) -> String) {
+    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, kind: FNMNCore.Material.Kind, place: Int?, note: Int?, showsLine: Bool, onePlate: Bool, library: LibraryModel, plainText: @escaping @Sendable (String) -> String) {
         self.document = document
         self.materialID = materialID
         self.title = title
         self.source = source
         self.baseURL = baseURL
+        self.kind = kind
         self.plainText = plainText
         state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library

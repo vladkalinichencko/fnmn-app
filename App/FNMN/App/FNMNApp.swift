@@ -16,6 +16,7 @@ struct FNMNApp: App {
         _server = State(initialValue: server)
         _imports = State(initialValue: ImportJobs(library: library, server: server))
         _digests = State(initialValue: DigestModel(device: library.deviceID, server: server))
+        ReaderAppearance.makeSpeedProfiles()
     }
 
     var body: some Scene {

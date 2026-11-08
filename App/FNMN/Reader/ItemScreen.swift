@@ -74,6 +74,7 @@ private struct ArticleOpener: View {
             title: package.material.title,
             source: library.snapshot.source(of: itemID),
             baseURL: baseURL,
+            kind: package.material.kind,
             place: place,
             note: startPiece,
             showsLine: showsLine,

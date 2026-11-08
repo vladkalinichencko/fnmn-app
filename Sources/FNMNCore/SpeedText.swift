@@ -113,6 +113,17 @@ public struct SpeedText: Sendable {
         tokens.indices.dropFirst(index + 1).first { tokens[$0].startsSentence || tokens[$0].isStop }
     }
 
+    public func endedBlock(at frame: Range<Int>) -> Int? {
+        guard !frame.isEmpty, frame.upperBound < tokens.count else {
+            return nil
+        }
+        let last = tokens[frame.upperBound - 1]
+        guard !last.isStop, tokens[frame.upperBound].block != last.block else {
+            return nil
+        }
+        return last.block
+    }
+
     /// The letter the eye is meant to rest on, as an offset into `text`: a little left of the middle, the way a word
     /// is recognized fastest (the optimal recognition point). Leading quotes and brackets are passed over.
     public static func pivot(of text: String) -> Int {

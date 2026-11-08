@@ -1,3 +1,4 @@
+import FNMNCore
 import SwiftUI
 import Textual
 
@@ -237,6 +238,32 @@ enum ReaderAppearance {
     static let speedKey = "readerSpeedWordsPerMinute"
     static let speedWordsKey = "readerSpeedWordsPerFrame"
     static let speedPausesKey = "readerSpeedPauses"
+
+    enum SpeedSetting: String, CaseIterable {
+        case wordsPerMinute = "readerSpeedWordsPerMinute"
+        case wordsPerFrame = "readerSpeedWordsPerFrame"
+        case pauses = "readerSpeedPauses"
+
+        func key(_ kind: FNMNCore.Material.Kind) -> String {
+            "\(rawValue).\(kind == .book ? "book" : "article")"
+        }
+    }
+
+    static func makeSpeedProfiles(in defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: "readerSpeedProfiles") else {
+            return
+        }
+        defaults.set(true, forKey: "readerSpeedProfiles")
+        for kind in [FNMNCore.Material.Kind.article, .book] {
+            for setting in SpeedSetting.allCases {
+                guard let value = defaults.object(forKey: setting.rawValue) else {
+                    continue
+                }
+                defaults.set(value, forKey: setting.key(kind))
+            }
+        }
+    }
+
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
 

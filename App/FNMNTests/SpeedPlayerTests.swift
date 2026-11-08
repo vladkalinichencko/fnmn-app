@@ -104,4 +104,32 @@ final class SpeedPlayerTests: XCTestCase {
         }
         XCTAssertEqual(player.mode, .ended)
     }
+
+    func testAPlateShownWholeStandsBetweenParagraphs() async {
+        let player = await loaded()
+        player.play()
+        for _ in 0..<40 where player.resting == nil {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.resting, 0)
+        for _ in 0..<60 where player.mode != .playing {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.mode, .playing)
+        player.pause()
+    }
+
+    func testPausingDuringThePlateStopsTheWords() async {
+        let player = await loaded()
+        player.play()
+        for _ in 0..<40 where player.resting == nil {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.resting, 0)
+        player.pause()
+        XCTAssertEqual(player.mode, .paused)
+        let frame = player.frame
+        try? await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(player.frame, frame)
+    }
 }
