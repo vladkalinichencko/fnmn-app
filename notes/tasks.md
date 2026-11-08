@@ -588,9 +588,9 @@ Tests first, then one rule per commit. The behaviour each rule must keep is pinn
 - [x] U35. Two steps hide inside `LibraryModel`: folding the queued places in `saveProgress`, and removing a deleted material's delivery and original in `apply`. Name them, so both functions read as calls (4e72dec).
 - [x] U36. The app's folders show the flow: `App/` (entry and tabs), `Store/` (state), `Sync/` (device and disk), `Import/` (one import from a tap to a card), screens beside them; `APP_SPEC` says which folder is which.
 - [x] U37. The reader's column is one state: `laidOut` or `jumping(to:hiding:)`; `opening` and `hidesColumn` are read from it (5533aec).
-- [x] U38. The library's window state is one value: `LibraryPhase` folds `loadState` and the folder; a deep link waits for a real `ready` (885d604).
-- [x] U39. A failed server check says whether the address was saved (3e39946).
-- [ ] U40. Left from the state-machine note: video source and seek, item status, import job phases, speed playback, note editor, Live Activity, deep-link latch, dialog draft, web content identity.
+- [x] U38. The library's window state is one value: `LibraryPhase` folds `loadState` and the folder; a deep link waits for a real `ready` (885d604, f1962af).
+- [x] U39. A failed server check says whether the address was saved, through one transition (3e39946, c8be239).
+- [x] U40. The state-machine note is closed: video source and seek (6aa8223), item status (55e0681), import job place (3e88b27), speed playback and press (0e5acbb), note editor (c43a103), background activity (9d49d03), dialog draft (0d2d75f), web content identity (519f043).
 
 ### Unification pass 4 (branch `unification`, 2026-11-08)
 

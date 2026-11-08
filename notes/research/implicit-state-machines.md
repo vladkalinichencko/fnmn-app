@@ -1,6 +1,6 @@
 # Implicit state machines
 
-Line references in this note predate the 2026-11-08 folder move and the `LoadState` rename; the claims were checked again on 2026-11-08, and items 1, 3 and 11 are now closed.
+Line references in this note predate the 2026-11-08 folder move and the `LoadState` rename; the claims were checked again on 2026-11-08. Items 1, 3 and 11 are closed, and the nine that the owner took next (2, 4, 5, 6, 8, 10, 12, 13, 14) are closed on `unification`, each with a test that fails without it. Item 7 is left as it is, on purpose, and 9, 15 stay as they are.
 
 Question: which state in the app is a machine that nobody named?
 
@@ -71,6 +71,8 @@ else { YouTube embed }
 
 Shape: `enum Source { local(URL, ready: Bool), downloading(URL), embed(EmbedPhase) }` computed once, and `enum Seek { none, pending(Double), applied }`. The view then branches on one value.
 
+*Closed in 6aa8223:* `VideoSource.of(original:downloaded:onDevice:)` is read from the disk on every draw, so a file the system let go comes down again; `videoReduce` drops `seekTo` on `.embed(.failed)` and on `.left`, and `SystemPlayer` reports a seek done only when the system applied it. `VideoSourceTests` and `VideoStateTests` pin both; proven by keeping the seek on a failed page and on leaving.
+
 ## 3. Library readiness
 
 [LibraryLoadState](../../App/FNMN/Store/LibraryModel.swift#L17-L23) names four states, and the app treats three more fields as part of the same state: `cloudFolder` ([L36](../../App/FNMN/Store/LibraryModel.swift#L36)), `failure` ([L42](../../App/FNMN/Store/LibraryModel.swift#L42)) and the journal read handle ([L52](../../App/FNMN/Store/LibraryModel.swift#L52)).
@@ -110,6 +112,8 @@ Marking read also archives, and unmarking also unarchives, but only from the til
 
 Shape: keep the stores, add one derived `enum ItemStatus { unread, started, read, archived }` selector next to `continueItems`, and make every screen read it. This is the one place where deriving again is better than storing: the stores already merge by time across devices.
 
+*Closed in 55e0681:* `ItemStatus` (`unread`, `started`, `read`) and `ReadingProgress.status(of:)`; the tile menu, Continue and the continue deep link read it, so a material marked read leaves both. `LibraryTests` pins the four answers and their agreement; proven by removing the status check from `continuedID`, which made the deep link open a read material again. Archiving stays a catalog fact beside the status, because marking read and archiving are two separate choices the person makes.
+
 ## 5. Import job
 
 [ImportJob](../../App/FNMN/Store/ImportJobs.swift#L18-L38) has `phase` (`preparing(step)` or `failed(message)`) and an optional `itemID`. Completion is not a case; the job disappears ([L62-L90](../../App/FNMN/Store/ImportJobs.swift#L62-L90)). The four reachable states are:
@@ -127,6 +131,8 @@ Shape: keep the stores, add one derived `enum ItemStatus { unread, started, read
 
 Shape: `phase` gains `done` only if the UI needs to show it; the real fix is to make `itemID` part of the phase (`onTile` / `onCard(id)`), and to store the task in the job itself or in a reducer-produced `effects` list.
 
+*Closed in 3e88b27:* `ImportJob.Phase` carries `Place` (`tile` or `card(id)`), so a failed job cannot be given a card and `.finished` only closes a job still preparing; `itemID` is read from the phase. `ImportJobTests` drives `importReduce`; proven by letting `.placed` rewrite the phase, which attached a card to a failed job. The `running` dictionary stays: it maps a job to the task that runs it, and the list stays the only record of what exists.
+
 ## 6. Speed playback
 
 [SpeedPlayer](../../App/FNMN/Reader/SpeedReader.swift#L30-L45) has `text`, `frame`, `isPlaying`, `furthest`, and a `clock` task. The visible modes are loading, paused, playing, stopped on a block, and at the end. None of them is stored as a state: loading is `text == nil`, paused is `!isPlaying`, and the other two are computed:
@@ -140,6 +146,8 @@ Shape: `phase` gains `done` only if the UI needs to show it; the real fix is to 
 The touch state is worse: `holding`, `touchStart`, `holdTimer` and `playedBeforeHold` ([L158-L161](../../App/FNMN/Reader/SpeedReader.swift#L158-L161)) are four fields for one machine — idle, pressed, holding, released — with cancellation spread across three closures ([L303-L331](../../App/FNMN/Reader/SpeedReader.swift#L303-L331)). `holding` true with no finger is representable; `playedBeforeHold` survives into the next gesture.
 
 Shape: `enum Playback { loading, paused(frame: Range<Int>), playing, stopped(at: Int) }` owned by the player, with the clock started and cancelled by transitions into and out of `.playing`. The view gets `enum Press { idle, down(since: Date), holding(wasPlaying: Bool) }`.
+
+*Closed in 0e5acbb:* `SpeedPlayback` (`loading`, `paused`, `playing`, `stopped`, `ended`) with `enter` as the one writer, so the clock lives exactly while the words run, and a stop survives a pause; `Press` (`idle`, `down`, `holding`) holds whether the words should start again. `SpeedPlayerTests` and `PressTests`; proven by letting `pause()` rewrite a stopped player, and by holding a press that already lifted.
 
 ## 7. Plate aside
 
@@ -161,6 +169,8 @@ That last line is the implicit transition that matters: a journal merge from ano
 
 Shape: `enum NoteEdit { closed(saved: String), editing(draft: String), saving(draft: String) }`, with an explicit conflict rule (keep the local draft, or show both). The view then reads one value.
 
+*Closed in c43a103:* `NoteEdit` holds `saved`, `draft` and whether the field is open; a note that arrives while a changed draft is open is ignored, and closing saves once. `NoteEditTests`; proven by letting every arriving note into the draft, which replaced what the person typed.
+
 ## 9. Progress write-behind
 
 [LibraryModel](../../App/FNMN/Store/LibraryModel.swift#L111-L126) buffers saved places in `places`, publishes everything else at once, and schedules a write two seconds after the last change ([L203-L211](../../App/FNMN/Store/LibraryModel.swift#L203-L211)). Four fields form the machine: `places`, `progressUnsaved`, `progressWrite`, `lastWrite`; `journalRead` is a fifth single-flight latch ([L170-L180](../../App/FNMN/Store/LibraryModel.swift#L170-L180)).
@@ -179,6 +189,8 @@ Reachable combinations the type allows: ID set with no task (requested, not yet 
 
 Shape: `enum Activity { idle, requested(id: String, step: ImportStep), running(task: BGContinuedProcessingTask, step: ImportStep) }`. The identifier check then becomes a switch, and `end` can complete whatever is bound.
 
+*Closed in 9d49d03:* `ImportActivity.State` (`idle`, `requested`, `running`, `ended`) over a small `ImportActivityTask` port, so a test binds a fake task. A request the system adopts after the import ended completes with the import's own status. `ImportActivityTests`; proven by completing such a request as success.
+
 ## 11. Connection check
 
 [ConnectionCheck](../../App/FNMN/Settings/SettingsScreen.swift#L3-L10) is a clean four-state enum, but the saved credential is a second machine beside it. `saveAndCheck` writes the connection to Keychain and memory before checking ([L85-L101](../../App/FNMN/Settings/SettingsScreen.swift#L85-L101)). A parse failure leaves `.failed` with nothing saved; a network failure leaves `.failed` with the new credential saved. One state name, two very different outcomes, and the user cannot tell which one they are in.
@@ -195,6 +207,8 @@ Shape: `enum Check { editing, checking, connected, failed(message, saved: Bool) 
 
 Shape: `enum PendingRoute { none, waiting(Route) }` on `WindowNavigation`, consumed by the first screen that can show it.
 
+*Closed in f1962af:* `PendingRoute` (`none`, `continueReading`) lives on `WindowNavigation` beside the tab and its stacks, and `showPending` opens it once the library is ready and asks for the route only then. `PendingRouteTests`; proven by consuming the route while the folder is still missing. The route itself is still computed at the moment it opens, since the place in the library may have moved while the app waited.
+
 ## 13. Dialog draft
 
 [LibraryDialog](../../App/FNMN/Library/LibraryDialogs.swift#L6-L18) is a good explicit machine, and the one field it does not own is the draft: `albumName` is `@State` in the view modifier ([L67](../../App/FNMN/Library/LibraryDialogs.swift#L67)), shared by the create and rename alerts. The alert is presented from `dialogs.dialog.albumTarget`, a `String??` whose `.some(nil)` means "new album, standalone" ([L149-L151](../../App/FNMN/Library/LibraryDialogs.swift#L149-L151)). The double optional exists only because `presenting:` needs an optional payload; the case already carries the meaning.
@@ -203,6 +217,8 @@ The draft is cleared on create and cancel but not on `dismiss` ([L130-L143](../.
 
 Shape: `case namingAlbum(adding: String?, draft: String)` and `case renamingAlbum(name: String, draft: String)`, so the draft travels with the state and no view needs to remember to clear it.
 
+*Closed in 0d2d75f:* both cases carry the draft, `typeAlbumName` rewrites it, and the view binds the field to the dialog instead of its own `@State`. `LibraryDialogsTests`; proven by building a fresh new-album dialog on every keystroke, which lost a rename.
+
 ## 14. Web content identity
 
 [LiveCropView](../../App/FNMN/Reader/LiveCropView.swift#L5-L18) has a correct `CropPhase` enum and a static `shownHeights` cache keyed by URL and selector. The cache is a second state store: `height` for `.loading` reads the last height of that figure from a previous instance ([L54-L58](../../App/FNMN/Reader/LiveCropView.swift#L54-L58)), which is deliberate (it avoids a layout jump). It is never cleared, and it is global across windows.
@@ -210,6 +226,8 @@ Shape: `case namingAlbum(adding: String?, draft: String)` and `case renamingAlbu
 Both web views use `loaded` (a URL or video ID) as a hand-rolled generation ([LiveCropView.swift#L96-L110](../../App/FNMN/Reader/LiveCropView.swift#L96-L110), [VideoReaderView.swift#L389-L400](../../App/FNMN/Video/VideoReaderView.swift#L389-L400)). The delegate and script callbacks carry no identity, so a message from the page that was just replaced writes the new page's phase. `updateUIView` sets `phase = .loading` in a `Task` after the new load starts, which narrows the window but does not close it.
 
 Shape: a `generation: Int` bumped on each load, passed to the coordinator with every callback, or a small `enum Content { none, loading(URL), shown(URL, CGFloat), failed(URL, String) }` where the URL is checked on arrival.
+
+*Closed in 519f043:* `WebGeneration` in the core, carried into the page and sent back with every message; the page's own number is what the coordinator accepts, and a failure from a replaced navigation is dropped. The figure sends it from its injected script, the player from its page. `WebGenerationTests` and `WebPageIdentityTests`; proven by accepting every number and by dropping it from the height message.
 
 ## 15. Catalog migration
 
