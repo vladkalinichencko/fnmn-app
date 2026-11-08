@@ -573,4 +573,11 @@ Tests first, then one rule per commit. The behaviour each rule must keep is pinn
 - [x] U12. One `OrderedGroups` for the collections, the screen's arrangement and the magazine's sections; first-seen order, declared folders keep their place, empty ones drop.
 - [x] U13. One `asset_path` for the four adapters; the names are unchanged.
 - [x] U14. One `write_delivery_from` for the digest's media and model; a digest now reads through the article reader.
-- [ ] U15. Left: one route stack, one post card, one Markdown splitter, one yt-dlp driver, one OCR loop.
+- [ ] U15. Left: one post card, one OCR loop, and the audit's cross-cutting items.
+
+### Unification pass 3 (branch `refactor/unification-3`, 2026-11-08)
+
+- [x] U16. One `MarkdownParts` splitter for the column and the speed reader; a heading, a fence and a `$$` formula end a part the same way.
+- [x] U17. One `collect/ytdlp.py` for the three collectors: the command, the JSON lines and the last error line.
+- [x] U18. One `RouteStack` for the library, the shelf and the digest; `Route.hidesTabBar` is a property of the route.
+- [ ] U19. Left: the post card and the OCR loop, then the audit's cross-cutting items.
