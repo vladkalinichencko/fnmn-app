@@ -8,8 +8,6 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from tqdm import tqdm
-
 PROMPT = "<|grounding|>Convert the document to markdown."
 MODEL = "mlx-community/DeepSeek-OCR-2-bf16"
 
@@ -46,6 +44,7 @@ def run(
     if not jobs:
         save(output, overrides)
         return
+    from tqdm import tqdm
     from mlx_vlm import generate, load
     from mlx_vlm.prompt_utils import apply_chat_template
 
