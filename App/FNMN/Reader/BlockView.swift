@@ -21,6 +21,7 @@ struct BlockView: View, Equatable {
     let fold: HeadingFold
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
+    var spot: TextSpan?
 
     var body: some View {
         switch block {
@@ -31,7 +32,7 @@ struct BlockView: View, Equatable {
             PlateView(
                 markdown: markdown, index: index, baseURL: baseURL, mode: mode,
                 readShare: readShare, markedReadThrough: markedReadThrough, annotations: annotations,
-                finds: finds, activeFind: activeFind
+                finds: finds, activeFind: activeFind, spot: spot
             )
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
@@ -176,6 +177,7 @@ struct PlateView: View {
     let annotations: [Annotation]
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
+    var spot: TextSpan?
     /// How far the finger has moved the plate from where the mode puts it; zero whenever no finger is on it.
     @State private var drag: CGFloat = 0
     @State private var size = CGSize.zero
@@ -284,8 +286,8 @@ struct PlateView: View {
 
     /// A selection stays inside its plate. What is read grays in the text; the glass stays as it is.
     private var plate: some View {
-        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts, finds: finds, activeFind: activeFind))
-            .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts), AnyHashable(finds), AnyHashable(activeFind)])
+        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts, finds: finds, activeFind: activeFind, spot: spot))
+            .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts), AnyHashable(finds), AnyHashable(activeFind), AnyHashable(spot)])
             .textual.overflowMode(.wrap)
             .plateMarkdownStyles()
             .textual.textSelection(.enabled)

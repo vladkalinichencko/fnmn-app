@@ -92,7 +92,8 @@ struct ReadingSession: View {
                             annotations: marks[index] ?? [],
                             fold: fold(of: index, in: document),
                             finds: findsByBlock[index]?.map(\.span) ?? [],
-                            activeFind: activeFind?.piece == index ? activeFind?.span : nil
+                            activeFind: activeFind?.piece == index ? activeFind?.span : nil,
+                            spot: reader.spotSpan(of: index)
                         )
                         .equatable()
                         .padding(.bottom, Tokens.gap)
@@ -167,6 +168,12 @@ struct ReadingSession: View {
                     .navigationTransition(.zoom(sourceID: media, in: mediaZoom))
             }
         }
+        .overlay(alignment: .bottom) {
+            if let spot = reader.state.spot {
+                SpotControls(reader: reader, running: spot.running)
+                    .padding(.bottom, 12)
+            }
+        }
         .toolbar {
             if reader.state.mode != .reading {
                 ToolbarItem(placement: .confirmationAction) {
@@ -208,5 +215,25 @@ private struct Reveal: ViewModifier {
                 guard !shown else { return }
                 withAnimation(.spring(duration: 0.32, bounce: 0.22)) { shown = true }
             }
+    }
+}
+
+struct SpotControls: View {
+    let reader: ReaderCoordinator
+    let running: Bool
+
+    var body: some View {
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                Button(running ? "Pause" : "Play", systemImage: running ? "pause.fill" : "play.fill") {
+                    reader.send(.spotPaused(running))
+                }
+                .buttonStyle(.glass)
+                Button("Done", systemImage: "xmark") {
+                    reader.send(.spot(false))
+                }
+                .buttonStyle(.glass)
+            }
+        }
     }
 }

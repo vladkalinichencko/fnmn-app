@@ -352,6 +352,11 @@ struct ReaderMenu: View {
                 set: { reader.send(.onePlate($0)) }
             ))
             Button("Speed Reading", systemImage: "hare") { reader.send(.speedReading(true)) }
+            if reader.state.spot == nil {
+                Button("Spot Reading", systemImage: "text.cursor") { reader.send(.spot(true)) }
+            } else {
+                Button("Stop Spot Reading", systemImage: "xmark.circle") { reader.send(.spot(false)) }
+            }
             Button("Find in Material", systemImage: "magnifyingglass") {
                 if reader.state.shownPlate != nil {
                     reader.send(.onePlate(false))

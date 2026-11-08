@@ -27,6 +27,13 @@ ONE_LINE_BLOCK = re.compile(
 )
 ELSE_ONE_LINE = re.compile(r"^\s*\}\s*else\b.*\{[^{}]*\}\s*$")
 AMONG = re.compile(r"\bamong\s*:|\?\?\s*items\b")
+STRING_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
+COMMENT_IN_CODE = re.compile(r"//|/\*")
+
+
+def comment_in(line):
+    """A comment anywhere on the line, whatever the form: a doc comment, a note after code, a block."""
+    return bool(COMMENT_IN_CODE.search(STRING_LITERAL.sub('""', line)))
 # Generated trees that must never be tracked: the digest store's working files, browser profiles with the
 # logged-in sessions, build products and Python caches.
 RUNTIME_PATHS = ("/out/", "/profiles/", "/__pycache__/", "/.build/", "/.venv/")
@@ -62,7 +69,7 @@ def diff_violations(base):
         is_swift = path.endswith(".swift")
         if CYRILLIC.search(text):
             found.append((path, number, "cyrillic", "Russian text in a change; the repository is written in English"))
-        if is_swift and text.strip().startswith("//"):
+        if is_swift and comment_in(text):
             found.append((path, number, "comment", "a comment in the code; the names and the shape carry the meaning"))
         if is_swift and (ONE_LINE_BLOCK.match(text) or ELSE_ONE_LINE.match(text)):
             found.append((path, number, "one-line block", "block body on one line; put the statements on their own lines"))
@@ -190,6 +197,22 @@ def server_python() -> str:
     return str(venv) if venv.exists() else sys.executable
 
 
+def diff_self_test():
+    cases = [
+        ("    /// A doc comment.", True),
+        ("    // a note", True),
+        ("    let count = 1 // a note", True),
+        ("    /* a block */", True),
+        ('    let url = URL(string: "https://x.org")!', False),
+        ('    let text = "a // b"', False),
+        ("    let half = total / 2", False),
+        ("    let path = bundle.appending(path: \"search\")", False),
+    ]
+    for line, should in cases:
+        if comment_in(line) != should:
+            sys.exit(f"FAILED: the comment check reads {line!r} wrongly")
+
+
 def lint_self_test():
     probe = ROOT / "App/FNMN/GuardProbe.swift"
     probe.write_text(
@@ -236,6 +259,7 @@ def main():
     source_checks()
     source_self_test()
     print("==> lint self-test", flush=True)
+    diff_self_test()
     lint_self_test()
     step("swiftlint --strict", ["swiftlint", "--strict"])
     step("swift test", ["swift", "test"])

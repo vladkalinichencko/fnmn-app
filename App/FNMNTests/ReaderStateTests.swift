@@ -44,6 +44,21 @@ final class ReaderStateTests: XCTestCase {
         XCTAssertEqual(next.column, .jumping(to: 3, hiding: false))
     }
 
+    func testSpotStartsAtThePlaceMovesAndStops() {
+        var state = readerReduce(ReaderState(place: 3), .spot(true), document: document)
+        XCTAssertEqual(state.spot?.piece, 3)
+        XCTAssertEqual(state.spot?.running, true)
+        XCTAssertEqual(readerReduce(state, .spot(true), document: document), state)
+
+        state = readerReduce(state, .spotPaused(true), document: document)
+        XCTAssertEqual(state.spot?.running, false)
+
+        let moved = SpotState(piece: 5, word: 2, span: TextSpan(start: 4, length: 3), running: true)
+        state = readerReduce(state, .spotMove(moved), document: document)
+        XCTAssertEqual(state.spot, moved)
+        XCTAssertNil(readerReduce(state, .spot(false), document: document).spot)
+    }
+
     func testAFindThatArrivesAfterAnotherQueryIsDropped() {
         var state = readerReduce(ReaderState(place: nil), .find(true), document: document)
         state = readerReduce(state, .findQuery("one"), document: document)
