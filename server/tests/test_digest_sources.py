@@ -9,6 +9,7 @@ from lxml import html
 from digest import instagram, telegram, x
 from digest.reading import save_photo
 from digest.store import Store
+from tests import fakes
 from tests.test_digest_store import png
 from web import Web
 
@@ -23,9 +24,8 @@ def source(**values) -> dict:
     return {"id": "x/karpathy", "network": "x", "handle": "karpathy", "folders": ["ml"], **values}
 
 
-class FakeWeb(Web):
-    def __new__(cls, text=None, bytes=None):
-        return super().__new__(cls, text or (lambda url: ""), bytes or (lambda url: png()), None, None)
+def fake_web(text=None, bytes=None) -> Web:
+    return fakes.web(text=text or (lambda url: ""), bytes=bytes or (lambda url: png()))
 
 
 class FakeResponse:
@@ -66,7 +66,7 @@ class TelegramTests(unittest.TestCase):
     def test_the_fixture_page_reads_into_posts(self):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
-            web = FakeWeb(text=lambda url: fixture("telegram.html"))
+            web = fake_web(text=lambda url: fixture("telegram.html"))
             result = telegram.collect(
                 {"id": "telegram/telegram", "network": "telegram", "channel": "telegram", "folders": ["tech"]},
                 web, store, ["tech"], lambda stage: None,
@@ -89,7 +89,7 @@ class TelegramTests(unittest.TestCase):
             store = Store(Path(folder))
             result = telegram.collect(
                 {"id": "telegram/telegram", "network": "telegram", "channel": "telegram", "folders": ["tech"]},
-                FakeWeb(text=refuse), store, ["tech"], lambda stage: None, page=FakePage(fixture("telegram.html")),
+                fake_web(text=refuse), store, ["tech"], lambda stage: None, page=FakePage(fixture("telegram.html")),
             )
             self.assertEqual(len(result.posts), 3)
 
@@ -99,7 +99,7 @@ class XTests(unittest.TestCase):
         payload = json.loads(fixture("tweet-20.json"))
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
-            post = x._post(payload, "jack", source(), FakeWeb(), store, ["ml"])
+            post = x._post(payload, "jack", source(), fake_web(), store, ["ml"])
             self.assertEqual(post.id, "x/20")
             self.assertEqual(post.author, {"handle": "jack", "name": "jack"})
             self.assertEqual(post.text, "just setting up my twttr")
@@ -110,7 +110,7 @@ class XTests(unittest.TestCase):
         payload = json.loads(fixture("tweet-quote.json"))
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
-            post = x._post(payload, "karpathy", source(), FakeWeb(), store, ["ml"])
+            post = x._post(payload, "karpathy", source(), fake_web(), store, ["ml"])
             self.assertEqual(post.context["kind"], "quote")
             self.assertEqual(post.context["post"]["author"]["handle"], "hardmaru")
             self.assertEqual(post.context["post"]["text"], "A post being quoted.")
@@ -121,12 +121,12 @@ class XTests(unittest.TestCase):
         payload = json.loads(fixture("tweet-reply.json"))
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
-            post = x._post(payload, "karpathy", source(), FakeWeb(), store, ["ml"])
+            post = x._post(payload, "karpathy", source(), fake_web(), store, ["ml"])
             self.assertEqual(post.context["kind"], "reply")
             self.assertEqual(post.context["post"]["text"], "A post being answered.")
 
     def test_a_tweet_that_is_gone_is_skipped(self):
-        self.assertIsNone(x._tweet(FakeWeb(text=lambda url: json.dumps({"__typename": "TweetTombstone"})), "1"))
+        self.assertIsNone(x._tweet(fake_web(text=lambda url: json.dumps({"__typename": "TweetTombstone"})), "1"))
 
     def test_the_syndication_request_names_the_status(self):
         seen = []
@@ -135,7 +135,7 @@ class XTests(unittest.TestCase):
             seen.append(url)
             return json.dumps({"__typename": "TweetTombstone"})
 
-        self.assertIsNone(x._tweet(FakeWeb(text=text), "12345"))
+        self.assertIsNone(x._tweet(fake_web(text=text), "12345"))
         self.assertIn("id=12345", seen[0])
         self.assertIn("cdn.syndication.twimg.com/tweet-result", seen[0])
 
@@ -148,7 +148,7 @@ class TelegramTimeTests(unittest.TestCase):
                 '<div class="tgme_widget_message"><a data-post="channel/1"></a>'
                 '<div class="tgme_widget_message_text">Hello</div></div>'
             )
-            post = telegram._post(message, "channel", {"id": "telegram/channel"}, FakeWeb(), store, ["tech"])
+            post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
             self.assertIsNone(post)
 
 
@@ -160,7 +160,7 @@ class PictureTests(unittest.TestCase):
 
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
-            web = FakeWeb(bytes=refuse)
+            web = fake_web(bytes=refuse)
             self.assertIsNone(save_photo(web, store, "x/1", 0, "https://pbs.twimg.com/media/a.jpg"))
             post = x._post(json.loads(fixture("tweet-quote.json")), "karpathy", source(), web, store, ["ml"])
             self.assertEqual(post.media, [])
@@ -175,7 +175,7 @@ class InstagramTests(unittest.TestCase):
             post = instagram._post(
                 FakePage(fixture("instagram-post.html")), "studio", "CxYzAbCdEfG",
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
-                FakeWeb(), store, ["design"],
+                fake_web(), store, ["design"],
             )
             self.assertEqual(post.id, "instagram/studio/CxYzAbCdEfG")
             self.assertEqual(post.text, "Two pencils and one idea. Drawing the same shape until it stops arguing.")
@@ -196,7 +196,7 @@ class InstagramTests(unittest.TestCase):
             post = instagram._post(
                 FakePage(fixture("instagram-post.html")), "studio", "CxYzAbCdEfG",
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
-                FakeWeb(bytes=refuse), store, ["design"],
+                fake_web(bytes=refuse), store, ["design"],
             )
             self.assertEqual(len(post.media), 1)
 
@@ -212,7 +212,7 @@ class InstagramTests(unittest.TestCase):
             post = instagram._post(
                 FakePage(markup), "studio", "abc",
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
-                FakeWeb(), store, ["design"],
+                fake_web(), store, ["design"],
             )
             self.assertIsNone(post)
 
