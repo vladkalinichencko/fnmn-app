@@ -6,6 +6,31 @@ enum ConnectionCheck: Equatable {
     case connected
     /// The check failed; `saved` says whether the address and token were written before it did.
     case failed(String, saved: Bool)
+
+    enum Event {
+        case edited
+        case saveFailed(String)
+        case checkPassed
+        case checkFailed(String)
+    }
+
+    /// The address and token are written before the check runs, so only a failed save says they are not saved.
+    func send(_ event: Event) -> ConnectionCheck {
+        switch event {
+        case .edited:
+            return .editing
+        case let .saveFailed(message):
+            return .failed(message, saved: false)
+        case .checkPassed:
+            return .connected
+        case let .checkFailed(message):
+            return .failed(message, saved: true)
+        }
+    }
+
+    var isChecking: Bool {
+        self == .checking
+    }
 }
 
 /// The library folder, and the server address and token, saved once and checked with an authorized request.
@@ -60,7 +85,7 @@ struct SettingsScreen: View {
                     Button("Close", systemImage: "xmark") { dialogs.send(.dismiss) }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", systemImage: "checkmark", action: saveAndCheck).disabled(check == .checking)
+                    Button("Save", systemImage: "checkmark", action: saveAndCheck).disabled(check.isChecking)
                 }
             }
         }
@@ -69,8 +94,12 @@ struct SettingsScreen: View {
             address = connection?.endpoint.absoluteString ?? ""
             token = connection?.token ?? ""
         }
-        .onChange(of: address) { check = .editing }
-        .onChange(of: token) { check = .editing }
+        .onChange(of: address) {
+            check = check.send(.edited)
+        }
+        .onChange(of: token) {
+            check = check.send(.edited)
+        }
     }
 
     @ViewBuilder
@@ -95,16 +124,16 @@ struct SettingsScreen: View {
         do {
             try server.save(ServerConnection(address: address, token: token))
         } catch {
-            check = .failed(error.localizedDescription, saved: false)
+            check = check.send(.saveFailed(error.localizedDescription))
             return
         }
         check = .checking
         Task {
             do {
                 try await server.check()
-                check = .connected
+                check = check.send(.checkPassed)
             } catch {
-                check = .failed(error.localizedDescription, saved: true)
+                check = check.send(.checkFailed(error.localizedDescription))
             }
         }
     }
