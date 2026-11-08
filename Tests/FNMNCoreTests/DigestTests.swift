@@ -131,6 +131,16 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     }
 }
 
+@Test func aFileNamedDotIsRefused() async throws {
+    let root = try temporaryFolder()
+    let file = DigestFile(url: root, cache: root)
+    let tar = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).tar")
+    try writeTar(package: encoder().encode(package()), files: [(".", Data("x".utf8))], to: tar)
+    await #expect(throws: DigestFileError.unsafePath(".")) {
+        _ = try await file.add(tar: tar)
+    }
+}
+
 @Test func theIndexSurvivesARoundtrip() async throws {
     let root = try temporaryFolder()
     let file = DigestFile(url: root, cache: root)
@@ -157,6 +167,21 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     let last = try decoder.decode(DigestEngagement.self, from: Data(lines[1].utf8))
     #expect(last.kind == .saved)
     #expect(last.postID == "x/1")
+}
+
+@Test func aJournalFieldWithANewlineStaysOneLine() async throws {
+    let root = try temporaryFolder()
+    let file = DigestFile(url: root, cache: root)
+    let folder = try temporaryFolder()
+    let id = "x/1\nnot a second line"
+    try await file.append(DigestEngagement(kind: .opened, postID: id, digestID: "digest-1"), device: "phone", to: folder)
+    let journal = folder.appending(path: "digest-state/phone.jsonl")
+    let lines = try String(contentsOf: journal, encoding: .utf8)
+        .split(separator: "\n", omittingEmptySubsequences: true)
+    #expect(lines.count == 1)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    #expect(try decoder.decode(DigestEngagement.self, from: Data(lines[0].utf8)).postID == id)
 }
 
 @Test func evictionKeepsTheNewestDigests() async throws {

@@ -194,5 +194,31 @@ class HtmlMarkdownTests(unittest.TestCase):
         self.assertNotIn("ab", markdown)
 
 
+class AssetNameTests(unittest.TestCase):
+    PAGE_WITH = (
+        "<html><body><article><h1>T</h1>"
+        "<p>A paragraph long enough to be read as the article.</p>"
+        "{body}"
+        "</article></body></html>"
+    )
+
+    def test_the_same_picture_keeps_one_name(self):
+        page = self.PAGE_WITH.format(body='<img src="/a.jpg"><img src="/a.jpg">')
+        markdown, assets = article_markdown(page, PAGE)
+        names = list(assets)
+        self.assertEqual(len(names), 1)
+        self.assertRegex(names[0], r"^assets/[0-9a-f]{16}\.jpg$")
+        self.assertEqual(markdown.count(names[0]), 1)
+
+    def test_two_pictures_get_two_names(self):
+        page = self.PAGE_WITH.format(body='<img src="/a.jpg"><img src="/b.png">')
+        markdown, assets = article_markdown(page, PAGE)
+        names = sorted(assets)
+        self.assertEqual(len(names), 2)
+        for name in names:
+            self.assertRegex(name, r"^assets/[0-9a-f]{16}\.(jpg|png)$")
+            self.assertIn(name, markdown)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -287,20 +287,12 @@ extension DigestPackage {
     /// does not list, and never an empty one. A classifier label counts only when it names one of the package's
     /// folders.
     public func sections(labels: [String: String], hidden: Set<String>) -> [Section] {
-        var order = folders
-        var groups: [String: [Post]] = [:]
-        for post in posts where !hidden.contains(post.id) {
+        OrderedGroups.of(posts.filter { !hidden.contains($0.id) }, startingWith: folders) { post in
             let folder = folder(of: post, labels: labels)
-            if !order.contains(folder) {
-                order.append(folder)
-            }
-            groups[folder, default: []].append(post)
+            return (folder, folder)
         }
-        return order.compactMap { folder in
-            guard let posts = groups[folder], !posts.isEmpty else {
-                return nil
-            }
-            return Section(folder: folder, posts: posts.sorted { $0.postedAt > $1.postedAt })
+        .map { group in
+            Section(folder: group.key, posts: group.items.sorted { $0.postedAt > $1.postedAt })
         }
     }
 

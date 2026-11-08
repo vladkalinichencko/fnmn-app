@@ -121,6 +121,22 @@ private func twoDevices() async throws -> (phone: LibraryFile, pad: LibraryFile,
     #expect(found.snapshot.deletedAt[page.material.id] != nil)
 }
 
+@Test func aJournalLineWithANoteThatHasNewlinesStaysOneLine() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud, withIntermediateDirectories: true)
+    let file = LibraryFile(url: root.appending(path: "app"))
+    await file.useCloudFolder(cloud)
+    let target = AnnotationTarget(materialID: "article:a", piece: 0, text: "text")
+    let event = JournalEvent(time: Date(timeIntervalSince1970: 1_000), change: .library(.note("one\ntwo", target)))
+    try await file.appendJournal([event], device: "phone")
+    let journal = cloud.appending(path: "state/phone.jsonl")
+    let lines = try String(contentsOf: journal, encoding: .utf8)
+        .split(separator: "\n", omittingEmptySubsequences: true)
+    #expect(lines.count == 1)
+    #expect(try JSONDecoder().decode(JournalEvent.self, from: Data(lines[0].utf8)) == event)
+}
+
 @Test func aDeletedMaterialTakesItsArchiveOutOfTheFolderSoNothingReadsItBackIn() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let cloud = root.appending(path: "FNMN")

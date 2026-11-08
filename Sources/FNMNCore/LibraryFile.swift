@@ -453,15 +453,7 @@ public actor LibraryFile {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let journal = ownJournal(of: device, in: folder)
         try coordinatedWrite(at: journal, options: .forMerging) { url in
-            let lines = Data(try self.lines(of: events).utf8)
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                try lines.write(to: url)
-                return
-            }
-            let handle = try FileHandle(forWritingTo: url)
-            defer { try? handle.close() }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: lines)
+            try JSONLines.append(Data(try self.lines(of: events).utf8), to: url)
         }
         let written = try readJournal(journal)
         guard written.count > limit else { return }
@@ -484,7 +476,7 @@ public actor LibraryFile {
     }
 
     private func lines(of events: [JournalEvent]) throws -> String {
-        try events.map { String(decoding: try encoder.encode($0), as: UTF8.self) + "\n" }.joined()
+        try events.map { String(decoding: try JSONLines.line($0, encoder: encoder), as: UTF8.self) }.joined()
     }
 
     private func readJournal(_ file: URL) throws -> [JournalEvent] {
@@ -625,11 +617,7 @@ public actor LibraryFile {
 
     /// A relative path from a package, only when it stays inside the folder.
     static func contained(_ path: String, in folder: URL) -> URL? {
-        let folder = folder.standardizedFileURL
-        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return nil }
-        let destination = folder.appending(path: path).standardizedFileURL
-        guard destination.path == folder.path || destination.path.hasPrefix(folder.path + "/") else { return nil }
-        return destination
+        PackagePath.resolves(path, in: folder)
     }
 
     private func absorbLegacyNotes(_ notes: [Note], into snapshot: inout LibrarySnapshot) -> Bool {

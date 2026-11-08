@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import gzip
-import hashlib
 import io
 import re
 import tarfile
@@ -10,7 +9,7 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from adapters import pdf
-from package import Document, Report
+from package import Document, Report, asset_path
 from web import Web
 
 _PAPER = re.compile(
@@ -234,7 +233,7 @@ def _graphic(target: str, images: dict[str, bytes], files: dict[str, bytes], mai
         return f"\\includegraphics{{{target}}}"
     name, blob = found
     suffix = Path(name).suffix.lower()
-    path = f"assets/{hashlib.sha256(name.encode()).hexdigest()[:16]}{suffix}"
+    path = asset_path(name, suffix)
     files[path] = blob
     return f"\n\n![{Path(name).stem}]({path})\n\n"
 

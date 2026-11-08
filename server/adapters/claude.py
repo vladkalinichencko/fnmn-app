@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from html import unescape
 from urllib.parse import urlparse
 
 from adapters.chatgpt import normalize_copied_math
-from package import Document, ImportFailure, Report
+from package import Document, ImportFailure, Report, asset_path
 from web import Web
 
 _SHARE = re.compile(r"/share/([0-9A-Fa-f-]{36})")
@@ -126,7 +125,7 @@ def _artifact(spec: dict, artifacts: dict[str, dict], files: dict[str, bytes]) -
 
 def _page(content: str, files: dict[str, bytes]) -> str:
     whole = content.lstrip()[:15].lower().startswith(("<!doctype", "<html"))
-    path = f"assets/interactive-{hashlib.sha256(content.encode()).hexdigest()[:16]}.html"
+    path = asset_path(content, ".html", "interactive-")
     files[path] = (content if whole else _PAGE.replace("{content}", content)).encode()
     return f"```fnmn-interactive\n{path}\n```"
 

@@ -11,14 +11,12 @@ every other delivery.
 from __future__ import annotations
 
 import argparse
-import io
 import json
-import os
-import tarfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from digest.store import Post, Store, iso, wire
+from package import write_delivery_from
 
 HERE = Path(__file__).resolve().parent
 FNMN = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/FNMN"
@@ -120,37 +118,17 @@ def _model() -> dict | None:
 
 
 def _write(package: dict, posts: list[Post], store: Store, destination: Path) -> None:
-    """Writes the delivery next to its final name and renames it into place, so a run that dies leaves no
-    half a digest for the phone to read."""
-    temporary = destination.with_suffix(".tar.part")
-    with tarfile.open(temporary, "w", format=tarfile.USTAR_FORMAT) as archive:
-        _add(archive, "package.json", json.dumps(package, ensure_ascii=False).encode("utf-8"))
-        for post in posts:
-            for media in post.media:
-                _add_path(archive, media["path"], store.root / media["path"])
-            poster = (post.video or {}).get("poster")
-            if poster:
-                _add_path(archive, poster["path"], store.root / poster["path"])
-        model = HERE / "out/classifier.mlmodel"
-        if package["model"] and model.exists():
-            _add_path(archive, "classifier.mlmodel", model)
-    os.replace(temporary, destination)
-
-
-def _add(archive: tarfile.TarFile, name: str, data: bytes) -> None:
-    info = tarfile.TarInfo(name)
-    info.size = len(data)
-    info.mode = 0o644
-    archive.addfile(info, io.BytesIO(data))
-
-
-def _add_path(archive: tarfile.TarFile, name: str, path: Path) -> None:
-    if not path.exists():
-        raise FileNotFoundError(f"the digest names {name}, which the store does not hold")
-    info = archive.gettarinfo(str(path), arcname=name)
-    info.mode = 0o644
-    with path.open("rb") as file:
-        archive.addfile(info, file)
+    """The delivery goes through the same writer as an article's; the files already live in the store."""
+    files: list[tuple[str, Path]] = []
+    for post in posts:
+        files += [(media["path"], store.root / media["path"]) for media in post.media]
+        poster = (post.video or {}).get("poster")
+        if poster:
+            files.append((poster["path"], store.root / poster["path"]))
+    model = HERE / "out/classifier.mlmodel"
+    if package["model"] and model.exists():
+        files.append(("classifier.mlmodel", model))
+    write_delivery_from(destination, package, files)
 
 
 def _unshowable(post: Post) -> str | None:

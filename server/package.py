@@ -145,6 +145,11 @@ def delivery_name(material_id: str) -> str:
     return hashlib.sha256(material_id.encode()).hexdigest() + ".tar"
 
 
+def asset_path(seed: str, suffix: str = "", prefix: str = "") -> str:
+    """A file's name inside a delivery: the hash of what it came from, so the same picture keeps its name."""
+    return f"assets/{prefix}{hashlib.sha256(seed.encode()).hexdigest()[:16]}{suffix}"
+
+
 def place_original(library: Path, delivery: str, original: Path) -> None:
     """The file a material was made from goes to `originals/`, named like its delivery with its own extension,
     where the app finds it for Open Original."""
@@ -163,6 +168,17 @@ def write_delivery(path: Path, delivery: Delivery) -> None:
         _add(archive, PACKAGE_NAME, json.dumps(delivery.package, ensure_ascii=False).encode())
         for name, blob in delivery.files.items():
             _add(archive, name, blob)
+    replace_if_changed(incoming, path)
+
+
+def write_delivery_from(path: Path, package: dict, files: list[tuple[str, Path]]) -> None:
+    """The same archive, for files that already live on disk: a digest's media and its classifier model."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    incoming = path.with_suffix(".incoming")
+    with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
+        _add(archive, PACKAGE_NAME, json.dumps(package, ensure_ascii=False).encode())
+        for name, source in files:
+            _add_path(archive, name, source)
     replace_if_changed(incoming, path)
 
 
@@ -198,6 +214,15 @@ def _add(archive: tarfile.TarFile, name: str, blob: bytes) -> None:
     info.size = len(blob)
     info.mode = 0o644
     archive.addfile(info, io.BytesIO(blob))
+
+
+def _add_path(archive: tarfile.TarFile, name: str, path: Path) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"the delivery names {name}, which is not there")
+    info = archive.gettarinfo(str(path), arcname=name)
+    info.mode = 0o644
+    with path.open("rb") as file:
+        archive.addfile(info, file)
 
 
 def stable_id(prefix: str, value: str) -> str:
