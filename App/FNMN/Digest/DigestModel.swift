@@ -143,47 +143,10 @@ final class DigestModel {
     /// Takes the deliveries the index does not hold, and the ones whose unpacked copy the system removed.
     /// One bad delivery is a line of `lastError`; the others still land, and the magazine stays on screen.
     private func take(in folder: URL) async -> [String] {
-        let tars: [URL]
-        do {
-            tars = try await CloudFolder.archives(in: folder, subfolder: "digests")
-        } catch {
-            return ["the digests folder could not be read: \(error.localizedDescription)"]
-        }
-        var failures: [String] = []
-        var imported: [String: String] = [:]
-        for entry in index.imported {
-            imported[entry.file] = entry.id
-        }
-        var unpacked = Set((try? await file.packages())?.map(\.id) ?? [])
-        for tar in tars {
-            let name = tar.lastPathComponent
-            if let id = imported[name], unpacked.contains(id) {
-                continue
-            }
-            do {
-                try await CloudFolder.download(tar)
-                let digest = try await file.add(tar: tar)
-                unpacked.insert(digest.id)
-                if imported[name] == nil {
-                    index.imported.append(.init(file: name, id: digest.id, at: .now))
-                    imported[name] = digest.id
-                }
-            } catch {
-                failures.append("\(name): \(error.localizedDescription)")
-            }
-        }
-        if !tars.isEmpty {
-            do {
-                try await file.evict(keeping: 5)
-            } catch {
-                failures.append("the digest cache could not be pruned: \(error.localizedDescription)")
-            }
-            do {
-                try await file.saveIndex(index)
-            } catch {
-                failures.append("the digest index could not be saved: \(error.localizedDescription)")
-            }
-        }
+        let unpacked = Set((try? await file.packages())?.map(\.id) ?? [])
+        let target = DigestDeliveries(file: file, index: index, unpacked: unpacked)
+        let failures = await DeliverySync.run(target, in: folder)
+        index = target.index
         return failures
     }
 
@@ -239,5 +202,50 @@ final class DigestModel {
                 return
             }
         }
+    }
+}
+
+/// The digest's side of `DeliverySync`: the index and the unpacked folders decide what is known, and every
+/// new archive is unpacked and recorded. The index is written once after the loop.
+@MainActor
+private final class DigestDeliveries: DeliveryTarget {
+    let subfolder = "digests"
+    private let file: DigestFile
+    private var unpacked: Set<String>
+    var index: DigestIndex
+
+    init(file: DigestFile, index: DigestIndex, unpacked: Set<String>) {
+        self.file = file
+        self.index = index
+        self.unpacked = unpacked
+    }
+
+    func changed(_ archives: [URL]) async throws -> [URL] {
+        var imported: [String: String] = [:]
+        for entry in index.imported {
+            imported[entry.file] = entry.id
+        }
+        return archives.filter { archive in
+            guard let id = imported[archive.lastPathComponent] else {
+                return true
+            }
+            return !unpacked.contains(id)
+        }
+    }
+
+    func add(_ archive: URL, index: Int, total: Int) async throws {
+        let digest = try await file.add(tar: archive)
+        unpacked.insert(digest.id)
+        if !self.index.imported.contains(where: { $0.file == archive.lastPathComponent }) {
+            self.index.imported.append(.init(file: archive.lastPathComponent, id: digest.id, at: .now))
+        }
+    }
+
+    func finish(_ archives: [URL]) async throws {
+        guard !archives.isEmpty else {
+            return
+        }
+        try await file.evict(keeping: 5)
+        try await file.saveIndex(index)
     }
 }

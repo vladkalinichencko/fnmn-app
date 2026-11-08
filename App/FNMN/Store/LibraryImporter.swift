@@ -73,7 +73,7 @@ final class LibraryImporter {
 
     /// Reads the FNMN folder: its catalog, then every delivery this device has not read as it is now.
     func readFolder(
-        _ folder: URL, onStep: @escaping @MainActor (ImportStep) -> Void, write: Write
+        _ folder: URL, onStep: @escaping @MainActor (ImportStep) -> Void, write: @escaping Write
     ) async throws {
         onStep(.readingLibraryFolder)
         let catalog = folder.appending(path: "catalog.json")
@@ -89,24 +89,12 @@ final class LibraryImporter {
     /// it first; the others get it here from iCloud. Each one is saved as soon as it is read, so it shows as
     /// a card at once and a read that stops goes on from there the next time.
     func readChangedDeliveries(
-        in folder: URL?, onStep: @MainActor (ImportStep) -> Void = { _ in }, write: Write
+        in folder: URL?, onStep: @escaping @MainActor (ImportStep) -> Void = { _ in }, write: @escaping Write
     ) async throws {
-        let deliveries = try await deliveryFiles(in: folder)
-        var changed: [URL] = []
-        try await write(true) { [file] snapshot in
-            let found = try await file.changedDeliveries(deliveries, in: snapshot)
-            changed = found.deliveries
-            return found.snapshot
+        let target = LibraryDeliveries(file: file, write: write, onStep: onStep)
+        if let failure = await DeliverySync.run(target, in: folder).first {
+            throw DeliverySyncError.failed(failure)
         }
-        for (index, delivery) in changed.enumerated() {
-            onStep(.reading(index, of: changed.count))
-            try await CloudFolder.download(delivery)
-            try await write(true) { [file] snapshot in try await file.addCloudDelivery(delivery, into: snapshot) }
-        }
-    }
-
-    private func deliveryFiles(in folder: URL?) async throws -> [URL] {
-        try await CloudFolder.archives(in: folder, subfolder: "deliveries")
     }
 
     /// The files materials were made from and saved videos, in the FNMN folder's `originals/`, by the name
@@ -118,4 +106,37 @@ final class LibraryImporter {
 
     /// The FNMN folder is outside the app, so access to it is kept as a security-scoped bookmark.
     private static let cloudFolderKey = "cloudFolderBookmark"
+}
+
+/// The library's side of `DeliverySync`: the snapshot decides what changed, and every archive is written into
+/// the model's serialized write as soon as it is read.
+@MainActor
+private final class LibraryDeliveries: DeliveryTarget {
+    let subfolder = "deliveries"
+    private let file: LibraryFile
+    private let write: LibraryImporter.Write
+    private let onStep: @MainActor (ImportStep) -> Void
+
+    init(file: LibraryFile, write: @escaping LibraryImporter.Write, onStep: @escaping @MainActor (ImportStep) -> Void) {
+        self.file = file
+        self.write = write
+        self.onStep = onStep
+    }
+
+    func changed(_ archives: [URL]) async throws -> [URL] {
+        var changed: [URL] = []
+        try await write(true) { [file] snapshot in
+            let found = try await file.changedDeliveries(archives, in: snapshot)
+            changed = found.deliveries
+            return found.snapshot
+        }
+        return changed
+    }
+
+    func add(_ archive: URL, index: Int, total: Int) async throws {
+        onStep(.reading(index, of: total))
+        try await write(true) { [file] snapshot in try await file.addCloudDelivery(archive, into: snapshot) }
+    }
+
+    func finish(_ archives: [URL]) async throws {}
 }
