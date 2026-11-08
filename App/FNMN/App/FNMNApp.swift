@@ -37,7 +37,6 @@ private struct WindowRoot: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigation = WindowNavigation()
     @State private var dialogs = LibraryDialogs()
-    @State private var pendingContinue = false
 
     var body: some View {
         Group {
@@ -85,9 +84,9 @@ private struct WindowRoot: View {
             }
             takeSharedItems()
             Task { await digests.sync(folder: library.cloudFolder) }
-            guard pendingContinue else { return }
-            pendingContinue = false
-            continueReading()
+            navigation.showPending(phase: phase) {
+                continuedRoute()
+            }
         }
         .onChange(of: library.cloudFolder) { _, folder in
             guard let folder else {
@@ -97,10 +96,9 @@ private struct WindowRoot: View {
         }
         .onOpenURL { url in
             if url.scheme == "fnmn", url.host == "continue" {
-                if library.phase == .ready {
-                    continueReading()
-                } else {
-                    pendingContinue = true
+                navigation.pending = navigation.pending.arriving()
+                navigation.showPending(phase: library.phase) {
+                    continuedRoute()
                 }
             } else if url.scheme == "fnmn", url.host == "digest" {
                 navigation.tab = .digest
@@ -129,8 +127,10 @@ private struct WindowRoot: View {
         }
     }
 
-    private func continueReading() {
-        guard let id = library.snapshot.continuedID(library.progress) else { return }
-        navigation.show(.item(id))
+    private func continuedRoute() -> Route? {
+        guard let id = library.snapshot.continuedID(library.progress) else {
+            return nil
+        }
+        return .item(id)
     }
 }
