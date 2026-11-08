@@ -78,6 +78,17 @@ What follows from those examples, one line each:
 - No wrapper that renames one call, no method that ignores `self`, no property that only a test reads. `CloudFolder.isOnDevice` became `isLocal` made internal, `PendingRoute.arriving()` became an assignment, `SpeedPlayer.hasClock` became two tests that watch the words stand still and move on.
 - Effects start and stop with a transition, never beside it.
 
+The same work also produced the wrong versions first. They are here because each one looks reasonable while it is being written:
+
+- **Wrong:** a function that renames one call — `CloudFolder.isOnDevice(_:)` wrapping `isLocal(_:)`. **Right:** `isLocal` made internal, and the view calls it.
+- **Wrong:** a method that ignores `self` — `PendingRoute.arriving()` always returning `.continueReading`. **Right:** the assignment `pending = .continueReading` at the one place that decides it.
+- **Wrong:** a property only the tests read, so a private detail becomes part of the type — `SpeedPlayer.hasClock`. **Right:** two tests that watch the effect: a pause leaves the words standing, playing moves them on.
+- **Wrong:** the fact kept beside the state — `itemID` on the job, the draft in the view, `holding` next to `touchStart`. **Right:** the fact inside the case, read back through a computed property.
+- **Wrong:** a machine naming a state no screen shows. **Right:** the states are the words of the screen, and every one of them draws something.
+- **Wrong:** a comment that explains the name. **Right:** a better name; `guards.py` refuses the comment.
+
+**Sometimes the new type is the right answer, and that is the owner's call.** A new port earns its place when it names an external channel the code cannot reach otherwise: `ImportActivityTask` exists because a `BGTask` cannot be built in a test, and the rule about completing it has to be pinned. A shared value earns its place when two screens must answer the same question the same way: `WebGeneration`, `TextFold`, `PackagePath`. It does not earn its place with one caller, one call site, or a parameter that carries no decision. When the honest answer is a new type, bring it to the owner before building it, and the PR says which sentence the type answers.
+
 ## Machines nobody named
 
 Most screen state is already a machine; the fields just do not say so. The signs:
