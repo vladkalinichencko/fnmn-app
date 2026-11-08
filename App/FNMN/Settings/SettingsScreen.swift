@@ -4,7 +4,8 @@ enum ConnectionCheck: Equatable {
     case editing
     case checking
     case connected
-    case failed(String)
+    /// The check failed; `saved` says whether the address and token were written before it did.
+    case failed(String, saved: Bool)
 }
 
 /// The library folder, and the server address and token, saved once and checked with an authorized request.
@@ -78,7 +79,15 @@ struct SettingsScreen: View {
         case .editing: EmptyView()
         case .checking: ProgressView()
         case .connected: Label("Connected", systemImage: "checkmark.circle")
-        case let .failed(message): Text(message)
+        case let .failed(message, saved):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message)
+                if saved {
+                    Text("Saved; the server did not answer.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -86,7 +95,7 @@ struct SettingsScreen: View {
         do {
             try server.save(ServerConnection(address: address, token: token))
         } catch {
-            check = .failed(error.localizedDescription)
+            check = .failed(error.localizedDescription, saved: false)
             return
         }
         check = .checking
@@ -95,7 +104,7 @@ struct SettingsScreen: View {
                 try await server.check()
                 check = .connected
             } catch {
-                check = .failed(error.localizedDescription)
+                check = .failed(error.localizedDescription, saved: true)
             }
         }
     }
