@@ -10,6 +10,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* one declaration of the host table per side of the wire, generated from one list or returned by the server, so the app never re-derives a kind the server owns. `SourceIndex` and `publisher_of` answer a different question and should stay separate — but `collect/browser_library.source_for` is the offline half of `publisher_of` and can call it.
 
+*Decided 2026-11-08:* the two tables stay. The server and the app model different things and share only the wire format — see AGENTS.md, "Across the boundary".
+
 **2. YouTube video id.** `YouTube.videoID(in:)` (`Sources/FNMNCore/YouTube.swift:4`), `video_id_from_url` (`server/adapters/youtube.py:74`), and a third inline special case in `canonical_url` (`server/collect/browser_library.py:46`, which also rewrites the URL, not just reads the id). The two regex/id-shape rules match today; three copies means one of them will accept `watch?v=` while another does not.
 
 *One home:* the server's parser is the contract; the Swift copy is needed only because `SourceIndex.key` groups links offline. Give it a test that runs both over one list of URLs.
@@ -19,6 +21,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 **3. Delivery file name.** `delivery_name` (`server/package.py:142`), a second identical copy (`server/collect/reparse_library.py:89`), `_delivery` (`server/collect/prepare_browser_library.py:89`), and `LibraryFile.deliveryName` (`Sources/FNMNCore/LibraryFile.swift:384`). The prepare script hashes `row["url"]`; the other three hash the material id. For a link they differ (`https://…` against `link:https://…`), so the same material has two legal archive names depending on which writer made it. Nothing breaks today because the app stores the name it read, but any future writer that recomputes the name creates a second archive for one material.
 
 *One home:* `package.delivery_name`, imported by both collect scripts; the prepare script passes the material id it already builds. Across the wire it stays a contract, and the existing `DeliveryArchiveTests` should pin the rule on the Swift side.
+
+*Closed in 854f615:* the prepare script names a link archive `delivery_name("link:<url>")` and an article archive `delivery_name(stable_id("article", url))`; a legacy URL-named file is renamed once instead of refetched; `test_prepare` pins both.
 
 **4. Id to file or folder name.** `base64` with `/` → `_` for an article folder and its cover (`LibraryFile.swift:739`), `/` → `-` for a digest folder (`DigestFile.swift:105`), `sha256` hex for a delivery (three Python sites). Three encodings of one idea, in two files that already have a shared audience.
 
@@ -108,9 +112,13 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* one `title(for:)` that takes the DOM and the written Markdown and returns one answer, with the fallbacks written once.
 
+*Closed in 2804ce1:* `material_title(title, body, fallback)`; the app only reads `material.title`, and `test_markdown` pins the order.
+
 **19. The publisher of a page.** `server/publisher.py` resolves it from the live page (section above the article, else front page, plus `og:site_name`); `collect/browser_library.source_for` resolves it from the saved URL's path alone; `SourceIndex` resolves it in the app from the catalog and the declared sources. Three models of "who owns this page", and the app's answer can name a different source than the server's for the same article.
 
 *One home:* the server writes `material.source` for every delivery (it already does when it can) and the app's `SourceIndex` only fills gaps for materials imported before that; the offline catalog's `source_for` should call `publisher_of`'s path logic instead of restating it.
+
+*Closed in 7562c6e:* `Material.declaredSource` first, `SourceIndex` only when the server named none; `SourceNameTests` pins both.
 
 ## Server: Markdown repair
 

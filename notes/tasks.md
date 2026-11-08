@@ -592,4 +592,8 @@ One branch, one PR, a commit per step.
 - [x] U23. One `youtube-urls.json` fixture that both parsers are tested against, so the two address lists cannot drift.
 - [x] U24. `fake_web` uses `tests.fakes.web`; the digest tests stop subclassing `Web`.
 - [x] U25. `notes/research/source-identity.md`: the four decisions (source kind, publisher, title, delivery name) with options, costs and a pick.
-- [ ] U26. Waiting on the owner's answers in U25; then the winning option is one commit each.
+- [x] U26. Waiting on the owner's answers in U25; then the winning option is one commit each.
+- [x] U27. The publisher the server named wins; `SourceIndex` answers only when the server named none (7562c6e).
+- [x] U28. One `material_title`: the page's title, else the first Markdown heading, else the address; the app reads `material.title` (2804ce1).
+- [x] U29. A delivery is named by its material id; a legacy URL-named file is renamed once, not refetched (854f615).
+- [x] U30. The boundary rule: the server and the app keep their own classifications and share only the wire format (1a440a8).
