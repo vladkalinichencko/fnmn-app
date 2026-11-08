@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from digest import instagram, telegram, x
-from digest.reading import SourceFailure, browser
+from digest.reading import SourceFailure, browser, needs_browser
 from digest.store import Store, iso
 from web import LIVE
 
@@ -55,7 +55,7 @@ def _run(source: dict, folders: list[str], store: Store, verbose: bool) -> dict:
             print(f"{source['id']}: {stage}")
 
     try:
-        if source["network"] in ("x", "instagram", "telegram"):
+        if needs_browser(source["network"]):
             with browser(source["network"]) as page:
                 result = module.collect(source, LIVE, store, source.get("folders", []), report, page=page)
         else:

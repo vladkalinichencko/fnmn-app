@@ -68,7 +68,9 @@ struct MarkedMarkdown: MarkupParser {
             }
             if let inline = match.output.3 ?? match.output.5 {
                 let latex = flattened(String(inline))
-                if isPrice(latex) { return "\\$" + latex + "\\$" }
+                if InlineMath.looksLikeProse(latex) {
+                    return "\\$" + latex + "\\$"
+                }
                 // A formula this long would run past the line's end, where a line of text cannot scroll.
                 if latex.count > Self.longestInline { return "\n\n$$" + escaped(latex) + "$$\n\n" }
                 return "$" + escaped(latex) + "$"
@@ -83,11 +85,6 @@ struct MarkedMarkdown: MarkupParser {
     /// One line, and no dollar signs inside: a formula ends at the first one.
     private static func flattened(_ latex: String) -> String {
         latex.replacing(/\s*\n\s*/, with: " ").replacing(/(\\\$)|\$/) { $0.output.1.map(String.init) ?? "" }
-    }
-
-    /// Between two dollar signs of a sentence: words, no TeX.
-    private static func isPrice(_ text: String) -> Bool {
-        !text.contains(/[\\^_{}=+<>]/) && text.contains(/\p{L}{3,}/)
     }
 
     private static func escaped(_ latex: String) -> String {

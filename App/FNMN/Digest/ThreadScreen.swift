@@ -51,7 +51,7 @@ struct ThreadScreen: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                Text(kind == .reply ? "Replying to" : kind == .repost ? "Reposting" : "Quoting")
+                Text(kind.action)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

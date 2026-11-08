@@ -251,17 +251,32 @@ final class DigestModelTests: XCTestCase {
         let post = try XCTUnwrap(digests.post("x/1"))
         let digest = try XCTUnwrap(digests.digest(of: "x/1"))
         digests.record(.hidden, post: post, digest: digest)
-        let found = digests.posts(matching: "karpathy", in: digest.package)
+        let found = digest.package.posts(matching: "karpathy", hidden: digests.hidden)
         XCTAssertEqual(found.map(\.id), ["x/2"])
     }
 
     func testEveryNetworkAndContextKindHasADisplay() {
         for network in DigestPackage.Network.allCases {
-            XCTAssertFalse(PostCard.network(network).isEmpty)
+            XCTAssertFalse(network.name.isEmpty)
         }
         for kind in DigestPackage.Post.Context.Kind.allCases {
             XCTAssertFalse(PostCard.icon(kind).isEmpty)
-            XCTAssertFalse(PostCard.contextLabel(DigestPackage.Post.Context(kind: kind)).isEmpty)
+            let context = DigestPackage.Post.Context(kind: kind)
+            XCTAssertEqual(PostCard.contextLabel(context), "\(kind.action) a post that is gone")
+        }
+    }
+
+    func testAContextKindNamesThePostItShows() {
+        let parent = DigestPackage.Post.ContextPost(
+            id: "x/0",
+            network: .x,
+            author: .init(handle: "ada", name: "Ada"),
+            permalink: URL(string: "https://x.com/ada/status/0")!,
+            postedAt: Date(timeIntervalSince1970: 1_759_999_000)
+        )
+        for kind in DigestPackage.Post.Context.Kind.allCases {
+            let label = PostCard.contextLabel(DigestPackage.Post.Context(kind: kind, post: parent))
+            XCTAssertEqual(label, "\(kind.action) @ada")
         }
     }
 

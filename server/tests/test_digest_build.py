@@ -6,21 +6,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from digest import build, train
-from digest.store import Post, Store
+from digest.store import Store
+from tests.fakes import post
 from tests.test_digest_store import png
-
-
-def post(post_id: str, text: str = "A small model that reads the whole catalog.", folders=("ml",)) -> Post:
-    return Post(
-        id=post_id,
-        network="x",
-        source="x/karpathy",
-        author={"handle": "karpathy", "name": "Andrej Karpathy"},
-        permalink=f"https://x.com/karpathy/status/{post_id.split('/')[-1]}",
-        posted_at="2026-11-07T09:30:00Z",
-        text=text,
-        folders=list(folders),
-    )
 
 
 class BuildTests(unittest.TestCase):

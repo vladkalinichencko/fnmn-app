@@ -21,7 +21,8 @@ enum DigestSyncState: Equatable {
 @MainActor @Observable
 final class DigestModel {
     private(set) var state = DigestLoadState.idle
-    /// Whether a sync is running; the tab shows a small spinner, and a second pull waits for this one.
+    /// Whether a sync is running; the tab shows a small spinner. A second sync returns at once, because the
+    /// running one already reads every delivery.
     private(set) var syncState = DigestSyncState.idle
     /// Newest window first.
     private(set) var digests: [Digest] = []
@@ -124,11 +125,14 @@ final class DigestModel {
         }
         do {
             try await load()
-            if let folder {
-                let failures = await take(in: folder)
-                lastError = failures.isEmpty ? nil : failures.joined(separator: "; ")
-            }
             digests = try await file.packages()
+            if let folder {
+                let taken = await take(in: folder)
+                lastError = taken.failures.isEmpty ? nil : taken.failures.joined(separator: "; ")
+                if taken.took {
+                    digests = try await file.packages()
+                }
+            }
             state = .ready
             scoreIfNeeded()
             await writePending()
@@ -174,28 +178,21 @@ final class DigestModel {
         await writePending()
     }
 
-    /// The posts of the open digest after the search field's text, minus the hidden ones.
-    func posts(matching query: String, in package: DigestPackage) -> [DigestPackage.Post] {
-        package.posts(matching: query, hidden: hidden)
-    }
-
     private func load() async throws {
         guard !loaded else {
             return
         }
         index = try await file.loadIndex()
-        digests = try await file.packages()
         loaded = true
     }
 
     /// Takes the deliveries the index does not hold, and the ones whose unpacked copy the system removed.
     /// One bad delivery is a line of `lastError`; the others still land, and the magazine stays on screen.
-    private func take(in folder: URL) async -> [String] {
-        let unpacked = Set((try? await file.packages())?.map(\.id) ?? [])
-        let target = DigestDeliveries(file: file, index: index, unpacked: unpacked)
+    private func take(in folder: URL) async -> (failures: [String], took: Bool) {
+        let target = DigestDeliveries(file: file, index: index, unpacked: Set(digests.map(\.id)))
         let failures = await DeliverySync.run(target, in: folder)
         index = target.index
-        return failures
+        return (failures, target.took)
     }
 
     private func scoreIfNeeded() {
@@ -260,20 +257,19 @@ private final class DigestDeliveries: DeliveryTarget {
     let subfolder = "digests"
     private let file: DigestFile
     private var unpacked: Set<String>
+    private var imported: [String: String]
+    private(set) var took = false
     var index: DigestIndex
 
     init(file: DigestFile, index: DigestIndex, unpacked: Set<String>) {
         self.file = file
         self.index = index
         self.unpacked = unpacked
+        imported = Dictionary(index.imported.map { ($0.file, $0.id) }, uniquingKeysWith: { first, _ in first })
     }
 
     func changed(_ archives: [URL]) async throws -> [URL] {
-        var imported: [String: String] = [:]
-        for entry in index.imported {
-            imported[entry.file] = entry.id
-        }
-        return archives.filter { archive in
+        archives.filter { archive in
             guard let id = imported[archive.lastPathComponent] else {
                 return true
             }
@@ -283,8 +279,9 @@ private final class DigestDeliveries: DeliveryTarget {
 
     func add(_ archive: URL, index: Int, total: Int) async throws {
         let digest = try await file.add(tar: archive)
+        took = true
         unpacked.insert(digest.id)
-        if !self.index.imported.contains(where: { $0.file == archive.lastPathComponent }) {
+        if imported.updateValue(digest.id, forKey: archive.lastPathComponent) == nil {
             self.index.imported.append(.init(file: archive.lastPathComponent, id: digest.id, at: .now))
         }
     }

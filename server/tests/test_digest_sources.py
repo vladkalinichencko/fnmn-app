@@ -217,5 +217,16 @@ class InstagramTests(unittest.TestCase):
             self.assertIsNone(post)
 
 
+class SourceTableTests(unittest.TestCase):
+    def test_one_table_serves_the_monitor_and_the_refresh(self):
+        from digest import monitor, refresh
+        from digest.reading import needs_browser
+
+        self.assertIs(monitor.SOURCES, refresh.SOURCES)
+        for network in monitor.SOURCES:
+            self.assertTrue(needs_browser(network))
+        self.assertFalse(needs_browser("none"))
+
+
 if __name__ == "__main__":
     unittest.main()

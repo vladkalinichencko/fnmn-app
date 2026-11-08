@@ -61,7 +61,7 @@ struct PostCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            Text("\(Self.network(post.network)) · \(post.postedAt.formatted(.relative(presentation: .numeric)))")
+            Text("\(post.network.name) · \(post.postedAt.formatted(.relative(presentation: .numeric)))")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
@@ -171,7 +171,7 @@ struct PostCard: View {
                     .font(.callout)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open the post in \(Self.network(post.network))")
+            .accessibilityLabel("Open the post in \(post.network.name)")
         }
         .font(.caption2)
         .foregroundStyle(.tertiary)
@@ -182,7 +182,7 @@ struct PostCard: View {
             let link = digests.save(post, digest: digest)
             imports.send(.submit(.link(link), id: UUID()))
         }
-        Button("Open in \(Self.network(post.network))", systemImage: "arrow.up.right.square") {
+        Button("Open in \(post.network.name)", systemImage: "arrow.up.right.square") {
             openURL(post.permalink)
         }
         Button("Hide", systemImage: "eye.slash") {
@@ -195,10 +195,6 @@ struct PostCard: View {
         Tokens.concentric(Tokens.plateRadius, inset: Tokens.tilePadding)
     }
 
-    static func network(_ name: DigestPackage.Network) -> String {
-        name.name
-    }
-
     static func icon(_ kind: DigestPackage.Post.Context.Kind) -> String {
         switch kind {
         case .reply: "arrowshape.turn.up.left"
@@ -209,11 +205,7 @@ struct PostCard: View {
 
     static func contextLabel(_ context: DigestPackage.Post.Context) -> String {
         let handle = context.post.map { "@\($0.author.handle)" } ?? "a post that is gone"
-        return switch context.kind {
-        case .reply: "Replying to \(handle)"
-        case .repost: "Reposting \(handle)"
-        case .quote: "Quoting \(handle)"
-        }
+        return "\(context.kind.action) \(handle)"
     }
 
     static func length(_ seconds: Double) -> String {

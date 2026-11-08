@@ -14,13 +14,12 @@ folder or was deleted; the app moves the link's collections to it. `--into` writ
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from importer import import_link
-from package import Delivery, read_delivery, write_delivery
+from package import Delivery, delivery_name, read_delivery, write_delivery
 from web import LIVE
 
 _KEPT_CHANGES = {"setRead", "note", "mark", "span", "delete"}
@@ -84,11 +83,6 @@ def reparse(archive: Path, into: Path, kept: set[str]) -> str:
         write_delivery(into / delivery_name(new["id"]), after)
         return "link became an article"
     return f"kept, id changed to {new['id']}"
-
-
-def delivery_name(material_id: str) -> str:
-    """The app's name for a material's archive."""
-    return hashlib.sha256(material_id.encode()).hexdigest() + ".tar"
 
 
 def main() -> None:

@@ -546,3 +546,20 @@ Mac следит за выбранными каналами Telegram и пост
 - [x] Proof и not-in лежат в разделе «После ревью» заметки и в реестре AGENTS.md.
 - [ ] Очередь закрывает классификатор «модель едет в поставке» без прогона.
 - [x] Коммиты несут `tasks.md` и research-заметки; правки владельца сохранены.
+
+### Unification pass (branch `refactor/unification`, 2026-11-08)
+
+From [research/duplication-audit.md](research/duplication-audit.md), easiest first. Each entry deletes a second home and keeps the behavior; the ones marked done were proven by the guards run at the end.
+
+- [x] U1. AGENTS.md rows and two comments that claim more than the code does: the save row, the seen/hidden row, the schedule row; `reading.py`'s "Telegram takes no page"; `syncState`'s "a second pull waits".
+- [x] U2. One `Context.Kind.label(following:)` in FNMNCore, used by `PostCard` and `ThreadScreen`; the nested ternary goes.
+- [x] U3. Delete the pass-throughs `PostCard.network(_:)` and `DigestModel.posts(matching:in:)`.
+- [x] U4. `service.digest_media` asks `Store` for `media_dir` instead of rebuilding `digest/out/media`.
+- [x] U5. One `post()` factory in `server/tests/fakes.py` for the three digest test modules, and one `Published` write helper in `LibraryImporterTests`. The tar writer stays in each test target: the app target cannot see the package's tests, and a shared product is a bigger change than the copy.
+- [ ] U6. Not done: the three source guards differ in shape (one needle, one per-file rule, one allowlist), and `AppSources` already shares the file list; a helper used once would add a name without removing one.
+- [x] U7. `DeliverySync` failures: the library reports every failed archive, not the first; `take` reuses the loaded digests; `DigestDeliveries` keeps one known-file map.
+- [x] U8. One source table in `digest/monitor.py`, imported by `refresh`; `needs_browser` in `digest/reading.py`; the launchd hours read `BUILD_HOURS`; `html_markdown` imports `punctuation`; `reparse_library` imports `delivery_name`.
+- [x] C1. CI installed the server's packages on the runner's Python 3.9, while four pins need 3.10, so the guard job never reached the tests. `setup-python` 3.12 now matches the `.venv` the tests are written against.
+- [x] U9. One `InlineMath.looksLikeProse` for the price-or-formula test, used by `MarkedMarkdown` and `SpeedText`; a single letter is a variable, and the test says so.
+
+The rest of the audit (grouping, Markdown splitting, journal writer, path rule, archive writer, yt-dlp, OCR loop, the merged post card) is not in this PR; it stays in the note with its one-home shape.

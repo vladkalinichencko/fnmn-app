@@ -53,12 +53,14 @@ case "${1:-}" in
     agent $TRAINER "$PYTHON" -m digest.train
     /usr/libexec/PlistBuddy -c "Add :StartInterval integer 7200" "$AGENTS/$MONITOR.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval array" "$AGENTS/$BUILDER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0 dict" "$AGENTS/$BUILDER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Hour integer 8" "$AGENTS/$BUILDER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Minute integer 0" "$AGENTS/$BUILDER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:1 dict" "$AGENTS/$BUILDER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:1:Hour integer 20" "$AGENTS/$BUILDER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:1:Minute integer 0" "$AGENTS/$BUILDER.plist"
+    hours=($(cd "$SERVER" && "$PYTHON" -c "from digest.build import BUILD_HOURS; print(*BUILD_HOURS)"))
+    slot=0
+    for hour in "${hours[@]}"; do
+      /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:$slot dict" "$AGENTS/$BUILDER.plist"
+      /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:$slot:Hour integer $hour" "$AGENTS/$BUILDER.plist"
+      /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:$slot:Minute integer 0" "$AGENTS/$BUILDER.plist"
+      slot=$((slot + 1))
+    done
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval array" "$AGENTS/$TRAINER.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0 dict" "$AGENTS/$TRAINER.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Hour integer 21" "$AGENTS/$TRAINER.plist"

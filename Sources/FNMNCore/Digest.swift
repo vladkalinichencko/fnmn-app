@@ -192,6 +192,15 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 
             public enum Kind: String, Codable, CaseIterable, Sendable {
                 case quote, reply, repost
+
+                /// The words a card puts before the post it quotes, repeats or answers.
+                public var action: String {
+                    switch self {
+                    case .quote: "Quoting"
+                    case .reply: "Replying to"
+                    case .repost: "Reposting"
+                    }
+                }
             }
         }
 

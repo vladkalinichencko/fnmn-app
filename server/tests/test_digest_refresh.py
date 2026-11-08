@@ -2,25 +2,14 @@ import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from digest.refresh import refresh
-from digest.store import Post, Store
+from digest.store import Store
 from service import app
-
-
-def post(post_id: str = "x/1") -> Post:
-    return Post(
-        id=post_id,
-        network="x",
-        source="x/karpathy",
-        author={"handle": "karpathy", "name": "Andrej Karpathy"},
-        permalink="https://x.com/karpathy/status/1",
-        posted_at="2026-11-07T09:30:00Z",
-        text="A small model that reads the whole catalog.",
-        folders=["ml"],
-    )
+from tests.fakes import post
 
 
 class RefreshTests(unittest.TestCase):
@@ -57,3 +46,19 @@ class EndpointTests(unittest.TestCase):
             headers={"Authorization": "Bearer test"},
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_a_picture_in_the_store_is_served(self):
+        os.environ["FNMN_TOKEN"] = "test"
+        store = Store()
+        store.media_dir.mkdir(parents=True, exist_ok=True)
+        path = store.media_dir / f"probe-{uuid4().hex}.png"
+        path.write_bytes(b"png")
+        try:
+            response = TestClient(app).get(
+                f"/digest/media/{path.name}",
+                headers={"Authorization": "Bearer test"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, b"png")
+        finally:
+            path.unlink()
