@@ -145,7 +145,12 @@ final class SpeedPlayer {
         let playing = isPlaying
         pause()
         show(index)
-        if playing { play() }
+        if playing {
+            play()
+        } else if mode == .stopped {
+            // The block that waited is behind the words now, so the player waits for the person instead.
+            enter(.paused)
+        }
     }
 
     private func show(_ index: Int) {

@@ -79,6 +79,19 @@ final class SpeedPlayerTests: XCTestCase {
         XCTAssertEqual(player.mode, .stopped)
     }
 
+    func testAJumpAwayFromAStopLeavesTheStopBehind() async {
+        let player = await loaded("One.\n\n$$\nx^2\n$$\n\nAfter.")
+        player.play()
+        for _ in 0..<40 where player.mode == .playing {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.mode, .stopped)
+
+        player.sentenceBack()
+        XCTAssertEqual(player.mode, .paused)
+        XCTAssertEqual(player.token?.isStop, false)
+    }
+
     func testTheWordsFinishAtTheEndAndKeepNoClock() async {
         let player = await loaded("One.")
         player.play()
