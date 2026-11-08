@@ -2,7 +2,6 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// The lines every post card shares: the text as the digest wrote it, the arrow that opens it, and who wrote it.
 struct PostText: View {
     let text: String
 
@@ -11,7 +10,6 @@ struct PostText: View {
     }
 }
 
-/// The arrow that opens a post, its parent or a reply in its network.
 struct PostOpenButton: View {
     let url: URL
     let label: String
@@ -30,7 +28,6 @@ struct PostOpenButton: View {
     }
 }
 
-/// The author line above a post, in the size the card it belongs to uses.
 struct PostAuthorLine<Trailing: View>: View {
     enum Size {
         case full, compact

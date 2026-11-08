@@ -53,7 +53,7 @@ The question for every check: which values can reach this line, where do they co
 - One implementation per query. Do not add a second overload that exists only to accept a cached list (for example `among:` with a fallback to the collecting path). Make the cache once, and let the query read it.
 - Every block body is written on separate lines: function and computed-property bodies, initializers, `if`, `else`, `guard … else`, `for`, `while`, `switch` cases, and nested functions. Closures passed as arguments (`sorted { $0 < $1 }`, `map { … }`) may stay on one line when they are a single expression.
 - Keep an expanded `if`/`else` expanded. Do not condense it back during a formatting pass.
-- Write comments in English, and only where the code cannot say why. A comment block is at most four lines.
+- Write no comments in the code, neither `///` nor `//`. A name or a shape that needs a sentence beside it is the thing to change. `guards.py` refuses a comment on an added line.
 - Do not reformat lines or files the change does not need to touch.
 
 ## Across the boundary
@@ -100,7 +100,7 @@ Each defect below is closed by the check in the last column.
 |---|---|---|
 | 2026-11-02 | Russian text in the agent rules, lint config, and PR description | `guards.py`: `cyrillic` on added lines |
 | 2026-11-02 | One-line block bodies in new code, against the expanded style | `guards.py`: `one-line block` on added lines |
-| 2026-11-02 | Doc comments added in long blocks (43 added comment lines in one PR) | `guards.py`: `comment block`, more than four lines in a row |
+| 2026-11-02 | Doc comments added in long blocks (43 added comment lines in one PR) | `guards.py`: `comment`, any comment on an added line |
 | 2026-11-02 | A second code path for cached lists (`among:` with a fallback), and duplicate overloads | `guards.py`: `among parameter` on added lines |
 | 2026-11-02 | The Add to Collection sheet, search, and every screen rebuilt the whole catalog (~10–20 ms for 1,500 materials) in a view body; frames of the sheet's slide-in and of search typing were dropped | `snapshot_catalog_selector_in_view` in `.swiftlint.yml`; `HotPathGuardTests`; `guards.py` lint self-test, which must see the rule fire on a planted `LibraryQueries(` |
 | 2026-11-02 | A change removed `@ViewBuilder` and `public` and broke the app build, while the PR claimed a build that was not run | `guards.py --app`: `xcodebuild` of the FNMN scheme on every PR |
@@ -153,3 +153,4 @@ Each defect below is closed by the check in the last column.
 | 2026-11-08 | A paused speed reader kept a clock, a stop was content rather than state, and a lifted finger left its state behind | `SpeedPlayerTests`, `PressTests`: one playback mode owns the clock and one press value owns the gesture; proven by letting `pause()` rewrite a stopped player |
 | 2026-11-08 | A note synced from another device replaced the draft the person was typing | `NoteEditTests`: an open changed draft wins; proven by taking every arriving note into the draft |
 | 2026-11-08 | A video played a file whose bytes the system had let go, and a seek outlived the page it was asked of | `VideoSourceTests`, `VideoStateTests`: the source is read from the disk and a failed page drops its seek; proven by keeping the seek on `.embed(.failed)` and on `.left` |
+| 2026-11-08 | Comments narrated the state machines, the reader column and the post parts: prose beside names that already said it | `guards.py`: `comment` on added lines, proven by planting a `//` in `LoadState.swift` and watching the diff check fail |

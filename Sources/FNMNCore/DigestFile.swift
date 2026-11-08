@@ -85,7 +85,6 @@ public actor DigestFile {
         try JSONLines.append(try JSONLines.line(engagement, encoder: Self.encoder()), to: journal)
     }
 
-    /// Writes a picture the Mac refetched into the digest's folder, under the delivery's own path rule.
     public func saveMedia(_ data: Data, as name: String, of digest: Digest) throws -> String {
         let path = "media/\(name)"
         try Self.check(path)

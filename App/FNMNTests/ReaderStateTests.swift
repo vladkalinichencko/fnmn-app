@@ -2,7 +2,6 @@ import FNMNCore
 import XCTest
 @testable import FNMN
 
-/// The column's handshake: a jump waits for the rows, and a scroll means nothing until it lands.
 final class ReaderStateTests: XCTestCase {
     private let document = ReaderDocument(
         markdown: "# Book\n\nIntro.\n\n## One\n\nText one.\n\n## Two\n\nText two.",

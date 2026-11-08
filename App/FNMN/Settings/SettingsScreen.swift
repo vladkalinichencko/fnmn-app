@@ -4,7 +4,6 @@ enum ConnectionCheck: Equatable {
     case editing
     case checking
     case connected
-    /// The check failed; `saved` says whether the address and token were written before it did.
     case failed(String, saved: Bool)
 
     enum Event {

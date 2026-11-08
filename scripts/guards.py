@@ -19,7 +19,6 @@ from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parent.parent
 SCOPE = ["App", "Sources", "Tests", "AGENTS.md", ".swiftlint.yml", ".github"]
-MAX_COMMENT_RUN = 4
 
 CYRILLIC = re.compile(r"[\u0400-\u04FF]")
 ONE_LINE_BLOCK = re.compile(
@@ -59,22 +58,16 @@ def added_lines(base):
 
 def diff_violations(base):
     found = []
-    comment_end = {}
-    comment_length = {}
     for path, number, text in added_lines(base):
         is_swift = path.endswith(".swift")
         if CYRILLIC.search(text):
             found.append((path, number, "cyrillic", "Russian text in a change; the repository is written in English"))
+        if is_swift and text.strip().startswith("//"):
+            found.append((path, number, "comment", "a comment in the code; the names and the shape carry the meaning"))
         if is_swift and (ONE_LINE_BLOCK.match(text) or ELSE_ONE_LINE.match(text)):
             found.append((path, number, "one-line block", "block body on one line; put the statements on their own lines"))
         if is_swift and AMONG.search(text):
             found.append((path, number, "among parameter", "a second code path for a cached list; derive the cache once instead"))
-        if text.strip().startswith("//"):
-            length = comment_length.get(path, 0) + 1 if comment_end.get(path) == number - 1 else 1
-            comment_end[path] = number
-            comment_length[path] = length
-            if length == MAX_COMMENT_RUN + 1:
-                found.append((path, number, "comment block", f"more than {MAX_COMMENT_RUN} comment lines in a row"))
     return found
 
 

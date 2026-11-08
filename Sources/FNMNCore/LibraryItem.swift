@@ -35,8 +35,6 @@ extension LibraryItem.Kind {
 }
 
 extension Material {
-    /// The source the server named for the page, if it named one. A homepage alone adds nothing to the URL, and
-    /// the catalog may know a better name for that blog, so a nameless source falls through to it.
     var declaredSource: SourceRef? {
         guard let source, let name = source.name else {
             return nil

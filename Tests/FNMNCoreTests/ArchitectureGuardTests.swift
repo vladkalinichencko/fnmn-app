@@ -54,8 +54,6 @@ final class ArchitectureGuardTests: XCTestCase {
         XCTAssertTrue(saved.contains("storage.load()"), "savedConnection() no longer reads the saved connection")
     }
 
-    /// A post's author line, its text and the button that opens it are drawn in one place: the card and the
-    /// thread compose them. The whole app is read, so a third card is caught too.
     func testPostCardsShareTheirParts() throws {
         for file in ["PostCard.swift", "ThreadScreen.swift"] {
             let source = try contents(of: file)

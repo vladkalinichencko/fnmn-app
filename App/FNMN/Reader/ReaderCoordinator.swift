@@ -1,8 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// Where the column stands. A jump waits for the column's rows; `hiding` is the first jump, which the column is
-/// not shown for.
 enum Column: Equatable {
     case laidOut
     case jumping(to: Int, hiding: Bool)
@@ -18,12 +16,9 @@ struct ReaderState: Equatable {
     var place: Int?
     /// The block at the top of the column: the one the person scrolled to, or the one an action moves the column to.
     var scrollID: Int?
-    /// Where the column stands, and whether a jump is still waiting for its rows. A lazy column drops a position
-    /// given before its rows exist and opens at the top, so `.scrolled` means nothing until `.opened` lands.
     var column = Column.laidOut
     /// Opened at a note rather than to read on: scrolling looks around and leaves the place where reading stopped.
     var keepsPlace = false
-    /// The block the column goes to once it is laid out, if a jump is pending.
     var opening: Int? {
         if case let .jumping(to, _) = column {
             return to
@@ -31,7 +26,6 @@ struct ReaderState: Equatable {
         return nil
     }
 
-    /// The column stays unseen until its first jump lands.
     var hidesColumn: Bool {
         if case .jumping(_, hiding: true) = column {
             return true

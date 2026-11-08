@@ -2,7 +2,6 @@
 import Foundation
 import Testing
 
-/// A material's publisher is the one the server saw on the page; the catalog's guess is only the fallback.
 @Suite struct SourceNameTests {
     private func package(source: PageSource?) -> ImportPackage {
         ImportPackage(

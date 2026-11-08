@@ -14,7 +14,6 @@ enum Original: Equatable {
     case file(URL)
 }
 
-/// What the window can show: the library is ready only once its folder is chosen.
 enum LibraryPhase: Equatable {
     case loading
     case needsFolder
@@ -33,7 +32,6 @@ final class LibraryModel {
     private(set) var queries = LibraryQueries(LibrarySnapshot())
     private(set) var loadState = LoadState.idle
 
-    /// What the window shows: `loadState` and the folder, decided in one place.
     var phase: LibraryPhase {
         switch loadState {
         case .idle, .loading: .loading
@@ -152,8 +150,6 @@ final class LibraryModel {
         }
     }
 
-    /// The places queued since the last write: all of them applied to the progress, and only the latest of each
-    /// material going into the journal.
     private func foldPlaces() {
         var latest: [String: ProgressChange] = [:]
         for change in places {
@@ -346,8 +342,6 @@ final class LibraryModel {
         return (entry, originalFile(itemID))
     }
 
-    /// A material deleted here leaves the folder too: its delivery and its original go, so no device reads them
-    /// back in, and the list of originals is read again.
     private func removeDeleted(_ deleted: (entry: ArticleEntry, original: URL?)) async {
         try? await file.removeDelivery(of: deleted.entry)
         if let original = deleted.original {
