@@ -13,7 +13,7 @@ import Testing
     }
 
     @Test func aNameWithUnicodeOrSpacesStaysInside() throws {
-        #expect(LibraryFile.contained("assets/фото 1.png", in: folder)?.lastPathComponent == "фото 1.png")
+        #expect(LibraryFile.contained("assets/café 1.png", in: folder)?.lastPathComponent == "café 1.png")
     }
 
     @Test func aNameThatCouldLeaveIsRefused() {
