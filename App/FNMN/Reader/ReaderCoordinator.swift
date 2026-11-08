@@ -6,6 +6,31 @@ enum Column: Equatable {
     case jumping(to: Int, hiding: Bool)
 }
 
+enum FindResult: Equatable {
+    case idle
+    case searching
+    case matches([TextMatch], current: Int)
+}
+
+struct FindState: Equatable {
+    var query = ""
+    var result = FindResult.idle
+
+    var matches: [TextMatch] {
+        if case let .matches(matches, _) = result {
+            return matches
+        }
+        return []
+    }
+
+    var current: Int? {
+        if case let .matches(matches, current) = result, matches.indices.contains(current) {
+            return current
+        }
+        return nil
+    }
+}
+
 /// Everything an open document's screen does with it: the plate mode, the headings folded, the paragraph reading
 /// stopped at and the block the column is scrolled to.
 struct ReaderState: Equatable {
@@ -41,6 +66,7 @@ struct ReaderState: Equatable {
     var shownPlate: Int?
     /// Where speed reading opened, as a block and the share of it already read; nil while it is closed.
     var speedStart: ReadingLine?
+    var find: FindState?
 }
 
 enum ReaderAction {
@@ -73,6 +99,10 @@ enum ReaderAction {
     case speedReading(Bool)
     /// Speed reading has shown the text up to this block and this share of its words, which is now read.
     case speedRead(ReadingLine)
+    case find(Bool)
+    case findQuery(String)
+    case findStep(Int)
+    case found([TextMatch], query: String)
 }
 
 /// Pure: the next screen state for an action. A heading folds or opens below itself, so the column stays where it is.
@@ -181,6 +211,26 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         }
     case .mark, .note, .settleLine, .ask, .copyPrompt:
         break
+    case .find(true):
+        state.find = FindState()
+    case .find(false):
+        state.find = nil
+    case let .findQuery(query):
+        guard state.find != nil else {
+            return state
+        }
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        state.find = FindState(query: query, result: needle.isEmpty ? .idle : .searching)
+    case let .findStep(step):
+        guard case let .matches(matches, current)? = state.find?.result, !matches.isEmpty else {
+            return state
+        }
+        state.find?.result = .matches(matches, current: (current + step + matches.count) % matches.count)
+    case let .found(matches, query):
+        guard state.find?.query == query else {
+            return state
+        }
+        state.find?.result = .matches(matches, current: 0)
     }
     return state
 }
@@ -214,16 +264,19 @@ final class ReaderCoordinator {
     /// The lines of text laid out in the column, merged where they overlap. Only the reading line watches them.
     private var textLines: [ClosedRange<Double>] = []
     @ObservationIgnored private let library: LibraryModel
+    @ObservationIgnored private var texts: [Int: String]?
+    @ObservationIgnored private let plainText: @Sendable (String) -> String
 
     /// The column opens at the note it was opened at, or else at the place reading stopped, which with the reading
     /// line is the line's block. A line saved in another block than the column opens at starts again at its top.
     /// Read one plate at a time, the material shows the plate of that same block.
-    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, place: Int?, note: Int?, showsLine: Bool, onePlate: Bool, library: LibraryModel) {
+    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, place: Int?, note: Int?, showsLine: Bool, onePlate: Bool, library: LibraryModel, plainText: @escaping @Sendable (String) -> String) {
         self.document = document
         self.materialID = materialID
         self.title = title
         self.source = source
         self.baseURL = baseURL
+        self.plainText = plainText
         state = ReaderState(place: place, keepsPlace: note != nil)
         self.library = library
         // A material nobody has folded by hand opens with its lowest sections closed up, the contents showing. The block
@@ -369,7 +422,7 @@ final class ReaderCoordinator {
         // A section opens and closes at once: the lazy column, animating rows in, loses where it stands.
         case .plate: .snappy
         // The plate shown alone and the blur under it animate themselves; the column under them opens sections at once.
-        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia, .onePlate, .turnPlate, .speedReading, .speedRead: nil
+        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia, .onePlate, .turnPlate, .speedReading, .speedRead, .find, .findQuery, .findStep, .found: nil
         }
     }
 
@@ -436,6 +489,18 @@ final class ReaderCoordinator {
             savePlace(next.place)
         case .speedReading:
             break
+        case let .findQuery(query):
+            guard next.find?.result == .searching else {
+                return
+            }
+            search(query)
+        case .findStep, .found:
+            guard let find = next.find, let current = find.current else {
+                return
+            }
+            scroll(find.matches[current].piece)
+        case .find:
+            break
         case .speedRead:
             guard next != before else { return }
             if next.line != before.line { library.apply(.line(next.line, itemID: materialID)) }
@@ -463,5 +528,26 @@ final class ReaderCoordinator {
         }
         let position = place.map(ReadingPosition.piece) ?? library.position(of: materialID) ?? .piece(0)
         library.apply(.savePosition(position, itemID: materialID, progress: Double(read + 1) / Double(document.blocks.count)))
+    }
+
+    private func search(_ query: String) {
+        guard let texts else {
+            let document = document, plainText = plainText
+            Task {
+                let texts = await Task.detached(priority: .userInitiated) {
+                    var texts: [Int: String] = [:]
+                    for (index, block) in document.blocks.enumerated() {
+                        if case let .text(markdown) = block {
+                            texts[index] = plainText(markdown)
+                        }
+                    }
+                    return texts
+                }.value
+                self.texts = texts
+                send(.found(ReadingSearch.matches(of: query, in: texts), query: query))
+            }
+            return
+        }
+        send(.found(ReadingSearch.matches(of: query, in: texts), query: query))
     }
 }

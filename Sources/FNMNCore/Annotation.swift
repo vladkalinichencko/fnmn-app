@@ -66,6 +66,15 @@ public struct TextSpan: Codable, Equatable, Hashable, Sendable {
 
     var end: Int { start + length }
 
+    public func range(in text: String) -> Range<String.Index>? {
+        let utf16 = text.utf16
+        guard let lower = utf16.index(utf16.startIndex, offsetBy: start, limitedBy: utf16.endIndex),
+              let upper = utf16.index(lower, offsetBy: length, limitedBy: utf16.endIndex),
+              let lowerCharacter = String.Index(lower, within: text),
+              let upperCharacter = String.Index(upper, within: text) else { return nil }
+        return lowerCharacter..<upperCharacter
+    }
+
     func touches(_ other: TextSpan) -> Bool {
         start <= other.end && other.start <= end
     }

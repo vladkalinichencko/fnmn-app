@@ -65,6 +65,9 @@ struct ReadingSession: View {
             progress.readThrough[reader.materialID]
         }
         let paging = reader.state.shownPlate != nil
+        let found = reader.state.find?.matches ?? []
+        let findsByBlock = Dictionary(grouping: found, by: \.piece)
+        let activeFind = reader.state.find?.current.map { found[$0] }
         ScrollViewReader { proxy in
             ScrollView {
                 // The gap under a block belongs to the block, so it closes up with it.
@@ -87,7 +90,9 @@ struct ReadingSession: View {
                                 ?? (progress.isPieceRead(index, of: reader.materialID, current: current) ? 1 : 0),
                             markedReadThrough: marked == index,
                             annotations: marks[index] ?? [],
-                            fold: fold(of: index, in: document)
+                            fold: fold(of: index, in: document),
+                            finds: findsByBlock[index]?.map(\.span) ?? [],
+                            activeFind: activeFind?.piece == index ? activeFind?.span : nil
                         )
                         .equatable()
                         .padding(.bottom, Tokens.gap)

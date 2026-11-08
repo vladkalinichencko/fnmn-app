@@ -10,6 +10,11 @@ struct MaterialReader: View {
 
     var body: some View {
         ReadingSession(reader: reader)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if reader.state.find != nil {
+                    FindBar(reader: reader)
+                }
+            }
             .modifier(ReaderAppearanceModifier())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

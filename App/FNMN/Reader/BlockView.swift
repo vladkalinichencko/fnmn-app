@@ -19,6 +19,8 @@ struct BlockView: View, Equatable {
     let annotations: [Annotation]
     /// What a heading does when tapped; `.none` for every other block.
     let fold: HeadingFold
+    var finds: [TextSpan] = []
+    var activeFind: TextSpan?
 
     var body: some View {
         switch block {
@@ -28,7 +30,8 @@ struct BlockView: View, Equatable {
         case let .text(markdown):
             PlateView(
                 markdown: markdown, index: index, baseURL: baseURL, mode: mode,
-                readShare: readShare, markedReadThrough: markedReadThrough, annotations: annotations
+                readShare: readShare, markedReadThrough: markedReadThrough, annotations: annotations,
+                finds: finds, activeFind: activeFind
             )
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
@@ -172,6 +175,8 @@ struct PlateView: View {
     let readShare: Double
     let markedReadThrough: Bool
     let annotations: [Annotation]
+    var finds: [TextSpan] = []
+    var activeFind: TextSpan?
     /// How far the finger has moved the plate from where the mode puts it; zero whenever no finger is on it.
     @State private var drag: CGFloat = 0
     @State private var size = CGSize.zero
@@ -280,10 +285,8 @@ struct PlateView: View {
 
     /// A selection stays inside its plate. What is read grays in the text; the glass stays as it is.
     private var plate: some View {
-        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts))
-            // StructuredText parses again only when the Markdown changes; new marks, a new width and bold word starts
-            // need a new parse.
-            .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts)])
+        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts, finds: finds, activeFind: activeFind))
+            .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts), AnyHashable(finds), AnyHashable(activeFind)])
             .textual.overflowMode(.wrap)
             .plateMarkdownStyles()
             .textual.textSelection(.enabled)

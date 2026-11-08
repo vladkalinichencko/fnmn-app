@@ -11,6 +11,8 @@ struct MarkedMarkdown: MarkupParser {
     var width: CGFloat?
     /// The opening letters of each word are bold.
     var boldsWordStarts = false
+    var finds: [TextSpan] = []
+    var activeFind: TextSpan?
 
     func attributedString(for input: String) throws -> AttributedString {
         var text = try Self.parse(input, baseURL: baseURL)
@@ -19,8 +21,30 @@ struct MarkedMarkdown: MarkupParser {
         for mark in marks {
             Self.apply(mark, to: &text)
         }
+        for find in finds {
+            Self.paint(find, .find, in: &text)
+        }
+        if let activeFind {
+            Self.paint(activeFind, .findActive, in: &text)
+        }
         if boldsWordStarts { Self.boldWordStarts(&text) }
         return text
+    }
+
+    private static func paint(_ span: TextSpan, _ color: Color, in text: inout AttributedString) {
+        guard let range = range(of: span, in: text) else {
+            return
+        }
+        text[range].backgroundColor = color
+    }
+
+    private static func range(of span: TextSpan, in text: AttributedString) -> Range<AttributedString.Index>? {
+        let plain = String(text.characters)
+        guard let found = span.range(in: plain) else { return nil }
+        let start = plain.distance(from: plain.startIndex, to: found.lowerBound)
+        let end = plain.distance(from: plain.startIndex, to: found.upperBound)
+        let from = text.characters.index(text.startIndex, offsetBy: start)
+        return from..<text.characters.index(text.startIndex, offsetBy: end)
     }
 
     /// Sets the opening letters of each word bold, outside code, formulas and pictures. The characters stay as they
@@ -170,4 +194,6 @@ private struct ParagraphPicture: Attachment {
 
 extension Color {
     static let highlight = Color.accentColor.opacity(0.3)
+    static let find = Color.yellow.opacity(0.38)
+    static let findActive = Color.orange.opacity(0.6)
 }

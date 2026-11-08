@@ -321,6 +321,7 @@ struct ReaderMenu: View {
                 set: { reader.send(.onePlate($0)) }
             ))
             Button("Speed Reading", systemImage: "hare") { reader.send(.speedReading(true)) }
+            Button("Find in Material", systemImage: "magnifyingglass") { reader.send(.find(true)) }
             let lowest = reader.document.lowestHeadings
             if !lowest.isEmpty {
                 if lowest.isSubset(of: reader.state.folded) {

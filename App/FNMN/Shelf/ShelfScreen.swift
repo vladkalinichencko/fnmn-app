@@ -104,7 +104,7 @@ struct ArchiveScreen: View {
     var body: some View {
         let found = library.queries.search(query, in: library.queries.archivedItems)
         ScrollView {
-            ItemGrid(items: found).padding(.horizontal, Tokens.gutter)
+            ItemGrid(items: found, query: query).padding(.horizontal, Tokens.gutter)
         }
         .background(Tokens.canvas)
         .noResults(for: query, when: found.isEmpty)

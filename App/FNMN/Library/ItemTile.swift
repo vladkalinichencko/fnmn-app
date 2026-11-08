@@ -5,11 +5,12 @@ import SwiftUI
 struct ItemGrid: View {
     let items: [LibraryItem]
     var album: String?
+    var query = ""
 
     var body: some View {
         LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
             ForEach(items) { item in
-                ItemTile(item: item, album: album)
+                ItemTile(item: item, album: album, query: query)
             }
         }
     }
@@ -18,6 +19,7 @@ struct ItemGrid: View {
 struct ItemTile: View {
     let item: LibraryItem
     var album: String?
+    var query = ""
     @Environment(LibraryModel.self) private var library
     @Environment(ImportJobs.self) private var imports
     @Environment(WindowNavigation.self) private var navigation
@@ -43,7 +45,7 @@ struct ItemTile: View {
                         header(job)
                         title
                         if let excerpt = item.excerpt {
-                            Text(excerpt)
+                            marked(excerpt)
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(job == nil ? 6 : 3)
@@ -97,10 +99,28 @@ struct ItemTile: View {
     }
 
     private var title: some View {
-        Text(item.title)
+        marked(item.title)
             .font(.title3.weight(.black))
             .lineLimit(4)
             .multilineTextAlignment(.leading)
+    }
+
+    private func marked(_ text: String) -> Text {
+        guard !query.isEmpty else {
+            return Text(text)
+        }
+        var attributed = AttributedString(text)
+        for span in ReadingSearch.spans(of: query, in: text) {
+            guard let found = span.range(in: text) else {
+                continue
+            }
+            let start = text.distance(from: text.startIndex, to: found.lowerBound)
+            let end = text.distance(from: text.startIndex, to: found.upperBound)
+            let from = attributed.characters.index(attributed.startIndex, offsetBy: start)
+            let to = attributed.characters.index(attributed.startIndex, offsetBy: end)
+            attributed[from..<to].backgroundColor = .find
+        }
+        return Text(attributed)
     }
 
     private func header(_ job: ImportJob?) -> some View {

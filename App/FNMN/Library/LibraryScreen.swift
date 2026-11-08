@@ -16,7 +16,7 @@ struct LibraryScreen: View {
             let found = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : library.queries.items(matching: query)
             ScrollView {
                 if let found {
-                    ItemGrid(items: found).padding(.horizontal, Tokens.gutter)
+                    ItemGrid(items: found, query: query).padding(.horizontal, Tokens.gutter)
                 } else {
                     sections
                 }
