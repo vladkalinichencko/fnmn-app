@@ -81,17 +81,8 @@ public actor DigestFile {
     public func append(_ engagement: DigestEngagement, device: String, to folder: URL) throws {
         let state = folder.appending(path: "digest-state")
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-        var line = try Self.encoder().encode(engagement)
-        line.append(Data("\n".utf8))
-        let file = state.appending(path: "\(device).jsonl")
-        guard FileManager.default.fileExists(atPath: file.path) else {
-            try line.write(to: file, options: .atomic)
-            return
-        }
-        let handle = try FileHandle(forWritingTo: file)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: line)
+        let journal = state.appending(path: "\(device).jsonl")
+        try JSONLines.append(try JSONLines.line(engagement, encoder: Self.encoder()), to: journal)
     }
 
     private var indexURL: URL {
