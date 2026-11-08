@@ -14,30 +14,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
-import subprocess
 import sys
 from pathlib import Path
+
+from collect import ytdlp
 
 # Authenticated pseudo-URL: the plain playlist?list=WL address is not
 # resolvable ("playlist does not exist") even with valid login cookies.
 WATCH_LATER = ":ytwatchlater"
-
-
-def build_command(url: str, cookies_from_browser: str | None, cookies_file: str | None) -> list[str]:
-    command = [
-        "yt-dlp",
-        "--flat-playlist",
-        "--skip-download",
-        "--dump-json",
-        "--no-warnings",
-        url,
-    ]
-    if cookies_from_browser:
-        command[-1:-1] = ["--cookies-from-browser", cookies_from_browser]
-    if cookies_file:
-        command[-1:-1] = ["--cookies", cookies_file]
-    return command
+LOGIN = "\nWatch Later needs login: pass --cookies-from-browser chrome|safari|firefox or --cookies cookies.txt"
 
 
 def urls_from_lines(lines) -> list[str]:
@@ -62,18 +47,18 @@ def urls_from_lines(lines) -> list[str]:
 
 
 def list_playlist(url: str, cookies_from_browser: str | None, cookies_file: str | None) -> list[str]:
-    if shutil.which("yt-dlp") is None:
-        raise RuntimeError("yt-dlp not found on PATH (pip install -r server/requirements.txt)")
-    command = build_command(url, cookies_from_browser, cookies_file)
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    assert process.stdout is not None
-    urls = urls_from_lines(process.stdout)
-    _, stderr = process.communicate()
-    if process.returncode != 0:
-        hint = stderr.strip().splitlines()[-1] if stderr.strip() else "yt-dlp failed"
-        if "Sign in" in stderr or "login" in stderr.lower() or not urls:
-            hint += "\nWatch Later needs login: pass --cookies-from-browser chrome|safari|firefox or --cookies cookies.txt"
-        raise RuntimeError(hint)
+    try:
+        output = ytdlp.run(
+            ytdlp.command(url, cookies_from_browser=cookies_from_browser, cookies_file=cookies_file)
+        )
+    except RuntimeError as error:
+        hint = str(error)
+        if "Sign in" in hint or "login" in hint.lower():
+            hint += LOGIN
+        raise RuntimeError(hint) from error
+    urls = urls_from_lines(output.splitlines())
+    if not urls:
+        raise RuntimeError("yt-dlp found no video" + LOGIN)
     return urls
 
 
