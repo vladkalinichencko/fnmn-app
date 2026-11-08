@@ -56,22 +56,14 @@ public struct LibraryQueries: Sendable {
         if grouping == .albums {
             summaries = albumSummaries
         } else {
-            var order: [String] = []
-            var names: [String: String] = [:]
-            var membersByGroup: [String: [LibraryItem]] = [:]
-            for item in items {
-                guard let (key, name) = Self.group(of: item, by: grouping) else {
-                    continue
-                }
-                if membersByGroup[key] == nil {
-                    order.append(key)
-                }
-                names[key] = name
-                membersByGroup[key, default: []].append(item)
-            }
-            summaries = order.map { key in
-                let inside = membersByGroup[key] ?? []
-                return AlbumSummary(grouping: grouping, key: key, name: names[key] ?? key, count: inside.count, front: Array(inside.prefix(3)))
+            summaries = OrderedGroups.of(items, by: { Self.group(of: $0, by: grouping) }).map { group in
+                AlbumSummary(
+                    grouping: grouping,
+                    key: group.key,
+                    name: group.name,
+                    count: group.items.count,
+                    front: Array(group.items.prefix(3))
+                )
             }
         }
         func byName(_ a: AlbumSummary, _ b: AlbumSummary) -> Bool {
@@ -232,19 +224,13 @@ public struct LibraryQueries: Sendable {
         guard let by = grouping.grouping else {
             return [ItemSection(id: "all", title: nil, items: sorted(items))]
         }
-        var order: [String] = []
-        var names: [String: String] = [:]
-        var members: [String: [LibraryItem]] = [:]
-        for item in items {
-            let (key, name) = group(of: item, by: by) ?? ("", "Other")
-            if members[key] == nil {
-                order.append(key)
-            }
-            names[key] = name
-            members[key, default: []].append(item)
+        let groups = OrderedGroups.of(items, by: { group(of: $0, by: by) ?? ("", "Other") })
+        let ordered = if by == .months {
+            groups.sorted { $0.key > $1.key }
+        } else {
+            groups.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         }
-        let keys = by == .months ? order.sorted(by: >) : order.sorted { (names[$0] ?? "").localizedStandardCompare(names[$1] ?? "") == .orderedAscending }
-        return keys.map { ItemSection(id: $0, title: names[$0], items: sorted(members[$0] ?? [])) }
+        return ordered.map { ItemSection(id: $0.key, title: $0.name, items: sorted($0.items)) }
     }
 
     private static func group(of item: LibraryItem, by grouping: LibraryGrouping) -> (key: String, name: String)? {
