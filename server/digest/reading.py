@@ -2,10 +2,10 @@
 
     collect(source, web, store, folders, report, page=None) -> SourceResult
 
-X and Instagram read through `page`, the logged-in browser profile, and raise SourceFailure when the network
-refuses the reader. Telegram reads public pages through `web` and takes no page. `report` names the stage for
-the monitor log; a source that read only part of its list says so in `SourceResult.note` instead of pretending
-the run was complete.
+X, Instagram and Telegram read through `page`, the logged-in browser profile, and raise SourceFailure when the
+network refuses the reader. Telegram also reads a channel whose public page is enough through `web`, where no
+`page` is passed. `report` names the stage for the monitor log; a source that read only part of its list says
+so in `SourceResult.note` instead of pretending the run was complete.
 """
 
 from __future__ import annotations

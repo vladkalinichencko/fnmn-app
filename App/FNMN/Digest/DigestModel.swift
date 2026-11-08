@@ -21,7 +21,8 @@ enum DigestSyncState: Equatable {
 @MainActor @Observable
 final class DigestModel {
     private(set) var state = DigestLoadState.idle
-    /// Whether a sync is running; the tab shows a small spinner, and a second pull waits for this one.
+    /// Whether a sync is running; the tab shows a small spinner. A second sync returns at once, because the
+    /// running one already reads every delivery.
     private(set) var syncState = DigestSyncState.idle
     /// Newest window first.
     private(set) var digests: [Digest] = []
