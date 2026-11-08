@@ -2,11 +2,20 @@ import Foundation
 import Testing
 @testable import FNMNCore
 
-@Test func youtubeIDComesFromThePublicAddress() {
-    #expect(YouTube.videoID(in: URL(string: "https://youtu.be/abcdefghijk")!) == "abcdefghijk")
-    #expect(YouTube.videoID(in: URL(string: "https://www.youtube.com/watch?v=abcdefghijk")!) == "abcdefghijk")
-    #expect(YouTube.videoID(in: URL(string: "https://www.youtube.com/shorts/abcdefghijk")!) == "abcdefghijk")
-    #expect(YouTube.videoID(in: URL(string: "https://example.com/watch?v=abcdefghijk")!) == nil)
+@Test func youtubeIDComesFromThePublicAddress() throws {
+    let url = try #require(Bundle.module.url(forResource: "youtube-urls", withExtension: "json", subdirectory: "Fixtures"))
+    let lists = try JSONDecoder().decode(YouTubeAddresses.self, from: Data(contentsOf: url))
+    for address in lists.video {
+        #expect(YouTube.videoID(in: URL(string: address)!) == "abcdefghijk", "\(address)")
+    }
+    for address in lists.none {
+        #expect(YouTube.videoID(in: URL(string: address)!) == nil, "\(address)")
+    }
+}
+
+private struct YouTubeAddresses: Decodable {
+    let video: [String]
+    let none: [String]
 }
 
 @Test func aFoldedHeadingHidesItsSectionAndNothingAfterIt() {

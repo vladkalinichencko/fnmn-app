@@ -1,0 +1,20 @@
+{
+  "video": [
+    "https://youtu.be/abcdefghijk",
+    "https://youtu.be/abcdefghijk?t=30",
+    "https://www.youtube.com/watch?v=abcdefghijk",
+    "https://www.youtube.com/watch?v=abcdefghijk&t=30",
+    "https://m.youtube.com/watch?v=abcdefghijk",
+    "https://music.youtube.com/watch?v=abcdefghijk",
+    "https://www.youtube.com/shorts/abcdefghijk",
+    "https://www.youtube.com/embed/abcdefghijk",
+    "https://www.youtube.com/live/abcdefghijk"
+  ],
+  "none": [
+    "https://www.youtube.com/watch?v=short",
+    "https://www.youtube.com/watch?v=abcdefghijkl",
+    "https://example.com/watch?v=abcdefghijk",
+    "https://notyoutube.com/watch?v=abcdefghijk",
+    "https://www.youtube.com/feed/subscriptions"
+  ]
+}
