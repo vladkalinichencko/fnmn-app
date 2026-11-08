@@ -60,6 +60,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* one predicate over the inner text, in `FNMNCore`, used by both.
 
+*Closed in 4cae4d4:* `InlineMath.looksLikeProse`; `InlineMathTests` pins a price, a formula and the lone letter that is a variable.
+
 ## The digest branch's views
 
 **13. One post card, three drawings.** `PostCard` draws author + handle + network/time, the text, the media, and an open-in-network button on a plate. `ThreadScreen.parentCard` (`ThreadScreen.swift:43`) draws a smaller author + handle + text + open button on a plate; `ThreadScreen.comments` (`:80`) draws author + text + open button on a plate; `SourcesScreen.row` (`:38`) draws a name + detail + trailing label on a plate. Four hand-built variants of one row, each with its own font sizes.

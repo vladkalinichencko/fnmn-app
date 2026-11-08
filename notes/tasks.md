@@ -560,5 +560,6 @@ From [research/duplication-audit.md](research/duplication-audit.md), easiest fir
 - [x] U7. `DeliverySync` failures: the library reports every failed archive, not the first; `take` reuses the loaded digests; `DigestDeliveries` keeps one known-file map.
 - [x] U8. One source table in `digest/monitor.py`, imported by `refresh`; `needs_browser` in `digest/reading.py`; the launchd hours read `BUILD_HOURS`; `html_markdown` imports `punctuation`; `reparse_library` imports `delivery_name`.
 - [x] C1. CI installed the server's packages on the runner's Python 3.9, while four pins need 3.10, so the guard job never reached the tests. `setup-python` 3.12 now matches the `.venv` the tests are written against.
+- [x] U9. One `InlineMath.looksLikeProse` for the price-or-formula test, used by `MarkedMarkdown` and `SpeedText`; a single letter is a variable, and the test says so.
 
 The rest of the audit (grouping, Markdown splitting, journal writer, path rule, archive writer, yt-dlp, OCR loop, the merged post card) is not in this PR; it stays in the note with its one-home shape.
