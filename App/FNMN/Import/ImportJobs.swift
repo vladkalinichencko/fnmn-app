@@ -250,7 +250,7 @@ final class ImportJobs {
         let shown = jobs.last { $0.isPreparing }
         if shown?.id != shownJobID, shownJobID != nil {
             let failed = if case .failed = action { true } else { false }
-            Task { await ImportActivity.end(status: failed ? "Failed" : "Ready") }
+            ImportActivity.end(status: failed ? "Failed" : "Ready")
             shownJobID = nil
         }
         guard let shown, case let .preparing(step, _) = shown.phase else {
@@ -260,7 +260,7 @@ final class ImportJobs {
             shownJobID = shown.id
             ImportActivity.start(title: shown.title, step: step)
         } else {
-            Task { await ImportActivity.update(step) }
+            ImportActivity.update(step)
         }
     }
 }
