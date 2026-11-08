@@ -41,6 +41,27 @@ import Testing
     ])
 }
 
+@Test func aHeadingEndsTheParagraphBeforeItWithoutABlankLine() {
+    #expect(ArticleBody.blocks(in: "Text\n## Heading\nMore") == [
+        .text("Text"),
+        .heading(level: 2, title: "Heading"),
+        .text("More"),
+    ])
+}
+
+@Test func aFenceAndADisplayFormulaKeepTheirBlankLines() {
+    let fenced = ArticleBody.blocks(in: "Intro\n\n```swift\nlet a = 1\n\nlet b = 2\n```")
+    #expect(fenced.count == 1)
+    #expect(fenced.first?.text?.contains("let a = 1\n\nlet b = 2") == true)
+    let formula = ArticleBody.blocks(in: "Intro\n\n$$\nE = mc^2\n\nmore\n$$")
+    #expect(formula.count == 2)
+    #expect(formula.last?.text?.contains("$$\nE = mc^2\n\nmore\n$$") == true)
+}
+
+@Test func aRuleUnderALineOfTextIsThatLinesMark() {
+    #expect(ArticleBody.blocks(in: "Title\n---\n\nNext") == [.text("Title\n---"), .text("Next")])
+}
+
 @Test func picturesAndCodeJoinTheirParagraphAndOnlyTheOpeningPictureStandsAlone() {
     let blocks = ArticleBody.blocks(in: """
     ![cover](assets/cover.png)
@@ -125,4 +146,13 @@ import Testing
     let package = try JSONDecoder().decode(ImportPackage.self, from: Data(json.utf8))
     #expect(package.body == nil)
     #expect(package.blocks.count == 1)
+}
+
+private extension DocumentBlock {
+    var text: String? {
+        if case let .text(text) = self {
+            return text
+        }
+        return nil
+    }
 }
