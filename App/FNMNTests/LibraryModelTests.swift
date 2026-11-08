@@ -40,4 +40,27 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertEqual(model.snapshot.articles.count, 1)
         XCTAssertEqual(model.queries.unsortedItems.count, 1)
     }
+
+    func testDeletingAMaterialTakesItsDeliveryOutOfTheFolder() async throws {
+        UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
+        let (model, root) = makeModel()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
+        }
+        let cloud = root.appending(path: "FNMN")
+        try FileManager.default.createDirectory(at: cloud, withIntermediateDirectories: true)
+        try await model.linkLibraryFolder(cloud) { _ in }
+        let url = try XCTUnwrap(URL(string: "https://dl.acm.org/doi/4"))
+        try await model.storeLink(url)
+        let entry = try XCTUnwrap(model.snapshot.articles.first)
+        let deliveries = cloud.appending(path: "deliveries")
+        let before = try FileManager.default.contentsOfDirectory(atPath: deliveries.path)
+        XCTAssertEqual(before.count, 1)
+
+        await model.apply(.delete(itemID: entry.material.id))
+
+        XCTAssertTrue(model.snapshot.articles.isEmpty)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: deliveries.path).isEmpty)
+    }
 }

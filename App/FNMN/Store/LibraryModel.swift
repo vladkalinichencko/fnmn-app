@@ -92,11 +92,7 @@ final class LibraryModel {
             journal.record(.library(change))
             scheduleSave()
             if let deleted {
-                try? await file.removeDelivery(of: deleted.entry)
-                if let original = deleted.original {
-                    try? await file.removeOriginal(original)
-                }
-                await readOriginals()
+                await removeDeleted(deleted)
             }
         } catch {
             failure = error.localizedDescription
@@ -128,19 +124,7 @@ final class LibraryModel {
     func saveProgress() async {
         progressWrite?.cancel()
         guard progressUnsaved else { return }
-        if !places.isEmpty {
-            var latest: [String: ProgressChange] = [:]
-            for change in places {
-                if case let .savePosition(_, itemID, _) = change {
-                    latest[itemID] = change
-                }
-            }
-            progress = places.reduce(progress) { $0.applying($1) }
-            places = []
-            for change in latest.values {
-                journal.record(.progress(change))
-            }
-        }
+        foldPlaces()
         progressUnsaved = false
         do {
             try await file.saveProgress(progress)
@@ -148,6 +132,22 @@ final class LibraryModel {
         } catch {
             progressUnsaved = true
             failure = error.localizedDescription
+        }
+    }
+
+    /// The places queued since the last write: all of them applied to the progress, and only the latest of each
+    /// material going into the journal.
+    private func foldPlaces() {
+        var latest: [String: ProgressChange] = [:]
+        for change in places {
+            if case let .savePosition(_, itemID, _) = change {
+                latest[itemID] = change
+            }
+        }
+        progress = places.reduce(progress) { $0.applying($1) }
+        places = []
+        for change in latest.values {
+            journal.record(.progress(change))
         }
     }
 
@@ -327,6 +327,16 @@ final class LibraryModel {
     private func deletedMaterial(in change: LibraryChange) -> (entry: ArticleEntry, original: URL?)? {
         guard case let .delete(itemID) = change, let entry = entry(itemID) else { return nil }
         return (entry, originalFile(itemID))
+    }
+
+    /// A material deleted here leaves the folder too: its delivery and its original go, so no device reads them
+    /// back in, and the list of originals is read again.
+    private func removeDeleted(_ deleted: (entry: ArticleEntry, original: URL?)) async {
+        try? await file.removeDelivery(of: deleted.entry)
+        if let original = deleted.original {
+            try? await file.removeOriginal(original)
+        }
+        await readOriginals()
     }
 
     private func entry(_ materialID: String) -> ArticleEntry? {
