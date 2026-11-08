@@ -165,22 +165,7 @@ public struct SpeedText: Sendable {
 
     /// The parts of a block's Markdown between blank lines, keeping a code fence or a `$$` formula whole.
     static func segments(of markdown: String) -> [String] {
-        var segments: [String] = []
-        var lines: [Substring] = []
-        var fenced = false, inMath = false
-        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty, !fenced, !inMath {
-                if !lines.isEmpty { segments.append(lines.joined(separator: "\n")) }
-                lines = []
-                continue
-            }
-            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") { fenced.toggle() }
-            if !fenced, line.components(separatedBy: "$$").count.isMultiple(of: 2) { inMath.toggle() }
-            lines.append(line)
-        }
-        if !lines.isEmpty { segments.append(lines.joined(separator: "\n")) }
-        return segments
+        MarkdownParts.split(markdown)
     }
 
     /// Whether a part of a paragraph cannot be read a word at a time: code, a formula, a table or a picture.

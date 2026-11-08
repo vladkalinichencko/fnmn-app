@@ -25,55 +25,12 @@ public enum ArticleBody {
     }
 
     private static func rawBlocks(in markdown: String) -> [DocumentBlock] {
-        var blocks: [DocumentBlock] = []
-        var lines: [Substring] = []
-        var fence: Substring?
-        var inMath = false
-
-        func flush() {
-            let text = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            lines = []
-            guard !text.isEmpty else { return }
-            blocks.append(block(text, fence: fence))
+        MarkdownParts.split(markdown).compactMap { part in
+            if let heading = MarkdownParts.heading(part) {
+                return .heading(level: heading.level, title: heading.title)
+            }
+            return block(part)
         }
-
-        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if fence != nil {
-                lines.append(line)
-                if trimmed.hasPrefix("```"), lines.count > 1 {
-                    flush()
-                    fence = nil
-                }
-                continue
-            }
-            if inMath {
-                lines.append(line)
-                if trimmed.components(separatedBy: "$$").count.isMultiple(of: 2) { inMath = false }
-                continue
-            }
-            if trimmed.hasPrefix("```") {
-                flush()
-                fence = line
-                lines = [line]
-                continue
-            }
-            if trimmed.isEmpty {
-                flush()
-                continue
-            }
-            if let heading = heading(trimmed) {
-                flush()
-                blocks.append(heading)
-                continue
-            }
-            // A rule between paragraphs would be a plate with a line on it; under a line of text it is that line's mark.
-            if lines.isEmpty, isThematicBreak(trimmed) { continue }
-            lines.append(line)
-            if trimmed.components(separatedBy: "$$").count.isMultiple(of: 2) { inMath = true }
-        }
-        flush()
-        return blocks
     }
 
     /// A picture or code block joins the paragraph before it; after a heading it joins the paragraph that follows.
@@ -186,21 +143,10 @@ public enum ArticleBody {
         return nil
     }
 
-    private static func isThematicBreak(_ line: String) -> Bool {
-        let marks = line.filter { !$0.isWhitespace }
-        guard marks.count >= 3, let first = marks.first, "-*_".contains(first) else { return false }
-        return marks.allSatisfy { $0 == first }
-    }
-
-    private static func heading(_ line: String) -> DocumentBlock? {
-        guard let match = line.prefixMatch(of: /(#{1,6})[ \t]+(.+)/) else { return nil }
-        let title = String(match.2).trimmingCharacters(in: .whitespaces)
-        return title.isEmpty ? nil : .heading(level: match.1.count, title: title)
-    }
-
-    private static func block(_ text: String, fence: Substring?) -> DocumentBlock {
-        if let fence {
-            let kind = fence.trimmingCharacters(in: .whitespaces).dropFirst(3)
+    private static func block(_ text: String) -> DocumentBlock {
+        if text.hasPrefix("```") {
+            let first = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+            let kind = first.trimmingCharacters(in: .whitespaces).dropFirst(3)
             let body = text.split(separator: "\n").dropFirst().dropLast().map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             // A page of the article's own, shipped in its folder, has no scheme; a page of the web is http(s).
             if kind == "fnmn-interactive", let address = body.first, let url = URL(string: address),
