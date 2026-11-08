@@ -219,12 +219,12 @@ struct JobStatus: View {
     var body: some View {
         HStack(spacing: 6) {
             switch phase {
-            case let .preparing(step):
+            case let .preparing(step, _):
                 if step.fraction == nil {
                     ProgressView().controlSize(.mini)
                 }
                 Text(step.text).lineLimit(1)
-            case let .failed(message):
+            case let .failed(message, _):
                 Text(message).lineLimit(3)
             }
         }
@@ -332,7 +332,7 @@ struct CoverImage: View {
 extension ImportJob {
     var symbol: String {
         switch phase {
-        case let .preparing(step): step.symbol
+        case let .preparing(step, _): step.symbol
         case .failed: "exclamationmark.triangle"
         }
     }

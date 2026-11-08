@@ -92,9 +92,9 @@ struct VideoReaderView: View {
             EmptyView()
         } else if let download {
             switch download.phase {
-            case let .preparing(step):
+            case let .preparing(step, _):
                 Text(step.text)
-            case let .failed(message):
+            case let .failed(message, _):
                 Button("Try Download Again", systemImage: "arrow.clockwise") { imports.send(.retry(download.id)) }
                 Text(message)
             }
