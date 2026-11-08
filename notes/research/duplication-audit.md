@@ -86,6 +86,8 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* `PostCard` with parameters (compact, showsContext, opensThread) plus one `PlateRow` for the non-post rows; the four call sites keep their data, lose their layout.
 
+*Partly closed in 3b1cc70:* `PostAuthorLine`, `PostText` and `PostOpenButton` are shared, and `ArchitectureGuardTests` fails if either card builds its own. The parent card is still its own composition, and the comment and source rows keep their layout; those two are not post cards.
+
 **14. Two navigation stacks.** `RouteStack` (`Shell.swift:139`) binds `[Route]`, builds a `NavigationStack`, maps routes, hides the tab bar on the routes that own the screen. `DigestStack` (`DigestScreen.swift:90`) binds `[DigestRoute]`, builds a `NavigationStack`, maps routes, hides the tab bar for a thread. The second is the first with a different generic.
 
 *One home:* one generic `RouteStack<Route: Hashable>` taking a destinations closure and a `hidesTabBar` predicate.
@@ -168,9 +170,13 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *One home:* one `ocr_jobs.py` with `run(jobs, selector, output, model)`, leaving each script to say which issues it collects and how it narrows the answer.
 
+*Closed in c737a3c:* `ocr_jobs.run` with `key`, `select` and `metrics` hooks; each script is its issue filter and its selector; `test_ocr_jobs` covers the empty pass, `test_compile` every script's syntax.
+
 **28. Stripping OCR grounding.** `GROUNDING` and the "join the text between grounding blocks" loop in `math_issues.select_formula` (`:52`) and `run-footnote-ocr.markdown` (`:16`); `assemble-book.read_ocr` (`:48`) parses the same blocks with the same regex shape. Three readers of one OCR output format.
 
 *One home:* `grounding.py` — `strip(text)` for the two selectors and `blocks(text)` for the assembler.
+
+*Closed in c737a3c:* `grounding.strip` and `grounding.blocks`; `test_grounding` pins markers, empty pages and stray text.
 
 **29. Chapter numbers.** `export-app-book.NUMBER`/`clean_heading` (`:17`, `:35`) and `assemble-book.heading_similarity.clean` (`:34`) both strip `12.3`/`A.4`/`∞` prefixes from a heading, with two different regexes of the same intent.
 

@@ -580,7 +580,10 @@ Tests first, then one rule per commit. The behaviour each rule must keep is pinn
 - [x] U16. One `MarkdownParts` splitter for the column and the speed reader; a heading, a fence and a `$$` formula end a part the same way.
 - [x] U17. One `collect/ytdlp.py` for the three collectors: the command, the JSON lines and the last error line.
 - [x] U18. One `RouteStack` for the library, the shelf and the digest; `Route.hidesTabBar` is a property of the route.
-- [ ] U19. Left: the post card and the OCR loop, then the audit's cross-cutting items.
+- [ ] U19. Left: the small server rules (page parse, emphasis repair, wire shape), the app's other phases, the dead Activity target, the test-support leftovers.
+- [x] U31. `PostText`, `PostOpenButton`, `PostAuthorLine`; the card and the thread compose them, and `ArchitectureGuardTests` keeps a third card from building its own (3b1cc70).
+- [x] U32. One `ocr_jobs.run` for both re-OCR passes and one `grounding.strip`/`blocks`; `test_grounding`, `test_ocr_jobs`, `test_compile` (c737a3c).
+- [x] U33. The pdf-book tests run in `guards.py`, so the OCR scripts have a check in CI (c737a3c).
 
 ### Unification pass 4 (branch `unification`, 2026-11-08)
 
