@@ -90,7 +90,8 @@ final class WindowNavigation {
         library = [route]
     }
 
-    func showPending(phase: LibraryPhase, continued: () -> Route?) {        let (rest, route) = pending.consume(phase, continued: continued)
+    func showPending(phase: LibraryPhase, continued: () -> Route?) {
+        let (rest, route) = pending.consume(phase, continued: continued)
         pending = rest
         if let route {
             show(route)
