@@ -180,9 +180,7 @@ struct VideoReaderView: View {
     }
 
     private var source: VideoSource {
-        VideoSource.of(original: library.originalFile(materialID), downloading: downloading) { file in
-            CloudFolder.isLocal(file)
-        }
+        VideoSource.of(original: library.originalFile(materialID), downloading: downloading, onDevice: CloudFolder.isLocal)
     }
 
     /// The embed needs a page address of our own for YouTube to accept it; it is the server's.
