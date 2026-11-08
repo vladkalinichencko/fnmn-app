@@ -359,6 +359,54 @@ struct PlateView: View {
     }
 }
 
+/// The note in the margin. The field holds the person's text; a note that arrives from another device while the
+/// field is open does not replace what they typed, and closing the field saves the text once.
+struct NoteEdit: Equatable {
+    private(set) var saved: String
+    private(set) var draft: String
+    private(set) var isEditing = false
+
+    init(saved: String) {
+        self.saved = saved
+        self.draft = saved
+    }
+
+    mutating func begin() {
+        isEditing = true
+    }
+
+    mutating func type(_ text: String) {
+        draft = text
+    }
+
+    /// The store has a new note. A draft the person is still writing wins over it.
+    mutating func arrived(_ note: String) {
+        guard !isEditing || draft == saved else {
+            return
+        }
+        saved = note
+        draft = note
+    }
+
+    /// The field closed. Returns the text to save, or nil when nothing changed.
+    mutating func finish() -> String? {
+        isEditing = false
+        guard draft != saved else {
+            return nil
+        }
+        saved = draft
+        return saved
+    }
+
+    /// The view went away with the field open: the text is still the person's to keep.
+    mutating func abandon() -> String? {
+        guard isEditing else {
+            return nil
+        }
+        return finish()
+    }
+}
+
 /// A note in the margin beside its paragraph: plain text on the page, no frame, saved when it closes.
 /// It is as tall as its paragraph; a longer note fades out at its lower edge and scrolls while it is edited.
 /// Closed, it is SwiftUI's own text, which the glass plate over it blurs. Open, it is an editor in a scroll view,
@@ -369,7 +417,7 @@ private struct MarginNote: View {
     let save: (String) -> Void
     /// The height of the note's text, without the room around it.
     let measured: (CGFloat) -> Void
-    @State private var draft = ""
+    @State private var note = NoteEdit(saved: "")
     @State private var overflow = Overflow()
     /// The height the paragraph gives the note.
     @State private var room: CGFloat = 0
@@ -380,7 +428,7 @@ private struct MarginNote: View {
         Group {
             if active {
                 ScrollView {
-                    TextField("Note", text: $draft, axis: .vertical)
+                    TextField("Note", text: draftBinding, axis: .vertical)
                         .focused($focused)
                         .onAppear { focused = saved.isEmpty }
                         .modifier(NoteLayout(font: readerFont.font(.callout)))
@@ -395,8 +443,8 @@ private struct MarginNote: View {
                     )
                 } action: { _, new in overflow = new }
             } else {
-                Text(draft.isEmpty ? "Note" : draft)
-                    .foregroundStyle(draft.isEmpty ? .tertiary : .primary)
+                Text(note.draft.isEmpty ? "Note" : note.draft)
+                    .foregroundStyle(note.draft.isEmpty ? .tertiary : .primary)
                     .modifier(NoteLayout(font: readerFont.font(.callout)))
                     .fixedSize(horizontal: false, vertical: true)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
@@ -410,17 +458,33 @@ private struct MarginNote: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
         .mask(fade)
         .onChange(of: overflow.text) { measured(overflow.text - 2 * Tokens.tilePadding) }
-        .onAppear { draft = saved }
-        .onChange(of: saved) { draft = saved }
+        .onAppear {
+            note = NoteEdit(saved: saved)
+            if active {
+                note.begin()
+            }
+        }
+        .onChange(of: saved) { note.arrived(saved) }
         .onChange(of: active) {
-            guard !active else { return }
-            focused = false
-            if draft != saved { save(draft) }
+            guard active else {
+                focused = false
+                if let text = note.finish() {
+                    save(text)
+                }
+                return
+            }
+            note.begin()
         }
         // A plate shown alone goes away while its note is open when reading turns back to the column.
         .onDisappear {
-            if active, draft != saved { save(draft) }
+            if let text = note.abandon() {
+                save(text)
+            }
         }
+    }
+
+    private var draftBinding: Binding<String> {
+        Binding(get: { note.draft }, set: { note.type($0) })
     }
 
     private var fade: some View {
