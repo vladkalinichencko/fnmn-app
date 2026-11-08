@@ -259,7 +259,11 @@ enum ReaderAppearance {
                 guard let value = defaults.object(forKey: setting.rawValue) else {
                     continue
                 }
-                defaults.set(value, forKey: setting.key(kind))
+                if setting == .pauses {
+                    defaults.set(SpeedPauseProfile(legacy: value as? String).json, forKey: setting.key(kind))
+                } else {
+                    defaults.set(value, forKey: setting.key(kind))
+                }
             }
         }
     }

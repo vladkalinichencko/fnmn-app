@@ -7,7 +7,7 @@ final class SpeedPlayerTests: XCTestCase {
     private func loaded(_ markdown: String = "One two three.\n\nFour five six.\n\nSeven eight nine.") async -> SpeedPlayer {
         let player = SpeedPlayer()
         player.wordsPerMinute = 600
-        player.pauses = 0
+        player.pauseProfile = SpeedPauseProfile(.off)
         let document = ReaderDocument(markdown: markdown, title: "Text")
         await player.load(document, from: ReadingLine(piece: 0, fraction: 0))
         return player

@@ -131,6 +131,9 @@ public actor LibraryFile {
 
     private var stateURL: URL { root.appending(path: "state.json") }
     private var articlesURL: URL { root.appending(path: "articles.json") }
+    private var searchFolder: URL {
+        root.appending(path: "search")
+    }
     /// Older libraries kept every article with its text in one file.
     private var packagesURL: URL { root.appending(path: "packages.json") }
     private var progressURL: URL { root.appending(path: "progress.json") }
@@ -276,8 +279,7 @@ public actor LibraryFile {
 
     /// One delivery in the FNMN folder: the package enters the catalog, and of its files only the cover is
     /// kept, as a small picture; the archive stays in iCloud and is unpacked when the reader opens it.
-    public func addCloudDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let cover = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    public func addCloudDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {        let cover = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: cover) }
         var hasCover = false
         let package = try DeliveryArchive(url: archive).unpack { (package: ImportPackage, path: String) in
@@ -288,6 +290,7 @@ public actor LibraryFile {
         if hasCover {
             try writeThumbnail(of: cover, to: Self.coverFile(root: root, materialID: package.material.id))
         }
+        try writeSearchBody(package)
         var next = snapshot
         try next.importPackage(package, at: .now, delivery: archive.lastPathComponent, deliveredAt: Self.changeDate(of: archive))
         next.articleRevisions[package.material.id] = nil
@@ -422,7 +425,41 @@ public actor LibraryFile {
             try? FileManager.default.removeItem(at: folder)
             try FileManager.default.moveItem(at: incoming, to: folder)
         }
-        return try decoder.decode(ImportPackage.self, from: Data(contentsOf: text))
+        let package = try decoder.decode(ImportPackage.self, from: Data(contentsOf: text))
+        if !FileManager.default.fileExists(atPath: searchURL(entry.material.id).path) {
+            try writeSearchBody(package)
+        }
+        return package
+    }
+
+    public func searchBodies() throws -> [String: SearchBody] {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: searchFolder, includingPropertiesForKeys: nil) else {
+            return [:]
+        }
+        var bodies: [String: SearchBody] = [:]
+        for file in files where file.pathExtension == "json" {
+            guard let body = try? decoder.decode(SearchBody.self, from: Data(contentsOf: file)) else {
+                continue
+            }
+            bodies[body.materialID] = body
+        }
+        return bodies
+    }
+
+    public func removeSearchBody(_ materialID: String) {
+        try? FileManager.default.removeItem(at: searchURL(materialID))
+    }
+
+    private func writeSearchBody(_ package: ImportPackage) throws {
+        guard package.material.kind == .article || package.material.kind == .book else {
+            return
+        }
+        try FileManager.default.createDirectory(at: searchFolder, withIntermediateDirectories: true)
+        try encoder.encode(SearchBody(package)).write(to: searchURL(package.material.id), options: .atomic)
+    }
+
+    private func searchURL(_ materialID: String) -> URL {
+        searchFolder.appending(path: SHA256.hash(data: Data(materialID.utf8)).map { String(format: "%02x", $0) }.joined() + ".json")
     }
 
     // MARK: Journals

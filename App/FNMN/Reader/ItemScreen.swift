@@ -5,12 +5,13 @@ import SwiftUI
 struct ItemScreen: View {
     let itemID: String
     let startPiece: Int?
+    var startSeconds: Double? = nil
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
         Group {
             if library.snapshot.articles.contains(where: { $0.material.id == itemID }) {
-                ArticleOpener(itemID: itemID, startPiece: startPiece)
+                ArticleOpener(itemID: itemID, startPiece: startPiece, startSeconds: startSeconds)
             } else {
                 ContentUnavailableView("This material is no longer in the library", systemImage: "questionmark.folder")
             }
@@ -32,6 +33,7 @@ private enum ArticleText {
 private struct ArticleOpener: View {
     let itemID: String
     let startPiece: Int?
+    var startSeconds: Double?
     @Environment(LibraryModel.self) private var library
     @State private var text = ArticleText.loading
     @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
@@ -62,7 +64,9 @@ private struct ArticleOpener: View {
 
     private func open() async throws -> ArticleText {
         let package = try await library.article(itemID)
-        guard package.material.kind != .video else { return .video(VideoCoordinator(package: package, library: library)) }
+        guard package.material.kind != .video else {
+            return .video(VideoCoordinator(package: package, library: library, startSeconds: startSeconds))
+        }
         guard let baseURL = library.articleFolder(itemID) else { throw LibraryError.cloudFolderMissing }
         let document = await Self.document(of: package)
         // With the reading line, the block the line stands in is the first one not read.

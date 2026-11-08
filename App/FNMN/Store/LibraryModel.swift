@@ -336,6 +336,88 @@ final class LibraryModel {
         return try await file.openCloudArticle(entry)
     }
 
+    @ObservationIgnored private var bodies: [String: SearchBody] = [:]
+    @ObservationIgnored private var bodiesRead = false
+    @ObservationIgnored private var plainTexts: [String: String] = [:]
+
+    func search(_ query: String) async -> [SearchHit] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else {
+            return []
+        }
+        let folded = TextFold.folded(needle)
+        var hits: [SearchHit] = snapshot.articles.compactMap { article in
+            guard article.searchText.contains(folded) else {
+                return nil
+            }
+            let text = article.excerpt ?? article.material.byline ?? article.material.sourceURL?.host() ?? ""
+            return SearchHit(itemID: article.material.id, source: .material, text: text)
+        }
+        for body in await searchBodies().values {
+            for paragraph in body.paragraphs where TextFold.folded(paragraph.markdown).contains(folded) {
+                let plain = await plainText(paragraph.markdown)
+                hits += matches(in: plain, of: needle, itemID: body.materialID, source: .text, piece: paragraph.piece)
+            }
+            for cue in body.cues where TextFold.folded(cue.text).contains(folded) {
+                hits += matches(in: cue.text, of: needle, itemID: body.materialID, source: .transcript, seconds: cue.seconds)
+            }
+        }
+        for annotation in snapshot.annotations {
+            if !annotation.note.isEmpty, TextFold.folded(annotation.note).contains(folded) {
+                hits += matches(in: annotation.note, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+            } else if let mark = annotation.marks.first(where: { TextFold.folded($0.quote).contains(folded) }) {
+                hits += matches(in: mark.quote, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+            } else if TextFold.folded(annotation.text).contains(folded) {
+                hits += matches(in: annotation.text, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+            }
+        }
+        let order = Dictionary(uniqueKeysWithValues: SearchSource.allCases.enumerated().map { ($1, $0) })
+        return hits.sorted { left, right in
+            let leftOrder = order[left.source] ?? 0
+            let rightOrder = order[right.source] ?? 0
+            if leftOrder != rightOrder {
+                return leftOrder < rightOrder
+            }
+            let leftDate = addedAt(of: left.itemID) ?? .distantPast
+            let rightDate = addedAt(of: right.itemID) ?? .distantPast
+            if leftDate != rightDate {
+                return leftDate > rightDate
+            }
+            if left.piece != right.piece {
+                return (left.piece ?? 0) < (right.piece ?? 0)
+            }
+            return (left.seconds ?? 0) < (right.seconds ?? 0)
+        }
+    }
+
+    private func matches(in text: String, of needle: String, itemID: String, source: SearchSource, piece: Int? = nil, seconds: Double? = nil) -> [SearchHit] {
+        ReadingSearch.spans(of: needle, in: text).map { span in
+            let excerpt = SearchExcerpt.around(text, span: span)
+            return SearchHit(itemID: itemID, source: source, piece: piece, seconds: seconds, text: excerpt.text, span: excerpt.span)
+        }
+    }
+
+    private func addedAt(of itemID: String) -> Date? {
+        snapshot.addedAt[itemID]
+    }
+
+    private func searchBodies() async -> [String: SearchBody] {
+        if !bodiesRead {
+            bodies = (try? await file.searchBodies()) ?? [:]
+            bodiesRead = true
+        }
+        return bodies
+    }
+
+    private func plainText(_ markdown: String) async -> String {
+        if let plain = plainTexts[markdown] {
+            return plain
+        }
+        let plain = MarkedMarkdown.plainText(markdown, baseURL: nil)
+        plainTexts[markdown] = plain
+        return plain
+    }
+
     /// The entry and saved original of the material a change deletes, taken before it goes from the catalog.
     private func deletedMaterial(in change: LibraryChange) -> (entry: ArticleEntry, original: URL?)? {
         guard case let .delete(itemID) = change, let entry = entry(itemID) else { return nil }
@@ -344,6 +426,7 @@ final class LibraryModel {
 
     private func removeDeleted(_ deleted: (entry: ArticleEntry, original: URL?)) async {
         try? await file.removeDelivery(of: deleted.entry)
+        await file.removeSearchBody(deleted.entry.material.id)
         if let original = deleted.original {
             try? await file.removeOriginal(original)
         }

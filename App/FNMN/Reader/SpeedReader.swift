@@ -1,29 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// How much longer long words, numbers and punctuation stay on screen while speed reading.
-enum SpeedPauses: String, CaseIterable, Identifiable {
-    case off, slight, regular
-    var id: String { rawValue }
-
-    var name: String {
-        switch self {
-        case .off: "Off"
-        case .slight: "Slight"
-        case .regular: "Regular"
-        }
-    }
-
-    /// The share of each token's extra beats that is waited out.
-    var share: Double {
-        switch self {
-        case .off: 0
-        case .slight: 0.5
-        case .regular: 1
-        }
-    }
-}
-
 enum SpeedPlayback: Equatable {
     case loading
     case paused
@@ -44,7 +21,7 @@ final class SpeedPlayer {
     /// The last token shown so far. Going back a sentence leaves it where it is, so rereading takes nothing read away.
     private(set) var furthest: Int?
     var wordsPerMinute = 250
-    var pauses = 1.0
+    var pauseProfile = SpeedPauseProfile()
     var wordsPerFrame = 1 {
         didSet {
             // A paused frame takes the new size at once; a running one at the next step.
@@ -166,7 +143,7 @@ final class SpeedPlayer {
 
     private func run() async {
         while mode == .playing, let text {
-            let seconds = text.duration(of: frame, wordsPerMinute: wordsPerMinute, pauses: pauses)
+            let seconds = text.duration(of: frame, wordsPerMinute: wordsPerMinute, pauses: pauseProfile)
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled, mode == .playing else {
                 return
@@ -246,7 +223,7 @@ struct SpeedReader: View {
     @State private var player = SpeedPlayer()
     @AppStorage private var wordsPerMinute: Int
     @AppStorage private var wordsPerFrame: Int
-    @AppStorage private var pauses: SpeedPauses
+    @AppStorage private var pauseProfileJSON: String
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
     /// The current block shows whole while a finger rests on the words.
     @State private var press = Press()
@@ -258,7 +235,7 @@ struct SpeedReader: View {
         let kind = reader.kind
         _wordsPerMinute = AppStorage(wrappedValue: 250, ReaderAppearance.SpeedSetting.wordsPerMinute.key(kind))
         _wordsPerFrame = AppStorage(wrappedValue: 1, ReaderAppearance.SpeedSetting.wordsPerFrame.key(kind))
-        _pauses = AppStorage(wrappedValue: .regular, ReaderAppearance.SpeedSetting.pauses.key(kind))
+        _pauseProfileJSON = AppStorage(wrappedValue: "", ReaderAppearance.SpeedSetting.pauses.key(kind))
     }
 
     private static let speeds = 150...600
@@ -282,12 +259,12 @@ struct SpeedReader: View {
         .task {
             player.wordsPerMinute = wordsPerMinute
             player.wordsPerFrame = wordsPerFrame
-            player.pauses = pauses.share
+            player.pauseProfile = pauseProfile
             await player.load(reader.document, from: start)
         }
         .onChange(of: wordsPerMinute) { player.wordsPerMinute = wordsPerMinute }
         .onChange(of: wordsPerFrame) { player.wordsPerFrame = wordsPerFrame }
-        .onChange(of: pauses) { player.pauses = pauses.share }
+        .onChange(of: pauseProfileJSON) { player.pauseProfile = pauseProfile }
         // A locked screen or another app stops the words, and what was shown is saved in case the app is closed.
         .onChange(of: scenePhase) {
             guard scenePhase != .active else { return }
@@ -308,13 +285,19 @@ struct SpeedReader: View {
                 .buttonStyle(.glass)
                 Spacer()
                 Menu("Speed Reading Options", systemImage: "slider.horizontal.3") {
-                    Picker(selection: $pauses) {
-                        ForEach(SpeedPauses.allCases) { Text($0.name).tag($0) }
-                    } label: {
-                        Label("Pauses", systemImage: "pause.circle")
-                        Text(pauses.name)
+                    Menu("Pauses", systemImage: "pause.circle") {
+                        ForEach(SpeedPauseKind.allCases, id: \.self) { kind in
+                            Picker(kind.name, selection: Binding(
+                                get: { pauseProfile[kind] },
+                                set: { set($0, for: kind) }
+                            )) {
+                                ForEach(SpeedPauseLevel.allCases, id: \.self) { level in
+                                    Text(level.name).tag(level)
+                                }
+                            }
+                            .pickerStyle(.inline)
+                        }
                     }
-                    .pickerStyle(.menu)
                     ReaderAppearanceControls()
                 }
                 .labelStyle(.iconOnly)
@@ -324,12 +307,22 @@ struct SpeedReader: View {
         .padding(.top, 8)
     }
 
+    private var pauseProfile: SpeedPauseProfile {
+        SpeedPauseProfile(json: pauseProfileJSON)
+    }
+
+    private func set(_ level: SpeedPauseLevel, for kind: SpeedPauseKind) {
+        var next = pauseProfile
+        next.set(level, for: kind)
+        pauseProfileJSON = next.json
+    }
+
     /// The section being read, how much of the material lies behind and how long the rest takes at this speed.
     private var progress: some View {
         let token = player.token
         let blocks = max(reader.document.blocks.count, 1)
         let share = token.map { (Double($0.block) + $0.share) / Double(blocks) } ?? 0
-        let minutes = player.text?.minutesLeft(from: player.frame.lowerBound, wordsPerMinute: wordsPerMinute, pauses: pauses.share) ?? 0
+        let minutes = player.text?.minutesLeft(from: player.frame.lowerBound, wordsPerMinute: wordsPerMinute, pauses: pauseProfile) ?? 0
         return VStack(alignment: .leading, spacing: 8) {
             Text(sectionTitle(of: token?.block ?? start.piece))
                 .font(.headline)

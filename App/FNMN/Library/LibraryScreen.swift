@@ -13,16 +13,14 @@ struct LibraryScreen: View {
     var body: some View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.library, hidesTabBar: { $0.hidesTabBar }) {
-            let found = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : library.queries.items(matching: query)
-            ScrollView {
-                if let found {
-                    ItemGrid(items: found, query: query).padding(.horizontal, Tokens.gutter)
+            Group {
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ScrollView { sections }
                 } else {
-                    sections
+                    SearchResults(query: query)
                 }
             }
             .background(Tokens.canvas)
-            .noResults(for: query, when: found?.isEmpty == true)
             .screenSearch($query)
             .navigationTitle("Library")
             .toolbar {

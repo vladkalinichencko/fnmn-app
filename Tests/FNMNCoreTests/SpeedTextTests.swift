@@ -15,14 +15,14 @@ private func words(_ tokens: [SpeedToken]) -> [String] {
 
 @Test func punctuationSetsThePauseAndStartsTheNextSentence() {
     let tokens = SpeedText.tokens(in: .text("One, two. Three e.g. four: five"), at: 0)
-    #expect(tokens.map(\.pause) == [.comma, .sentence, .none, .none, .comma, .paragraph])
+    #expect(tokens.map(\.pause) == [.comma, .sentence, .none, .none, .clause, .paragraph])
     #expect(tokens.map(\.startsSentence) == [true, false, true, false, false, false])
 }
 
 @Test func aDashStandingAlonePausesTheWordBeforeIt() {
     let tokens = SpeedText.tokens(in: .text("wait — then go"), at: 0)
     #expect(words(tokens) == ["wait", "then", "go"])
-    #expect(tokens[0].pause == .comma)
+    #expect(tokens[0].pause == .clause)
 }
 
 @Test func listItemsReadAsParagraphs() {
@@ -62,18 +62,60 @@ private func words(_ tokens: [SpeedToken]) -> [String] {
 
 @Test func longWordsAndPunctuationTakeLongerUnlessPausesAreOff() {
     let text = SpeedText(tokens: SpeedText.tokens(in: .text("cat extraordinarily, dog"), at: 0))
-    #expect(text.duration(of: 0..<1, wordsPerMinute: 240, pauses: 1) == 0.25)
-    #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: 0) == 0.25)
-    #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: 1) > 0.25 * 2)
-    #expect(text.duration(of: 2..<3, wordsPerMinute: 240, pauses: 1) > text.duration(of: 0..<1, wordsPerMinute: 240, pauses: 1))
+    let regular = SpeedPauseProfile(.regular)
+    let off = SpeedPauseProfile(.off)
+    #expect(text.duration(of: 0..<1, wordsPerMinute: 240, pauses: regular) == 0.25)
+    #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: off) == 0.25)
+    #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: regular) > 0.25 * 2)
+    #expect(text.duration(of: 2..<3, wordsPerMinute: 240, pauses: regular) > text.duration(of: 0..<1, wordsPerMinute: 240, pauses: regular))
 }
 
 @Test func minutesLeftCountWordsAndPausesToTheEnd() {
     let text = SpeedText(tokens: SpeedText.tokens(in: .text("a b c d"), at: 0))
-    #expect(text.minutesLeft(from: 0, wordsPerMinute: 2, pauses: 0) == 2)
-    #expect(text.minutesLeft(from: 2, wordsPerMinute: 2, pauses: 0) == 1)
-    #expect(text.minutesLeft(from: 4, wordsPerMinute: 2, pauses: 1) == 0)
-    #expect(text.minutesLeft(from: 0, wordsPerMinute: 2, pauses: 1) > 2)
+    let regular = SpeedPauseProfile(.regular)
+    let off = SpeedPauseProfile(.off)
+    #expect(text.minutesLeft(from: 0, wordsPerMinute: 2, pauses: off) == 2)
+    #expect(text.minutesLeft(from: 2, wordsPerMinute: 2, pauses: off) == 1)
+    #expect(text.minutesLeft(from: 4, wordsPerMinute: 2, pauses: regular) == 0)
+    #expect(text.minutesLeft(from: 0, wordsPerMinute: 2, pauses: regular) > 2)
+}
+
+@Test func eachPauseSettingHoldsBackOnlyItsOwnKind() {
+    let tokens = SpeedText.tokens(in: .text("one, two"), at: 0) + SpeedText.tokens(in: .text("three: four"), at: 1)
+        + SpeedText.tokens(in: .text("five. Six"), at: 2) + SpeedText.tokens(in: .text("seven 42"), at: 3)
+    let text = SpeedText(tokens: tokens)
+    for kind in SpeedPauseKind.allCases {
+        var quiet = SpeedPauseProfile(.regular)
+        quiet.set(.off, for: kind)
+        #expect(text.duration(of: 0..<1, wordsPerMinute: 240, pauses: quiet) <= text.duration(of: 0..<1, wordsPerMinute: 240, pauses: SpeedPauseProfile(.regular)))
+        #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: quiet) <= text.duration(of: 1..<2, wordsPerMinute: 240, pauses: SpeedPauseProfile(.regular)))
+    }
+    var commas = SpeedPauseProfile(.off)
+    commas.set(.regular, for: .comma)
+    #expect(text.duration(of: 0..<1, wordsPerMinute: 240, pauses: commas) > 0.25)
+    #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: commas) == 0.25)
+    #expect(text.duration(of: 2..<3, wordsPerMinute: 240, pauses: commas) == 0.25)
+}
+
+@Test func aColonPausesLongerThanACommaAndShorterThanAFullStop() {
+    let colon = SpeedText(tokens: SpeedText.tokens(in: .text("one: two"), at: 0))
+    let comma = SpeedText(tokens: SpeedText.tokens(in: .text("one, two"), at: 0))
+    let stop = SpeedText(tokens: SpeedText.tokens(in: .text("one. Two"), at: 0))
+    let regular = SpeedPauseProfile(.regular)
+    let colonBeats = colon.duration(of: 0..<1, wordsPerMinute: 60, pauses: regular)
+    let commaBeats = comma.duration(of: 0..<1, wordsPerMinute: 60, pauses: regular)
+    let stopBeats = stop.duration(of: 0..<1, wordsPerMinute: 60, pauses: regular)
+    #expect(commaBeats < colonBeats)
+    #expect(colonBeats < stopBeats)
+}
+
+@Test func aProfileIsWrittenAndReadBackWhole() {
+    var profile = SpeedPauseProfile(.slight)
+    profile.set(.off, for: .numbers)
+    profile.set(.regular, for: .longWords)
+    let read = SpeedPauseProfile(json: profile.json)
+    #expect(read == profile)
+    #expect(SpeedPauseProfile(json: "nonsense") == SpeedPauseProfile(.regular))
 }
 
 @Test func sentencesStepBackAndForward() {

@@ -125,9 +125,8 @@ struct HeadingView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(fold == .open ? 90 : 0))
-                    // A turn leaves the layout as it was, so the chevron gets the width it needs lying down; past
-                    // the heading's edge the gray mask would cut it off.
                     .frame(width: chevronWidth)
+                    .padding(.trailing, 4)
             }
         }
         // The column opens and closes the section at once; only the heading itself moves to its new look.

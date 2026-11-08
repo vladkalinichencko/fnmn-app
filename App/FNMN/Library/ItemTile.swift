@@ -109,18 +109,7 @@ struct ItemTile: View {
         guard !query.isEmpty else {
             return Text(text)
         }
-        var attributed = AttributedString(text)
-        for span in ReadingSearch.spans(of: query, in: text) {
-            guard let found = span.range(in: text) else {
-                continue
-            }
-            let start = text.distance(from: text.startIndex, to: found.lowerBound)
-            let end = text.distance(from: text.startIndex, to: found.upperBound)
-            let from = attributed.characters.index(attributed.startIndex, offsetBy: start)
-            let to = attributed.characters.index(attributed.startIndex, offsetBy: end)
-            attributed[from..<to].backgroundColor = .find
-        }
-        return Text(attributed)
+        return Text(AttributedString.highlighted(text, spans: ReadingSearch.spans(of: query, in: text)))
     }
 
     private func header(_ job: ImportJob?) -> some View {

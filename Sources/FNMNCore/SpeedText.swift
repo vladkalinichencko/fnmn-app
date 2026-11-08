@@ -2,9 +2,29 @@ import Foundation
 
 /// How long the reader waits after a word, by what ends it.
 public enum SpeedPause: Int, Comparable, Sendable {
-    case none, comma, sentence, paragraph
+    case none, comma, clause, sentence, paragraph
 
     public static func < (lhs: SpeedPause, rhs: SpeedPause) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    var kind: SpeedPauseKind? {
+        switch self {
+        case .none: nil
+        case .comma: .comma
+        case .clause: .clause
+        case .sentence: .sentence
+        case .paragraph: .paragraph
+        }
+    }
+
+    var beats: Double {
+        switch self {
+        case .none: 0
+        case .comma: 0.75
+        case .clause: 1.1
+        case .sentence: 1.5
+        case .paragraph: 2.5
+        }
+    }
 }
 
 /// One step of speed reading: a word of a paragraph, or a block that cannot be read a word at a time (a formula, code,
@@ -28,20 +48,15 @@ public struct SpeedToken: Equatable, Sendable {
         self.startsSentence = startsSentence
     }
 
-    /// The beats the token stays on screen beyond the one every word gets: a long word, a number and the pause after
-    /// it. A setting of pauses scales them, from none to all.
-    public var extraBeats: Double {
-        guard !isStop else { return 0 }
-        let letters = text.filter { $0.isLetter || $0.isNumber }.count
-        let long = min(Double(max(letters - 7, 0)) * 0.08, 0.6)
-        let number = text.contains(where: \.isNumber) ? 0.3 : 0
-        let pause: Double = switch pause {
-        case .none: 0
-        case .comma: 0.75
-        case .sentence: 1.5
-        case .paragraph: 2.5
+    public func extraBeats(_ profile: SpeedPauseProfile) -> Double {
+        guard !isStop else {
+            return 0
         }
-        return long + number + pause
+        let letters = text.filter { $0.isLetter || $0.isNumber }.count
+        let long = min(Double(max(letters - 7, 0)) * 0.08, 0.6) * profile.share(.longWords)
+        let number = (text.contains(where: \.isNumber) ? 0.3 : 0) * profile.share(.numbers)
+        let pausing = pause.kind.map { pause.beats * profile.share($0) } ?? 0
+        return long + number + pausing
     }
 }
 
@@ -50,9 +65,7 @@ public struct SpeedToken: Equatable, Sendable {
 /// words.
 public struct SpeedText: Sendable {
     public let tokens: [SpeedToken]
-    /// The words and the extra beats from each token to the end, so the time left is known at once on every word.
     private let wordsAfter: [Double]
-    private let extraAfter: [Double]
 
     /// The text of every plate from `start` on, without what the reading line has already passed in its block.
     public init(document: ReaderDocument, from start: ReadingLine) {
@@ -67,13 +80,10 @@ public struct SpeedText: Sendable {
     public init(tokens: [SpeedToken]) {
         self.tokens = tokens
         var words = [Double](repeating: 0, count: tokens.count + 1)
-        var extra = [Double](repeating: 0, count: tokens.count + 1)
         for index in tokens.indices.reversed() {
             words[index] = words[index + 1] + (tokens[index].isStop ? 0 : 1)
-            extra[index] = extra[index + 1] + tokens[index].extraBeats
         }
         wordsAfter = words
-        extraAfter = extra
     }
 
     /// The tokens shown together from `index`: up to `words` words of one sentence, ending early at a pause, or a stop
@@ -89,17 +99,16 @@ public struct SpeedText: Sendable {
         return index..<end
     }
 
-    /// How long a frame stays on screen, in seconds. Every word gets a beat of the chosen speed, and `pauses`, from 0
-    /// to 1, adds the extra beats of long words, numbers and punctuation.
-    public func duration(of frame: Range<Int>, wordsPerMinute: Int, pauses: Double) -> Double {
-        let beats = tokens[frame].reduce(0) { $0 + 1 + pauses * $1.extraBeats }
+    public func duration(of frame: Range<Int>, wordsPerMinute: Int, pauses: SpeedPauseProfile) -> Double {
+        let beats = tokens[frame].reduce(0) { $0 + 1 + $1.extraBeats(pauses) }
         return beats * 60 / Double(max(wordsPerMinute, 1))
     }
 
     /// Minutes to read from `index` to the end at this speed; the blocks shown whole are not counted.
-    public func minutesLeft(from index: Int, wordsPerMinute: Int, pauses: Double) -> Double {
+    public func minutesLeft(from index: Int, wordsPerMinute: Int, pauses: SpeedPauseProfile) -> Double {
         let index = min(max(index, 0), tokens.count)
-        return (wordsAfter[index] + pauses * extraAfter[index]) / Double(max(wordsPerMinute, 1))
+        let extra = tokens[index...].reduce(0.0) { $0 + $1.extraBeats(pauses) }
+        return (wordsAfter[index] + extra) / Double(max(wordsPerMinute, 1))
     }
 
     /// Where going back a sentence lands from a frame starting at `index`: the start of the sentence it stands in, or,
@@ -225,7 +234,7 @@ public struct SpeedText: Sendable {
         for piece in paragraph.split(whereSeparator: \.isWhitespace).map(String.init) {
             guard piece.contains(where: { $0.isLetter || $0.isNumber }) else {
                 if let last = words.indices.last, piece.contains(where: { "—–-:;".contains($0) }) {
-                    words[last].pause = max(words[last].pause, .comma)
+                    words[last].pause = max(words[last].pause, .clause)
                 }
                 continue
             }
@@ -246,9 +255,18 @@ public struct SpeedText: Sendable {
 
     private static func pause(after word: String) -> SpeedPause {
         let ending = word.trimmingCharacters(in: closing)
-        guard let last = ending.last else { return .none }
-        if ".!?…".contains(last) { return .sentence }
-        if ",;:—–".contains(last) { return .comma }
+        guard let last = ending.last else {
+            return .none
+        }
+        if ".!?…".contains(last) {
+            return .sentence
+        }
+        if "—–:;".contains(last) {
+            return .clause
+        }
+        if ",".contains(last) {
+            return .comma
+        }
         return .none
     }
 }

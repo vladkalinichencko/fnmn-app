@@ -10,7 +10,7 @@ enum ShellTab: Hashable {
 
 /// Where a tab's navigation stack can go.
 enum Route: Hashable {
-    case item(String, piece: Int? = nil)
+    case item(String, piece: Int? = nil, seconds: Double? = nil)
     case album(String)
     case source(String)
     /// A type or a month of the Collections section; albums and publishers have routes of their own.
@@ -202,8 +202,8 @@ struct RouteScreen: View {
 
     var body: some View {
         switch route {
-        case let .item(id, piece):
-            ItemScreen(itemID: id, startPiece: piece)
+        case let .item(id, piece, seconds):
+            ItemScreen(itemID: id, startPiece: piece, startSeconds: seconds)
                 .modifier(ZoomDestinationModifier(id: id))
         case let .album(name):
             AlbumScreen(name: name)

@@ -133,7 +133,7 @@ final class VideoCoordinator {
     @ObservationIgnored private var savedAt = Date.distantPast
     @ObservationIgnored private var resumeFollowing: Task<Void, Never>?
 
-    init(package: ImportPackage, library: LibraryModel) {
+    init(package: ImportPackage, library: LibraryModel, startSeconds: Double? = nil) {
         self.package = package
         self.library = library
         cues = package.blocks.compactMap { block in
@@ -142,7 +142,7 @@ final class VideoCoordinator {
             guard !text.isEmpty else { return nil }
             return VideoCue(id: block.id, startSeconds: start, text: text)
         }
-        start = library.position(of: package.material.id)?.videoSeconds ?? 0
+        start = startSeconds ?? library.position(of: package.material.id)?.videoSeconds ?? 0
         seconds = start
         savedSeconds = start
         let index = activeCue(in: cues, at: start)

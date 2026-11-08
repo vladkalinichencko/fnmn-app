@@ -24,7 +24,8 @@ final class SpeedProfileTests: XCTestCase {
         for kind in [FNMNCore.Material.Kind.article, .book] {
             XCTAssertEqual(defaults.integer(forKey: key(.wordsPerMinute, kind)), 420)
             XCTAssertEqual(defaults.integer(forKey: key(.wordsPerFrame, kind)), 2)
-            XCTAssertEqual(defaults.string(forKey: key(.pauses, kind)), "slight")
+            let pauses = SpeedPauseProfile(json: defaults.string(forKey: key(.pauses, kind)))
+            XCTAssertEqual(pauses, SpeedPauseProfile(.slight))
         }
     }
 
