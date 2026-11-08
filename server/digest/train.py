@@ -37,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
     if len(texts) < MINIMUM:
         print(f"fewer than {MINIMUM} labeled posts; the digest goes without a classifier this time")
         return 0
+    if len(set(labels)) < 2:
+        print("only one folder has posts; a classifier needs at least two")
+        return 0
     if options.dry_run:
         return 0
     train(texts, labels)

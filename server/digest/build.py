@@ -44,7 +44,11 @@ def main(argv: list[str] | None = None) -> int:
         print("the next build time has not come yet")
         return 0
     subscriptions = _subscriptions(Path(options.subscriptions) if options.subscriptions else HERE / "subscriptions.json")
-    skipped = {post.id: reason for post in pending if (reason := _unshowable(post))}
+    skipped = {}
+    for post in pending:
+        reason = _unshowable(post) or _available(post, store)
+        if reason:
+            skipped[post.id] = reason
     buildable = [post for post in pending if post.id not in skipped]
     if not buildable:
         store.record_build({"at": iso(now), "post_ids": list(skipped), "skipped": skipped, "file": None})
@@ -160,6 +164,24 @@ def _unshowable(post: Post) -> str | None:
     if post.video:
         return "a video with no poster"
     return "neither text nor media"
+
+
+def _available(post: Post, store: Store) -> str | None:
+    """Drops a picture the store does not hold; a post left with nothing to draw is skipped like an empty one."""
+    available = []
+    for media in post.media:
+        if (store.root / media["path"]).exists():
+            available.append(media)
+        else:
+            print(f"{post.id}: missing {media['path']}")
+    post.media = available
+    poster = (post.video or {}).get("poster")
+    if poster and not (store.root / poster["path"]).exists():
+        print(f"{post.id}: missing {poster['path']}")
+        post.video["poster"] = None
+    if post.text or post.media or (post.video and post.video.get("poster")):
+        return None
+    return "missing media"
 
 
 def _prune(folder: Path) -> None:

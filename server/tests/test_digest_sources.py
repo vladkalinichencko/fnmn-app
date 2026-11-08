@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import httpx
+from lxml import html
 
 from digest import instagram, telegram, x
 from digest.reading import save_photo
@@ -98,6 +99,29 @@ class XTests(unittest.TestCase):
     def test_a_tweet_that_is_gone_is_skipped(self):
         self.assertIsNone(x._tweet(FakeWeb(text=lambda url: json.dumps({"__typename": "TweetTombstone"})), "1"))
 
+    def test_the_syndication_request_names_the_status(self):
+        seen = []
+
+        def text(url):
+            seen.append(url)
+            return json.dumps({"__typename": "TweetTombstone"})
+
+        self.assertIsNone(x._tweet(FakeWeb(text=text), "12345"))
+        self.assertIn("id=12345", seen[0])
+        self.assertIn("cdn.syndication.twimg.com/tweet-result", seen[0])
+
+
+class TelegramTimeTests(unittest.TestCase):
+    def test_a_message_without_a_time_is_skipped(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            message = html.fromstring(
+                '<div class="tgme_widget_message"><a data-post="channel/1"></a>'
+                '<div class="tgme_widget_message_text">Hello</div></div>'
+            )
+            post = telegram._post(message, "channel", {"id": "telegram/channel"}, FakeWeb(), store, ["tech"])
+            self.assertIsNone(post)
+
 
 class PictureTests(unittest.TestCase):
     def test_a_picture_the_network_refuses_is_left_out(self):
@@ -132,6 +156,22 @@ class InstagramTests(unittest.TestCase):
     def test_a_description_without_a_caption_keeps_the_text(self):
         self.assertIsNone(instagram._caption(None))
         self.assertEqual(instagram._caption("12 likes"), "12 likes")
+
+    def test_a_post_without_a_time_is_skipped(self):
+        markup = (
+            '<html><head>'
+            '<meta property="og:description" content="12 likes, 0 comments - studio on March 3, 2026: &quot;A caption&quot;">'
+            '<meta property="og:image" content="https://example.com/a.jpg">'
+            '</head><body></body></html>'
+        )
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = instagram._post(
+                FakePage(markup), "studio", "abc",
+                {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
+                FakeWeb(), store, ["design"],
+            )
+            self.assertIsNone(post)
 
 
 if __name__ == "__main__":

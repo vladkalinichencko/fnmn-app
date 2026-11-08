@@ -5,7 +5,7 @@ networks, so a run reads a small number of new posts and leaves the rest for the
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 
 from lxml import html
 
@@ -28,6 +28,7 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     known = store.ids()
     posts: list[Post] = []
     name = None
+    skipped = 0
     for shortcode in links:
         post_id = f"instagram/{handle}/{shortcode}"
         if post_id in known:
@@ -38,11 +39,19 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
         if post is not None:
             posts.append(post)
             name = name or post.author["name"]
+        else:
+            skipped += 1
         page.wait_for_timeout(1200)
-    note = None
+    notes = []
     if len(posts) >= MAX_POSTS:
-        note = f"read the first {MAX_POSTS} new posts; the rest wait for the next run"
-    return SourceResult(posts=sorted(posts, key=lambda post: post.posted_at), name=name, note=note)
+        notes.append(f"read the first {MAX_POSTS} new posts; the rest wait for the next run")
+    if skipped:
+        notes.append(f"{skipped} posts had no time to place them")
+    return SourceResult(
+        posts=sorted(posts, key=lambda post: post.posted_at),
+        name=name,
+        note="; ".join(notes) or None,
+    )
 
 
 def _grid(page, handle: str) -> list[str]:
@@ -85,7 +94,9 @@ def _post(page, handle: str, shortcode: str, source: dict, web: Web, store, fold
         if saved:
             media.append(saved)
     times = document.xpath("//time/@datetime")
-    posted = iso(datetime.fromisoformat(times[0])) if times else iso(datetime.now(timezone.utc))
+    if not times:
+        return None
+    posted = iso(datetime.fromisoformat(times[0]))
     return Post(
         id=post_id,
         network="instagram",

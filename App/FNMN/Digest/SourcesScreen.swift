@@ -20,7 +20,7 @@ struct SourcesScreen: View {
                             }
                         }
                     }
-                    Text("The Mac reads these through \(digest.package.sources.count) profiles and channels.")
+                    Text("The Mac reads \(digest.package.sources.count) sources in these folders.")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }

@@ -1,4 +1,5 @@
 import FNMNCore
+import Observation
 import XCTest
 @testable import FNMN
 
@@ -261,5 +262,32 @@ final class DigestModelTests: XCTestCase {
             XCTAssertFalse(PostCard.icon(kind).isEmpty)
             XCTAssertFalse(PostCard.contextLabel(DigestPackage.Post.Context(kind: kind)).isEmpty)
         }
+    }
+
+    func testRecordingAMarkNotifiesTheReader() async throws {
+        let folder = root.appending(path: "FNMN")
+        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
+        let digests = model()
+        await digests.sync(folder: folder)
+        let post = try XCTUnwrap(digests.post("x/1"))
+        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
+        let seen = expectation(description: "the reader sees the mark")
+        withObservationTracking {
+            _ = digests.seen
+        } onChange: {
+            seen.fulfill()
+        }
+        digests.record(.opened, post: post, digest: digest)
+        await fulfillment(of: [seen], timeout: 1)
+    }
+
+    func testABrokenClassifierIsReported() async throws {
+        let missing = await InterestClassifier.labels(modelURL: root.appending(path: "missing.mlmodel"), posts: [])
+        XCTAssertNotNil(missing.error)
+        let broken = root.appending(path: "broken.mlmodel")
+        try Data("not a model".utf8).write(to: broken)
+        let loaded = await InterestClassifier.labels(modelURL: broken, posts: [])
+        XCTAssertNotNil(loaded.error)
+        XCTAssertTrue(loaded.labels.isEmpty)
     }
 }

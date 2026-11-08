@@ -93,6 +93,28 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(self.build(root, fnmn), 0)
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "a video with no poster"})
 
+    def test_a_missing_picture_is_dropped_and_the_text_stays(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            with_picture = post("x/1")
+            with_picture.media = [{"path": "media/missing.png", "width": 1, "height": 1}]
+            Store(root).append([with_picture])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+                self.assertNotIn("media/missing.png", opened.getnames())
+            self.assertEqual(package["posts"][0]["media"], [])
+
+    def test_a_post_whose_only_picture_is_missing_is_skipped(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            with_picture = post("x/1", text="")
+            with_picture.media = [{"path": "media/missing.png", "width": 1, "height": 1}]
+            Store(root).append([with_picture])
+            self.build(root, fnmn)
+            self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "missing media"})
+
     def test_the_build_reads_its_subscriptions_file(self):
         with TemporaryDirectory() as folder:
             root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
@@ -143,6 +165,11 @@ class ScheduleTests(unittest.TestCase):
 
 
 class TrainRowsTests(unittest.TestCase):
+    def test_one_folder_is_not_enough_to_train(self):
+        with TemporaryDirectory() as folder:
+            Store(Path(folder)).append([post(f"x/{index}") for index in range(20)])
+            self.assertEqual(train.main(["--root", folder, "--folder", folder]), 0)
+
     def test_engagement_weights_the_rows_and_hides_the_hidden(self):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))

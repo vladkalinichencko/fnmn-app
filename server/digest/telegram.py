@@ -4,7 +4,7 @@ needs no login. A channel busy enough to overflow one page is read back through 
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 
 from lxml import html
 
@@ -24,6 +24,7 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     collected: dict[str, Post] = {}
     name = None
     before = None
+    skipped = 0
     for _ in range(MAX_PAGES):
         report(f"reading t.me/{channel}")
         url = PAGE.format(channel=channel) + (f"?before={before}" if before else "")
@@ -35,6 +36,7 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
         for message in messages:
             post = _post(message, channel, source, web, store, folders)
             if post is None:
+                skipped += 1
                 continue
             page_ids.append(post.id)
             collected.setdefault(post.id, post)
@@ -43,7 +45,8 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
         before = _older(document)
         if before is None or any(post_id in known for post_id in page_ids):
             break
-    return SourceResult(posts=sorted(collected.values(), key=lambda post: post.posted_at), name=name)
+    note = f"{skipped} messages had no text, media or time" if skipped else None
+    return SourceResult(posts=sorted(collected.values(), key=lambda post: post.posted_at), name=name, note=note)
 
 
 def _older(document) -> str | None:
@@ -59,7 +62,9 @@ def _post(message, channel: str, source: dict, web: Web, store, folders: list[st
     message_id = data_post[0].split("/")[-1]
     post_id = f"telegram/{channel}/{message_id}"
     times = message.xpath('.//time/@datetime')
-    posted = iso(datetime.fromisoformat(times[0])) if times else iso(datetime.now(timezone.utc))
+    if not times:
+        return None
+    posted = iso(datetime.fromisoformat(times[0]))
     text = _markdown(message.xpath('.//div[contains(@class,"tgme_widget_message_text")]'))
     media = []
     for index, style in enumerate(message.xpath('.//a[contains(@class,"tgme_widget_message_photo_wrap")]/@style')[:4]):

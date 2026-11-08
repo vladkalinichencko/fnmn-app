@@ -20,13 +20,12 @@ final class DigestModel {
     private(set) var digests: [Digest] = []
     /// The folder each post's text belongs to, by the model the newest digest carried.
     private(set) var labels: [String: String] = [:]
-    private(set) var seen: Set<String> = []
-    private(set) var hidden: Set<String> = []
+    /// The one record of what this device read, hid and took in; the views read it through `seen` and `hidden`.
+    private(set) var index = DigestIndex()
     /// The last sync's failures, while the magazine it already had stays on screen.
     private(set) var lastError: String?
     private let file: DigestFile
     private let device: String
-    @ObservationIgnored private var index = DigestIndex()
     @ObservationIgnored private var folder: URL?
     @ObservationIgnored private var loaded = false
     @ObservationIgnored private var pending: [DigestEngagement] = []
@@ -41,6 +40,14 @@ final class DigestModel {
 
     var current: Digest? {
         digests.first
+    }
+
+    var seen: Set<String> {
+        index.seen
+    }
+
+    var hidden: Set<String> {
+        index.hidden
     }
 
     /// The digest a post belongs to, for the thread screen and for recording what the reader did with it.
@@ -77,6 +84,10 @@ final class DigestModel {
             state = .ready
             scoreIfNeeded()
             await writePending()
+        } catch is CancellationError {
+            if state == .loading {
+                state = .idle
+            }
         } catch {
             if state == .ready {
                 lastError = error.localizedDescription
@@ -92,9 +103,9 @@ final class DigestModel {
         pending.append(DigestEngagement(kind: kind, postID: post.id, digestID: digest.id))
         switch kind {
         case .opened:
-            seen.insert(post.id)
+            index.seen.insert(post.id)
         case .hidden:
-            hidden.insert(post.id)
+            index.hidden.insert(post.id)
         case .saved:
             break
         }
@@ -110,8 +121,6 @@ final class DigestModel {
 
     /// Writes what is waiting before the app leaves the foreground.
     func settle() async {
-        index.seen = seen
-        index.hidden = hidden
         try? await file.saveIndex(index)
         indexSave?.cancel()
         await writePending()
@@ -127,8 +136,6 @@ final class DigestModel {
             return
         }
         index = try await file.loadIndex()
-        seen = index.seen
-        hidden = index.hidden
         digests = try await file.packages()
         loaded = true
     }
@@ -166,8 +173,16 @@ final class DigestModel {
             }
         }
         if !tars.isEmpty {
-            try? await file.evict(keeping: 5)
-            try? await file.saveIndex(index)
+            do {
+                try await file.evict(keeping: 5)
+            } catch {
+                failures.append("the digest cache could not be pruned: \(error.localizedDescription)")
+            }
+            do {
+                try await file.saveIndex(index)
+            } catch {
+                failures.append("the digest index could not be saved: \(error.localizedDescription)")
+            }
         }
         return failures
     }
@@ -185,21 +200,26 @@ final class DigestModel {
             guard !Task.isCancelled else {
                 return
             }
-            self?.labels = scored
+            self?.labels = scored.labels
+            if let error = scored.error {
+                self?.lastError = error
+            }
         }
     }
 
     private func scheduleIndexSave() {
         indexSave?.cancel()
         indexSave = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
             await self?.saveIndexNow()
         }
     }
 
     private func saveIndexNow() async {
-        index.seen = seen
-        index.hidden = hidden
         try? await file.saveIndex(index)
     }
 
