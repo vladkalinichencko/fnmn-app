@@ -14,6 +14,14 @@ enum Original: Equatable {
     case file(URL)
 }
 
+/// What the window can show: the library is ready only once its folder is chosen.
+enum LibraryPhase: Equatable {
+    case loading
+    case needsFolder
+    case ready
+    case failed(String)
+}
+
 /// The one owner of the library: every change goes through `apply`, is written to disk, then published.
 /// The catalog and reading progress are separate properties, so a view that reads one never wakes for the other.
 /// The journal lives in `JournalSync` and importing in `LibraryImporter`; the model sequences both and owns
@@ -24,6 +32,15 @@ final class LibraryModel {
     private(set) var progress = ReadingProgress()
     private(set) var queries = LibraryQueries(LibrarySnapshot())
     private(set) var loadState = LoadState.idle
+
+    /// What the window shows: `loadState` and the folder, decided in one place.
+    var phase: LibraryPhase {
+        switch loadState {
+        case .idle, .loading: .loading
+        case let .failed(message): .failed(message)
+        case .ready: cloudFolder == nil ? .needsFolder : .ready
+        }
+    }
     /// The FNMN folder in iCloud Drive, where every material lives; until the reader points to it once,
     /// the app asks for it instead of showing the library.
     private(set) var cloudFolder: URL?

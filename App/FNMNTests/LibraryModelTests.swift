@@ -18,6 +18,7 @@ final class LibraryModelTests: XCTestCase {
 
         await model.load()
         XCTAssertEqual(model.loadState, .ready)
+        XCTAssertEqual(model.phase, .needsFolder)
         XCTAssertNil(model.cloudFolder)
         XCTAssertTrue(model.queries.unsortedItems.isEmpty)
     }
@@ -32,8 +33,10 @@ final class LibraryModelTests: XCTestCase {
         let cloud = root.appending(path: "FNMN")
         try FileManager.default.createDirectory(at: cloud, withIntermediateDirectories: true)
 
+        await model.load()
         try await model.linkLibraryFolder(cloud) { _ in }
         XCTAssertEqual(model.cloudFolder?.standardizedFileURL, cloud.standardizedFileURL)
+        XCTAssertEqual(model.phase, .ready)
 
         let url = try XCTUnwrap(URL(string: "https://dl.acm.org/doi/3"))
         try await model.storeLink(url)

@@ -41,8 +41,8 @@ private struct WindowRoot: View {
 
     var body: some View {
         Group {
-            switch library.loadState {
-            case .idle, .loading:
+            switch library.phase {
+            case .loading:
                 Loading()
             case let .failed(message):
                 ContentUnavailableView {
@@ -52,7 +52,7 @@ private struct WindowRoot: View {
                 } actions: {
                     Button("Try Again") { Task { await library.load() } }
                 }
-            case .ready where library.cloudFolder == nil:
+            case .needsFolder:
                 LibraryFolderScreen()
             case .ready:
                 AppShell()
@@ -70,7 +70,7 @@ private struct WindowRoot: View {
                     await library.saveProgress()
                     await digests.settle()
                 }
-            case .active where library.loadState == .ready:
+            case .active where library.phase == .ready:
                 takeSharedItems()
                 Task {
                     await library.syncWithOtherDevices()
@@ -79,8 +79,8 @@ private struct WindowRoot: View {
             default: break
             }
         }
-        .onChange(of: library.loadState) { _, state in
-            guard state == .ready else { return }
+        .onChange(of: library.phase) { _, phase in
+            guard phase == .ready else { return }
             takeSharedItems()
             Task { await digests.sync(folder: library.cloudFolder) }
             guard pendingContinue else { return }
@@ -95,7 +95,7 @@ private struct WindowRoot: View {
         }
         .onOpenURL { url in
             if url.scheme == "fnmn", url.host == "continue" {
-                if library.loadState == .ready { continueReading() } else { pendingContinue = true }
+                if library.phase == .ready { continueReading() } else { pendingContinue = true }
             } else if url.scheme == "fnmn", url.host == "digest" {
                 navigation.tab = .digest
             } else if let shared = CaptureHandoff.sharedURL(from: url) {
