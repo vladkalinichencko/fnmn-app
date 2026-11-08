@@ -14,13 +14,6 @@ enum Original: Equatable {
     case file(URL)
 }
 
-enum LibraryLoadState: Equatable {
-    case idle
-    case loading
-    case ready
-    case failed(String)
-}
-
 /// The one owner of the library: every change goes through `apply`, is written to disk, then published.
 /// The catalog and reading progress are separate properties, so a view that reads one never wakes for the other.
 /// The journal lives in `JournalSync` and importing in `LibraryImporter`; the model sequences both and owns
@@ -30,7 +23,7 @@ final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
     private(set) var progress = ReadingProgress()
     private(set) var queries = LibraryQueries(LibrarySnapshot())
-    private(set) var loadState = LibraryLoadState.idle
+    private(set) var loadState = LoadState.idle
     /// The FNMN folder in iCloud Drive, where every material lives; until the reader points to it once,
     /// the app asks for it instead of showing the library.
     private(set) var cloudFolder: URL?

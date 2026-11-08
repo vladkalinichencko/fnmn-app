@@ -2,13 +2,6 @@ import FNMNCore
 import Foundation
 import Observation
 
-enum DigestLoadState: Equatable {
-    case idle
-    case loading
-    case ready
-    case failed(String)
-}
-
 enum DigestSyncState: Equatable {
     case idle
     case syncing
@@ -20,7 +13,7 @@ enum DigestSyncState: Equatable {
 /// receives the folder with every sync.
 @MainActor @Observable
 final class DigestModel {
-    private(set) var state = DigestLoadState.idle
+    private(set) var state = LoadState.idle
     /// Whether a sync is running; the tab shows a small spinner. A second sync returns at once, because the
     /// running one already reads every delivery.
     private(set) var syncState = DigestSyncState.idle
