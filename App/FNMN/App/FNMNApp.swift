@@ -38,6 +38,7 @@ private struct WindowRoot: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var navigation = WindowNavigation()
     @State private var dialogs = LibraryDialogs()
+    @State private var widgetRefresh: Task<Void, Never>?
 
     var body: some View {
         Group {
@@ -89,6 +90,23 @@ private struct WindowRoot: View {
                 continuedRoute()
             }
         }
+        .onChange(of: library.phase) { _, phase in
+            guard phase == .ready, let route = navigation.pendingItem else {
+                return
+            }
+            navigation.pendingItem = nil
+            navigation.show(route)
+        }
+        .task { await WidgetSnapshotBuilder.refresh(library: library, digests: digests) }
+        .onChange(of: library.snapshot) { scheduleWidgetRefresh() }
+        .onChange(of: library.progress) { scheduleWidgetRefresh() }
+        .onChange(of: digests.current?.id) { scheduleWidgetRefresh() }
+        .onChange(of: scenePhase) {
+            guard scenePhase == .background else {
+                return
+            }
+            Task { await WidgetSnapshotBuilder.refresh(library: library, digests: digests) }
+        }
         .onChange(of: library.cloudFolder) { _, folder in
             guard let folder else {
                 return
@@ -103,6 +121,16 @@ private struct WindowRoot: View {
                 }
             } else if url.scheme == "fnmn", url.host == "digest" {
                 navigation.tab = .digest
+            } else if url.scheme == "fnmn", url.host == "item",
+                      let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                      let id = components.queryItems?.first(where: { $0.name == "id" })?.value,
+                      !id.isEmpty {
+                let piece = components.queryItems?.first { $0.name == "piece" }?.value.flatMap(Int.init)
+                if library.phase == .ready {
+                    navigation.show(.item(id, piece: piece))
+                } else {
+                    navigation.pendingItem = .item(id, piece: piece)
+                }
             } else if let shared = CaptureHandoff.sharedURL(from: url) {
                 dialogs.send(.addLink(shared.absoluteString))
             }
@@ -114,6 +142,17 @@ private struct WindowRoot: View {
             Button("OK") { library.failure = nil }
         } message: {
             Text(library.failure ?? "")
+        }
+    }
+
+    private func scheduleWidgetRefresh() {
+        widgetRefresh?.cancel()
+        widgetRefresh = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else {
+                return
+            }
+            await WidgetSnapshotBuilder.refresh(library: library, digests: digests)
         }
     }
 

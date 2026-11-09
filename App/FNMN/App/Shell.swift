@@ -65,6 +65,7 @@ final class WindowNavigation {
     var digest: [DigestRoute] = []
     var shelf: [Route] = []
     var pending = PendingRoute.none
+    var pendingItem: Route?
 
     /// Pushes onto the stack of the visible tab.
     func open(_ route: Route) {

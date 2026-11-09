@@ -78,5 +78,7 @@ private struct Ring: View {
 struct ImportActivityBundle: WidgetBundle {
     var body: some Widget {
         ImportActivityWidget()
+        ContinueWidget()
+        DigestWidget()
     }
 }
