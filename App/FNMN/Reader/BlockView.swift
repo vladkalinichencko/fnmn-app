@@ -122,11 +122,7 @@ struct HeadingView: View {
                     .transition(.blurReplace)
             }
             if fold != .none {
-                Image(systemName: fold == .open ? "chevron.down" : "chevron.right")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: chevronWidth, height: chevronWidth)
+                DisclosureChevron(open: fold == .open, width: chevronWidth)
             }
         }
         // The column opens and closes the section at once; only the heading itself moves to its new look.
