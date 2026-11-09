@@ -516,6 +516,16 @@ private let namedBook = ImportPackage(
     queries = LibraryQueries(library)
     #expect(ids("Kernel Trick") == ["article:headed"])
     #expect(ids("hidden body text").isEmpty)
+    let accented = ImportPackage(
+        material: Material(id: "article:accented", kind: .article, title: "Café Baseline", sourceURL: URL(string: "https://example.com/accented")!),
+        sections: [],
+        blocks: [],
+        body: "plain body text"
+    )
+    try library.importPackage(accented, at: .now)
+    queries = LibraryQueries(library)
+    #expect(ids("cafe") == ["article:accented"])
+    #expect(ids("CAFÉ") == ["article:accented"])
     let book = queries.items.filter { $0.id == namedBook.material.id }
     #expect(queries.search("kernel", in: book).isEmpty)
     #expect(queries.search("roberts", in: book).map(\.id) == [namedBook.material.id])

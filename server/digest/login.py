@@ -20,7 +20,7 @@ from digest.reading import profile
 LOGIN = {
     "x": "https://x.com/login",
     "instagram": "https://www.instagram.com/accounts/login/",
-    "telegram": "https://t.me/",
+    "telegram": "https://web.telegram.org/",
 }
 CHROME = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 
