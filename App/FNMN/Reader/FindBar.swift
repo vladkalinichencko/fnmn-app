@@ -10,7 +10,7 @@ struct FindBar: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Find in Material", text: Binding(
+            TextField("Find in Text", text: Binding(
                 get: { find.query },
                 set: { reader.send(.findQuery($0)) }
             ))

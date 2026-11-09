@@ -357,7 +357,7 @@ struct ReaderMenu: View {
             } else {
                 Button("Stop Spot Reading", systemImage: "xmark.circle") { reader.send(.spot(false)) }
             }
-            Button("Find in Material", systemImage: "magnifyingglass") {
+            Button("Find in Text", systemImage: "magnifyingglass") {
                 if reader.state.shownPlate != nil {
                     reader.send(.onePlate(false))
                 }
