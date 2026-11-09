@@ -31,6 +31,8 @@ final class SpeedPlayer {
         }
     }
     @ObservationIgnored private var clock: Task<Void, Never>?
+    private(set) var backs = 0
+    @ObservationIgnored private var startedAt = Date.now
 
     var isPlaying: Bool {
         mode == .playing
@@ -46,6 +48,7 @@ final class SpeedPlayer {
     /// The text is split into tokens off the main thread: a book is hundreds of thousands of words.
     func load(_ document: ReaderDocument, from start: ReadingLine) async {
         guard text == nil else { return }
+        startedAt = .now
         let text = await Task.detached(priority: .userInitiated) { SpeedText(document: document, from: start) }.value
         self.text = text
         frame = text.frame(at: 0, words: wordsPerFrame)
@@ -92,7 +95,24 @@ final class SpeedPlayer {
         guard let text else {
             return
         }
-        jump(to: text.sentenceStart(before: frame.lowerBound))
+        let target = text.sentenceStart(before: frame.lowerBound)
+        if target != frame.lowerBound {
+            backs += 1
+        }
+        jump(to: target)
+    }
+
+    func summary(itemID: String, wordsPerMinute: Int, pauses: String) -> ReadingModeEvent {
+        ReadingModeEvent(
+            itemID: itemID,
+            mode: .rsvp,
+            wordsPerMinute: wordsPerMinute,
+            pauses: pauses,
+            words: (furthest ?? -1) + 1,
+            backs: backs,
+            startedAt: startedAt,
+            endedAt: .now
+        )
     }
 
     func sentenceForward() {
@@ -271,7 +291,14 @@ struct SpeedReader: View {
             player.pause()
             saveShown()
         }
-        .onDisappear { player.pause() }
+        .onDisappear {
+            player.pause()
+            let summary = player.summary(itemID: reader.materialID, wordsPerMinute: wordsPerMinute, pauses: pauseProfile.json)
+            guard summary.words > 0 else {
+                return
+            }
+            Task { await library.recordReadingMode(summary) }
+        }
     }
 
     private var bar: some View {

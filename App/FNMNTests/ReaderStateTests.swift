@@ -55,7 +55,11 @@ final class ReaderStateTests: XCTestCase {
 
         let moved = SpotState(piece: 5, word: 2, span: TextSpan(start: 4, length: 3), running: true)
         state = readerReduce(state, .spotMove(moved), document: document)
-        XCTAssertEqual(state.spot, moved)
+        XCTAssertEqual(state.spot?.piece, moved.piece)
+        XCTAssertEqual(state.spot?.word, moved.word)
+        XCTAssertEqual(state.spot?.words, 1)
+        state = readerReduce(state, .spotMove(moved), document: document)
+        XCTAssertEqual(state.spot?.words, 2)
         XCTAssertNil(readerReduce(state, .spot(false), document: document).spot)
     }
 

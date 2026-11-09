@@ -94,6 +94,19 @@ final class SpeedPlayerTests: XCTestCase {
         XCTAssertEqual(player.token?.isStop, false)
     }
 
+    func testTheSummaryCountsShownWordsAndReturns() async {
+        let player = await loaded("One two three. Four five six. Seven eight nine.")
+        player.play()
+        try? await Task.sleep(for: .milliseconds(350))
+        player.sentenceBack()
+        let summary = player.summary(itemID: "text", wordsPerMinute: 600, pauses: SpeedPauseProfile(.off).json)
+        XCTAssertGreaterThan(summary.words, 0)
+        XCTAssertEqual(summary.backs, 1)
+        XCTAssertEqual(summary.mode, .rsvp)
+        XCTAssertLessThanOrEqual(summary.startedAt, summary.endedAt)
+        player.pause()
+    }
+
     func testTheWordsFinishAtTheEnd() async {
         let player = await loaded("One.")
         player.play()

@@ -469,6 +469,22 @@ public actor LibraryFile {
         cloudFolder?.appending(path: "state", directoryHint: .isDirectory)
     }
 
+    public func appendReadingMode(_ event: ReadingModeEvent, device: String) throws {
+        let folder = journalFolder() ?? root
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let line = try JSONLines.line(event, encoder: encoder)
+        try JSONLines.append(line, to: folder.appending(path: "\(device).reading.jsonl"))
+    }
+
+    public func readingModes(device: String) throws -> [ReadingModeEvent] {
+        let folder = journalFolder() ?? root
+        let url = folder.appending(path: "\(device).reading.jsonl")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return []
+        }
+        return text.split(separator: "\n").compactMap { try? decoder.decode(ReadingModeEvent.self, from: Data($0.utf8)) }
+    }
+
     public func loadSync() throws -> JournalKnowledge {
         let url = root.appending(path: "sync.json")
         guard FileManager.default.fileExists(atPath: url.path) else {

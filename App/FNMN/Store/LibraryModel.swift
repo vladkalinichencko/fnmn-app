@@ -418,6 +418,10 @@ final class LibraryModel {
         return plain
     }
 
+    func recordReadingMode(_ event: ReadingModeEvent) async {
+        try? await file.appendReadingMode(event, device: journal.device)
+    }
+
     /// The entry and saved original of the material a change deletes, taken before it goes from the catalog.
     private func deletedMaterial(in change: LibraryChange) -> (entry: ArticleEntry, original: URL?)? {
         guard case let .delete(itemID) = change, let entry = entry(itemID) else { return nil }

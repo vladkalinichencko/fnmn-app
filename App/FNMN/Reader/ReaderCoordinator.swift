@@ -36,6 +36,8 @@ struct SpotState: Equatable {
     var word: Int
     var span: TextSpan
     var running: Bool
+    var words = 0
+    var startedAt = Date.now
 }
 
 struct SpotWord: Equatable {
@@ -265,8 +267,10 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         state.spot = nil
     case let .spotPaused(paused):
         state.spot?.running = !paused
-    case let .spotMove(next):
-        state.spot = next.running ? next : SpotState(piece: next.piece, word: next.word, span: next.span, running: false)
+    case var .spotMove(next):
+        next.words = (state.spot?.words ?? 0) + 1
+        next.startedAt = state.spot?.startedAt ?? .now
+        state.spot = next.running ? next : SpotState(piece: next.piece, word: next.word, span: next.span, running: false, words: next.words, startedAt: next.startedAt)
     }
     return state
 }
@@ -543,6 +547,20 @@ final class ReaderCoordinator {
             startSpot()
         case .spot(false):
             stopSpot()
+            if let spot = before.spot {
+                let defaults = UserDefaults.standard
+                let event = ReadingModeEvent(
+                    itemID: materialID,
+                    mode: .spot,
+                    wordsPerMinute: defaults.integer(forKey: ReaderAppearance.SpeedSetting.wordsPerMinute.key(kind)),
+                    pauses: defaults.string(forKey: ReaderAppearance.SpeedSetting.pauses.key(kind)) ?? "",
+                    words: spot.words,
+                    backs: 0,
+                    startedAt: spot.startedAt,
+                    endedAt: .now
+                )
+                Task { await library.recordReadingMode(event) }
+            }
             savePlace(next.place)
         case let .spotPaused(paused):
             if paused {
