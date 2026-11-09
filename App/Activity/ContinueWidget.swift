@@ -50,12 +50,12 @@ struct ContinueEntryView: View {
             if let head = shown.first {
                 switch family {
                 case .systemSmall:
-                    ContinueHead(item: head, cover: nil)
+                    ContinueHead(item: head, cover: nil, lines: 4)
                 case .systemMedium:
-                    ContinueHead(item: head, cover: 78)
+                    ContinueHead(item: head, cover: 78, lines: 3)
                 default:
                     VStack(alignment: .leading, spacing: 10) {
-                        ContinueHead(item: head, cover: 92)
+                        ContinueHead(item: head, cover: 92, lines: 2)
                         ForEach(shown.dropFirst()) { item in
                             ContinueLine(item: item)
                         }
@@ -74,6 +74,7 @@ struct ContinueEntryView: View {
 private struct ContinueHead: View {
     let item: WidgetItem
     let cover: CGFloat?
+    let lines: Int
 
     var body: some View {
         Link(destination: item.deepLink) {
@@ -88,7 +89,7 @@ private struct ContinueHead: View {
                             .foregroundStyle(.secondary)
                         Text(item.title)
                             .font(cover == nil ? .subheadline.weight(.semibold) : .headline)
-                            .lineLimit(cover == nil ? 4 : 3)
+                            .lineLimit(lines)
                             .minimumScaleFactor(0.85)
                         Text(item.source ?? item.kind.capitalized)
                             .font(.caption2)
@@ -131,7 +132,7 @@ private struct WidgetCover: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: side, height: side * 0.78)
+                .frame(width: side, height: side)
                 .clipShape(.rect(cornerRadius: 8, style: .continuous))
         }
     }
