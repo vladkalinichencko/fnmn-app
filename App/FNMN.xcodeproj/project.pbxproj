@@ -16,6 +16,8 @@
 		A1ACT000000000000000042 /* Activity/WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ACT000000000000000051 /* Activity/WidgetSnapshot.swift */; };
 		A1ACT000000000000000043 /* Activity/ContinueWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ACT000000000000000052 /* Activity/ContinueWidget.swift */; };
 		A1ACT000000000000000044 /* Activity/DigestWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ACT000000000000000053 /* Activity/DigestWidget.swift */; };
+		A1ACT000000000000000045 /* Activity/WidgetLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ACT000000000000000054 /* Activity/WidgetLayout.swift */; };
+		A1ACT000000000000000046 /* Activity/WidgetLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1ACT000000000000000054 /* Activity/WidgetLayout.swift */; };
 		A1ACT000000000000000005 /* Activity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1ACT000000000000000014 /* Activity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A1CORE00000000000000004 /* FNMNCore in Frameworks */ = {isa = PBXBuildFile; productRef = A1CORE00000000000000002 /* FNMNCore */; };
 		A1CORE00000000000000005 /* FNMNCore in Frameworks */ = {isa = PBXBuildFile; productRef = A1CORE00000000000000003 /* FNMNCore */; };
@@ -73,6 +75,7 @@
 		A1ACT000000000000000051 /* Activity/WidgetSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Activity/WidgetSnapshot.swift; sourceTree = "<group>"; };
 		A1ACT000000000000000052 /* Activity/ContinueWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Activity/ContinueWidget.swift; sourceTree = "<group>"; };
 		A1ACT000000000000000053 /* Activity/DigestWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Activity/DigestWidget.swift; sourceTree = "<group>"; };
+		A1ACT000000000000000054 /* Activity/WidgetLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Activity/WidgetLayout.swift; sourceTree = "<group>"; };
 		A1ACT000000000000000013 /* Activity/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Activity/Info.plist; sourceTree = "<group>"; };
 		A1ACT000000000000000014 /* Activity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Activity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1SHARE00000000000000001 /* Share/ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Share/ShareViewController.swift; sourceTree = "<group>"; };
@@ -176,6 +179,7 @@
 				A1ACT000000000000000051 /* Activity/WidgetSnapshot.swift */,
 				A1ACT000000000000000052 /* Activity/ContinueWidget.swift */,
 				A1ACT000000000000000053 /* Activity/DigestWidget.swift */,
+				A1ACT000000000000000054 /* Activity/WidgetLayout.swift */,
 				A1ACT000000000000000013 /* Activity/Info.plist */,
 				A1SHARE00000000000000003 /* Share/Info.plist */,
 			);
@@ -356,6 +360,7 @@
 				A1ACT000000000000000001 /* Activity/ImportActivityAttributes.swift in Sources */,
 				A1ACT000000000000000002 /* Activity/ImportActivity.swift in Sources */,
 				A1ACT000000000000000042 /* Activity/WidgetSnapshot.swift in Sources */,
+				A1ACT000000000000000045 /* Activity/WidgetLayout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,6 +373,7 @@
 				A1ACT000000000000000041 /* Activity/WidgetSnapshot.swift in Sources */,
 				A1ACT000000000000000043 /* Activity/ContinueWidget.swift in Sources */,
 				A1ACT000000000000000044 /* Activity/DigestWidget.swift in Sources */,
+				A1ACT000000000000000046 /* Activity/WidgetLayout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

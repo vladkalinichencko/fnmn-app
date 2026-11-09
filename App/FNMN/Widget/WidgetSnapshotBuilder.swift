@@ -27,7 +27,10 @@ enum WidgetSnapshotBuilder {
         }
         snapshot.generatedAt = .now
         WidgetStore.write(snapshot)
-        WidgetCenter.shared.reloadAllTimelines()
+        let covers = Set((snapshot.items + snapshot.spares).compactMap(\.cover))
+        WidgetStore.pruneCovers(keeping: covers)
+        WidgetCenter.shared.reloadTimelines(ofKind: "FNMNContinue")
+        WidgetCenter.shared.reloadTimelines(ofKind: "FNMNDigest")
     }
 
     private static func item(for item: LibraryItem, library: LibraryModel) -> WidgetItem {

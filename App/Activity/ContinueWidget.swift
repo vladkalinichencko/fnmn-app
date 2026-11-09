@@ -36,89 +36,60 @@ struct ContinueEntryView: View {
     @Environment(\.widgetFamily) private var family
     let entry: ContinueEntry
 
-    private var items: [WidgetItem] {
-        entry.snapshot.items
-    }
-
-    private var spare: WidgetItem? {
-        entry.snapshot.spare(at: entry.date)
+    private var shown: [WidgetItem] {
+        let items = entry.snapshot.items
+        let first = items.first ?? entry.snapshot.spare(at: entry.date)
+        guard let first else {
+            return []
+        }
+        return [first] + items.dropFirst().prefix(WidgetLayout.continueCount(for: family) - 1)
     }
 
     var body: some View {
         Group {
-            switch family {
-            case .systemSmall:
-                if let first = items.first ?? spare {
-                    SmallItem(item: first)
-                } else {
-                    EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
+            if let head = shown.first {
+                switch family {
+                case .systemSmall:
+                    ContinueHead(item: head, cover: nil)
+                case .systemMedium:
+                    ContinueHead(item: head, cover: 78)
+                default:
+                    VStack(alignment: .leading, spacing: 10) {
+                        ContinueHead(item: head, cover: 92)
+                        ForEach(shown.dropFirst()) { item in
+                            ContinueLine(item: item)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
-            case .systemMedium:
-                MiddleColumn(head: items.first ?? spare, rest: Array(items.dropFirst().prefix(2)))
-            case .systemLarge:
-                MiddleColumn(head: items.first ?? spare, rest: Array(items.dropFirst().prefix(4)))
-            default:
-                MiddleColumn(head: items.first ?? spare, rest: Array(items.dropFirst().prefix(7)))
+            } else {
+                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
             }
         }
         .containerBackground(.background, for: .widget)
     }
 }
 
-private struct SmallItem: View {
+private struct ContinueHead: View {
     let item: WidgetItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            CoverLink(item: item, height: 74)
-            Text("Continue")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(item.title)
-                .font(.headline)
-                .lineLimit(2)
-            WidgetProgress(progress: item.progress)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .widgetURL(item.deepLink)
-    }
-}
-
-private struct MiddleColumn: View {
-    let head: WidgetItem?
-    let rest: [WidgetItem]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let head {
-                HeadItem(item: head)
-            } else {
-                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
-            }
-            ForEach(rest) { item in
-                RestItem(item: item)
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-private struct HeadItem: View {
-    let item: WidgetItem
+    let cover: CGFloat?
 
     var body: some View {
         Link(destination: item.deepLink) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top, spacing: 10) {
-                    CoverLink(item: item, height: 64)
-                    VStack(alignment: .leading, spacing: 4) {
+                    if let cover {
+                        WidgetCover(item: item, side: cover)
+                    }
+                    VStack(alignment: .leading, spacing: 5) {
                         Text("Continue")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(item.title)
-                            .font(.headline)
-                            .lineLimit(2)
+                            .font(cover == nil ? .subheadline.weight(.semibold) : .headline)
+                            .lineLimit(cover == nil ? 4 : 3)
+                            .minimumScaleFactor(0.85)
                         Text(item.source ?? item.kind.capitalized)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -128,37 +99,39 @@ private struct HeadItem: View {
                 }
                 WidgetProgress(progress: item.progress)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-private struct RestItem: View {
+private struct ContinueLine: View {
     let item: WidgetItem
 
     var body: some View {
         Link(destination: item.deepLink) {
-            HStack(alignment: .center, spacing: 8) {
+            HStack(spacing: 8) {
                 WidgetProgress(progress: item.progress, height: 2)
                     .frame(width: 26)
                 Text(item.title)
                     .font(.footnote)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.9)
                 Spacer(minLength: 0)
             }
         }
     }
 }
 
-private struct CoverLink: View {
+private struct WidgetCover: View {
     let item: WidgetItem
-    let height: CGFloat
+    let side: CGFloat
 
     var body: some View {
         if let url = WidgetStore.cover(named: item.cover), let image = UIImage(contentsOfFile: url.path) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: height * 1.3, height: height)
+                .frame(width: side, height: side * 0.78)
                 .clipShape(.rect(cornerRadius: 8, style: .continuous))
         }
     }
@@ -173,7 +146,7 @@ struct WidgetProgress: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(.secondary.opacity(0.25))
                 Capsule().fill(.primary)
-                    .frame(width: max(geometry.size.width * min(max(progress, 0), 1), 0))
+                    .frame(width: geometry.size.width * min(max(progress, 0), 1))
             }
         }
         .frame(height: height)
@@ -193,22 +166,5 @@ struct EmptyWidget: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-}
-
-extension WidgetSnapshot {
-    static var placeholder: WidgetSnapshot {
-        WidgetSnapshot(
-            items: [
-                WidgetItem(id: "article:one", title: "A Talk on Representation Learning", source: "Distill", progress: 0.42, piece: 12, cover: nil, kind: "article"),
-                WidgetItem(id: "article:two", title: "Why Momentum Really Works", source: "Distill", progress: 0.18, piece: 4, cover: nil, kind: "article"),
-                WidgetItem(id: "article:three", title: "Attention Is All You Need", source: "arXiv", progress: 0.66, piece: 30, cover: nil, kind: "article"),
-            ],
-            spares: [],
-            digest: WidgetDigest(
-                id: "digest", deliveredAt: .now,
-                posts: [WidgetPost(id: "p1", text: "A model that reads its own output is not checking anything.", author: "Someone", network: "X")]
-            )
-        )
     }
 }
