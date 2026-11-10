@@ -49,6 +49,7 @@ WINDOWED = [
 _SETTLE_MS = 10_000
 _LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
+_SESSIONS: dict[str, tuple[Reader, int]] = {}
 
 
 class ReaderError(Exception):
@@ -271,24 +272,45 @@ class Reader:
             self.process.terminate()
 
 
+def _launch(network: str) -> Reader:
+    folder = profile(network)
+    folder.mkdir(parents=True, exist_ok=True)
+    for stale in ("DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"):
+        (folder / stale).unlink(missing_ok=True)
+    process = subprocess.Popen(
+        [str(CHROME), f"--user-data-dir={folder}", *HEADLESS],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return Reader(network, process, Connection(_wait_for_endpoint(network)))
+
+
 def ensure(network: str, headed: bool = False) -> Reader:
     """The running browser of the profile, launching it when it is not there. Jobs run headless; a
     login runs headed, in a window the network's check accepts."""
+    if headed:
+        return _launch_headed(network)
     with _lock(network):
-        existing = endpoint(network)
-        process = None
-        if existing is None:
-            folder = profile(network)
-            folder.mkdir(parents=True, exist_ok=True)
-            for stale in ("DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"):
-                (folder / stale).unlink(missing_ok=True)
-            process = subprocess.Popen(
-                [str(CHROME), f"--user-data-dir={folder}", *(WINDOWED if headed else HEADLESS)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            existing = _wait_for_endpoint(network)
-        return Reader(network, process, Connection(existing))
+        session = _SESSIONS.get(network)
+        if session is None:
+            existing = endpoint(network)
+            browser = Reader(network, None, Connection(existing)) if existing else _launch(network)
+            session = (browser, 0)
+        _SESSIONS[network] = (session[0], session[1] + 1)
+        return session[0]
+
+
+def _launch_headed(network: str) -> Reader:
+    folder = profile(network)
+    folder.mkdir(parents=True, exist_ok=True)
+    for stale in ("DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"):
+        (folder / stale).unlink(missing_ok=True)
+    process = subprocess.Popen(
+        [str(CHROME), f"--user-data-dir={folder}", *WINDOWED],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return Reader(network, process, Connection(_wait_for_endpoint(network)))
 
 
 def _wait_for_endpoint(network: str, timeout: float = 30) -> str:
@@ -303,11 +325,18 @@ def _wait_for_endpoint(network: str, timeout: float = 30) -> str:
 
 @contextmanager
 def job(network: str) -> Iterator[Tab]:
-    """One tab of the profile's headless browser; a browser the job started closes with it."""
+    """One tab of the profile's headless browser. Concurrent jobs share one browser; the last job closes
+    the browser it started."""
     session = ensure(network)
     tab = session.tab()
     try:
         yield tab
     finally:
         tab.close()
-        session.close()
+        with _lock(network):
+            current, count = _SESSIONS[network]
+            if count == 1:
+                current.close()
+                del _SESSIONS[network]
+            else:
+                _SESSIONS[network] = (current, count - 1)
