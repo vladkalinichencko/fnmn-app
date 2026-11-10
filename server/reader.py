@@ -1,10 +1,10 @@
 """The reader browser: one real Chrome per profile, driven over the DevTools protocol.
 
-A plain fetch reads a dynamic page as an empty shell, and a headless Chrome names itself
-HeadlessChrome, which sites refuse. So a dynamic page is read in a real Chrome window on the
-profile's login: the app hides itself while it works, so to the site it is the owner at the
-keyboard. The browser starts on demand for a job and closes after it; the login lives in the
-profile on disk, so a closed browser loses nothing.
+A plain fetch reads a dynamic page as an empty shell. A page that needs a browser is read in Chrome's
+new headless mode with its automation markers off: there is no window, no Dock icon, nothing to hide,
+and `navigator.webdriver` stays false. The browser starts on demand for a job and closes after it; the
+login lives in the profile on disk, so a closed browser loses nothing. A login itself runs once in a
+headed window, because a network will not log a headless browser in.
 
     with reader.job("x") as tab:
         tab.goto(url)
@@ -31,16 +31,20 @@ import websocket
 
 PROFILES = Path(__file__).resolve().parent / "digest" / "profiles"
 CHROME = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-FLAGS = [
+HEADLESS = [
+    "--headless=new",
+    "--remote-debugging-port=0",
+    "--disable-blink-features=AutomationControlled",
+    "--no-first-run",
+    "--no-default-browser-check",
+]
+WINDOWED = [
     "--remote-debugging-port=0",
     "--disable-blink-features=AutomationControlled",
     "--no-first-run",
     "--no-default-browser-check",
     "--window-position=40,60",
     "--window-size=1280,1600",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-renderer-backgrounding",
-    "--disable-background-timer-throttling",
 ]
 _SETTLE_MS = 10_000
 _LOCKS: dict[str, threading.Lock] = {}
@@ -122,6 +126,9 @@ class Tab:
         self.call("Page.enable")
         self.call("Network.enable")
         self.call("Runtime.enable")
+        agent = self.eval("navigator.userAgent") or ""
+        if "HeadlessChrome" in agent:
+            self.call("Emulation.setUserAgentOverride", {"userAgent": agent.replace("HeadlessChrome", "Chrome")})
 
     def call(self, method: str, params: dict | None = None, timeout: float = 60) -> dict:
         return self.connection.call(method, params, session=self.session, timeout=timeout)
@@ -250,30 +257,8 @@ class Reader:
     def tab(self) -> Tab:
         return Tab(self.connection)
 
-    def set_visible(self, visible: bool) -> None:
-        """The window shows at the corner of the screen, or parks mostly off its left edge, through the
-        DevTools protocol itself: no macOS permissions are asked, and the read-back bounds say where
-        the window actually stands."""
-        tab = self.tab()
-        try:
-            info = self.connection.call("Browser.getWindowForTarget", {"targetId": tab.target_id})
-            wanted = {"left": 60, "top": 60} if visible else {"left": -2000, "top": 40}
-            self.connection.call("Browser.setWindowBounds", {"windowId": info["windowId"], "bounds": wanted})
-            left = self.connection.call("Browser.getWindowForTarget", {"targetId": tab.target_id})["bounds"].get("left", 0)
-            if not visible and left > -1200:
-                self.connection.call("Browser.setWindowBounds", {"windowId": info["windowId"], "bounds": {"left": -2000 - (left + 2000), "top": 40}})
-        finally:
-            tab.close()
-
-    def hide(self) -> None:
-        self.set_visible(False)
-
-    def show(self) -> None:
-        self.set_visible(True)
-
     def close(self) -> None:
-        """A browser this job started closes with the job; one it attached to (the login keeps it open)
-        keeps running."""
+        """A browser this job started closes with the job; one it attached to keeps running."""
         if self.process is None:
             return
         try:
@@ -286,8 +271,9 @@ class Reader:
             self.process.terminate()
 
 
-def ensure(network: str, visible: bool = False) -> Reader:
-    """The running browser of the profile, launching it when it is not there."""
+def ensure(network: str, headed: bool = False) -> Reader:
+    """The running browser of the profile, launching it when it is not there. Jobs run headless; a
+    login runs headed, in a window the network's check accepts."""
     with _lock(network):
         existing = endpoint(network)
         process = None
@@ -297,16 +283,12 @@ def ensure(network: str, visible: bool = False) -> Reader:
             for stale in ("DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"):
                 (folder / stale).unlink(missing_ok=True)
             process = subprocess.Popen(
-                [str(CHROME), f"--user-data-dir={folder}", *FLAGS],
+                [str(CHROME), f"--user-data-dir={folder}", *(WINDOWED if headed else HEADLESS)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
             existing = _wait_for_endpoint(network)
-        connection = Connection(existing)
-        reader = Reader(network, process, connection)
-        if not visible:
-            reader.hide()
-        return reader
+        return Reader(network, process, Connection(existing))
 
 
 def _wait_for_endpoint(network: str, timeout: float = 30) -> str:
@@ -320,9 +302,9 @@ def _wait_for_endpoint(network: str, timeout: float = 30) -> str:
 
 
 @contextmanager
-def job(network: str, visible: bool = False) -> Iterator[Tab]:
-    """One tab of the profile's browser; a browser the job started closes with it."""
-    session = ensure(network, visible=visible)
+def job(network: str) -> Iterator[Tab]:
+    """One tab of the profile's headless browser; a browser the job started closes with it."""
+    session = ensure(network)
     tab = session.tab()
     try:
         yield tab

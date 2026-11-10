@@ -95,9 +95,10 @@ def python_shadowing(root=ROOT):
 
 
 def browser_sandbox(root=ROOT):
-    """The reader browser must keep its sandbox and its undetectable-face flags. `--no-sandbox` is a flag
-    Chrome reports to every page; without `--disable-blink-features=AutomationControlled` Chrome 136+
-    names itself webdriver to every page; a fixed debugging port would sit in the logs of every run."""
+    """The reader browser must stay headless and keep its undetectable-face flags. A windowed reader puts
+    a Chrome window on the owner's screen; `--no-sandbox` is a flag Chrome reports to every page; without
+    `--disable-blink-features=AutomationControlled` Chrome 136+ names itself webdriver to every page; a
+    fixed debugging port would sit in the logs of every run."""
     path = root / "server" / "reader.py"
     if not path.exists():
         return []
@@ -105,7 +106,7 @@ def browser_sandbox(root=ROOT):
     problems = []
     if "--no-sandbox" in source:
         problems.append("server/reader.py launches Chrome with --no-sandbox")
-    for flag in ("--disable-blink-features=AutomationControlled", "--remote-debugging-port=0"):
+    for flag in ("--headless=new", "--disable-blink-features=AutomationControlled", "--remote-debugging-port=0"):
         if flag not in source:
             problems.append(f"server/reader.py lost the {flag} flag")
     return problems
