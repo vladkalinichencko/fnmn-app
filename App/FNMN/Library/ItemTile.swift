@@ -299,7 +299,7 @@ struct ProgressLine: View {
                     .overlay(alignment: .leading) {
                         Capsule()
                             .fill(color)
-                            .frame(width: max(geometry.size.width * min(progress, 1), Self.thickness))
+                            .scaleEffect(x: max(min(progress, 1), Self.thickness / max(geometry.size.width, 1)), anchor: .leading)
                     }
             }
             .frame(height: Self.thickness)

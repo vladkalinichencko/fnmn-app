@@ -355,11 +355,11 @@ struct SpeedReader: View {
                 .font(.headline)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            GeometryReader { geometry in
+            GeometryReader { _ in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.secondary.opacity(0.25))
                     Capsule().fill(Color.accentColor)
-                        .frame(width: geometry.size.width * min(max(share, 0), 1))
+                        .scaleEffect(x: min(max(share, 0), 1), anchor: .leading)
                 }
             }
             .frame(height: 3)
