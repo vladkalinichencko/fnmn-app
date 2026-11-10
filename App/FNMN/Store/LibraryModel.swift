@@ -58,6 +58,7 @@ final class LibraryModel {
     @ObservationIgnored private var progressWrite: Task<Void, Never>?
     @ObservationIgnored private var progressUnsaved = false
     @ObservationIgnored private var journalRead: Task<Void, Never>?
+    @ObservationIgnored private var reindex: Task<Void, Never>?
 
     init(
         storageURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "FNMN"),
@@ -175,6 +176,19 @@ final class LibraryModel {
         } catch {
             failure = error.localizedDescription
         }
+        reindex = Task { await reindexSearch() }
+    }
+
+    /// Materials added before the search index existed have no search body until they are opened; the pass fills
+    /// the missing ones in the background, and the next search reads them in. A written body is never written
+    /// again, so a pass the app interrupted resumes where it stopped.
+    func reindexSearch() async {
+        guard cloudFolder != nil else { return }
+        for entry in snapshot.articles {
+            guard entry.material.kind != .video, await !file.hasSearchBody(entry.material.id) else { continue }
+            _ = try? await article(entry.material.id)
+        }
+        bodiesRead = false
     }
 
     /// The other devices' journals. A launch and a return to the app can both start a sync, and two reads at once

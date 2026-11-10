@@ -450,6 +450,10 @@ public actor LibraryFile {
         try? FileManager.default.removeItem(at: searchURL(materialID))
     }
 
+    public func hasSearchBody(_ materialID: String) -> Bool {
+        FileManager.default.fileExists(atPath: searchURL(materialID).path)
+    }
+
     private func writeSearchBody(_ package: ImportPackage) throws {
         guard package.material.kind == .article || package.material.kind == .book else {
             return

@@ -74,8 +74,71 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertTrue(nothing.isEmpty)
     }
 
-    func testDeletingAMaterialTakesItsDeliveryOutOfTheFolder() async throws {
+    func testAReindexGivesAnOldMaterialItsSearchBodyBack() async throws {
         UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
+        let (model, root) = makeModel()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
+        }
+        let cloud = root.appending(path: "FNMN")
+        let deliveries = cloud.appending(path: "deliveries")
+        try FileManager.default.createDirectory(at: deliveries, withIntermediateDirectories: true)
+        let package = ImportPackage(
+            material: Material(id: "article:reindex", kind: .article, title: "Old Timer", sourceURL: URL(string: "https://example.com/old")!),
+            sections: [],
+            blocks: [],
+            body: "A paragraph about a waffle iron."
+        )
+        try writeDelivery(package, to: deliveries.appending(path: "old.tar"))
+
+        await model.load()
+        try await model.linkLibraryFolder(cloud) { _ in }
+        let itemID = package.material.id
+        let found = await model.search("waffle")
+        XCTAssertEqual(found.first?.source, .text)
+
+        await LibraryFile(url: model.storageURL).removeSearchBody(itemID)
+        let gone = await model.search("waffle")
+        XCTAssertTrue(gone.isEmpty)
+
+        await model.reindexSearch()
+        let hits = await model.search("waffle")
+        XCTAssertEqual(hits.first?.source, .text)
+        XCTAssertEqual(hits.first?.itemID, itemID)
+    }
+
+    /// Writes a delivery the way the server's `write_delivery` does: USTAR, `package.json` first.
+    private func writeDelivery(_ package: ImportPackage, to url: URL) throws {
+        var archive = Data()
+        func add(_ name: String, _ data: Data) {
+            var header = [UInt8](repeating: 0, count: 512)
+            func put(_ text: String, at offset: Int) {
+                for (index, byte) in text.utf8.enumerated() {
+                    header[offset + index] = byte
+                }
+            }
+            put(name, at: 0)
+            put("0000644", at: 100)
+            put("0000000", at: 108)
+            put("0000000", at: 116)
+            put(String(format: "%011o", data.count), at: 124)
+            put("00000000000", at: 136)
+            put("        ", at: 148)
+            put("0", at: 156)
+            put("ustar", at: 257)
+            put("00", at: 263)
+            put(String(format: "%06o", header.reduce(0) { $0 + Int($1) }), at: 148)
+            archive.append(contentsOf: header)
+            archive.append(data)
+            archive.append(Data(count: (512 - data.count % 512) % 512))
+        }
+        add("package.json", try JSONEncoder().encode(package))
+        archive.append(Data(count: 1024))
+        try archive.write(to: url)
+    }
+
+    func testDeletingAMaterialTakesItsDeliveryOutOfTheFolder() async throws {        UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
         let (model, root) = makeModel()
         defer {
             try? FileManager.default.removeItem(at: root)
