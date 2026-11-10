@@ -45,7 +45,7 @@ class FakeContext:
 
 
 class FakePage:
-    """What the parsers ask of a Playwright page: the markup after a navigation."""
+    """What the parsers ask of a reader tab: the markup after a navigation."""
 
     def __init__(self, markup: str):
         self.markup = markup
@@ -55,7 +55,7 @@ class FakePage:
     def goto(self, url, **kwargs):
         return None
 
-    def content(self):
+    def html(self):
         return self.markup
 
     def wait_for_timeout(self, milliseconds):

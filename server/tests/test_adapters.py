@@ -140,7 +140,9 @@ class AdapterTests(unittest.TestCase):
             self.assertIn("cdn.syndication.twimg.com/tweet-result?id=2117642301442752692", url)
             return payload
 
-        delivery = import_link("https://x.com/ravfogel/status/2117642301442752692", [], fakes.web(fetch_text, lambda url: b"jpg-bytes"))
+        with patch("adapters.x.reader.job") as no_reader:
+            no_reader.side_effect = OSError("no browser in tests")
+            delivery = import_link("https://x.com/ravfogel/status/2117642301442752692", [], fakes.web(fetch_text, lambda url: b"jpg-bytes"))
         package = delivery.package
         self.assertEqual(package["material"]["byline"], "Shauli Ravfogel")
         self.assertIn("So how can Astra read neural network weights?", package["body"])
@@ -160,10 +162,46 @@ class AdapterTests(unittest.TestCase):
         def fetch_text(url):
             return json.dumps(root) if "id=2117642301442752692" in url else json.dumps(reply)
 
-        delivery = import_link("https://x.com/ravfogel/status/2118000000000000001", [], fakes.web(fetch_text, lambda url: b""))
+        with patch("adapters.x.reader.job") as no_reader:
+            no_reader.side_effect = OSError("no browser in tests")
+            delivery = import_link("https://x.com/ravfogel/status/2118000000000000001", [], fakes.web(fetch_text, lambda url: b""))
         body = delivery.package["body"]
         self.assertLess(body.index("So how can Astra read"), body.index("Part two of the thread"))
         self.assertIn("## Shauli Ravfogel", body)
+
+    def test_the_readers_conversation_gives_the_threads_continuation(self):
+        from adapters import x
+
+        markup = (Path(__file__).parent / "fixtures" / "x-thread-dom.html").read_text(encoding="utf-8")
+        sections, files = x._continuations(markup, "ravfogel", "2117642301442752692", lambda url: b"jpg")
+        texts = "\n\n".join(sections)
+        self.assertEqual(len(sections), 2)
+        self.assertIn("Exp 3 (no input/output layers)", texts)
+        self.assertIn("Kudos to the authors", texts)
+        self.assertFalse(any("Yeah, when I read how it was done" in section for section in sections))
+
+    def test_the_article_view_gives_title_author_paragraphs_and_pictures(self):
+        from adapters import x
+
+        markup = (Path(__file__).parent / "fixtures" / "x-article-dom.html").read_text(encoding="utf-8")
+        title, author, paragraphs, images = x._article_parts(markup)
+        self.assertEqual(title, "The Myth of Overparameterization")
+        self.assertEqual(author, "deep Manifold")
+        self.assertIn("Modern neural networks are commonly described as overparameterized", "\n\n".join(paragraphs))
+        self.assertGreaterEqual(len(images), 3)
+
+    def test_a_thread_import_still_works_without_the_reader(self):
+        root = json.loads((Path(__file__).parent / "fixtures" / "x-thread-root.json").read_text(encoding="utf-8"))
+        reply = {"__typename": "Tweet", "id_str": "2118000000000000001", "text": "Part two of the thread [2/10]",
+                 "created_at": "2026-11-03T15:40:00.000Z", "user": root["user"], "entities": {"urls": []}, "parent": root}
+
+        def fetch_text(url):
+            return json.dumps(root) if "id=2117642301442752692" in url else json.dumps(reply)
+
+        with patch("adapters.x.reader.job") as job:
+            job.side_effect = OSError("no browser here")
+            delivery = import_link("https://x.com/ravfogel/status/2118000000000000001", [], fakes.web(fetch_text, lambda url: b"jpg"))
+        self.assertIn("Part two of the thread", delivery.package["body"])
 
     def test_a_video_post_becomes_a_video(self):
         payload = (Path(__file__).parent / "fixtures" / "x-video-post.json").read_text(encoding="utf-8")
@@ -180,7 +218,8 @@ class AdapterTests(unittest.TestCase):
                 "entities": {"urls": [{"url": "https://t.co/aaaa",
                                        "expanded_url": "https://x.com/i/article/2094832549705179136"}]}}
 
-        with self.assertRaises(ImportFailure) as caught:
+        with self.assertRaises(ImportFailure) as caught, patch("adapters.x.reader.job") as no_reader:
+            no_reader.side_effect = OSError("no browser in tests")
             import_link("https://x.com/betatomorrow/status/2094833633983107384", [], fakes.web(lambda url: json.dumps(post), lambda url: b""))
         self.assertIn("article", str(caught.exception).lower())
 
@@ -189,8 +228,9 @@ class AdapterTests(unittest.TestCase):
             import_link("https://x.com/ada", [], fakes.web(lambda url: "", lambda url: b""))
         self.assertIn("not a single post", str(caught.exception))
 
-    def test_x_article_url_stops_until_the_body_is_public(self):
-        with self.assertRaises(ImportFailure) as caught:
+    def test_x_article_url_needs_the_reader_browser(self):
+        with self.assertRaises(ImportFailure) as caught, patch("adapters.x.reader.job") as no_reader:
+            no_reader.side_effect = OSError("no browser in tests")
             import_link("https://x.com/i/article/2076946210397552640", [], fakes.web(lambda url: "", lambda url: b""))
         self.assertIn("article", str(caught.exception).lower())
 

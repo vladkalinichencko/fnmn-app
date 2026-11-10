@@ -31,10 +31,10 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
         url = PAGE.format(channel=channel) + (f"?before={before}" if before else "")
         if page is not None:
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+                page.goto(url)
             except Exception as error:
                 raise SourceFailure(f"t.me/{channel} did not load: {error}") from error
-            document = html.fromstring(page.content())
+            document = html.fromstring(page.html())
         else:
             document = html.fromstring(web.text(url))
         messages = document.xpath('//div[contains(@class,"tgme_widget_message_wrap")]')

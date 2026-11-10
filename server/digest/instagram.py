@@ -54,33 +54,33 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     )
 
 
-def _grid(page, handle: str) -> list[str]:
+def _grid(tab, handle: str) -> list[str]:
     try:
-        page.goto(f"{HOME}/{handle}/", wait_until="domcontentloaded", timeout=45_000)
-        if "/accounts/login" in page.url:
+        tab.goto(f"{HOME}/{handle}/")
+        if "/accounts/login" in tab.url:
             raise SourceFailure("the login expired; run python -m digest.login instagram")
-        page.wait_for_selector('a[href*="/p/"], a[href*="/reel/"]', timeout=20_000)
+        tab.wait_for_selector('a[href*="/p/"], a[href*="/reel/"]', timeout=20)
     except SourceFailure:
         raise
     except Exception as error:
         raise SourceFailure(f"instagram.com/{handle} did not show its profile: {error}") from error
     found: list[str] = []
     for _ in range(2):
-        hrefs = page.eval_on_selector_all('a[href*="/p/"], a[href*="/reel/"]', "els => els.map(e => e.getAttribute('href'))") or []
+        hrefs = tab.eval_on_selector_all('a[href*="/p/"], a[href*="/reel/"]', "e => e.getAttribute('href')") or []
         for href in hrefs:
             match = SHORTCODE.search(href or "")
             if match and match.group(2) not in found:
                 found.append(match.group(2))
-        page.mouse.wheel(0, 1200)
-        page.wait_for_timeout(900)
+        tab.wheel(1200)
+        tab.wait_for_timeout(900)
     return found
 
 
-def _post(page, handle: str, shortcode: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:
+def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:
     """One post page: the caption and the picture are in the page's own meta tags, the time in its `time`."""
     try:
-        page.goto(f"{HOME}/p/{shortcode}/", wait_until="domcontentloaded", timeout=45_000)
-        markup = page.content()
+        tab.goto(f"{HOME}/p/{shortcode}/")
+        markup = tab.html()
     except Exception:
         return None
     document = html.fromstring(markup)
@@ -90,7 +90,7 @@ def _post(page, handle: str, shortcode: str, source: dict, web: Web, store, fold
     post_id = f"instagram/{handle}/{shortcode}"
     media = []
     errors = 0
-    fetch = page_fetch(page)
+    fetch = page_fetch(tab)
     if image:
         saved = save_photo(web, store, post_id, 0, image, fetch)
         if saved:

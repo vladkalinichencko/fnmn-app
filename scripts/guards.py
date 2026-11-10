@@ -95,13 +95,19 @@ def python_shadowing(root=ROOT):
 
 
 def browser_sandbox(root=ROOT):
-    """Every persistent Chrome the digest opens must keep its sandbox. Playwright passes `--no-sandbox` by
-    default, which Chrome reports as an unsupported flag; one launch without the option brings it back."""
+    """The reader browser must keep its sandbox and its undetectable-face flags. `--no-sandbox` is a flag
+    Chrome reports to every page; without `--disable-blink-features=AutomationControlled` Chrome 136+
+    names itself webdriver to every page; a fixed debugging port would sit in the logs of every run."""
+    path = root / "server" / "reader.py"
+    if not path.exists():
+        return []
+    source = path.read_text(encoding="utf-8")
     problems = []
-    for path in sorted((root / "server" / "digest").glob("*.py")):
-        source = path.read_text(encoding="utf-8")
-        if "launch_persistent_context" in source and "chromium_sandbox=True" not in source:
-            problems.append(f"{path.relative_to(root)} launches Chrome without chromium_sandbox=True")
+    if "--no-sandbox" in source:
+        problems.append("server/reader.py launches Chrome with --no-sandbox")
+    for flag in ("--disable-blink-features=AutomationControlled", "--remote-debugging-port=0"):
+        if flag not in source:
+            problems.append(f"server/reader.py lost the {flag} flag")
     return problems
 
 
@@ -156,10 +162,16 @@ def source_self_test():
             sys.exit("FAILED: the shadowing check missed a module named like a root module")
     with TemporaryDirectory() as folder:
         root = Path(folder)
-        (root / "server" / "digest").mkdir(parents=True)
-        (root / "server" / "digest" / "probe.py").write_text("playwright.chromium.launch_persistent_context('x')\n")
+        (root / "server").mkdir(parents=True)
+        (root / "server" / "reader.py").write_text('FLAGS = ["--no-sandbox"]\n')
         if not browser_sandbox(root):
-            sys.exit("FAILED: the browser check missed a Chrome launch without chromium_sandbox=True")
+            sys.exit("FAILED: the browser check missed a Chrome launch with --no-sandbox")
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        (root / "server").mkdir(parents=True)
+        (root / "server" / "reader.py").write_text('FLAGS = ["--remote-debugging-port=9222"]\n')
+        if not browser_sandbox(root):
+            sys.exit("FAILED: the browser check missed a reader with a fixed debugging port")
     with TemporaryDirectory() as folder:
         root = Path(folder)
         (root / "server" / "digest").mkdir(parents=True)

@@ -60,13 +60,13 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     return SourceResult(posts=sorted(posts, key=lambda post: post.posted_at), name=name, note=note)
 
 
-def _timeline(page, handle: str) -> list[str]:
+def _timeline(tab, handle: str) -> list[str]:
     """The status ids on the profile timeline, in the order the page shows them, newest first."""
     try:
-        page.goto(f"{HOME}/{handle}", wait_until="domcontentloaded", timeout=45_000)
-        if "/login" in page.url or "/i/flow/login" in page.url:
+        tab.goto(f"{HOME}/{handle}")
+        if "/login" in tab.url:
             raise SourceFailure("the login expired; run python -m digest.login x")
-        page.wait_for_selector('[data-testid="tweet"]', timeout=20_000)
+        tab.wait_for_selector('[data-testid="tweet"]', timeout=20)
     except SourceFailure:
         raise
     except Exception as error:
@@ -74,13 +74,13 @@ def _timeline(page, handle: str) -> list[str]:
     pattern = re.compile(rf"/{re.escape(handle)}/status/(\d+)", re.IGNORECASE)
     seen: list[str] = []
     for _ in range(4):
-        hrefs = page.eval_on_selector_all('a[href*="/status/"]', "els => els.map(e => e.getAttribute('href'))") or []
+        hrefs = tab.eval_on_selector_all('a[href*="/status/"]', "e => e.getAttribute('href')") or []
         for href in hrefs:
-            match = pattern.match(href)
+            match = pattern.match(href or "")
             if match and match.group(1) not in seen:
                 seen.append(match.group(1))
-        page.mouse.wheel(0, 1400)
-        page.wait_for_timeout(900)
+        tab.wheel(1400)
+        tab.wait_for_timeout(900)
     return seen
 
 
@@ -190,25 +190,23 @@ def _context_post(payload: dict) -> dict:
     }
 
 
-def _replies(page, post: Post) -> list[dict]:
+def _replies(tab, post: Post) -> list[dict]:
     """The first replies under a post, as the permalink page draws them; the post itself is the first article."""
     try:
-        page.goto(post.permalink, wait_until="domcontentloaded", timeout=45_000)
-        page.wait_for_selector('article[data-testid="tweet"]', timeout=20_000)
+        tab.goto(post.permalink)
+        tab.wait_for_selector('article[data-testid="tweet"]', timeout=20)
     except Exception as error:
         raise SourceFailure(f"the replies of {post.id} did not load: {error}") from error
-    comments = []
-    for article in page.query_selector_all('article[data-testid="tweet"]')[1:4]:
-        text = article.query_selector('[data-testid="tweetText"]')
-        if text is None:
-            continue
-        link = article.query_selector('a[href*="/status/"]')
-        href = link.get_attribute("href") if link else None
-        author = article.query_selector('[data-testid="User-Name"]')
-        label = author.inner_text().split("\n")[0].strip() if author else ""
-        comments.append({
-            "author": label,
-            "text": text.inner_text().strip(),
-            "permalink": f"{HOME}{href}" if href else None,
-        })
-    return comments
+    return tab.eval(REPLIES) or []
+
+
+REPLIES = """[...document.querySelectorAll('article[data-testid="tweet"]')].slice(1, 4).map(a => {
+    const text = a.querySelector('[data-testid="tweetText"]');
+    const link = a.querySelector('a[href*="/status/"]');
+    const author = a.querySelector('[data-testid="User-Name"]');
+    return {
+        author: author ? author.innerText.split("\\n")[0].trim() : "",
+        text: text ? text.innerText.trim() : null,
+        permalink: link ? link.href : null,
+    };
+}).filter(reply => reply.text)"""

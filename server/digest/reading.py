@@ -2,10 +2,11 @@
 
     collect(source, web, store, folders, report, page=None) -> SourceResult
 
-X, Instagram and Telegram read through `page`, the logged-in browser profile, and raise SourceFailure when the
-network refuses the reader. Telegram also reads a channel whose public page is enough through `web`, where no
-`page` is passed. `report` names the stage for the monitor log; a source that read only part of its list says
-so in `SourceResult.note` instead of pretending the run was complete.
+X, Instagram and Telegram read through `page`, a tab of the reader browser on the network's
+logged-in profile; the monitor opens it with `browser(network)`. Telegram also reads a channel
+whose public page is enough through `web`, where no `page` is passed. `report` names the stage
+for the monitor log; a source that read only part of its list says so in `SourceResult.note`
+instead of pretending the run was complete.
 """
 
 from __future__ import annotations
@@ -16,12 +17,13 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 import httpx
-from playwright.sync_api import Page, sync_playwright
 
 from digest.store import Post
 from web import Web
+import reader
 
-PROFILES = Path(__file__).resolve().parent / "profiles"
+BROWSER = {"x", "instagram", "telegram"}
+"""The networks read through a logged-in profile; Telegram also has a public page."""
 
 
 @dataclass
@@ -40,11 +42,7 @@ class SourceFailure(Exception):
 
 
 def profile(network: str) -> Path:
-    return PROFILES / network
-
-
-BROWSER = {"x", "instagram", "telegram"}
-"""The networks read through a logged-in profile; Telegram also has a public page."""
+    return reader.profile(network)
 
 
 def needs_browser(network: str) -> bool:
@@ -52,24 +50,28 @@ def needs_browser(network: str) -> bool:
 
 
 @contextmanager
-def browser(network: str) -> Iterator[Page]:
-    """The logged-in profile of one network, headless, one page. Chrome without a window names itself
-    HeadlessChrome, which X and Instagram refuse, so the page introduces itself as the ordinary Chrome it is."""
-    with sync_playwright() as playwright:
-        launch = {"channel": "chrome", "headless": True, "chromium_sandbox": True}
-        agent = playwright.chromium.launch(**launch).new_page().evaluate("navigator.userAgent").replace("HeadlessChrome", "Chrome")
-        context = playwright.chromium.launch_persistent_context(
-            str(profile(network)),
-            channel="chrome",
-            headless=True,
-            chromium_sandbox=True,
-            user_agent=agent,
-            viewport={"width": 1280, "height": 1600},
-        )
+def browser(network: str) -> Iterator[reader.Tab]:
+    """The logged-in profile of one network, in the reader browser."""
+    with reader.job(network) as tab:
+        yield tab
+
+
+def page_fetch(tab) -> Callable[[str], bytes]:
+    """Downloads through the logged-in tab's own cookies, so a CDN sees the profile's session."""
+    fetch = getattr(tab, "fetch", None)
+    if fetch is not None:
+        return fetch
+
+    def fetch_url(url: str) -> bytes:
         try:
-            yield context.new_page()
-        finally:
-            context.close()
+            response = tab.context.request.get(url, timeout=30_000)
+        except Exception as error:
+            raise OSError(str(error)) from error
+        if response.status >= 400:
+            raise OSError(f"the picture returned HTTP {response.status}")
+        return response.body()
+
+    return fetch_url
 
 
 def save_photo(web: Web, store, post_id: str, index: int | str, url: str, fetch: Callable[[str], bytes] | None = None) -> dict | None:
@@ -81,16 +83,3 @@ def save_photo(web: Web, store, post_id: str, index: int | str, url: str, fetch:
         return None
     extension = "png" if url.split("?")[0].lower().endswith(".png") else "jpg"
     return store.save_media(post_id, index, data, extension)
-
-
-def page_fetch(page) -> Callable[[str], bytes]:
-    """Downloads through the logged-in page's own request context, so a CDN sees the profile's cookies."""
-    def fetch(url: str) -> bytes:
-        try:
-            response = page.context.request.get(url, timeout=30_000)
-        except Exception as error:
-            raise OSError(str(error)) from error
-        if response.status >= 400:
-            raise OSError(f"the picture returned HTTP {response.status}")
-        return response.body()
-    return fetch
