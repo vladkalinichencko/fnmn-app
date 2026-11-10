@@ -1,0 +1,86 @@
+import Foundation
+
+public struct SearchIndex: Sendable {
+    private let bodies: [String: SearchBody]
+    private let foldedParagraphs: [String: [Int: String]]
+    private let foldedCues: [String: [Int: String]]
+
+    private init(bodies: [String: SearchBody]) {
+        self.bodies = bodies
+        foldedParagraphs = bodies.mapValues { body in
+            Dictionary(uniqueKeysWithValues: body.paragraphs.map { ($0.piece, TextFold.folded($0.markdown)) })
+        }
+        foldedCues = bodies.mapValues { body in
+            Dictionary(uniqueKeysWithValues: body.cues.enumerated().map { ($0.offset, TextFold.folded($0.element.text)) })
+        }
+    }
+
+    public static func load(bodies: [String: SearchBody]) async -> SearchIndex {
+        SearchIndex(bodies: bodies)
+    }
+
+    public func hits(
+        query: String,
+        articles: [ArticleEntry],
+        annotations: [Annotation],
+        addedAt: [String: Date],
+        plainText: @Sendable (String) -> String
+    ) async -> [SearchHit] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else {
+            return []
+        }
+        let folded = TextFold.folded(needle)
+        var hits: [SearchHit] = articles.compactMap { article in
+            guard article.searchText.contains(folded) else {
+                return nil
+            }
+            let text = article.excerpt ?? article.material.byline ?? article.material.sourceURL?.host() ?? ""
+            return SearchHit(itemID: article.material.id, source: .material, text: text)
+        }
+        for (materialID, body) in bodies {
+            guard !Task.isCancelled else {
+                return []
+            }
+            for paragraph in body.paragraphs where foldedParagraphs[materialID]?[paragraph.piece]?.contains(folded) == true {
+                hits += Self.matches(in: plainText(paragraph.markdown), of: needle, itemID: materialID, source: .text, piece: paragraph.piece)
+            }
+            for (index, cue) in body.cues.enumerated() where foldedCues[materialID]?[index]?.contains(folded) == true {
+                hits += Self.matches(in: cue.text, of: needle, itemID: materialID, source: .transcript, seconds: cue.seconds)
+            }
+        }
+        for annotation in annotations {
+            if !annotation.note.isEmpty, TextFold.folded(annotation.note).contains(folded) {
+                hits += Self.matches(in: annotation.note, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+            } else if let mark = annotation.marks.first(where: { TextFold.folded($0.quote).contains(folded) }) {
+                hits += Self.matches(in: mark.quote, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+            } else if TextFold.folded(annotation.text).contains(folded) {
+                hits += Self.matches(in: annotation.text, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+            }
+        }
+        let order = Dictionary(uniqueKeysWithValues: SearchSource.allCases.enumerated().map { ($1, $0) })
+        return hits.sorted { left, right in
+            let leftOrder = order[left.source] ?? 0
+            let rightOrder = order[right.source] ?? 0
+            if leftOrder != rightOrder {
+                return leftOrder < rightOrder
+            }
+            let leftDate = addedAt[left.itemID] ?? .distantPast
+            let rightDate = addedAt[right.itemID] ?? .distantPast
+            if leftDate != rightDate {
+                return leftDate > rightDate
+            }
+            if left.piece != right.piece {
+                return (left.piece ?? 0) < (right.piece ?? 0)
+            }
+            return (left.seconds ?? 0) < (right.seconds ?? 0)
+        }
+    }
+
+    private static func matches(in text: String, of needle: String, itemID: String, source: SearchSource, piece: Int? = nil, seconds: Double? = nil) -> [SearchHit] {
+        ReadingSearch.spans(of: needle, in: text).map { span in
+            let excerpt = SearchExcerpt.around(text, span: span)
+            return SearchHit(itemID: itemID, source: source, piece: piece, seconds: seconds, text: excerpt.text, span: excerpt.span)
+        }
+    }
+}
