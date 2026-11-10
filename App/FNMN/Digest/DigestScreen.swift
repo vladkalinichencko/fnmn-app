@@ -35,8 +35,10 @@ struct DigestScreen: View {
             switch route {
             case let .thread(id):
                 ThreadScreen(postID: id)
+                    .interactiveOnlyAtStackTop(route)
             case .sources:
                 SourcesScreen()
+                    .interactiveOnlyAtStackTop(route)
             }
         }
     }

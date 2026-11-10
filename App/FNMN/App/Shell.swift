@@ -99,6 +99,7 @@ final class WindowNavigation {
 extension EnvironmentValues {
     /// The namespace a tile and the screen it opens share, so the screen grows out of the tile.
     @Entry var zoomNamespace: Namespace.ID?
+    @Entry var stackTop: AnyHashable?
 }
 
 extension View {
@@ -107,6 +108,19 @@ extension View {
     @ViewBuilder
     func zoomSource(of id: some Hashable & Sendable) -> some View {
         modifier(ZoomSourceModifier(id: id))
+    }
+
+    func interactiveOnlyAtStackTop(_ route: some Hashable) -> some View {
+        modifier(StackTopInteraction(route: AnyHashable(route)))
+    }
+}
+
+private struct StackTopInteraction: ViewModifier {
+    let route: AnyHashable
+    @Environment(\.stackTop) private var stackTop
+
+    func body(content: Content) -> some View {
+        content.allowsHitTesting(stackTop == route)
     }
 }
 
@@ -193,6 +207,7 @@ struct RouteStack<Path: Hashable, Root: View, Destination: View>: View {
             root
                 .navigationDestination(for: Path.self) { destination($0) }
         }
+        .environment(\.stackTop, path.last.map { AnyHashable($0) })
         .toolbarVisibility(path.last.map(hidesTabBar) ?? false ? .hidden : .automatic, for: .tabBar)
     }
 }
@@ -202,6 +217,11 @@ struct RouteScreen: View {
     let route: Route
 
     var body: some View {
+        content
+            .interactiveOnlyAtStackTop(route)
+    }
+
+    @ViewBuilder private var content: some View {
         switch route {
         case let .item(id, piece, seconds):
             ItemScreen(itemID: id, startPiece: piece, startSeconds: seconds)
