@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-from adapters import youtube
+from adapters import article, youtube
 from importer import import_file, import_link
 from package import Delivery, file_delivery, link_delivery, write_delivery
 from web import LIVE
@@ -122,4 +122,4 @@ def _delivery(job: Job, report) -> Delivery:
     except Exception as failure:
         _LOG.exception("job %s (%s) kept the link as it is", job.id, job.url)
         job.error = str(failure)
-        return link_delivery(job.url, None, job.folders)
+        return link_delivery(job.url, article.title(job.url, LIVE), job.folders)

@@ -8,6 +8,7 @@ from urllib.parse import urldefrag
 from lxml import html
 
 from adapters.html_markdown import article_markdown
+from markdown import page_title
 from package import Document, ImportFailure, Report
 from publisher import publisher_of
 from sources import source_kind
@@ -23,6 +24,18 @@ def read(url: str, web: Web, report: Report) -> Document:
     content = document(source, markdown, assets, web, report)
     content.publisher = publisher_of(url, source, web)
     return content
+
+
+def title(url: str, web: Web) -> str | None:
+    """The page's own name for a link that stays a link; a page that does not answer leaves it nameless."""
+    try:
+        source = web.page(url)
+        document = html.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", source, count=1))
+    except Exception:
+        return None
+    found = next(iter(document.xpath("//meta[@property='og:title']/@content")), "").strip()
+    found = found or document.xpath("string(//title)").strip()
+    return page_title(found) or None
 
 
 def document(source: str, markdown: str, assets: dict[str, str], web: Web, report: Report) -> Document:

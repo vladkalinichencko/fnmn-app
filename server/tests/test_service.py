@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 import jobs
 from package import Delivery, Document
 from service import app
+from tests import fakes
 
 
 class ServiceTests(unittest.TestCase):
@@ -78,7 +79,7 @@ class ServiceTests(unittest.TestCase):
         def fail(url, folders, web, report):
             raise ValueError("no text layer")
 
-        with patch("jobs.import_link", fail):
+        with patch("jobs.import_link", fail), patch("jobs.LIVE", fakes.web()):
             job = self.client.post("/jobs", json={"url": "https://example.com/a.pdf", "folders": ["Books"]}).json()
             while (status := self.client.get(f"/jobs/{job['id']}").json())["phase"] == "queued" or status["phase"] == "running":
                 time.sleep(0.05)
@@ -88,6 +89,19 @@ class ServiceTests(unittest.TestCase):
             package = json.loads(archive.extractfile("package.json").read())
         self.assertEqual(package["material"]["id"], "link:https://example.com/a.pdf")
         self.assertEqual((package["material"]["kind"], package["folders"]), ("link", ["Books"]))
+
+    def test_a_link_the_page_still_names_arrives_with_the_pages_title(self):
+        def fail(url, folders, web, report):
+            raise ValueError("no text layer")
+
+        page = '<html><head><meta property="og:title" content="Quantum Kernels — Example"></head></html>'
+        with patch("jobs.import_link", fail), patch("jobs.LIVE", fakes.web(text=lambda url: page)):
+            job = self.client.post("/jobs", json={"url": "https://example.com/c/123", "folders": []}).json()
+            while (status := self.client.get(f"/jobs/{job['id']}").json())["phase"] in ("queued", "running"):
+                time.sleep(0.05)
+        with tarfile.open(fileobj=io.BytesIO(self.client.get(f"/jobs/{job['id']}/package").content)) as archive:
+            package = json.loads(archive.extractfile("package.json").read())
+        self.assertEqual(package["material"]["title"], "Quantum Kernels")
 
     def _package_of_file(self, name, data):
         job = self.client.post("/files", params={"name": name}, content=data).json()
