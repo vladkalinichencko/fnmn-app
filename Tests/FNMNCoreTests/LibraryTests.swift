@@ -154,6 +154,11 @@ private let paperLink = ImportPackage(
     #expect(try await file.load().catalog == loaded)
 }
 
+@Test func aLinkedImageLeavesNoMarkupInTheExcerpt() {
+    let body = "[![Rehaan Ahmad](assets/cover.png)](https://www.alphaxiv.org/@rehaan-ahmad)\n\nA long enough opening paragraph that becomes the excerpt of this article."
+    #expect(ArticleBody.excerpt(body) == "A long enough opening paragraph that becomes the excerpt of this article.")
+}
+
 @Test func positionAndNoteSurviveDiskRoundTrip() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let file = LibraryFile(url: directory.appending(path: "library.json"))

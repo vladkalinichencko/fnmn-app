@@ -136,7 +136,8 @@ def had_site_header(markdown: str) -> bool:
 
 def plain_title(heading: str) -> str:
     """A heading as a title: links keep their text, emphasis and code marks go."""
-    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
     return re.sub(r"[*_`]", "", text).strip()
 
 

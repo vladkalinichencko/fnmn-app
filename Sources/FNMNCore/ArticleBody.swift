@@ -124,7 +124,8 @@ public enum ArticleBody {
             guard let first = text.first, !"#!`$|<>".contains(first) else { continue }
             let prose = text.components(separatedBy: "$").first ?? text
             let plain = prose
-                .replacing(/!?\[([^\]]*)\]\([^)]*\)/) { $0.1 }
+                .replacing(/!\[([^\]]*)\]\([^)]*\)/) { $0.1 }
+                .replacing(/\[([^\]]*)\]\([^)]*\)/) { $0.1 }
                 .replacing(/[*_`$]/, with: "")
                 .replacing(/\s+/, with: " ")
             guard plain.count > 40 else { continue }

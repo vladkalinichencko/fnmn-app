@@ -34,6 +34,9 @@ class MarkdownTests(unittest.TestCase):
     def test_title_keeps_link_text_only(self):
         self.assertEqual(plain_title("[vfxblog](https://vfxblog.com) **news**"), "vfxblog news")
 
+    def test_title_keeps_a_linked_images_alt_text_only(self):
+        self.assertEqual(plain_title("[![Rehaan Ahmad](img.png)](https://alphaxiv.org/@rehaan-ahmad)"), "Rehaan Ahmad")
+
     def test_site_header_and_byline_are_not_the_article(self):
         text = "# [vfxblog](https://vfxblog.com)\n\n# Heads up: the oral history\n\n*By Ian Failes*\n\nIt’s ten years since."
         self.assertEqual(without_page_chrome(text), "# Heads up: the oral history\n\nIt’s ten years since.")
