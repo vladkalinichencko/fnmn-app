@@ -37,14 +37,18 @@ def _page(url: str) -> str:
 
 def _rendered(url: str) -> str:
     """Open the page in the reader browser on its own `web` profile: a real Chrome window that hides
-    itself while it works, so a site that refuses headless Chrome sees the ordinary browser it is."""
+    itself while it works, so a site that refuses headless Chrome sees the ordinary browser it is.
+    A browser error page is no page: it raises like the network error it stands for."""
     with reader.job("web") as tab:
         tab.goto(url)
         tab.settle()
         status = tab.document_status()
         if status and status >= 400:
             raise OSError(f"browser got HTTP {status} for {url}")
-        return with_base(tab.html(), tab.url)
+        page = tab.html()
+        if 'id="main-frame-error"' in page:
+            raise OSError(f"the browser could not open {url}")
+        return with_base(page, tab.url)
 
 
 LIVE = Web(

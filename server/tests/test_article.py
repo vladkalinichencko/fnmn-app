@@ -50,6 +50,17 @@ class ArticleTests(unittest.TestCase):
             {"homepage": "https://example.github.io/blog/", "name": "Alex L. Zhang"},
         )
 
+    def test_an_error_page_is_refused_not_packaged(self):
+        page = "<html><head><title>404 Not Found</title></head><body><p>The requested URL was not found on this server.</p></body></html>"
+        with self.assertRaises(ImportFailure):
+            article.read("https://example.com/dead", fakes.web(lambda url: page, lambda url: b""), lambda *_: None)
+        self.assertIsNone(article.title("https://example.com/dead", fakes.web(lambda url: page)))
+
+    def test_a_long_article_named_after_an_error_code_is_not_an_error_page(self):
+        page = "<html><head><title>404: a history of the error page</title></head><body><article><p>" + " prose" * 200 + "</p></article></body></html>"
+        package = imported_article("https://example.com/history", lambda url: page, lambda url: b"", [])
+        self.assertEqual(package["material"]["title"], "404: a history of the error page")
+
     def test_a_page_that_is_only_a_frame_is_the_page_inside_it(self):
         shell = """
         <html><head><title>A Space</title></head><body>

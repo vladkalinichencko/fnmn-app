@@ -22,8 +22,18 @@ def read(url: str, web: Web, report: Report) -> Document:
     report("fetchingPage", None, None)
     source, markdown, assets = _readable_page(url, web)
     content = document(source, markdown, assets, web, report)
+    if _is_error_page(content):
+        raise ImportFailure("fetchingPage", f"the page answers with an error page: {content.title}")
     content.publisher = publisher_of(url, source, web)
     return content
+
+
+_ERROR_TITLE = re.compile(r"^(?:[45]\d\d(?:\s|$)|not found$|page not found$)", re.I)
+
+
+def _is_error_page(content: Document) -> bool:
+    title = (content.title or "").strip()
+    return bool(_ERROR_TITLE.match(title)) and len(content.markdown.strip()) < 500
 
 
 def title(url: str, web: Web) -> str | None:
@@ -35,7 +45,8 @@ def title(url: str, web: Web) -> str | None:
         return None
     found = next(iter(document.xpath("//meta[@property='og:title']/@content")), "").strip()
     found = found or document.xpath("string(//title)").strip()
-    return page_title(found) or None
+    cleaned = page_title(found)
+    return None if _ERROR_TITLE.match(cleaned) else cleaned or None
 
 
 def document(source: str, markdown: str, assets: dict[str, str], web: Web, report: Report) -> Document:
