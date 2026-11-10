@@ -5,10 +5,10 @@ struct DisclosureChevron: View {
     var width: CGFloat = 18
 
     var body: some View {
-        Image(systemName: open ? "chevron.down" : "chevron.right")
+        Image(systemName: "chevron.right")
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
-            .contentTransition(.symbolEffect(.replace))
+            .rotationEffect(.degrees(open ? 90 : 0))
             .frame(width: width, height: width)
     }
 }
