@@ -4,7 +4,7 @@ import UIKit
 
 struct ContinueReadingIntent: AppIntent {
     static let title: LocalizedStringResource = "Continue Reading"
-    static let description = IntentDescription("Open the material you were last reading in Feynman.")
+    static let description = IntentDescription("Open what you were last reading in Feynman.")
     static let supportedModes: IntentModes = .foreground(.immediate)
 
     @MainActor

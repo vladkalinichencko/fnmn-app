@@ -135,7 +135,7 @@ extension LibraryError: LocalizedError {
         case .escapedPath: "A file path points outside the library."
         case let .albumNameTaken(name): "A collection named “\(name)” already exists."
         case .emptyAlbumName: "Enter a collection name."
-        case .cloudFolderMissing: "This material lives in the FNMN folder in iCloud Drive. Choose that folder again with + → File."
+        case .cloudFolderMissing: "This item lives in the FNMN folder in iCloud Drive. Choose that folder again with + → File."
         }
     }
 }

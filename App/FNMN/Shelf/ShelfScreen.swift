@@ -34,7 +34,7 @@ struct ShelfScreen: View {
             .background(Tokens.canvas)
             .overlay {
                 if !searching, annotations.isEmpty && archived.isEmpty {
-                    ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived materials appear here."))
+                    ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
                 }
             }
             .noResults(for: query, when: annotations.isEmpty && archived.isEmpty)

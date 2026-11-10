@@ -106,7 +106,7 @@ private struct LibraryDialogsModifier: ViewModifier {
                 Button("Cancel", role: .cancel) { dialogs.send(.dismiss) }
             }
             .confirmationDialog(
-                "Delete this material?",
+                "Delete this item?",
                 isPresented: dialogs.isShowing { if case .confirmingDelete = $0 { true } else { false } },
                 titleVisibility: .visible,
                 presenting: dialogs.dialog.deletedItem
@@ -126,7 +126,7 @@ private struct LibraryDialogsModifier: ViewModifier {
             ) { name in
                 Button("Delete Collection", role: .destructive) { Task { await library.apply(.deleteAlbum(name)) } }
             } message: { _ in
-                Text("Materials stay in the library.")
+                Text("Items stay in the library.")
             }
     }
 

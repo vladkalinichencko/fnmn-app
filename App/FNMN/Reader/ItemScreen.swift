@@ -13,7 +13,7 @@ struct ItemScreen: View {
             if library.snapshot.articles.contains(where: { $0.material.id == itemID }) {
                 ArticleOpener(itemID: itemID, startPiece: startPiece, startSeconds: startSeconds)
             } else {
-                ContentUnavailableView("This material is no longer in the library", systemImage: "questionmark.folder")
+                ContentUnavailableView("This item is no longer in the library", systemImage: "questionmark.folder")
             }
         }
         .task { library.apply(.open(itemID: itemID)) }
@@ -44,7 +44,7 @@ private struct ArticleOpener: View {
             case .loading:
                 Loading()
             case let .failed(message):
-                ContentUnavailableView("Couldn’t open this material", systemImage: "doc", description: Text(message))
+                ContentUnavailableView("Couldn’t open this item", systemImage: "doc", description: Text(message))
             case let .article(reader, sourceURL):
                 MaterialReader(reader: reader, sourceURL: sourceURL)
             case let .video(video):

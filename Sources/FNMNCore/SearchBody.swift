@@ -49,7 +49,7 @@ public enum SearchSource: String, CaseIterable, Codable, Sendable {
 
     public var title: String {
         switch self {
-        case .material: "Materials"
+        case .material: "Titles"
         case .text: "In the Text"
         case .annotation: "Notes and Highlights"
         case .transcript: "Transcripts"

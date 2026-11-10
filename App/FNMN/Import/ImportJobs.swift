@@ -206,7 +206,7 @@ final class ImportJobs {
         let job = try await server.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
         guard job.phase == .done, job.error == nil else {
             await forget(job.id, connection: connection)
-            throw ServerError.rejected(job.error ?? "The server could not prepare this material.")
+            throw ServerError.rejected(job.error ?? "The server could not prepare this item.")
         }
         let archive = try await server.port.delivery(of: job.id, connection: connection) { self.send(.progressed(jobID, $0)) }
         defer { try? FileManager.default.removeItem(at: archive) }
