@@ -179,13 +179,14 @@ final class LibraryModel {
         reindex = Task { await reindexSearch() }
     }
 
-    /// Materials added before the search index existed have no search body until they are opened; the pass fills
-    /// the missing ones in the background, and the next search reads them in. A written body is never written
-    /// again, so a pass the app interrupted resumes where it stopped.
     func reindexSearch() async {
-        guard cloudFolder != nil else { return }
+        guard cloudFolder != nil else {
+            return
+        }
         for entry in snapshot.articles {
-            guard entry.material.kind != .video, await !file.hasSearchBody(entry.material.id) else { continue }
+            guard entry.material.kind != .video, await !file.hasSearchBody(entry.material.id) else {
+                continue
+            }
             _ = try? await article(entry.material.id)
         }
         bodiesRead = false

@@ -133,22 +133,56 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(transcribe.call_args.args[:3], (pdf, "Attention Is All You Need", "Ashish Vaswani, Noam Shazeer"))
         self.assertIn("The transformer uses attention.", package["body"])
 
-    def test_x_post_uses_oembed_text(self):
-        payload = {
-            "author_name": "Ada",
-            "html": '<blockquote class="twitter-tweet"><p>Hello<br>there <a href="https://t.co/aaaa">https://t.co/aaaa</a></p></blockquote>',
-        }
+    def test_x_post_becomes_an_article_with_its_photo_and_quote(self):
+        payload = (Path(__file__).parent / "fixtures" / "x-thread-root.json").read_text(encoding="utf-8")
 
         def fetch_text(url):
-            self.assertIn("https://publish.x.com/oembed?url=", url)
-            self.assertIn("x.com", url)
-            return json.dumps(payload)
+            self.assertIn("cdn.syndication.twimg.com/tweet-result?id=2117642301442752692", url)
+            return payload
 
-        package = import_link("https://x.com/ada/status/20", [], fakes.web(fetch_text, lambda url: b"")).package
-        self.assertEqual(package["material"]["title"], "Ada")
-        self.assertEqual(package["material"]["byline"], "Ada")
-        self.assertIn("Hello\nthere", package["body"])
-        self.assertNotIn("t.co", package["body"])
+        delivery = import_link("https://x.com/ravfogel/status/2117642301442752692", [], fakes.web(fetch_text, lambda url: b"jpg-bytes"))
+        package = delivery.package
+        self.assertEqual(package["material"]["byline"], "Shauli Ravfogel")
+        self.assertIn("So how can Astra read neural network weights?", package["body"])
+        self.assertIn("https://x.com/rikiyatakehi/status/2117313742891327994", package["body"])
+        self.assertNotIn("t.co/JKjY2S5KZ1", package["body"])
+        self.assertIn("## Quoted: Rikiya Takehi", package["body"])
+        images = [name for name in delivery.files if name.endswith(".jpg")]
+        self.assertEqual(len(images), 1)
+        self.assertEqual(delivery.files[images[0]], b"jpg-bytes")
+        self.assertIn(images[0], package["body"])
+
+    def test_a_link_to_a_threads_reply_imports_the_thread_above_it(self):
+        root = json.loads((Path(__file__).parent / "fixtures" / "x-thread-root.json").read_text(encoding="utf-8"))
+        reply = {"__typename": "Tweet", "id_str": "2118000000000000001", "text": "Part two of the thread [2/10]",
+                 "created_at": "2026-11-03T15:40:00.000Z", "user": root["user"], "entities": {"urls": []}, "parent": root}
+
+        def fetch_text(url):
+            return json.dumps(root) if "id=2117642301442752692" in url else json.dumps(reply)
+
+        delivery = import_link("https://x.com/ravfogel/status/2118000000000000001", [], fakes.web(fetch_text, lambda url: b""))
+        body = delivery.package["body"]
+        self.assertLess(body.index("So how can Astra read"), body.index("Part two of the thread"))
+        self.assertIn("## Shauli Ravfogel", body)
+
+    def test_a_video_post_becomes_a_video(self):
+        payload = (Path(__file__).parent / "fixtures" / "x-video-post.json").read_text(encoding="utf-8")
+        delivery = import_link("https://x.com/ryolu_/status/2119586846657454152", [], fakes.web(lambda url: payload, lambda url: b""))
+        material = delivery.package["material"]
+        self.assertEqual(material["kind"], "video")
+        self.assertEqual(material["id"], "youtube:x-2119586846657454152")
+        self.assertEqual(material["sourceURL"], "https://x.com/ryolu_/status/2119586846657454152")
+        self.assertIsNone(delivery.package["blocks"][0]["mediaURL"])
+
+    def test_a_post_that_is_only_an_article_card_stops(self):
+        post = {"__typename": "Tweet", "id_str": "2094833633983107384", "text": "https://t.co/aaaa",
+                "created_at": "2026-09-01T00:00:00.000Z", "user": {"name": "deep Manifold"},
+                "entities": {"urls": [{"url": "https://t.co/aaaa",
+                                       "expanded_url": "https://x.com/i/article/2094832549705179136"}]}}
+
+        with self.assertRaises(ImportFailure) as caught:
+            import_link("https://x.com/betatomorrow/status/2094833633983107384", [], fakes.web(lambda url: json.dumps(post), lambda url: b""))
+        self.assertIn("article", str(caught.exception).lower())
 
     def test_x_without_a_status_stops(self):
         with self.assertRaises(ImportFailure) as caught:

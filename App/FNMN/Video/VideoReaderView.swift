@@ -97,7 +97,7 @@ struct VideoReaderView: View {
                 Button("Try Download Again", systemImage: "arrow.clockwise") { imports.send(.retry(download.id)) }
                 Text(message)
             }
-        } else if videoID != nil, let page = package.material.sourceURL {
+        } else if let page = package.material.sourceURL {
             Button("Download", systemImage: "arrow.down.circle") {
                 imports.send(.submit(.videoFile(itemID: materialID, url: page), id: UUID()))
             }

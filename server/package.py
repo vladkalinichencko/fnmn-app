@@ -49,6 +49,9 @@ class Video:
     title: str
     author: str | None = None
     cues: list[tuple[float, str]] = field(default_factory=list)
+    page: str | None = None
+    """The address the video was read from. The file a download makes from it plays offline; the page also
+    stands for Open Original. YouTube videos leave it out, because their id names both."""
 
 
 @dataclass
@@ -256,7 +259,9 @@ def _video_package(video: Video, folders: list[str]) -> dict:
     material_id = f"youtube:{video.video_id}"
     section_id = stable_id("section", f"{material_id}:video")
     player_id = stable_id("block", f"{material_id}:video")
-    blocks = [_block(player_id, section_id, "video", video.title, f"https://www.youtube.com/embed/{video.video_id}", 0.0)]
+    page = video.page or f"https://www.youtube.com/watch?v={video.video_id}"
+    embed = None if video.page else f"https://www.youtube.com/embed/{video.video_id}"
+    blocks = [_block(player_id, section_id, "video", video.title, embed, 0.0)]
     for index, (start, text) in enumerate(video.cues):
         cue_id = stable_id("block", f"{material_id}:cue:{index}:{start}:{text}")
         blocks.append(_block(cue_id, section_id, "transcript", text, None, start))
@@ -266,7 +271,7 @@ def _video_package(video: Video, folders: list[str]) -> dict:
             "id": material_id,
             "kind": "video",
             "title": video.title,
-            "sourceURL": f"https://www.youtube.com/watch?v={video.video_id}",
+            "sourceURL": page,
             "byline": video.author,
         },
         "sections": [{"id": section_id, "parentID": None, "title": video.title, "level": 1, "firstBlockID": player_id}],

@@ -56,18 +56,18 @@ def browser(network: str) -> Iterator[Page]:
     """The logged-in profile of one network, headless, one page. Chrome without a window names itself
     HeadlessChrome, which X and Instagram refuse, so the page introduces itself as the ordinary Chrome it is."""
     with sync_playwright() as playwright:
+        launch = {"channel": "chrome", "headless": True, "chromium_sandbox": True}
+        agent = playwright.chromium.launch(**launch).new_page().evaluate("navigator.userAgent").replace("HeadlessChrome", "Chrome")
         context = playwright.chromium.launch_persistent_context(
             str(profile(network)),
             channel="chrome",
             headless=True,
             chromium_sandbox=True,
+            user_agent=agent,
             viewport={"width": 1280, "height": 1600},
         )
         try:
-            probe = context.new_page()
-            agent = probe.evaluate("navigator.userAgent").replace("HeadlessChrome", "Chrome")
-            probe.close()
-            yield context.new_page(user_agent=agent)
+            yield context.new_page()
         finally:
             context.close()
 

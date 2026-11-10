@@ -108,7 +108,6 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertEqual(hits.first?.itemID, itemID)
     }
 
-    /// Writes a delivery the way the server's `write_delivery` does: USTAR, `package.json` first.
     private func writeDelivery(_ package: ImportPackage, to url: URL) throws {
         var archive = Data()
         func add(_ name: String, _ data: Data) {
