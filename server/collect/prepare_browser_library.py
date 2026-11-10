@@ -228,7 +228,7 @@ def main() -> None:
                 errors[url] = error
             errors_path.write_text(json.dumps(errors, ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"{count}/{len(selected)} {'failed' if error else 'ready'} {url}", flush=True)
-    ready = sum(_delivery(args.output, row).exists() for row in selected)
+    ready = sum(_article_path(args.output, row["url"]).exists() for row in selected)
     print(f"{ready} ready, {len(selected) - ready} failed in selection, {len(rows)} unique materials", flush=True)
 
 
