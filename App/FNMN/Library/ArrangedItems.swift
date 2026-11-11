@@ -1,8 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// The materials of an album, publisher, type or month, sorted and grouped as the reader chose for that screen;
-/// the choice sits in the eye menu of the bar and is kept for each screen on its own.
 struct ArrangedItems: View {
     let items: [LibraryItem]
     var album: String?

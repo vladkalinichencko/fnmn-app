@@ -51,7 +51,6 @@ private struct YouTubeAddresses: Decodable {
     #expect(document.lowestHeadings == [3, 5])
     #expect(document.headings(holding: 4) == [2, 3])
     #expect(document.lowestHeadings.subtracting(document.headings(holding: 4)) == [5])
-    // A last section that ends in an empty heading closes all the same.
     let ending = ReaderDocument(markdown: "# Book\n\n## Models\n\nText.\n\n## Summary\n\nText.\n\n### More in our Telegram", title: "Book")
     #expect(ending.lowestHeadings == [1, 3])
 }

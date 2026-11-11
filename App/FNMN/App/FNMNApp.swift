@@ -30,7 +30,6 @@ struct FNMNApp: App {
     }
 }
 
-/// One window: its own tab, navigation and dialogs over the shared library.
 private struct WindowRoot: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ImportJobs.self) private var imports
@@ -156,7 +155,6 @@ private struct WindowRoot: View {
         }
     }
 
-    /// Links and PDFs the Share extension left are imported like the ones added inside the app.
     private func takeSharedItems() {
         guard let inbox = CaptureInbox() else { return }
         for entry in inbox.take() {

@@ -52,7 +52,6 @@ private let article = ImportPackage(
     #expect(try Data(contentsOf: file.cachedFolder(of: entry).appending(path: "assets/p.png")) == Data("png".utf8))
 }
 
-/// A library whose FNMN folder is a folder beside it, as in the app.
 func libraryFile(_ root: URL) async -> LibraryFile {
     let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
     await file.useCloudFolder(root.appending(path: "FNMN"))
@@ -345,7 +344,6 @@ private let laterArticle = ImportPackage(
     let slides = directory.appending(path: "slides.key")
     try Data("keynote".utf8).write(to: slides)
     let package = try ImportPackage.file(slides)
-    // hashlib.sha256(b"keynote").hexdigest(), as `package.file_id` names it on the server.
     #expect(package.material.id == "file:cae9d3b20ba8a78238099f47745d060f9be0f3812b9711d6ff27ce0f134a38fa")
     #expect(package.material.kind == .link)
     #expect(package.material.title == "slides")
@@ -734,19 +732,14 @@ private func span(_ quote: String) -> AnnotationTarget {
 }
 
 @Test func theReadingLineStopsBetweenLinesOfTextAndNeverInsideOne() {
-    // Two lines of a paragraph, a table row of two cells side by side, a tall formula over a line beside it, and a
-    // line under a picture.
     let lines = ReadingLine.merged([0...20, 20...40, 60...80, 61...79, 100...140, 110...125, 140...140, 400...420])
     #expect(lines == [0...20, 20...40, 60...80, 100...140, 400...420])
-    // The block's own top and bottom are no stops: between blocks the line stands only in the gap.
     let stops = ReadingLine.stops(within: -16...436, lines: lines)
     #expect(stops == [20...20, 50...50, 90...90, 148...392])
     #expect(ReadingLine.nearest(to: 33, in: stops) == 20)
-    // Across the picture the line stands where it is put.
     #expect(ReadingLine.nearest(to: 250, in: stops) == 250)
     #expect(ReadingLine.nearest(to: 143, in: stops) == 148)
     #expect(ReadingLine.nearest(to: 33, in: []) == nil)
-    // A picture above the first line, or a block that is only a picture, is a space the line crosses.
     #expect(ReadingLine.stops(within: 0...300, lines: [200...220, 240...260]) == [8...192, 230...230])
     #expect(ReadingLine.stops(within: 0...300, lines: []) == [8...292])
     #expect(ReadingLine.stops(within: 0...40, lines: []) == [])

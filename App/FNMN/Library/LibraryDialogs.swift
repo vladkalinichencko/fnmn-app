@@ -2,7 +2,6 @@ import FNMNCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The one sheet, picker or alert a window shows over the library at a time.
 enum LibraryDialog: Equatable {
     case none
     case addingLink(String)
@@ -148,7 +147,6 @@ private struct LibraryDialogsModifier: ViewModifier {
     }
 }
 
-/// The payload each alert keeps from the moment it was shown.
 private extension LibraryDialog {
     var draft: String {
         switch self {
@@ -157,7 +155,6 @@ private extension LibraryDialog {
         }
     }
 
-    /// `.some(nil)` is a new album on its own; `.some(id)` also adds that material to it.
     var albumTarget: String?? {
         if case let .namingAlbum(itemID, _) = self {
             return itemID

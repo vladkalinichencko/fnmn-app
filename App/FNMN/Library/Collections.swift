@@ -31,10 +31,6 @@ struct AlbumTile: View {
         navigation.open(route)
     }
 
-    /// The fan takes a whole tile's shape, so an album never looks smaller than what it holds; the name goes under it.
-    /// The fan's cards are shrunk inside that shape, which leaves about twelve points under them, so the name moves
-    /// up into that space: the gap from the fan to its name stays smaller than the grid's gap below the name, and the
-    /// name reads as the fan's. The whole tile takes the tap, so a finger between the turned cards still opens the album.
     private var label: some View {
         VStack(alignment: .leading, spacing: -4) {
             AlbumFan(front: album.front)
@@ -51,7 +47,6 @@ struct AlbumTile: View {
     }
 }
 
-/// Up to three materials fanned out like a stack of photos: a cover where there is one, the title on a plate where not.
 private struct AlbumFan: View {
     let front: [LibraryItem]
 
@@ -75,7 +70,6 @@ private struct AlbumFan: View {
             }
     }
 
-    /// Where a card lies in the fan: its turn, its size and how far it is moved from the middle.
     private struct Place {
         let degrees: Double
         let scale: CGFloat
@@ -90,10 +84,6 @@ private struct AlbumFan: View {
         )
     }
 
-    /// A picture is laid down like a photo on a plate of glass, which gives it the same soft shadow as every other
-    /// plate and shows through a picture's transparent parts.
-    /// A title on glass starts a little lower than on a tile, clear of the turned plate's corner.
-    /// A title lies on glass, and glass under a transform spreads past its frame, so the glass turns its shape instead.
     @ViewBuilder
     private func card(_ item: LibraryItem, place: Place) -> some View {
         let turned = TurnedRectangle(cornerRadius: Tokens.tileRadius, degrees: place.degrees, scale: place.scale, offset: place.offset)
@@ -117,12 +107,10 @@ private struct AlbumFan: View {
         }
     }
 
-    /// Even a single card is turned a little, so an album never reads as a material's tile.
     private static let angles: [Double] = [2, -7, 7]
     private static let shifts: [CGFloat] = [0, -10, 10]
 }
 
-/// The tile its screen grows out of; the picker's tiles only choose an album, so they open nothing.
 private struct AlbumZoomSource: ViewModifier {
     let route: Route?
 
@@ -136,7 +124,6 @@ private struct AlbumZoomSource: ViewModifier {
     }
 }
 
-/// Dropping a tile adds the material to the album; the context menu renames or deletes it.
 private struct AlbumTileBehavior: ViewModifier {
     let album: AlbumSummary
     @Environment(LibraryModel.self) private var library
@@ -161,7 +148,6 @@ private struct AlbumTileBehavior: ViewModifier {
     }
 }
 
-/// The materials of one type or month of the Collections section.
 struct GroupScreen: View {
     let grouping: LibraryGrouping
     let key: String
@@ -208,7 +194,6 @@ struct AlbumScreen: View {
     }
 }
 
-/// Add to Album: the albums as tiles, as in Photos, and a new one.
 struct AlbumPicker: View {
     let itemID: String
     @Environment(LibraryModel.self) private var library
@@ -218,7 +203,6 @@ struct AlbumPicker: View {
         NavigationStack {
             ScrollView {
                 LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    // The collections the material is already in are not offered again.
                     let current = Set(library.snapshot.albums(of: itemID))
                     ForEach(library.queries.albumSummaries.filter { !current.contains($0.name) }) { album in
                         AlbumTile(album: album) {
@@ -244,7 +228,6 @@ struct AlbumPicker: View {
     }
 }
 
-/// Everything saved from one author, blog or channel, and the way to its home page.
 struct SourceScreen: View {
     let id: String
     @Environment(LibraryModel.self) private var library
@@ -269,7 +252,6 @@ struct SourceScreen: View {
     }
 }
 
-/// Add → Link: one field, the pasteboard's link already in it.
 struct LinkSheet: View {
     @State var text: String
     @Environment(LibraryDialogs.self) private var dialogs

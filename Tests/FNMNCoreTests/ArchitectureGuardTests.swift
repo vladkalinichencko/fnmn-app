@@ -1,14 +1,11 @@
 import Foundation
 import XCTest
 
-/// Source guards for boundaries the compiler cannot see: which file owns disk work, and when a lazy read runs.
-/// They read the whole app, not the lines one change adds.
 final class ArchitectureGuardTests: XCTestCase {
     private func contents(of file: String) throws -> String {
         try String(contentsOf: try AppSources.file(named: file), encoding: .utf8)
     }
 
-    /// The body between the first `{` after `declaration` and its matching `}`.
     private func body(of declaration: String, in source: String) -> String? {
         guard let start = source.range(of: declaration),
               let open = source[start.upperBound...].firstIndex(of: "{") else {
@@ -63,9 +60,6 @@ final class ArchitectureGuardTests: XCTestCase {
         }
     }
 
-    /// A web view may appear only where the app already decided it belongs: the live crop of a source page and
-    /// the embedded YouTube player. Every other screen draws with SwiftUI, so a new one has to be added here on
-    /// purpose, and the whole app is read, not the lines a change adds.
     func testWebViewsAppearOnlyInTheLiveCropAndThePlayer() throws {
         let allowed: Set<String> = ["LiveCropView.swift", "VideoReaderView.swift"]
         for file in try AppSources.files() {

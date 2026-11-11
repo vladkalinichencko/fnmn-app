@@ -2,7 +2,6 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// What the reader is doing with its plates: just reading, or writing a margin note.
 enum PlateMode: Equatable {
     case reading
     case noting(Int)
@@ -38,14 +37,10 @@ extension AnnotationCommand {
     }
 }
 
-/// One open document drawn from its coordinator: the column of blocks, the header and the headings that fold their sections.
-/// Each block gets only values, so when the place moves one paragraph, SwiftUI redraws just the blocks
-/// whose read state changed.
 struct ReadingSession: View {
     @Environment(LibraryModel.self) private var library
     let reader: ReaderCoordinator
     @State private var width: CGFloat = 0
-    /// The column's width inside its gutters, which every plate shares.
     @State private var columnWidth: CGFloat = 0
     @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
     @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
@@ -58,7 +53,6 @@ struct ReadingSession: View {
         let current = reader.current(in: visible)
         let marks = Dictionary(grouping: library.snapshot.annotations.filter { $0.materialID == reader.materialID }, by: \.piece)
         let progress = library.progress
-        // The plate whose "read to here" holds: with the line, the one right above it when it stands between blocks.
         let marked: Int? = if let line {
             line.fraction == 0 ? visible.last { $0 < line.piece } : line.fraction >= 1 ? line.piece : nil
         } else {
@@ -70,7 +64,6 @@ struct ReadingSession: View {
         let activeFind = reader.state.find?.current.map { found[$0] }
         ScrollViewReader { proxy in
             ScrollView {
-                // The gap under a block belongs to the block, so it closes up with it.
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if let lead = document.lead, case let .image(_, path) = document.blocks[lead] {
                         let cover = reader.baseURL.appending(path: path)
@@ -102,45 +95,35 @@ struct ReadingSession: View {
                         .id(index)
                     }
                 }
-                // On the stack itself: a modifier between them would make its own layout the one whose rows are watched.
                 .scrollTargetLayout()
                 .textual.onTextLinesChange { reader.textLinesChanged($0) }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
                 .padding(.horizontal, Tokens.gutter)
                 .padding(.bottom, 80)
-                // A wide screen reads in a narrower column in the middle; the scroll view itself keeps the whole width.
                 .frame(maxWidth: width > 0 ? column.width(in: width) : .infinity)
                 .frame(maxWidth: .infinity)
-                // The line runs across the whole screen, over the gutters; the column starts at the same height.
                 .overlay {
                     if line != nil { ReadingLineView(reader: reader) }
                 }
                 .coordinateSpace(.named(Self.column))
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            // The place is read off the rows the person sees, never through a scroll position the column keeps:
-            // one written back on each step made the column pull the next block to its top while scrolling up.
             .onScrollTargetVisibilityChange(idType: Int.self, threshold: 0.01) { shown in
                 reader.shownChanged(shown)
                 if let top = shown.min() { reader.send(.scrolled(top)) }
             }
             .onChange(of: showsLine) { reader.send(.showLine(showsLine)) }
-            // The column is laid out unseen at the top and shows only once it stands where it opens, so the jump there is never seen.
             .animation(.easeOut(duration: 0.3)) { $0.opacity(reader.state.hidesColumn ? 0 : 1) }
-            // Under a plate shown alone the column stays out of focus and takes no touches. Its pictures stop being
-            // where the whole-screen view zooms from, since the plate shown holds the same ones.
             .animation(.smooth(duration: 0.35)) { $0.blur(radius: paging ? 16 : 0) }
             .allowsHitTesting(!paging)
             .accessibilityHidden(paging)
             .environment(\.mediaZoom, paging ? nil : mediaZoom)
-            // After the first layout, when the lazy column knows its rows and can go to one far down.
             .task {
                 reader.scroll = { proxy.scrollTo($0, anchor: .top) }
                 await Task.yield()
                 reader.send(.opened)
             }
         }
-        // The plate and the shade come and go by themselves: the column under them opens sections at once.
         .overlay {
             ZStack {
                 if let plate = reader.state.shownPlate {
@@ -156,7 +139,6 @@ struct ReadingSession: View {
         .environment(reader)
         .environment(\.mediaZoom, mediaZoom)
         .environment(\.plateTextWidth, columnWidth > 0 ? columnWidth - 2 * Tokens.tilePadding : nil)
-        // A picture inside a paragraph is a link to its own file, since the text takes the touches over it.
         .environment(\.openURL, OpenURLAction { url in
             guard url.isFileURL, ImageFiles.headerSize(of: url) != nil else { return .systemAction }
             reader.send(.openMedia(url))
@@ -183,8 +165,6 @@ struct ReadingSession: View {
         }
     }
 
-    /// The reader's own coordinate space, shared by the rows' frames and the reading line. Geometry closures run off
-    /// the main actor, so it belongs to none.
     nonisolated static let column = "column"
 
     private func fold(of index: Int, in document: ReaderDocument) -> HeadingFold {
@@ -193,9 +173,6 @@ struct ReadingSession: View {
     }
 }
 
-/// A block an opened section brings onto the page comes down a little out of a blur. Only how it is drawn moves:
-/// a visual effect leaves its frame where the column set it, so the scroll view, the rows' frames and the reading
-/// line see the block in its place from the start.
 private struct Reveal: ViewModifier {
     @State private var shown: Bool
 

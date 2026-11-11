@@ -47,8 +47,6 @@ def main_content(document):
     marked = copy.deepcopy(document)
     copies = dict(zip(document.iter(), marked.iter()))
     for owner, number in owners.items():
-        # The marker goes before the owner's first words, which may follow a child: an old wiki writes its
-        # article after the heading's <div>, straight into the cell.
         twin = copies[owner]
         holder = next((child for child in twin if (child.tail or "").strip()), None)
         if (twin.text or "").strip() or holder is None:
@@ -85,11 +83,8 @@ def main_content(document):
         sibling is not root and (sibling in formulas or _closes_article(sibling)) for sibling in root.getparent()
     ):
         root = root.getparent()
-    # Long text Trafilatura left out beside the article is the article's too, an FAQ or a list of chapters,
-    # unless it sits in comments, a sidebar or a footer.
     told = [owner for owner in owners if not _furniture(owner) and not _aside(owner, root)]
     _trim_edges(root, kept + told, formulas)
-    # The article opens at its own title: what stands above it is the site's header. The title is not repeated.
     if heading is not None and (heading is root or root in heading.iterancestors()):
         _open_at(root, heading)
         return root, None
@@ -148,8 +143,6 @@ def _open_at(root, heading) -> None:
             node.drop_tree()
         elif passed and node.tag in {"h1", "h2", "h3"} and _heading_text(node).casefold() == text:
             node.drop_tree()
-    # A figure around the title is a cover with the title laid over it; with its picture gone above the title, it is
-    # text and not a figure the page draws.
     if header:
         for figure in [node for node in above if node.tag == "figure" and root in node.iterancestors()]:
             figure.drop_tag()
@@ -207,7 +200,6 @@ def _drop_own_text(owner) -> None:
         if isinstance(child.tag, str) and not _inline_element(child):
             child.tail = None
         elif isinstance(child.tag, str) and any(not _inline_element(inner) for inner in child.iterdescendants() if isinstance(inner.tag, str)):
-            # An inline element wrapped around blocks, a <span> holding paragraphs, keeps them.
             child.text = child.tail = None
         else:
             owner.remove(child)
@@ -259,7 +251,6 @@ def _trim_edges(root, kept, formulas) -> None:
     for node in list(root.iter()):
         if node in holders or node.getparent() is None:
             continue
-        # A link in the text of an element that stays is part of that text, wherever it sits.
         if isinstance(node.tag, str) and _inline_element(node) and _owner(node) in holders:
             continue
         index = order[node]

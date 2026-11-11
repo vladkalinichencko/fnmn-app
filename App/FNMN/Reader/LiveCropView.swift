@@ -12,9 +12,6 @@ struct LiveCropView: View {
     let url: URL
     let selector: String?
     @State private var phase = CropPhase.loading
-    /// The height each figure last showed at. The lazy column lets a figure go once it scrolls far away and makes it
-    /// anew when it comes back; starting at the plate's loading height, it would grow while the column scrolls up
-    /// to it and push the text below it down.
     private static var shownHeights: [String: CGFloat] = [:]
 
     var body: some View {
@@ -25,7 +22,6 @@ struct LiveCropView: View {
             if case .loading = phase {
                 Loading()
             }
-            // A figure that did not come takes one line of the plate, set in from its edges like a paragraph.
             if case let .failed(message) = phase {
                 Text(message)
                     .font(.footnote)
@@ -49,7 +45,6 @@ struct LiveCropView: View {
         return false
     }
 
-    /// Nil once the figure failed: the plate is as tall as the message.
     private var height: CGFloat? {
         switch phase {
         case let .shown(value): max(value, 44)
@@ -75,12 +70,10 @@ struct LiveCropWebView: UIViewRepresentable {
         configuration.userContentController.add(context.coordinator, name: "crop")
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
-        // A figure wider or taller than its frame is moved by the finger; one that fits stays still.
         view.scrollView.bounces = false
         view.scrollView.isDirectionalLockEnabled = true
         view.scrollView.contentInsetAdjustmentBehavior = .never
         view.isOpaque = false
-        // The phase starts as `.loading`, so the first load needs no state change from the update pass.
         context.coordinator.start(url, selector: selector, in: view)
         return view
     }
@@ -89,7 +82,6 @@ struct LiveCropWebView: UIViewRepresentable {
         context.coordinator.onPhase = { phase = $0 }
         guard context.coordinator.loaded != url else { return }
         context.coordinator.start(url, selector: selector, in: view)
-        // A view update must not write state; the new page's phase is set right after it.
         Task { @MainActor in phase = .loading }
     }
 

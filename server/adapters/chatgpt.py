@@ -15,7 +15,6 @@ _DISPLAY = re.compile(r"\\\[(.*?)\\\]", re.S)
 _INLINE = re.compile(r"\\\((.+?)\\\)")
 _FENCE = re.compile(r"(```[\s\S]*?```)")
 
-# A generated app is written for ChatGPT's own page: Tailwind classes and `--viz-*` colors that page defines.
 _APP_PAGE = """<!doctype html>
 <html>
 <head>

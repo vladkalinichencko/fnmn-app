@@ -27,7 +27,6 @@ enum ConnectionCheck: Equatable {
     }
 }
 
-/// The library folder, and the server address and token, saved once and checked with an authorized request.
 struct SettingsScreen: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ServerLink.self) private var server

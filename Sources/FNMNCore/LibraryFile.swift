@@ -10,14 +10,7 @@ private struct Note: Codable, Equatable, Identifiable, Sendable {
     var text: String
 }
 
-/// The library's files. Materials live in the FNMN folder in iCloud Drive: `deliveries/` holds one archive
-/// per article, video or book, `state/` each device's journal. The app keeps what it
-/// needs to list and resume them: the catalog, small cover pictures, reading progress and its own state, and
-/// in the cache the unpacked copies of materials it has opened.
 public actor LibraryFile {
-    /// `state.json` holds the reader's albums and marks; the catalog's article entries live in
-    /// `articles.json` and are written only when an import or a delete changes them; reading progress lives in
-    /// `progress.json`.
     private struct UserState: Codable {
         var legacyProgress: ReadingProgress?
         var albums: [String] = []
@@ -26,17 +19,12 @@ public actor LibraryFile {
         var archived: [String] = []
         var addedAt: [String: Date] = [:]
         var articleRevisions: [String: String] = [:]
-        /// Nil in a file written before deletions were kept.
         var deletedAt: [String: Date]?
-        /// Videos an older version saved inside the app, item id → file name in `videos/`, until they move
-        /// into the FNMN folder's `originals/`.
         var legacyVideoFiles: [String: String] = [:]
         var browserCatalog: BrowserCatalog?
         var legacyNotes: [Note] = []
         var legacyPackages: [ImportPackage]?
 
-        /// Older files called albums `folders` and annotations `highlights`, and kept packages, block notes
-        /// and reading progress inline.
         enum CodingKeys: String, CodingKey {
             case albums, placements, annotations, archived, addedAt, articleRevisions, deletedAt, videoFiles, browserCatalog
             case folders, highlights, notes, packages, positions, readThrough, readings
@@ -103,14 +91,10 @@ public actor LibraryFile {
     }
 
     public nonisolated let root: URL
-    /// Unpacked copies of materials, in a folder the system may empty when space runs low.
     public nonisolated let cache: URL
-    /// The FNMN folder in iCloud Drive, once the app has access to it.
     public private(set) var cloudFolder: URL?
     public private(set) var corruptPackageNames: [String] = []
     private var legacyVideoFiles: [String: String] = [:]
-    /// False for state written before deletions were kept: the deliveries of materials deleted then are still in
-    /// the FNMN folder, and the journals, which hold those deletions, are read once to fill them in.
     private var deletionsKnown = true
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -134,7 +118,6 @@ public actor LibraryFile {
     private var searchFolder: URL {
         root.appending(path: "search")
     }
-    /// Older libraries kept every article with its text in one file.
     private var packagesURL: URL { root.appending(path: "packages.json") }
     private var progressURL: URL { root.appending(path: "progress.json") }
     private static let textName = "text.json"
@@ -164,14 +147,12 @@ public actor LibraryFile {
         } else {
             packages = readLegacyPackages()
         }
-        // Texts from the older layouts go to their article folders in the app, until `moveIntoCloud` takes them.
         for package in packages {
             try writeText(package, revision: snapshot.articleRevisions[package.material.id])
         }
         snapshot.articles.append(contentsOf: packages.map { ArticleEntry($0) })
         try sweepArticleRevisions(snapshot)
         let foldedNotes = absorbLegacyNotes(legacyNotes, into: &snapshot)
-        // Progress moves out of `state.json` first, so a crash in between never loses it.
         let storedProgress = FileManager.default.fileExists(atPath: progressURL.path)
         var progress = storedProgress
             ? try decoder.decode(ReadingProgress.self, from: Data(contentsOf: progressURL))
@@ -186,8 +167,6 @@ public actor LibraryFile {
         if FileManager.default.fileExists(atPath: packagesURL.path) {
             try FileManager.default.removeItem(at: packagesURL)
         }
-        // The oldest layout kept one file per package; once every one of them is in, the folder goes.
-        // A file that could not be read keeps the folder, so it is not lost.
         let legacyFolder = root.appending(path: "packages")
         if corruptPackageNames.isEmpty, FileManager.default.fileExists(atPath: legacyFolder.path) {
             try FileManager.default.removeItem(at: legacyFolder)
@@ -200,8 +179,6 @@ public actor LibraryFile {
         try encoder.encode(progress).write(to: progressURL, options: .atomic)
     }
 
-    /// Writes the reader's state, and the article entries only when they differ from `previous`;
-    /// then removes the app's copies of materials the catalog no longer holds.
     public func save(_ snapshot: LibrarySnapshot, previous: LibrarySnapshot? = nil) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         if previous?.articles != snapshot.articles {
@@ -216,10 +193,7 @@ public actor LibraryFile {
         }
     }
 
-    // MARK: Originals
 
-    /// Keeps a copy of the file a material was made from, or of a video saved for the system player, in the
-    /// FNMN folder's `originals/`, named like the material's delivery with the file's own extension.
     public func storeOriginal(_ file: URL, of entry: ArticleEntry) throws {
         guard let name = entry.originalName(pathExtension: file.pathExtension) else { throw LibraryError.cloudFolderMissing }
         try placeInCloud(file, at: try requireCloudFolder().appending(path: "originals").appending(path: name))
@@ -234,7 +208,6 @@ public actor LibraryFile {
         if let error = coordination ?? failure { throw error }
     }
 
-    /// The archive of a deleted material leaves the FNMN folder, so no device is left a file to read it in again.
     public func removeDelivery(of entry: ArticleEntry) throws {
         guard let archive = deliveryURL(of: entry) else { return }
         do {
@@ -242,9 +215,7 @@ public actor LibraryFile {
         } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {}
     }
 
-    // MARK: Adding materials
 
-    /// A link or file kept as it is, made on this phone, becomes a delivery like any other.
     public func storeMade(_ package: ImportPackage, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let archive = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
         defer { try? FileManager.default.removeItem(at: archive) }
@@ -252,7 +223,6 @@ public actor LibraryFile {
         return try storeArticle(archive: archive, into: snapshot)
     }
 
-    /// A delivery archive the server prepared for this phone joins the others in the FNMN folder.
     public func storeArticle(archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let package = try DeliveryArchive(url: archive).unpack { (_: ImportPackage, _) in nil }
         let destination = try requireCloudFolder().appending(path: "deliveries").appending(path: Self.deliveryName(package.material.id))
@@ -262,13 +232,10 @@ public actor LibraryFile {
         return next
     }
 
-    /// A picked file kept as it is, known by its bytes, which are hashed here so the main thread never reads the file.
     public func package(ofFile file: URL) throws -> ImportPackage {
         try .file(file)
     }
 
-    /// The first step of a browser library import: its catalog of sources, whose reviewed albums replace
-    /// the browser's collections.
     public func applyBrowserCatalog(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
         var next = snapshot
@@ -277,8 +244,6 @@ public actor LibraryFile {
         return next
     }
 
-    /// One delivery in the FNMN folder: the package enters the catalog, and of its files only the cover is
-    /// kept, as a small picture; the archive stays in iCloud and is unpacked when the reader opens it.
     public func addCloudDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {        let cover = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: cover) }
         var hasCover = false
@@ -297,14 +262,9 @@ public actor LibraryFile {
         return next
     }
 
-    /// Deliveries in the FNMN folder this device has not read as they are now: ones another device added, and
-    /// ones it rewrote with a prepared material. A delivery whose material was deleted after the file last changed
-    /// stays out. A file still only in iCloud has no date here yet, so a rewrite of it waits until it is on the device.
-    /// Returns the catalog too, with the deletions it learned from the journals.
     public func changedDeliveries(_ files: [URL], in snapshot: LibrarySnapshot) throws -> (deliveries: [URL], snapshot: LibrarySnapshot) {
         var snapshot = snapshot
         if !deletionsKnown {
-            // An empty device name reads every device's journal, this one's too.
             for event in try unreadJournalEvents(except: "", sync: JournalKnowledge()).events {
                 guard case let .library(.delete(itemID)) = event.change else { continue }
                 snapshot.deletedAt[itemID] = max(snapshot.deletedAt[itemID] ?? .distantPast, event.time)
@@ -317,7 +277,7 @@ public actor LibraryFile {
             let changedAt = Self.changeDate(of: file)
             switch read[file.lastPathComponent] {
             case let readAt??: return changedAt.map { $0 != readAt } ?? false
-            case .some(nil): return false // read before this device kept the dates
+            case .some(nil): return false
             case nil:
                 guard let deletedAt = deleted[file.lastPathComponent] else { return true }
                 return changedAt.map { $0 > deletedAt } ?? false
@@ -326,16 +286,12 @@ public actor LibraryFile {
         return (changed, snapshot)
     }
 
-    /// Read fresh: a URL keeps the values it read before, which would hide a rewrite.
     private static func changeDate(of file: URL) -> Date? {
         var file = file
         file.removeAllCachedResourceValues()
         return try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
-    /// The first time the FNMN folder is linked, what an older version kept inside the app moves there: each
-    /// article becomes an archive in `deliveries/`, each saved video an original in `originals/`. The app's
-    /// copies then go; books come from the server as deliveries of their own.
     public func moveIntoCloud(_ snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
         let cloud = try requireCloudFolder()
         var next = snapshot
@@ -377,7 +333,6 @@ public actor LibraryFile {
         return next
     }
 
-    /// Whether anything still waits inside the app for `moveIntoCloud`.
     public func holdsMaterialsInApp(_ snapshot: LibrarySnapshot) -> Bool {
         snapshot.articles.contains { $0.delivery == nil }
             || FileManager.default.fileExists(atPath: root.appending(path: "books").path)
@@ -388,9 +343,7 @@ public actor LibraryFile {
         SHA256.hash(data: Data(materialID.utf8)).map { String(format: "%02x", $0) }.joined() + ".tar"
     }
 
-    // MARK: Opening materials
 
-    /// Where a material is unpacked; a new text gets a new folder.
     public nonisolated func cachedFolder(of entry: ArticleEntry) -> URL {
         cache.appending(path: "articles")
             .appending(path: Self.articleDirectory(root: root, materialID: entry.material.id).lastPathComponent)
@@ -401,14 +354,11 @@ public actor LibraryFile {
         FileManager.default.fileExists(atPath: cachedFolder(of: entry).appending(path: Self.textName).path)
     }
 
-    /// The material's archive in the FNMN folder, once the folder is linked.
     public func deliveryURL(of entry: ArticleEntry) -> URL? {
         guard let cloudFolder, let name = entry.delivery else { return nil }
         return cloudFolder.appending(path: "deliveries").appending(path: name)
     }
 
-    /// Opens a material from its unpacked copy, unpacking the archive first when the system has emptied the
-    /// cache; the caller brings the archive down from iCloud before that.
     public func openCloudArticle(_ entry: ArticleEntry) throws -> ImportPackage {
         let folder = cachedFolder(of: entry)
         let text = folder.appending(path: Self.textName)
@@ -466,9 +416,7 @@ public actor LibraryFile {
         searchFolder.appending(path: SHA256.hash(data: Data(materialID.utf8)).map { String(format: "%02x", $0) }.joined() + ".json")
     }
 
-    // MARK: Journals
 
-    /// Where each device's journal lives, once the FNMN folder is linked.
     public func journalFolder() -> URL? {
         cloudFolder?.appending(path: "state", directoryHint: .isDirectory)
     }
@@ -502,9 +450,6 @@ public actor LibraryFile {
         try encoder.encode(sync).write(to: root.appending(path: "sync.json"), options: .atomic)
     }
 
-    /// Appends this device's changes to its own journal, one JSON line each, under file coordination. A journal
-    /// grown past `compactingAfter` lines is folded down into a file of the next generation, which the other
-    /// devices read from its start, and the old file goes.
     public func appendJournal(_ events: [JournalEvent], device: String, compactingAfter limit: Int = 2000) throws {
         guard let folder = journalFolder(), !events.isEmpty else { return }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -520,7 +465,6 @@ public actor LibraryFile {
         try coordinatedWrite(at: journal, options: .forDeleting) { url in try FileManager.default.removeItem(at: url) }
     }
 
-    /// This device's journal: `<device>.jsonl`, or `<device>.<generation>.jsonl` once it has been folded down.
     private func ownJournal(of device: String, in folder: URL) -> URL {
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
         return files.filter { Self.isJournal($0, of: device) }.max { $0.lastPathComponent < $1.lastPathComponent }
@@ -557,9 +501,6 @@ public actor LibraryFile {
         if let coordination { throw coordination }
     }
 
-    /// The other devices' changes this device has not applied yet, and how many lines of each journal are
-    /// read after them. A line that does not decode stops that journal there, to be read again next time.
-    /// A journal another device has folded into a new generation is gone, and so is what was known of it.
     public func unreadJournalEvents(except device: String, sync: JournalKnowledge) throws -> (events: [JournalEvent], applied: [String: Int]) {
         guard let folder = journalFolder(),
               let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
@@ -584,14 +525,11 @@ public actor LibraryFile {
         return (events, applied)
     }
 
-    // MARK: Files in iCloud and in the app
 
-    /// The small cover picture kept in the app for a material.
     public static func coverFile(root: URL, materialID: String) -> URL {
         root.appending(path: "covers").appending(path: articleDirectory(root: root, materialID: materialID).lastPathComponent)
     }
 
-    /// A copy placed beside and renamed over, under file coordination, is a new version to iCloud, not a conflict.
     private func placeInCloud(_ item: URL, at destination: URL) throws {
         let incoming = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.copyItem(at: item, to: incoming)
@@ -613,9 +551,6 @@ public actor LibraryFile {
         if let error = coordination ?? failure { throw error }
     }
 
-    /// Covers are shown on tiles a few hundred points wide, so 800 pixels is enough; a picture with
-    /// transparency stays a PNG, so it does not turn black behind. A cover only decorates its tile, so a picture
-    /// ImageIO cannot read leaves the tile without one instead of stopping the import.
     private func writeThumbnail(of picture: URL, to destination: URL) throws {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -638,9 +573,7 @@ public actor LibraryFile {
         }
     }
 
-    // MARK: Older layouts
 
-    /// The whole package of an article an older version kept inside the app.
     public func article(_ materialID: String, revision: String?) throws -> ImportPackage {
         guard let url = Self.articleFile(root: root, materialID: materialID, path: Self.textName, revision: revision) else {
             throw LibraryError.escapedPath
@@ -656,7 +589,6 @@ public actor LibraryFile {
         try encoder.encode(package).write(to: url, options: .atomic)
     }
 
-    /// The folder in the app where an older version kept an article's text and pictures.
     public static func articleFolder(root: URL, materialID: String, revision: String?) -> URL {
         let folder = articleDirectory(root: root, materialID: materialID)
         guard let revision, !revision.isEmpty else { return folder }
@@ -672,7 +604,6 @@ public actor LibraryFile {
         return contained(path, in: folder)
     }
 
-    /// A relative path from a package, only when it stays inside the folder.
     static func contained(_ path: String, in folder: URL) -> URL? {
         PackagePath.resolves(path, in: folder)
     }
@@ -723,11 +654,7 @@ public actor LibraryFile {
         return packages
     }
 
-    // MARK: Sweeping
 
-    /// An article an older version kept in the app keeps only its current revision until it moves into the
-    /// FNMN folder; for a material there, its cover picture and unpacked copy go with it, and so does a copy of
-    /// an older text.
     private func sweepArticleRevisions(_ snapshot: LibrarySnapshot) throws {
         try sweepCloudCopies(snapshot)
         let articles = root.appending(path: "articles")

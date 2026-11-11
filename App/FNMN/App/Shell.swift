@@ -1,32 +1,27 @@
 import FNMNCore
 import SwiftUI
 
-/// SwiftUI also exports a `LibraryItem` (Xcode's view library); in this app the name means the material.
 typealias LibraryItem = FNMNCore.LibraryItem
 
 enum ShellTab: Hashable {
     case library, digest, shelf
 }
 
-/// Where a tab's navigation stack can go.
 enum Route: Hashable {
     case item(String, piece: Int? = nil, seconds: Double? = nil)
     case album(String)
     case source(String)
-    /// A type or a month of the Collections section; albums and publishers have routes of their own.
     case group(LibraryGrouping, String)
     case annotations
     case archive
 }
 
-/// Where the digest tab's stack can go: one post with its thread, and the sources the Mac reads.
 enum DigestRoute: Hashable {
     case thread(String)
     case sources
 }
 
 extension Route {
-    /// A material, an album, a publisher or a type grows out of its tile and needs no tabs.
     var hidesTabBar: Bool {
         switch self {
         case .item, .album, .source, .group: true
@@ -36,7 +31,6 @@ extension Route {
 }
 
 extension DigestRoute {
-    /// A thread is read on its own, so the tab bar goes while one is the top of the stack.
     var hidesTabBar: Bool {
         if case .thread = self {
             return true
@@ -57,7 +51,6 @@ enum PendingRoute: Equatable {
     }
 }
 
-/// The window's own place in the app: its tab and the stack of each tab.
 @MainActor @Observable
 final class WindowNavigation {
     var tab = ShellTab.library
@@ -67,7 +60,6 @@ final class WindowNavigation {
     var pending = PendingRoute.none
     var pendingItem: Route?
 
-    /// Pushes onto the stack of the visible tab.
     func open(_ route: Route) {
         switch tab {
         case .library: library.append(route)
@@ -76,12 +68,10 @@ final class WindowNavigation {
         }
     }
 
-    /// Pushes onto the digest tab's stack.
     func open(_ route: DigestRoute) {
         digest.append(route)
     }
 
-    /// Opens a route from outside the app on a fresh Library stack.
     func show(_ route: Route) {
         tab = .library
         library = [route]
@@ -97,14 +87,11 @@ final class WindowNavigation {
 }
 
 extension EnvironmentValues {
-    /// The namespace a tile and the screen it opens share, so the screen grows out of the tile.
     @Entry var zoomNamespace: Namespace.ID?
     @Entry var stackTop: AnyHashable?
 }
 
 extension View {
-    /// Makes a tile the place its screen opens from and closes back to. A material's tile is named by the
-    /// material's id, an album's or a publisher's by the route it opens.
     @ViewBuilder
     func zoomSource(of id: some Hashable & Sendable) -> some View {
         modifier(ZoomSourceModifier(id: id))
@@ -181,9 +168,6 @@ struct AppShell: View {
     }
 }
 
-/// A tab's stack: the root screen, the screens its path opens, and whether the bar hides on the top one. It
-/// follows the path, not the screen's own appearance, which a swipe back with the zoom transition does not
-/// always report.
 struct RouteStack<Path: Hashable, Root: View, Destination: View>: View {
     @Binding var path: [Path]
     let hidesTabBar: (Path) -> Bool
@@ -212,7 +196,6 @@ struct RouteStack<Path: Hashable, Root: View, Destination: View>: View {
     }
 }
 
-/// A material, an album, a publisher or a type grows out of its tile.
 struct RouteScreen: View {
     let route: Route
 

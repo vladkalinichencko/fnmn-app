@@ -2,7 +2,6 @@ import SwiftUI
 import Textual
 
 extension View {
-    /// How tables, quotes and code look inside a paragraph plate.
     func plateMarkdownStyles() -> some View {
         textual.tableStyle(HairlineTable())
             .textual.blockQuoteStyle(BarQuote())
@@ -10,7 +9,6 @@ extension View {
     }
 }
 
-/// A table ruled with hairlines, the width of a list separator.
 private struct HairlineTable: StructuredText.TableStyle {
     @Environment(\.pixelLength) private var line
 
@@ -28,7 +26,6 @@ private struct HairlineTable: StructuredText.TableStyle {
     }
 }
 
-/// A quote marked only by a bar at its left, on the plate itself.
 private struct BarQuote: StructuredText.BlockQuoteStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -41,7 +38,6 @@ private struct BarQuote: StructuredText.BlockQuoteStyle {
     }
 }
 
-/// A code block whose corners share their center with the plate's, since its edge is the plate's padding in.
 private struct PlateCode: StructuredText.CodeBlockStyle {
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: Tokens.codeRadius, style: .continuous)
@@ -54,7 +50,6 @@ private struct PlateCode: StructuredText.CodeBlockStyle {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
         }
-        // A shade of whatever plate it sits on, so it follows the reader's background.
         .background(Color.primary.opacity(0.05), in: shape)
         .clipShape(shape)
         .textual.blockSpacing(.fontScaled(top: 0.88, bottom: 0))

@@ -2,7 +2,6 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// Three pages, each with a light and a dark shade that follow the system's appearance.
 enum ReaderBackground: String, CaseIterable, Identifiable {
     case plain, gray, paper
     var id: String { rawValue }
@@ -15,7 +14,6 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The page in light and in dark. Only the page is chosen; its plates and links follow from it (`PageColors`).
     private var page: (light: UIColor, dark: UIColor) {
         switch self {
         case .plain: (UIColor(white: 1, alpha: 1), UIColor(white: 0, alpha: 1))
@@ -32,8 +30,6 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
         Self.adaptive(light: PageColors.plate(on: page.light, dark: false), dark: PageColors.plate(on: page.dark, dark: true))
     }
 
-    /// A swatch drawn as an image, so the menu shows the color itself instead of tinting a template:
-    /// the page in light on the left half, in dark on the right.
     var swatch: Image {
         let size = CGSize(width: 22, height: 22)
         let page = UIColor(canvas)
@@ -51,8 +47,6 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
         return Image(uiImage: image.withRenderingMode(.alwaysOriginal))
     }
 
-    /// The color of links and of the buttons that act like links: the accent on the black and white page, a
-    /// shade of the page on the others; links are underlined as well.
     var link: Color {
         guard self != .plain else { return .accentColor }
         return Self.adaptive(
@@ -66,10 +60,6 @@ enum ReaderBackground: String, CaseIterable, Identifiable {
     }
 }
 
-/// The plate and link colors of a page. A plate stands apart from its page by lightness: lighter while the page
-/// leaves room above it, darker on a white page, and lighter in the dark. A link takes the page's hue at full color,
-/// or stays gray on a gray page, and is as dark, or in the dark as light, as reading it on the plate needs: a
-/// contrast of 4.5 to 1.
 enum PageColors {
     static func plate(on page: UIColor, dark: Bool) -> UIColor {
         if dark { return page.mixed(with: .white, by: 0.12) }
@@ -105,7 +95,6 @@ private extension UIColor {
         )
     }
 
-    /// The relative luminance of WCAG: the share of light the eye sees in the color, from 0 for black to 1 for white.
     var luminance: CGFloat {
         func linear(_ c: CGFloat) -> CGFloat { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
         let (red, green, blue) = rgb
@@ -118,8 +107,6 @@ private extension UIColor {
     }
 }
 
-/// The two system faces and three bundled ones. The bundled files carry their own Cyrillic, drawn in from a close
-/// face (`server/fonts/build_reader_fonts.py`): CoreText's fallback for a missing glyph keeps neither bold nor italic.
 enum ReaderFont: String, CaseIterable, Identifiable {
     case system, serif, libron, literata, atkinson
     var id: String { rawValue }
@@ -134,7 +121,6 @@ enum ReaderFont: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The bundled face's regular style; SwiftUI's bold and italic find the family's other styles from it.
     private var face: String? {
         switch self {
         case .system, .serif: nil
@@ -151,13 +137,11 @@ enum ReaderFont: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The face at a text style's size, growing with the reader's text size like the system's own fonts.
     func font(_ style: Font.TextStyle) -> Font {
         guard let face else { return .system(style, design: design) }
         return .custom(face, size: Self.defaultSize(of: style), relativeTo: style)
     }
 
-    /// A text style's size at the default text size, which `relativeTo` scales from.
     private static func defaultSize(of style: Font.TextStyle) -> CGFloat {
         let platform: UIFont.TextStyle = switch style {
         case .extraLargeTitle2: .extraLargeTitle2
@@ -178,7 +162,6 @@ enum ReaderFont: String, CaseIterable, Identifiable {
     }
 }
 
-/// The room between lines of a paragraph, as a share of the font's size. More room helps an eye that loses its line.
 enum ReaderLineSpacing: String, CaseIterable, Identifiable {
     case tight, regular, loose
     var id: String { rawValue }
@@ -200,7 +183,6 @@ enum ReaderLineSpacing: String, CaseIterable, Identifiable {
     }
 }
 
-/// How wide the column of text is. A narrower column has shorter lines, which are easier to keep one's place in.
 enum ReaderColumn: String, CaseIterable, Identifiable {
     case narrow, regular, wide
     var id: String { rawValue }
@@ -213,8 +195,6 @@ enum ReaderColumn: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The column's width on a screen this wide: the regular one is `Tokens.readingWidth`, the narrow one a little
-    /// under it even on a phone, the wide one most of a wide screen.
     func width(in screen: CGFloat) -> CGFloat {
         switch self {
         case .narrow: Tokens.readingWidth(in: screen) * 0.86
@@ -233,7 +213,6 @@ enum ReaderAppearance {
     static let lineKey = "readerLine"
     static let lineSideKey = "readerLineSide"
     static let wordStartsKey = "readerWordStarts"
-    /// The materials read one plate at a time, kept on this device only, like the rest of how the reader looks.
     static let onePlateKey = "readerOnePlate"
     static let speedKey = "readerSpeedWordsPerMinute"
     static let speedWordsKey = "readerSpeedWordsPerFrame"
@@ -283,7 +262,6 @@ enum ReaderAppearance {
     }
 }
 
-/// Text size, background, font, line spacing and column width, the same choices for every screen that reads text.
 struct ReaderAppearanceControls: View {
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
@@ -335,7 +313,6 @@ struct ReaderAppearanceControls: View {
     }
 }
 
-/// The reader's one `···` button: text size and background right inside the menu, the reading line, and the original.
 struct ReaderMenu: View {
     let reader: ReaderCoordinator
     let page: URL?
@@ -376,7 +353,6 @@ struct ReaderMenu: View {
     }
 }
 
-/// Applies the chosen text size and background to a reader.
 struct ReaderAppearanceModifier: ViewModifier {
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
@@ -386,18 +362,14 @@ struct ReaderAppearanceModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .dynamicTypeSize(ReaderAppearance.sizes[min(max(size, 0), ReaderAppearance.sizes.count - 1)])
-            // A font, not a font design: Textual derives code from the environment font with `.monospaced()`, which
-            // turns a bundled face, having no fixed-width style, into the system's fixed-width font.
             .font(font.font(.body))
             .textual.paragraphStyle(ReaderParagraph(lineSpacing: spacing.share))
             .background(background.canvas)
             .environment(\.plateTint, background.plate)
-            // Only links take the page's link color; a tint would also paint every icon of the reader's menus.
             .textual.inlineStyle(.default.link(.foregroundColor(background.link), .underlineStyle(.single)))
     }
 }
 
-/// Textual's paragraph with the reader's line spacing.
 private struct ReaderParagraph: StructuredText.ParagraphStyle {
     let lineSpacing: CGFloat
 

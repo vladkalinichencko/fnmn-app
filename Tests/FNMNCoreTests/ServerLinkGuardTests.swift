@@ -1,10 +1,7 @@
 import Foundation
 import XCTest
 
-/// Source guard: a file that reads `server.connection` must also ask `ServerLink` to read it.
-/// The Keychain read is lazy, so a view that reads the value without triggering it sees no server.
 final class ServerLinkGuardTests: XCTestCase {
-    /// `ServerLink` itself owns the stored value; everyone else reads it through `savedConnection()` first.
     private static let owner = "ServerLink.swift"
 
     func testReadersOfTheSavedConnectionAskForIt() throws {

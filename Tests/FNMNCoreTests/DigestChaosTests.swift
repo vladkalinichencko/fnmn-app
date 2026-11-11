@@ -2,9 +2,6 @@
 import Foundation
 import Testing
 
-/// The deliveries come from another machine, so every name, size and byte is untrusted. These tests feed the
-/// reader the shapes a broken or hostile producer can make, and check that the cache stays the only place
-/// files land.
 @Suite struct DigestChaosTests {
     private func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()
@@ -60,7 +57,6 @@ import Testing
                 _ = try await file.add(tar: tar)
                 Issue.record("random bytes became a digest")
             } catch {
-                // The reader refused it; that is the contract.
             }
         }
         #expect((try? await file.packages())?.isEmpty ?? false)

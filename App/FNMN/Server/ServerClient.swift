@@ -5,25 +5,17 @@ import Foundation
 protocol ServerPort {
     func check(connection: ServerConnection) async throws
     func startJob(url: URL, connection: ServerConnection) async throws -> ServerJob
-    /// Sends a file for the server to make a material of by its type, reporting how much of it is sent.
     func startFileJob(file: URL, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> ServerJob
     func job(_ id: String, connection: ServerConnection) async throws -> ServerJob
-    /// Downloads the finished delivery archive to a temporary file, reporting how much of it has arrived.
     func delivery(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL
     func startVideoDownload(url: URL, connection: ServerConnection) async throws -> ServerJob
-    /// Downloads the finished video file to a temporary location, reporting how much of it has arrived.
     func videoFile(of id: String, connection: ServerConnection, onStep: @escaping @MainActor (ImportStep) -> Void) async throws -> URL
-    /// Tells the server to remove the job and its file.
     func forget(_ id: String, connection: ServerConnection) async throws
-    /// Re-fetches one digest post's pictures on the Mac; the entries name files the phone can download.
     func refreshDigestPost(_ postID: String, connection: ServerConnection) async throws -> [DigestPackage.Post.Media]
-    /// One picture of a refreshed digest post, by the file name the Mac returned.
     func digestMedia(_ name: String, connection: ServerConnection) async throws -> Data
 }
 
 extension ServerPort {
-    /// Polls a job until it stops waiting. The pause grows from one to five seconds while the step
-    /// stays the same and starts over when it changes.
     func finished(_ job: ServerJob, connection: ServerConnection, onStep: (ImportStep) -> Void) async throws -> ServerJob {
         var job = job
         var pause = 1
@@ -74,7 +66,6 @@ struct ServerJob: Decodable, Equatable {
     }
 }
 
-/// Where a job is: a caption, how far along when that is known, and the symbol a card shows for the stage.
 struct ImportStep: Equatable {
     let text: String
     let fraction: Double?
@@ -165,7 +156,6 @@ struct ServerClient: ServerPort {
             try await URLSession.shared.download(for: request, delegate: Transfer(.receiving, onStep: onStep))
         }
         try accept(response, data: Data())
-        // The download lands as a `.tmp`; the file keeps the extension the server gave it, which names the original.
         let name = response.suggestedFilename.map { URL(filePath: $0).pathExtension } ?? ""
         let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
             .appendingPathExtension(name.isEmpty ? "mp4" : name)
@@ -179,8 +169,6 @@ struct ServerClient: ServerPort {
         return try JSONDecoder().decode(type, from: data)
     }
 
-    /// Repeats a request the network dropped on the way, which a phone behind a VPN and Funnel sees now and then.
-    /// The server keeps a job and its file until the phone forgets them, so a repeat gets the same answer.
     private func repeatingDrops<Value>(_ request: () async throws -> Value) async throws -> Value {
         let dropped: Set<URLError.Code> = [.networkConnectionLost, .timedOut, .cannotConnectToHost, .notConnectedToInternet]
         for pause in [2, 5] {
@@ -221,16 +209,12 @@ struct ServerClient: ServerPort {
     private struct FailureBody: Decodable { let detail: String }
 }
 
-/// How far a file sent to the server or downloaded from it has got, as an import step once per whole percent.
-/// URLSession counts the bytes on its own thread; the steps go to the main thread in the order they were counted,
-/// so the last one arrives before the code awaiting the transfer goes on.
 private final class Transfer: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     enum Direction { case sending, receiving }
 
     private let direction: Direction
     private let onStep: @MainActor (ImportStep) -> Void
     private var observation: NSKeyValueObservation?
-    /// Read and written only on the main thread.
     private var percent = -1
 
     init(_ direction: Direction, onStep: @escaping @MainActor (ImportStep) -> Void) {

@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// The saved server connection is read from the Keychain only when something first asks for it.
 @MainActor
 final class ServerLinkTests: XCTestCase {
     private final class StorageSpy: ServerConnectionStorage {

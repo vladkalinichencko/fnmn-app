@@ -6,14 +6,17 @@
     python3 scripts/guards.py --base origin/master
 
 Diff checks read only the lines the change adds (against --base, committed or not), so code that was
-already in the repository never fails them. Source-level rules live in .swiftlint.yml.
+already in the repository never fails them. Source-level rules live in .swiftlint.yml; the source checks
+below read every tracked file, comments included.
 """
 
 import argparse
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -34,8 +37,6 @@ COMMENT_IN_CODE = re.compile(r"//|/\*")
 def comment_in(line):
     """A comment anywhere on the line, whatever the form: a doc comment, a note after code, a block."""
     return bool(COMMENT_IN_CODE.search(STRING_LITERAL.sub('""', line)))
-# Generated trees that must never be tracked: the digest store's working files, browser profiles with the
-# logged-in sessions, build products and Python caches.
 RUNTIME_PATHS = ("/out/", "/profiles/", "/__pycache__/", "/.build/", "/.venv/")
 
 
@@ -138,12 +139,53 @@ def tracked_runtime_files(root=ROOT):
     return [path for path in listed.stdout.splitlines() if any(part in f"/{path}" for part in RUNTIME_PATHS)]
 
 
+def swift_comments(path: Path, name: str) -> list[str]:
+    """Comment lines in a Swift file, skipping strings, including the multiline ones."""
+    problems = []
+    in_multiline = False
+    for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+        if line.count('"""') % 2 == 1:
+            in_multiline = not in_multiline
+            continue
+        if in_multiline:
+            continue
+        masked = re.sub(r'#+"(?:[^"]|"(?!#))*"#+|"(?:[^"\\]|\\.)*"', lambda m: "x" * len(m.group()), line)
+        if comment_in(masked):
+            problems.append(f"{name}:{number} carries a comment")
+    return problems
+
+
+def python_comments(path: Path, name: str) -> list[str]:
+    problems = []
+    with path.open(encoding="utf-8") as source:
+        for token in tokenize.generate_tokens(source.readline):
+            if token.type == tokenize.COMMENT and not (token.start[0] == 1 and token.line.startswith("#!")):
+                problems.append(f"{name}:{token.start[0]} carries a comment")
+    return problems
+
+
+def comments_in_sources(root=ROOT):
+    """No comments anywhere in the tracked sources, not only in a change. The vendored packages keep theirs."""
+    listed = subprocess.run(["git", "ls-files"], cwd=root, text=True, capture_output=True)
+    if listed.returncode != 0:
+        return []
+    problems = []
+    for path in listed.stdout.splitlines():
+        top = path.split("/")[0]
+        if path.endswith(".swift") and top in ("App", "Sources", "Tests"):
+            problems += swift_comments(root / path, path)
+        elif path.endswith(".py") and top in ("server", "scripts"):
+            problems += python_comments(root / path, path)
+    return problems
+
+
 def source_checks():
     problems = (
         python_shadowing()
         + browser_sandbox()
         + digest_script_checks()
         + [f"{path} is tracked but generated" for path in tracked_runtime_files()]
+        + comments_in_sources()
     )
     for problem in problems:
         print(problem)
@@ -195,6 +237,18 @@ def source_self_test():
         subprocess.run(["git", "add", "-f", str(working)], cwd=root, check=True)
         if not tracked_runtime_files(root):
             sys.exit("FAILED: the runtime check missed a tracked working file")
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        (root / "Sources").mkdir()
+        swift = root / "Sources" / "A.swift"
+        swift.write_text('let text = """\n// not a comment\n"""\n/// a doc comment\nlet x = 1\n')
+        (root / "server").mkdir()
+        (root / "server" / "a.py").write_text('markdown = "# not a comment"\n# a comment\n')
+        subprocess.run(["git", "add", "-f", str(swift), str(root / "server" / "a.py")], cwd=root, check=True)
+        problems = comments_in_sources(root)
+        if problems != ["Sources/A.swift:4 carries a comment", "server/a.py:2 carries a comment"]:
+            sys.exit(f"FAILED: the comment check reads {problems}")
 
 
 def step(title, args, cwd=ROOT):

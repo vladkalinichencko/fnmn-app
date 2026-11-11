@@ -1,9 +1,7 @@
 import Foundation
 
-/// One unit of the reading column. A text block is drawn on its own plate; headings sit on the background.
 public enum DocumentBlock: Equatable, Sendable {
     case heading(level: Int, title: String)
-    /// A paragraph, list, quote, table or code block, with any formula or picture that stands inside it.
     case text(String)
     case image(alt: String, path: String)
     case video(path: String)
@@ -18,8 +16,6 @@ public struct ArticleHeading: Equatable, Identifiable, Sendable {
 }
 
 public enum ArticleBody {
-    /// Splits Markdown into reading blocks. A blank line ends a block, except inside a code fence or a `$$` formula;
-    /// a heading line is always its own block. Pictures and code belong to the prose around them, never stand alone.
     public static func blocks(in markdown: String) -> [DocumentBlock] {
         attachingFigures(rawBlocks(in: markdown))
     }
@@ -33,8 +29,6 @@ public enum ArticleBody {
         }
     }
 
-    /// A picture or code block joins the paragraph before it; after a heading it joins the paragraph that follows.
-    /// Only a picture that opens the document, before any prose, stays on its own: it is the article's cover.
     private static func attachingFigures(_ blocks: [DocumentBlock]) -> [DocumentBlock] {
         var result: [DocumentBlock] = []
         var waiting: [String] = []
@@ -68,7 +62,6 @@ public enum ArticleBody {
         return result
     }
 
-    /// The Markdown of a block that belongs inside a paragraph's plate: a picture or a code fence.
     private static func figureMarkdown(_ block: DocumentBlock) -> String? {
         switch block {
         case let .image(alt, path): "![\(alt)](\(path))"
@@ -77,7 +70,6 @@ public enum ArticleBody {
         }
     }
 
-    /// Every local picture a block of Markdown shows, in order.
     public static func imagePaths(in markdown: String) -> [String] {
         markdown.matches(of: /!\[[^\]]*\]\(([^)\s]+)\)/).map { String($0.1) }
     }
@@ -116,7 +108,6 @@ public enum ArticleBody {
         return headings[index].piece
     }
 
-    /// The opening prose of an article for its tile: the first paragraph that is not a heading, picture, formula, code or table.
     public static func excerpt(_ body: String?, limit: Int = 220) -> String? {
         guard let body else { return nil }
         for block in body.prefix(20_000).components(separatedBy: "\n\n") {
@@ -134,7 +125,6 @@ public enum ArticleBody {
         return nil
     }
 
-    /// The first local raster picture of an article, the one its tile shows; tiles cannot draw SVG.
     public static func firstImagePath(_ body: String) -> String? {
         for match in body.prefix(40_000).matches(of: /!\[[^\]]*\]\(([^)\s]+)\)/) {
             let path = String(match.1)
@@ -149,7 +139,6 @@ public enum ArticleBody {
             let first = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
             let kind = first.trimmingCharacters(in: .whitespaces).dropFirst(3)
             let body = text.split(separator: "\n").dropFirst().dropLast().map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            // A page of the article's own, shipped in its folder, has no scheme; a page of the web is http(s).
             if kind == "fnmn-interactive", let address = body.first, let url = URL(string: address),
                url.scheme == "http" || url.scheme == "https" || (url.scheme == nil && url.pathExtension == "html") {
                 return .interactive(url: url, selector: body.dropFirst().first)

@@ -1,8 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// Highlights and notes, then the archive. Each section shows its latest few; its title opens all of them.
-/// A search shows everything it found in both sections.
 struct ShelfScreen: View {
     @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
@@ -46,7 +44,6 @@ struct ShelfScreen: View {
     }
 }
 
-/// A large section title that leads to the full list.
 private struct ShelfSection<Content: View>: View {
     let title: String
     let route: Route
@@ -61,8 +58,6 @@ private struct ShelfSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.gap) {
-            // A symbol inside text is centered on the capitals of its own font. The chevron's font is smaller than the
-            // title's, so it is raised by half the difference of their capital heights to sit on the title's middle.
             Button { navigation.open(route) } label: {
                 Text("\(title) \(Text(Image(systemName: "chevron.forward")).font(.title3.weight(.semibold)).foregroundStyle(.secondary).baselineOffset(Self.chevronRise))")
                     .font(Tokens.sectionTitle)
@@ -78,7 +73,6 @@ private struct ShelfSection<Content: View>: View {
     }
 }
 
-/// Every highlight and note, grouped by the material they were made in, newest first.
 struct AnnotationsScreen: View {
     @Environment(LibraryModel.self) private var library
     @State private var query = ""
@@ -113,7 +107,6 @@ struct ArchiveScreen: View {
     }
 }
 
-/// One card: a paragraph with its marks and its note.
 private struct AnnotationEntry: Identifiable {
     let item: LibraryItem
     let annotation: Annotation
@@ -123,19 +116,14 @@ private struct AnnotationEntry: Identifiable {
         groups.flatMap { group in group.annotations.map { AnnotationEntry(item: group.item, annotation: $0) } }
     }
 
-    /// How much room the card takes, judged by its text, so the columns come out about equally tall.
     var weight: Int {
         60 + min(annotation.text.count, 260) + annotation.note.count + item.title.count / 4
     }
 }
 
-/// Annotation cards in as many columns as the width holds. Each card goes under the column that is shortest so
-/// far, so the newest lie along the top; a phone has one column.
 private struct AnnotationColumns: View {
     let entries: [AnnotationEntry]
-    /// The shelf's preview shows two rows, or three in a single column, instead of every card.
     var preview = false
-    /// Until the width is known the cards stay unseen, so a wide screen never shows one column for a frame.
     @State private var width: CGFloat = 0
 
     var body: some View {
@@ -166,7 +154,6 @@ private struct AnnotationColumns: View {
     }
 }
 
-/// A quote on a plate turned slightly left, and its note on blurred glass laid over its lower right corner.
 private struct AnnotationCard: View {
     let entry: AnnotationEntry
     @Environment(LibraryModel.self) private var library
@@ -197,15 +184,11 @@ private struct AnnotationCard: View {
         }
     }
 
-    /// The note starts halfway down the quote's plate. The card is as tall as whichever reaches lower, the quote
-    /// or the note, so a short note never lets the quote run into the next card. A note kept without its
-    /// paragraph's text stands alone.
     @ViewBuilder
     private var composition: some View {
         let annotation = entry.annotation, note = entry.annotation.note
         ZStack(alignment: .topTrailing) {
             if !annotation.text.isEmpty {
-                // Alone, the paragraph stands in the middle; with a note, it moves left to make room for it.
                 quote(annotation)
                     .padding(note.isEmpty ? .horizontal : .trailing, note.isEmpty ? 22 : 44)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -226,7 +209,6 @@ private struct AnnotationCard: View {
             .font(.system(.callout, design: .serif))
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            // The card grows with a long note; the quote's plate keeps the height of its own text.
             .fixedSize(horizontal: false, vertical: true)
             .rotationEffect(.degrees(Self.quoteTurn))
             .plate(in: TurnedRectangle(cornerRadius: Tokens.plateRadius, degrees: Self.quoteTurn))
@@ -235,8 +217,6 @@ private struct AnnotationCard: View {
 
     private static let quoteTurn = -1.5
 
-    /// The paragraph with its highlights and strikethroughs. A long one is cut at words near 260 characters around
-    /// its first mark; a line limit would leave empty space under the text.
     private static func marked(_ annotation: Annotation) -> AttributedString {
         let excerpt = annotation.excerpt()
         var text = AttributedString(excerpt.text)
@@ -250,10 +230,6 @@ private struct AnnotationCard: View {
         return text
     }
 
-    /// The note has no frame: a blur toned to the page color keeps it readable over the quote and disappears into
-    /// the page beside it. The blur is drawn well past the text, so its soft edge has faded out completely before
-    /// the drawing ends and no rectangle shows. Over a quote the note and its blur are only as wide as its text, so a
-    /// short note covers a corner of the quote and no more.
     private func note(_ text: String, alone: Bool) -> some View {
         Text(text)
             .font(.callout.weight(.semibold))

@@ -2,14 +2,10 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// One post of the magazine: the author above the post's own text, its pictures under it, and a small button
-/// that opens the post itself in its network. A tap opens the thread; a long press saves the post to the
-/// library, opens it, or hides it.
 struct PostCard: View {
     let post: DigestPackage.Post
     let digest: Digest
     let read: Bool
-    /// The thread screen shows the post it was opened for, so that card does not open itself again.
     var opensThread = true
     @Environment(WindowNavigation.self) private var navigation
     @Environment(DigestModel.self) private var digests
@@ -79,7 +75,6 @@ struct PostCard: View {
         }
     }
 
-    /// A picture the source would not serve keeps the post on screen and offers the Mac another try.
     private var mediaPlaceholder: some View {
         HStack(spacing: 8) {
             Image(systemName: "photo.badge.exclamationmark")
@@ -109,7 +104,6 @@ struct PostCard: View {
             .clipShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
     }
 
-    /// A video the digest does not stream: its own frame, the length, and a tap that opens the post.
     private func poster(_ video: DigestPackage.Post.Video) -> some View {
         ZStack {
             if let poster = video.poster {
@@ -182,7 +176,6 @@ struct PostCard: View {
         }
     }
 
-    /// A picture sits inside the plate's padding, so its corner shares the plate's center.
     private var mediaRadius: CGFloat {
         Tokens.concentric(Tokens.plateRadius, inset: Tokens.tilePadding)
     }

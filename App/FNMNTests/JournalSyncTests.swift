@@ -2,7 +2,6 @@ import FNMNCore
 import XCTest
 @testable import FNMN
 
-/// This device's journal: recording, writing, reading the other devices' lines, and merging them.
 @MainActor
 final class JournalSyncTests: XCTestCase {
     private struct Fixture {

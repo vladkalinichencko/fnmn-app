@@ -1,7 +1,6 @@
 @testable import FNMNCore
 import Testing
 
-/// The renderer and the speed reader must agree on which `$…$` pairs are text.
 @Suite struct InlineMathTests {
     @Test func aPriceIsProse() {
         #expect(InlineMath.looksLikeProse("5 and 10"))
@@ -15,7 +14,6 @@ import Testing
         #expect(!InlineMath.looksLikeProse("{x}"))
     }
 
-    /// A lone letter is a variable, not a price: the rule wants a word of three letters.
     @Test func aSingleLetterIsAFormula() {
         #expect(!InlineMath.looksLikeProse("R"))
     }

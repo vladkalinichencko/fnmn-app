@@ -1,8 +1,5 @@
 import Foundation
 
-/// One prepared material as the server delivers it: an uncompressed USTAR archive whose first entry is
-/// `package.json` and whose other entries are the files its Markdown names, by their relative paths.
-/// It is read in one pass with a fixed buffer, so a delivery never sits in memory whole.
 public struct DeliveryArchive: Sendable {
     public let url: URL
 
@@ -10,9 +7,6 @@ public struct DeliveryArchive: Sendable {
         self.url = url
     }
 
-    /// Reads the package, then copies every other entry to the file `destination` names for it;
-    /// an entry it names no file for is skipped. Each kind of delivery decodes its own package, so articles
-    /// and digests read through the same one pass.
     public func unpack<Package: Decodable>(
         decoder: JSONDecoder = JSONDecoder(),
         filesInto destination: (Package, String) throws -> URL?
@@ -35,8 +29,6 @@ public struct DeliveryArchive: Sendable {
         return package
     }
 
-    /// Writes a delivery the way the server does: `package.json` first, then each file, copied from disk in
-    /// chunks. A path USTAR cannot hold is refused rather than written in a form the reader cannot read.
     public static func write(_ package: ImportPackage, files: [(path: String, source: URL)], to url: URL) throws {
         guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
@@ -82,7 +74,6 @@ public struct DeliveryArchive: Sendable {
         return Data(bytes)
     }
 
-    /// USTAR keeps a name of up to 100 bytes, and a longer path splits at a slash into a prefix of up to 155.
     private static func split(_ path: String) throws -> (prefix: String, name: String) {
         if path.utf8.count <= 100 { return ("", path) }
         for slash in path.indices where path[slash] == "/" {
@@ -102,7 +93,6 @@ public struct DeliveryArchive: Sendable {
     private static let block = 512
     private static let chunk = 64 * 1024
 
-    /// The next header, or nil at the two zero blocks that end the archive.
     private static func nextEntry(in archive: FileHandle) throws -> Entry? {
         let header = try read(block, from: archive)
         guard header.contains(where: { $0 != 0 }) else { return nil }
@@ -118,7 +108,6 @@ public struct DeliveryArchive: Sendable {
         case UInt8(ascii: "5"):
             return Entry(name: name, size: size, isFile: false)
         case let kind:
-            // PAX and GNU long-name headers are not written by the server, which fails on a path USTAR cannot hold.
             throw DeliveryArchiveError.unsupportedEntry(String(UnicodeScalar(kind)))
         }
     }
@@ -148,7 +137,6 @@ public struct DeliveryArchive: Sendable {
         }
     }
 
-    /// A cut-short archive shows at the next header, which then cannot be read whole.
     private static func skip(_ count: Int, in archive: FileHandle) throws {
         try archive.seek(toOffset: try archive.offset() + UInt64(count))
     }

@@ -1,7 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// A grid of material tiles; the same grid serves Library, albums, sources, search and the archive.
 struct ItemGrid: View {
     let items: [LibraryItem]
     var album: String?
@@ -29,7 +28,6 @@ struct ItemTile: View {
         library.progress.readings[item.id]?.progress
     }
 
-    /// The server preparing this material, or a download for it; its stage replaces the kind in the header.
     private var job: ImportJob? {
         imports.job(of: item.id)
     }
@@ -63,8 +61,6 @@ struct ItemTile: View {
         .contextMenu { ItemActions(item: item, album: album) }
     }
 
-    /// A tile with a picture has no frame: the picture fills it, its lower half eases into the plate color under the
-    /// title, and the title sits on glass that bends it.
     private func coverTile(_ cover: Cover, job: ImportJob?) -> some View {
         let progress = job?.fraction ?? progress
         return Color.clear
@@ -91,8 +87,6 @@ struct ItemTile: View {
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
     }
 
-    /// From clear at the tile's middle to the plate color at its bottom along an ease-in-out curve, so the picture
-    /// has no visible line where the fade starts.
     private static let fade: [Gradient.Stop] = (0 ... 12).map { step in
         let t = Double(step) / 12
         return Gradient.Stop(color: Tokens.plateTint.opacity(t * t * (3 - 2 * t)), location: t)
@@ -141,7 +135,6 @@ struct ItemTile: View {
     }
 }
 
-/// Everything a material offers from its tile, the same on every screen.
 struct ItemActions: View {
     let item: LibraryItem
     var album: String?
@@ -196,7 +189,6 @@ struct ItemActions: View {
     }
 }
 
-/// A job with no card yet: the FNMN folder being read, or a picked file still coming down from iCloud.
 struct PreparingTile: View {
     let job: ImportJob
 
@@ -218,8 +210,6 @@ struct PreparingTile: View {
     }
 }
 
-/// What a card's job is doing, in words; its share done runs as a grey line along the card's edge, where the
-/// accent line of reading progress would be. A stage with no known share shows a spinner; a failure shows its reason.
 struct JobStatus: View {
     let phase: ImportJob.Phase
 
@@ -241,7 +231,6 @@ struct JobStatus: View {
     }
 }
 
-/// Try Again and Dismiss for a job that failed, Stop for one still running.
 struct JobActions: View {
     let job: ImportJob
     @Environment(ImportJobs.self) private var imports
@@ -256,7 +245,6 @@ struct JobActions: View {
     }
 }
 
-/// The rounded glass card every tile without a picture is drawn on.
 struct TileCard<Content: View>: View {
     let progress: Double?
     let color: Color
@@ -279,14 +267,11 @@ struct TileCard<Content: View>: View {
     }
 }
 
-/// How far a material is read, or in grey how far its job is done: a straight line inside the glass along its
-/// bottom edge. It spans the edge's flat part, so its rounded ends sit where the corners start to curve.
 struct ProgressLine: View {
     let progress: Double?
     let cornerRadius: CGFloat
     var color: Color = .accentColor
 
-    /// How far the line stays from the bottom edge, and the room text above it keeps.
     static let inset: CGFloat = 9
     static let thickness: CGFloat = 5
     static var clearance: CGFloat { inset + thickness + 6 }

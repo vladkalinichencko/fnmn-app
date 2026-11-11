@@ -1,6 +1,5 @@
 import Foundation
 
-/// How long the reader waits after a word, by what ends it.
 public enum SpeedPause: Int, Comparable, Sendable {
     case none, comma, clause, sentence, paragraph
 
@@ -27,13 +26,9 @@ public enum SpeedPause: Int, Comparable, Sendable {
     }
 }
 
-/// One step of speed reading: a word of a paragraph, or a block that cannot be read a word at a time (a formula, code,
-/// a table, a picture, a video) and is shown whole.
 public struct SpeedToken: Equatable, Sendable {
     public let block: Int
-    /// The word as it stands in the text, with the punctuation around it; empty for a block shown whole.
     public let text: String
-    /// How much of its block is read once this token has been shown: the share of the block's tokens up to it.
     public let share: Double
     public let pause: SpeedPause
     public let startsSentence: Bool
@@ -60,14 +55,10 @@ public struct SpeedToken: Equatable, Sendable {
     }
 }
 
-/// A document's text from a place on, as speed reading shows it: words one or two at a time, blocks of anything but
-/// prose as stops. Built once when the mode opens, off the main thread, since a book holds hundreds of thousands of
-/// words.
 public struct SpeedText: Sendable {
     public let tokens: [SpeedToken]
     private let wordsAfter: [Double]
 
-    /// The text of every plate from `start` on, without what the reading line has already passed in its block.
     public init(document: ReaderDocument, from start: ReadingLine) {
         var tokens: [SpeedToken] = []
         for block in document.plates where block >= start.piece {
@@ -86,8 +77,6 @@ public struct SpeedText: Sendable {
         wordsAfter = words
     }
 
-    /// The tokens shown together from `index`: up to `words` words of one sentence, ending early at a pause, or a stop
-    /// alone.
     public func frame(at index: Int, words: Int) -> Range<Int> {
         guard tokens.indices.contains(index) else { return index..<index }
         guard !tokens[index].isStop else { return index..<index + 1 }
@@ -104,20 +93,16 @@ public struct SpeedText: Sendable {
         return beats * 60 / Double(max(wordsPerMinute, 1))
     }
 
-    /// Minutes to read from `index` to the end at this speed; the blocks shown whole are not counted.
     public func minutesLeft(from index: Int, wordsPerMinute: Int, pauses: SpeedPauseProfile) -> Double {
         let index = min(max(index, 0), tokens.count)
         let extra = tokens[index...].reduce(0.0) { $0 + $1.extraBeats(pauses) }
         return (wordsAfter[index] + extra) / Double(max(wordsPerMinute, 1))
     }
 
-    /// Where going back a sentence lands from a frame starting at `index`: the start of the sentence it stands in, or,
-    /// from a sentence's first word, the start of the one before. A block shown whole counts as a sentence.
     public func sentenceStart(before index: Int) -> Int {
         tokens.indices.prefix(min(max(index, 0), tokens.count)).last { tokens[$0].startsSentence || tokens[$0].isStop } ?? 0
     }
 
-    /// The start of the next sentence after the frame at `index`, nil at the last one.
     public func sentenceStart(after index: Int) -> Int? {
         tokens.indices.dropFirst(index + 1).first { tokens[$0].startsSentence || tokens[$0].isStop }
     }
@@ -133,8 +118,6 @@ public struct SpeedText: Sendable {
         return last.block
     }
 
-    /// The letter the eye is meant to rest on, as an offset into `text`: a little left of the middle, the way a word
-    /// is recognized fastest (the optimal recognition point). Leading quotes and brackets are passed over.
     public static func pivot(of text: String) -> Int {
         let characters = Array(text)
         let lead = characters.firstIndex { $0.isLetter || $0.isNumber } ?? 0
@@ -149,8 +132,6 @@ public struct SpeedText: Sendable {
         return min(lead + offset, max(characters.count - 1, 0))
     }
 
-    /// A block's tokens. Prose becomes words; a part that holds code, a formula, a table or a picture becomes one stop
-    /// in its place, and parts like that standing together one stop. A picture, a video or a live page is a stop.
     public static func tokens(in block: DocumentBlock, at index: Int) -> [SpeedToken] {
         let parts: [[String]?] = switch block {
         case .heading: []
@@ -183,13 +164,10 @@ public struct SpeedText: Sendable {
         return tokens
     }
 
-    /// The parts of a block's Markdown between blank lines, keeping a code fence or a `$$` formula whole.
     static func segments(of markdown: String) -> [String] {
         MarkdownParts.split(markdown)
     }
 
-    /// Whether a part of a paragraph cannot be read a word at a time: code, a formula, a table or a picture.
-    /// A dollar amount such as `$5 and $10` is prose.
     static func isRich(_ segment: String) -> Bool {
         let trimmed = segment.trimmingCharacters(in: .whitespaces)
         if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") { return true }
@@ -200,13 +178,10 @@ public struct SpeedText: Sendable {
         }
     }
 
-    /// The text of a part of prose as it reads, one string for each paragraph, list item or quote in it: links show
-    /// their text, emphasis and code markers go, `==marks==` lose their signs.
     static func paragraphs(of segment: String) -> [String] {
         let cleaned = segment
             .replacing(/<[^>\n]+>/, with: " ")
             .replacing("==", with: "")
-        // Most paragraphs have no Markdown in them, and parsing is what takes the time in a book.
         let marked = cleaned.contains { "*_[`\\&".contains($0) }
             || cleaned.split(separator: "\n").contains { $0.first.map { "-+>#".contains($0) || $0.isNumber } ?? false }
         guard marked else { return [cleaned] }
@@ -227,8 +202,6 @@ public struct SpeedText: Sendable {
         return paragraphs
     }
 
-    /// A paragraph's words with the pause after each. A dash standing alone is a pause after the word before it; a
-    /// full stop ends a sentence only before a capital, a digit or the paragraph's end, so "e.g. this" reads on.
     static func words(of paragraph: String) -> [(text: String, pause: SpeedPause)] {
         var words: [(text: String, pause: SpeedPause)] = []
         for piece in paragraph.split(whereSeparator: \.isWhitespace).map(String.init) {

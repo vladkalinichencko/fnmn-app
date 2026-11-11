@@ -2,12 +2,10 @@
 import Foundation
 import Testing
 
-/// Writes a delivery the way the server's `write_delivery` does: USTAR, `package.json` first, then the files.
 func writeDelivery(_ package: ImportPackage, files: [(String, Data)] = [], to url: URL) throws {
     try writeTar(package: try JSONEncoder().encode(package), files: files, to: url)
 }
 
-/// The same uncompressed USTAR archive for any package JSON, so a digest reads through the same reader.
 func writeTar(package: Data, files: [(String, Data)] = [], to url: URL) throws {
     var archive = Data()
     func add(_ name: String, _ data: Data) {

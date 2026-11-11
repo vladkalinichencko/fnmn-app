@@ -3,8 +3,6 @@ import Observation
 import XCTest
 @testable import FNMN
 
-/// The digest store on the phone: what it takes from the FNMN folder, what it keeps on disk, and what it writes
-/// back for the Mac's next training.
 @MainActor
 final class DigestModelTests: XCTestCase {
     private var root: URL!

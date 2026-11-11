@@ -1,11 +1,6 @@
 import Foundation
 
-/// Finds the author, blog or channel a saved link came from: the one the browser catalog saved that very
-/// page under, else the nearest page above it that stands for a publisher (the catalog's, or one the server
-/// found for another article), else its site. A link added later therefore joins the publisher its neighbours
-/// already have.
 struct SourceIndex {
-    /// A publisher's page and the path under which its articles lie.
     private struct Home {
         let path: [String]
         let ref: SourceRef
@@ -15,7 +10,6 @@ struct SourceIndex {
     private var homes: [String: [Home]] = [:]
     private var sites: [String: SourceRef] = [:]
 
-    /// The catalog's sources are entered first, so a blog it names keeps its name over one a page calls itself.
     init(catalog: BrowserCatalog?, declared: [PageSource] = []) {
         for source in catalog?.sources ?? [] {
             let ref = SourceRef(name: source.name, homepage: URL(string: source.url))
@@ -36,8 +30,6 @@ struct SourceIndex {
         }
     }
 
-    /// A prepared material's address is already parsed, so it is not parsed again for every tile;
-    /// a site without a publisher of its own is worked out once per host.
     mutating func source(for url: URL) -> SourceRef? {
         if let known = saved[Self.key(url)] {
             return known
@@ -69,7 +61,6 @@ struct SourceIndex {
         homes[host, default: []].append(Home(path: path, ref: ref))
     }
 
-    /// `example.com` for www.example.com, so a page and its `www.` twin are one site.
     private static func hostKey(_ url: URL) -> String? {
         guard let host = url.host()?.lowercased() else {
             return nil
@@ -81,7 +72,6 @@ struct SourceIndex {
         url.pathComponents.filter { $0 != "/" }
     }
 
-    /// The core of a host: `example` for example.com, www.example.co.uk and example.github.io.
     static func siteName(_ host: String) -> String {
         let labels = host.split(separator: ".").filter { $0 != "www" }
         guard labels.count > 1 else {
@@ -97,8 +87,6 @@ struct SourceIndex {
         return String(labels[labels.count - 2])
     }
 
-    /// YouTube links differ in shape but not in video; everything else compares by address, without the
-    /// `#fragment` that only scrolls the page.
     static func key(_ url: String) -> String {
         URL(string: url).map(key) ?? url
     }
@@ -112,7 +100,6 @@ struct SourceIndex {
 }
 
 extension URL {
-    /// The page itself: a link to a heading or a paragraph of it names the same material.
     public var withoutFragment: URL {
         guard fragment != nil, var parts = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
             return self

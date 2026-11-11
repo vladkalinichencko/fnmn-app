@@ -2,8 +2,6 @@
 import Foundation
 import XCTest
 
-/// Pure functions that run on the main thread while the reader waits, on a library the size of the real one.
-/// Budgets: 5 ms for work a keystroke or a frame triggers, 100 ms for a discrete action.
 final class PerformanceTests: XCTestCase {
     private static let body = (1...40).map { index in
         index % 8 == 1 ? "## Section \(index)" : "Paragraph \(index) explains the idea with a formula $x^\(index)$ and a [link](https://example.com/\(index))."

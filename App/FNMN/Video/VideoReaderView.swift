@@ -3,8 +3,6 @@ import FNMNCore
 import SwiftUI
 import WebKit
 
-/// A video with its transcript. A downloaded file plays in the system player, otherwise YouTube plays embedded.
-/// The second the viewer stopped at is saved exactly and survives restarts.
 struct VideoReaderView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ServerLink.self) private var server
@@ -44,8 +42,6 @@ struct VideoReaderView: View {
                         }
                     }
                 } else {
-                    // The transcript runs under the plate, which floats over it as glass; with no transcript
-                    // shown the plate sits in the middle of the screen.
                     ZStack(alignment: showsCaptions ? .top : .center) {
                         if showsCaptions {
                             captions
@@ -105,8 +101,6 @@ struct VideoReaderView: View {
         OpenOriginalButton(itemID: materialID, page: package.material.sourceURL)
     }
 
-    /// The video as a glass plate of its own size: the picture, or a spinner on the glass until it appears,
-    /// with a refusal below it.
     private var stage: some View {
         VStack(spacing: 0) {
             player
@@ -127,7 +121,6 @@ struct VideoReaderView: View {
         let video = video
         switch source {
         case let .coming(file):
-            // The file saved on another device, or let go by this one, comes down from iCloud before it plays.
             VideoPlaceholder { Loading() }
                 .task(id: file) {
                     downloading = file
@@ -183,8 +176,6 @@ struct VideoReaderView: View {
         VideoSource.of(original: library.originalFile(materialID), downloading: downloading, onDevice: CloudFolder.isLocal)
     }
 
-    /// The embed needs a page address of our own for YouTube to accept it; it is the server's.
-    /// The original and, where the build has it, the download stay in the `···` menu, so the message only says what is missing.
     private var embedState: EmbedPhase {
         guard videoID != nil else { return .failed("Not a YouTube video") }
         guard server.hasReadConnection else {
@@ -234,8 +225,6 @@ struct VideoReaderView: View {
     }
 }
 
-/// One line of the transcript, in the reader's font: the line being spoken sits on a plate like a paragraph,
-/// what is already said fades back, and each line keeps its time at the side.
 private struct CueRow: View {
     enum State { case past, current, ahead }
     let cue: VideoCue
@@ -261,7 +250,6 @@ private struct CueRow: View {
     }
 }
 
-/// Where the line being spoken is, so one plate can slide from line to line instead of one appearing and one vanishing.
 private struct CurrentCueBounds: PreferenceKey {
     static let defaultValue: Anchor<CGRect>? = nil
 
@@ -270,7 +258,6 @@ private struct CurrentCueBounds: PreferenceKey {
     }
 }
 
-/// Where the video will be: the plate's glass in the video's shape, holding a spinner or a play symbol.
 private struct VideoPlaceholder<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
@@ -281,7 +268,6 @@ private struct VideoPlaceholder<Content: View>: View {
     }
 }
 
-/// The system player for a downloaded video, with picture in picture and exact seeking.
 private struct SystemPlayer: UIViewControllerRepresentable {
     let url: URL
     let start: Double
@@ -324,7 +310,6 @@ private struct SystemPlayer: UIViewControllerRepresentable {
         private var timeObserver: Any?
         private var statusObserver: NSKeyValueObservation?
 
-        /// Both observers are called on the main queue, where the reader's state lives.
         func observe(_ player: AVPlayer, seconds: @escaping @MainActor (Double) -> Void, paused: @escaping @MainActor () -> Void) {
             timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { time in
                 MainActor.assumeIsolated { seconds(time.seconds) }
@@ -343,7 +328,6 @@ private struct SystemPlayer: UIViewControllerRepresentable {
     }
 }
 
-/// YouTube's player on a local page whose address is the server's: YouTube requires an embedding page it can identify.
 struct YouTubeEmbedView: UIViewRepresentable {
     let videoID: String
     let origin: URL
@@ -413,7 +397,6 @@ struct YouTubeEmbedView: UIViewRepresentable {
             )
         }
 
-        /// The exact saved second, applied once the player is ready; the page itself can only start on a whole second.
         func takeResume() -> Double? {
             defer { resumeAt = nil }
             return resumeAt

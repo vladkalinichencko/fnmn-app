@@ -1,9 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// What the Mac reads, as the newest digest reports it: one section per folder, each source with the state of
-/// its last read. A source whose login expired shows as stale or failed here instead of quietly leaving a hole
-/// in the magazine.
 struct SourcesScreen: View {
     @Environment(DigestModel.self) private var digests
 
@@ -58,7 +55,6 @@ struct SourcesScreen: View {
         .plate(cornerRadius: Tokens.plateRadius)
     }
 
-    /// A source that could not be read says why under its name.
     private func detail(of source: DigestPackage.Source) -> String {
         switch source.status {
         case .ok: source.id
@@ -80,7 +76,6 @@ struct SourcesScreen: View {
         let sources: [DigestPackage.Source]
     }
 
-    /// The sources under every folder they feed, in the package's folder order.
     private func folders(of package: DigestPackage) -> [Group] {
         package.folders.map { folder in
             Group(folder: folder, sources: package.sources.filter { $0.folders.contains(folder) })

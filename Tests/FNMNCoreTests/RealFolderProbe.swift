@@ -2,10 +2,6 @@ import FNMNCore
 import Foundation
 import Testing
 
-/// Reads a real FNMN folder into a copy of a device's library the way the app does, and prints any archive
-/// that fails. It runs only when both paths are given:
-///   FNMN_PROBE_FOLDER=~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN FNMN_PROBE_STATE=<copied Application Support/FNMN> \
-///   swift test --filter realFolderReads
 @Test func realFolderReads() async throws {
     let env = ProcessInfo.processInfo.environment
     guard let folderPath = env["FNMN_PROBE_FOLDER"], let statePath = env["FNMN_PROBE_STATE"] else { return }

@@ -1,15 +1,11 @@
 import Foundation
 
-/// One digest of social posts, as the Mac's digest builder delivers it: an uncompressed USTAR archive whose
-/// first entry is `package.json` and whose other entries are the post media and the classifier model.
-/// The dates arrive as ISO 8601 in UTC, so `DigestFile` reads it with its own decoder.
 public struct DigestPackage: Codable, Equatable, Sendable {
     public static let supportedSchema = 1
 
     public let schema: Int
     public let id: String
     public let window: Window
-    /// The folders in their subscription order: one section of the magazine each.
     public let folders: [String]
     public let sources: [Source]
     public let model: ModelRef?
@@ -33,8 +29,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         self.posts = posts
     }
 
-    /// The network a post or a source comes from. The server writes these three; a fourth is a contract
-    /// change, not an unknown string to draw.
     public enum Network: String, Codable, CaseIterable, Sendable {
         case x, telegram, instagram
 
@@ -47,7 +41,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         }
     }
 
-    /// The stretch of time the digest covers: the posts posted after the last build.
     public struct Window: Codable, Equatable, Sendable {
         public let from: Date
         public let to: Date
@@ -58,7 +51,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         }
     }
 
-    /// The text classifier the digest carries, when the Mac trained one from the folders and the engagement.
     public struct ModelRef: Codable, Equatable, Sendable {
         public let file: String
         public let trainedAt: Date
@@ -71,8 +63,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         }
     }
 
-    /// One channel, account or profile the monitor reads. `status` is `ok`, `stale` (the login or the page
-    /// did not answer) or `failed` (the source broke), and `detail` carries the reason.
     public struct Source: Codable, Equatable, Identifiable, Sendable {
         public let id: String
         public let network: Network
@@ -95,7 +85,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         }
     }
 
-    /// One post as the digest carries it, with the post it quotes, repeats or answers kept inside.
     public struct Post: Codable, Equatable, Identifiable, Sendable {
         public let id: String
         public let network: Network
@@ -108,10 +97,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         public let context: Context?
         public let comments: [Comment]
         public let stats: Stats?
-        /// The folders of the source it came from; the classifier's label wins when it names one of them.
         public let folders: [String]
-        /// Pictures the source would not serve when the post was collected. The card shows a placeholder and
-        /// can ask the Mac to fetch the post again.
         public let mediaErrors: Int?
 
         public init(
@@ -154,8 +140,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             }
         }
 
-        /// A picture file in the delivery, with the size it had when the server measured it, so a card lays
-        /// itself out before the file is decoded.
         public struct Media: Codable, Equatable, Sendable {
             public let path: String
             public let width: Int
@@ -168,7 +152,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             }
         }
 
-        /// A video the digest does not stream: its poster frame, its length, and nothing to play.
         public struct Video: Codable, Equatable, Sendable {
             public let poster: Media?
             public let duration: Double?
@@ -179,8 +162,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             }
         }
 
-        /// The post this one quotes, repeats or answers, and which of those it is. The context post carries
-        /// no context of its own: the server flattens a chain into the one post that started it.
         public struct Context: Codable, Equatable, Sendable {
             public let kind: Kind
             public let post: ContextPost?
@@ -193,7 +174,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             public enum Kind: String, Codable, CaseIterable, Sendable {
                 case quote, reply, repost
 
-                /// The words a card puts before the post it quotes, repeats or answers.
                 public var action: String {
                     switch self {
                     case .quote: "Quoting"
@@ -204,7 +184,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             }
         }
 
-        /// A quoted or answered post: what a card shows of it, without a context or comments of its own.
         public struct ContextPost: Codable, Equatable, Sendable {
             public let id: String
             public let network: Network
@@ -264,7 +243,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         }
     }
 
-    /// One section of the magazine: a folder and the posts in it, newest first.
     public struct Section: Equatable, Identifiable, Sendable {
         public let folder: String
         public let posts: [Post]
@@ -283,9 +261,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 extension DigestPackage {
     public static let otherFolder = "Other"
 
-    /// The magazine's sections: the package's folders in order, then any folder a post names that the package
-    /// does not list, and never an empty one. A classifier label counts only when it names one of the package's
-    /// folders.
     public func sections(labels: [String: String], hidden: Set<String>) -> [Section] {
         OrderedGroups.of(posts.filter { !hidden.contains($0.id) }, startingWith: folders) { post in
             let folder = folder(of: post, labels: labels)
@@ -296,8 +271,6 @@ extension DigestPackage {
         }
     }
 
-    /// The folder a post belongs to: the classifier's label when it names a folder the digest carries,
-    /// else the post's own first folder, else `Other`.
     public func folder(of post: Post, labels: [String: String]) -> String {
         if let label = labels[post.id], folders.contains(label) {
             return label
@@ -305,8 +278,6 @@ extension DigestPackage {
         return post.folders.first ?? Self.otherFolder
     }
 
-    /// The posts whose text or author contains the query and that are not hidden; an empty query returns
-    /// every shown post.
     public func posts(matching query: String, hidden: Set<String> = []) -> [Post] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
@@ -323,7 +294,6 @@ extension DigestPackage {
     }
 }
 
-/// One digest unpacked on this device: the package and the folder its media and model were written to.
 public struct Digest: Identifiable, Equatable, Sendable {
     public let package: DigestPackage
     public let folder: URL
@@ -337,13 +307,11 @@ public struct Digest: Identifiable, Equatable, Sendable {
         self.folder = folder
     }
 
-    /// The file a package path names inside this digest's folder.
     public func url(of path: String) -> URL {
         folder.appending(path: path)
     }
 }
 
-/// What this device has taken in of the digests in the FNMN folder, and the posts it has read or hidden.
 public struct DigestIndex: Codable, Equatable, Sendable {
     public var imported: [Imported]
     public var seen: Set<String>
@@ -355,7 +323,6 @@ public struct DigestIndex: Codable, Equatable, Sendable {
         self.hidden = hidden
     }
 
-    /// The delivery file's name leads, since a listing knows the file before it reads the id inside.
     public struct Imported: Codable, Equatable, Sendable {
         public let file: String
         public let id: String
@@ -369,8 +336,6 @@ public struct DigestIndex: Codable, Equatable, Sendable {
     }
 }
 
-/// One thing the reader did with a post, written for the Mac's next training. The text stays on the Mac,
-/// joined by the post id.
 public struct DigestEngagement: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, CaseIterable, Sendable {
         case opened, saved, hidden

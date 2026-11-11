@@ -167,8 +167,6 @@ def repackage(rows: list[dict], output: Path) -> int:
         delivery["folders"] = row["folders"]
         if delivery.get("body"):
             if had_site_header(delivery["body"]) or delivery["material"]["title"] == row["title"]:
-                # The old title came from the site's home link: take the article's own heading,
-                # or the title the browser saved without the site name.
                 body = normalize(delivery["body"])
                 delivery["material"]["title"] = first_heading(body) or page_title(row["title"])
             delivery["body"] = normalize(delivery["body"])
@@ -212,7 +210,6 @@ def main() -> None:
         return
     selected = [row for row in rows if args.kind == "all" or ("video" if video_id_from_url(row["url"]) else "web") == args.kind]
     if args.refetch:
-        # Only pages that were read before: a site that refused then is not asked again.
         selected = [row for row in selected if not video_id_from_url(row["url"]) and _delivery(args.output, row).exists()]
     if args.limit is not None:
         selected = selected[:args.limit]

@@ -29,7 +29,7 @@ _HEADING = re.compile(r"^(#+) (.+)$", re.M)
 _OCR = threading.Lock()
 
 sys.path.insert(0, str(_PIPELINE))
-from math_issues import formula_jobs  # noqa: E402
+from math_issues import formula_jobs
 
 
 def read(url: str, web: Web, report: Report) -> Document:

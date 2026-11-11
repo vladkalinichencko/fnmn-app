@@ -3,13 +3,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension EnvironmentValues {
-    /// The reader's namespace a picture or video on the whole screen grows out of.
     @Entry var mediaZoom: Namespace.ID?
 }
 
 extension View {
-    /// Every picture and video of the text opens the same way: a tap sends it to the reader, and the viewer grows
-    /// out of this view. Over a picture inside a paragraph the text takes the tap and sends it as a link instead.
     func opensMedia(_ url: URL) -> some View {
         modifier(MediaSource(url: url))
     }
@@ -29,7 +26,6 @@ private struct MediaSource: ViewModifier {
     }
 }
 
-/// A picture or video of the text on the whole screen, under the system's own bar.
 struct MediaViewer: View {
     let url: URL
 
@@ -45,8 +41,6 @@ struct MediaViewer: View {
     }
 }
 
-/// A picture on the whole screen, as in Photos: pinching enlarges it, a finger moves it, a double tap zooms into
-/// the tapped point and back out.
 private struct ImageViewer: View {
     let url: URL
     @State private var image: UIImage?
@@ -76,7 +70,6 @@ private struct ImageViewer: View {
     }
 }
 
-/// A video on the whole screen, playing from the start.
 private struct VideoViewer: View {
     let url: URL
     @State private var player: AVPlayer?
@@ -97,7 +90,6 @@ private struct VideoViewer: View {
     }
 }
 
-/// Close on the left; saving to Photos and sharing on the right.
 private struct MediaToolbar: ToolbarContent {
     let url: URL
     let save: () -> Void
@@ -124,10 +116,8 @@ private struct ZoomingImage: UIViewRepresentable {
     func updateUIView(_ view: ZoomingImageView, context: Context) {}
 }
 
-/// The picture fits the screen at the smallest zoom and stays in its middle while it is smaller than the screen.
 final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     private let imageView = UIImageView()
-    /// The size the picture was last fitted to; a new size, such as a turned phone, fits it again.
     private var fitted = CGSize.zero
 
     init(image: UIImage) {
@@ -155,8 +145,6 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) { center() }
 
-    /// At the smallest zoom the picture fits the screen. The largest shows it at twice its own size, and never less
-    /// than four times the fit, so a small picture still enlarges like a large one.
     private func fit() {
         fitted = bounds.size
         guard let size = imageView.image?.size, size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else { return }

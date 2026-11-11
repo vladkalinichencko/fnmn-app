@@ -19,8 +19,6 @@ from pathlib import Path
 
 from collect import ytdlp
 
-# Authenticated pseudo-URL: the plain playlist?list=WL address is not
-# resolvable ("playlist does not exist") even with valid login cookies.
 WATCH_LATER = ":ytwatchlater"
 LOGIN = "\nWatch Later needs login: pass --cookies-from-browser chrome|safari|firefox or --cookies cookies.txt"
 

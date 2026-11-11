@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Open Original, the same on a tile, in the reader and on a video: the page opens in the browser, a file the
-/// material was made from opens in Quick Look.
 struct OpenOriginalButton: View {
     let itemID: String
     let page: URL?

@@ -1,7 +1,5 @@
 import Foundation
 
-/// A highlight, a strikethrough or a note as older files kept them: one record each, the quote being the marked
-/// run, or the whole paragraph for a note.
 struct LegacyAnnotation: Decodable {
     var id: UUID
     var materialID: String
@@ -33,7 +31,6 @@ struct LegacyAnnotation: Decodable {
     }
 }
 
-/// The annotations of a state file: the current records, or an older file's, which merge into them as they are read.
 struct StoredAnnotations: Decodable {
     let records: [Annotation]
 
@@ -45,8 +42,6 @@ struct StoredAnnotations: Decodable {
         }
     }
 
-    /// One record per paragraph. A paragraph's text is the longest quote it had, which for a note is the whole
-    /// paragraph; marks outside it are appended after an ellipsis so they can still be found in it.
     static func merging(_ legacy: [LegacyAnnotation]) -> [Annotation] {
         var order: [String] = []
         var paragraphs: [String: [LegacyAnnotation]] = [:]

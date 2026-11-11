@@ -1,6 +1,3 @@
-// Parses every `$…$` and `$$…$$` of a Markdown file with the app's SwiftUIMath and counts the formulas it
-// cannot read, by error, with one example each. The app shows those as their LaTeX source.
-//   swift run MathProbe <content.md>
 import Foundation
 @testable import SwiftUIMath
 

@@ -1,11 +1,7 @@
 import Foundation
 
-/// The materials as screens list them. Building walks the whole catalog and sorts it, so `LibraryModel`
-/// builds it once per change, and every query here is a filter or a sort over what it already holds.
 public struct LibraryQueries: Sendable {
-    /// Everything, newest first.
     public let allItems: [LibraryItem]
-    /// Every material outside the archive, newest first.
     public let items: [LibraryItem]
     public let archivedItems: [LibraryItem]
     private let snapshot: LibrarySnapshot
@@ -35,7 +31,6 @@ public struct LibraryQueries: Sendable {
         items.filter { snapshot.albums(of: $0.id).isEmpty }
     }
 
-    /// One pass over the materials, each sorted into its albums, instead of a scan per album.
     public var albumSummaries: [AlbumSummary] {
         var byAlbum: [String: [LibraryItem]] = [:]
         for item in items {
@@ -49,8 +44,6 @@ public struct LibraryQueries: Sendable {
         }
     }
 
-    /// The Collections section: the same materials gathered by album, publisher, type or month added.
-    /// Only albums can be empty; the other groupings list what exists.
     public func groups(by grouping: LibraryGrouping, sortedBy sort: GroupSort, progress: ReadingProgress = ReadingProgress()) -> [AlbumSummary] {
         var summaries: [AlbumSummary]
         if grouping == .albums {
@@ -124,12 +117,10 @@ public struct LibraryQueries: Sendable {
         items.filter { $0.source?.id == id }
     }
 
-    /// Titles, authors, sources, albums and section headings; the body text is not searched.
     public func items(matching query: String) -> [LibraryItem] {
         search(query, in: items)
     }
 
-    /// The same search over the materials a screen already shows, such as one album's.
     public func search(_ query: String, in candidates: [LibraryItem]) -> [LibraryItem] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else {
@@ -140,7 +131,6 @@ public struct LibraryQueries: Sendable {
             TextFold.folded(text).contains(folded)
         }
         let articleHits = Set(snapshot.articles.filter { $0.searchText.contains(folded) }.map(\.material.id))
-        // Albums and sources repeat across tiles, so each name is tested once.
         let albumHits = Set(snapshot.albums.filter(hit))
         var sourceHits: [String: Bool] = [:]
         return candidates.filter { item in
@@ -162,7 +152,6 @@ public struct LibraryQueries: Sendable {
         }
     }
 
-    /// Highlights and notes grouped by material; the most recently touched material and annotation come first.
     public var annotationGroups: [AnnotationGroup] {
         let byItem = Dictionary(grouping: snapshot.annotations, by: \.materialID)
         let known = Dictionary(allItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -178,8 +167,6 @@ public struct LibraryQueries: Sendable {
         }
     }
 
-    /// The annotations a search finds: all of a material the material search finds, and elsewhere those whose
-    /// paragraph or note holds the query.
     public func annotationGroups(matching query: String) -> [AnnotationGroup] {
         let groups = annotationGroups
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -199,8 +186,6 @@ public struct LibraryQueries: Sendable {
         }
     }
 
-    /// The materials of one album, publisher, type or month in the reader's order, in sections when grouped.
-    /// `opened` gives when each material was last opened, for sorting by it.
     public static func arrange(
         _ items: [LibraryItem], sortedBy sort: ItemSort, groupedBy grouping: ItemGrouping, opened: [String: Date] = [:]
     ) -> [ItemSection] {
@@ -259,7 +244,6 @@ public struct LibraryQueries: Sendable {
         }
     }
 
-    /// Everything, built from the snapshot: the browser catalog and the declared sources name each publisher.
     private static func collect(_ snapshot: LibrarySnapshot) -> [LibraryItem] {
         var sources = SourceIndex(catalog: snapshot.browserCatalog, declared: snapshot.articles.compactMap(\.material.source))
         return snapshot.articles.map { article in
@@ -270,8 +254,6 @@ public struct LibraryQueries: Sendable {
                 title: material.title,
                 source: material.declaredSource ?? material.sourceURL.map { sources.source(for: $0) } ?? material.authors,
                 originalURL: material.sourceURL,
-                // The moment the server wrote the delivery, to the second; the moment this device imported it is
-                // the same for a whole folder read at once, and says nothing of the order they were saved in.
                 addedAt: article.deliveredAt ?? snapshot.addedAt[material.id],
                 excerpt: article.excerpt,
                 cover: article.cover
@@ -282,7 +264,6 @@ public struct LibraryQueries: Sendable {
             if a != b {
                 return a > b
             }
-            // A folder import gives a whole batch one date; ties fall back to the title so the order stays put.
             let order = $0.title.localizedStandardCompare($1.title)
             return order == .orderedSame ? $0.id < $1.id : order == .orderedAscending
         }

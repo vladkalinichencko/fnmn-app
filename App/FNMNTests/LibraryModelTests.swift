@@ -2,7 +2,6 @@ import FNMNCore
 import XCTest
 @testable import FNMN
 
-/// The model sequences the store: loading, the linked folder, and an import landing in the catalog.
 @MainActor
 final class LibraryModelTests: XCTestCase {
     private func makeModel() -> (model: LibraryModel, root: URL) {

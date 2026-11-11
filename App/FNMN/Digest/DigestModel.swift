@@ -7,27 +7,15 @@ enum DigestSyncState: Equatable {
     case syncing
 }
 
-/// The one owner of the social digests on this device: the deliveries the Mac left in the FNMN folder, the
-/// digests unpacked in the cache, the topics the classifier gave their posts, and the engagement this device
-/// writes back for the Mac's next training. `LibraryModel` owns the folder; this model asks it nothing and
-/// receives the folder with every sync.
 @MainActor @Observable
 final class DigestModel {
     private(set) var state = LoadState.idle
-    /// Whether a sync is running; the tab shows a small spinner. A second sync returns at once, because the
-    /// running one already reads every delivery.
     private(set) var syncState = DigestSyncState.idle
-    /// Newest window first.
     private(set) var digests: [Digest] = []
-    /// The folder each post's text belongs to, by the model the newest digest carried.
     private(set) var labels: [String: String] = [:]
-    /// The one record of what this device read, hid and took in; the views read it through `seen` and `hidden`.
     private(set) var index = DigestIndex()
-    /// Pictures a Retry fetched from the Mac, by post; the card reads them through `media(for:)`.
     private(set) var refreshed: [String: [DigestPackage.Post.Media]] = [:]
-    /// The posts whose Retry is running.
     private(set) var refreshing: Set<String> = []
-    /// The last sync's failures, while the magazine it already had stays on screen.
     private(set) var lastError: String?
     private let file: DigestFile
     private let device: String
@@ -56,13 +44,10 @@ final class DigestModel {
         index.hidden
     }
 
-    /// The pictures the card draws: the ones a Retry brought from the Mac, else the ones in the delivery.
     func media(for post: DigestPackage.Post) -> [DigestPackage.Post.Media] {
         refreshed[post.id] ?? post.media
     }
 
-    /// Asks the Mac to fetch one post again, then copies the pictures into this digest's folder. Only the post
-    /// is fetched; the rest of the magazine is untouched.
     func refresh(_ post: DigestPackage.Post, digest: Digest) async {
         guard let server else {
             lastError = "Set up the Mac server to fetch this picture again."
@@ -89,7 +74,6 @@ final class DigestModel {
         }
     }
 
-    /// The digest a post belongs to, for the thread screen and for recording what the reader did with it.
     func digest(of postID: String) -> Digest? {
         digests.first { $0.package.posts.contains { $0.id == postID } }
     }
@@ -98,9 +82,6 @@ final class DigestModel {
         digests.lazy.compactMap { digest in digest.package.posts.first { $0.id == postID } }.first
     }
 
-    /// Reads the FNMN folder's digests: what the Mac added since the last sync is downloaded from iCloud,
-    /// unpacked, and scored. The only entry: the tab, the launch and the pull all call it; a nil folder reads
-    /// what is already in the cache.
     func sync(folder: URL?) async {
         guard syncState == .idle else {
             return
@@ -139,8 +120,6 @@ final class DigestModel {
         }
     }
 
-    /// One thing the reader did with a post: kept in the index at once and, on the next sync or when the app
-    /// leaves the foreground, in the FNMN folder's journal, which the Mac reads before its next training.
     func record(_ kind: DigestEngagement.Kind, post: DigestPackage.Post, digest: Digest) {
         pending.append(DigestEngagement(kind: kind, postID: post.id, digestID: digest.id))
         switch kind {
@@ -154,14 +133,11 @@ final class DigestModel {
         scheduleIndexSave()
     }
 
-    /// The one save path: the engagement is recorded here, so a menu cannot save a post without telling the
-    /// Mac's next training about it. Returns the link the library imports.
     func save(_ post: DigestPackage.Post, digest: Digest) -> URL {
         record(.saved, post: post, digest: digest)
         return post.permalink
     }
 
-    /// Writes what is waiting before the app leaves the foreground.
     func settle() async {
         try? await file.saveIndex(index)
         indexSave?.cancel()
@@ -176,8 +152,6 @@ final class DigestModel {
         loaded = true
     }
 
-    /// Takes the deliveries the index does not hold, and the ones whose unpacked copy the system removed.
-    /// One bad delivery is a line of `lastError`; the others still land, and the magazine stays on screen.
     private func take(in folder: URL) async -> (failures: [String], took: Bool) {
         let target = DigestDeliveries(file: file, index: index, unpacked: Set(digests.map(\.id)))
         let failures = await DeliverySync.run(target, in: folder)
@@ -221,8 +195,6 @@ final class DigestModel {
         try? await file.saveIndex(index)
     }
 
-    /// Appends the waiting engagement to this device's journal; events that cannot be written wait for the
-    /// next sync or the next settling instead of being lost.
     private func writePending() async {
         guard let folder, !pending.isEmpty else {
             return
@@ -240,8 +212,6 @@ final class DigestModel {
     }
 }
 
-/// The digest's side of `DeliverySync`: the index and the unpacked folders decide what is known, and every
-/// new archive is unpacked and recorded. The index is written once after the loop.
 @MainActor
 private final class DigestDeliveries: DeliveryTarget {
     let subfolder = "digests"

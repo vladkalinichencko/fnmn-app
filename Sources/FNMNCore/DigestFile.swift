@@ -1,8 +1,5 @@
 import Foundation
 
-/// The one writer of the digest files: the unpacked digests in the cache, the index of what this device has
-/// taken in, and the engagement journal it appends to in the FNMN folder. Digest dates travel as ISO 8601
-/// in UTC, so this file owns the decoder and the encoder for them.
 public actor DigestFile {
     private let root: URL
     private let cache: URL
@@ -15,7 +12,6 @@ public actor DigestFile {
         self.cache = cache
     }
 
-    /// What this device has taken in; a device that has taken in nothing yet has an empty index.
     public func loadIndex() throws -> DigestIndex {
         guard FileManager.default.fileExists(atPath: indexURL.path) else {
             return DigestIndex()
@@ -28,8 +24,6 @@ public actor DigestFile {
         try Self.encoder().encode(index).write(to: indexURL, options: .atomic)
     }
 
-    /// Unpacks a digest delivery into the cache under the id its package names, replacing an older copy.
-    /// The files land in a staging folder first, so a read that stops halfway leaves no half a digest behind.
     public func add(tar: URL) throws -> Digest {
         let staging = cache.appending(path: "digest-staging-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
@@ -48,8 +42,6 @@ public actor DigestFile {
         return Digest(package: package, folder: destination)
     }
 
-    /// Every unpacked digest, newest window first. A folder without a readable package is a read that stopped
-    /// before it wrote one, and the next delivery of the same digest replaces it.
     public func packages() throws -> [Digest] {
         let directory = cache.appending(path: "digests")
         guard FileManager.default.fileExists(atPath: directory.path) else {
@@ -68,8 +60,6 @@ public actor DigestFile {
         return digests.sorted { $0.package.window.to > $1.package.window.to }
     }
 
-    /// Removes the unpacked digests beyond the newest `keeping`; the index and what was read stay, so an
-    /// evicted digest is not taken in again.
     public func evict(keeping: Int) throws {
         let digests = try packages()
         for digest in digests.dropFirst(keeping) {
@@ -77,7 +67,6 @@ public actor DigestFile {
         }
     }
 
-    /// Appends one engagement event to this device's journal in the FNMN folder, one JSON object per line.
     public func append(_ engagement: DigestEngagement, device: String, to folder: URL) throws {
         let state = folder.appending(path: "digest-state")
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
@@ -102,12 +91,10 @@ public actor DigestFile {
         cache.appending(path: "digests").appending(path: Self.name(of: id))
     }
 
-    /// A digest id names a folder, so a slash is written as a dash.
     private static func name(of id: String) -> String {
         id.replacingOccurrences(of: "/", with: "-")
     }
 
-    /// The package's own fields name a folder, so they are checked before anything is written.
     private static func check(_ package: DigestPackage) throws {
         guard package.schema == DigestPackage.supportedSchema else {
             throw DigestFileError.unsupportedSchema(package.schema)
@@ -118,7 +105,6 @@ public actor DigestFile {
         }
     }
 
-    /// A delivery names its files by relative paths; a name that climbs out of the digest's folder is refused.
     private static func check(_ path: String) throws {
         guard PackagePath.isSafe(path) else {
             throw DigestFileError.unsafePath(path)

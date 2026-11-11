@@ -2,7 +2,6 @@
 import Foundation
 import Testing
 
-/// Grouping keeps first-seen order, sorts where the screen asks, and never invents a group.
 @Suite struct GroupingTests {
     private func package(_ id: String, kind: Material.Kind = .article, source: String?, title: String) -> ImportPackage {
         ImportPackage(

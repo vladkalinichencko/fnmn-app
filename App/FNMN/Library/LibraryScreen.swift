@@ -69,7 +69,6 @@ struct LibraryScreen: View {
     }
 }
 
-/// A titled part of a screen with a large header, used by Library and Shelf.
 struct LibrarySection<Content: View, Accessory: View>: View {
     let title: String
     let accessory: Accessory
@@ -99,7 +98,6 @@ extension LibrarySection where Accessory == EmptyView {
     }
 }
 
-/// What the Collections section gathers materials by, and in which order; the choice is kept.
 private struct CollectionOptions: View {
     @Binding var grouping: LibraryGrouping
     @Binding var sort: GroupSort

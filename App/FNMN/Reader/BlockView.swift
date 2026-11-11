@@ -3,21 +3,14 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// The one place that decides how each kind of block is drawn. It holds only values, so SwiftUI compares it
-/// and skips its body when nothing it shows has changed; actions go to the `ReaderCoordinator` in the environment.
 struct BlockView: View, Equatable {
     let block: DocumentBlock
     let index: Int
     let baseURL: URL
     let mode: PlateMode
-    /// How much of the block is read, from its top: all of it once scrolled past the top or before the "read through
-    /// here" mark, the part above the reading line while the line stands in it.
     let readShare: Double
-    /// The "read through here" mark stands on this paragraph.
     let markedReadThrough: Bool
-    /// Highlights and notes on this block.
     let annotations: [Annotation]
-    /// What a heading does when tapped; `.none` for every other block.
     let fold: HeadingFold
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
@@ -50,8 +43,6 @@ struct BlockView: View, Equatable {
 }
 
 extension View {
-    /// Grays the read share of a block from its top, at once, even when the change comes inside another animation
-    /// such as a plate sliding back. Every block keeps the mask, read or not, so reading on does not rebuild it.
     func grayed(_ readShare: Double) -> some View {
         mask {
             GeometryReader { geometry in
@@ -66,15 +57,12 @@ extension View {
     }
 }
 
-/// Whether a heading has a section under it to close up, and whether it has.
 enum HeadingFold: Equatable {
     case none
     case open
-    /// Closed, with the number of blocks it hides.
     case closed(hidden: Int)
 }
 
-/// A heading whose tap closes its section up under it or opens it again.
 private struct SectionHeading: View {
     let index: Int
     let level: Int
@@ -84,7 +72,6 @@ private struct SectionHeading: View {
 
     var body: some View {
         HeadingView(level: level, title: title, fold: fold)
-            // Over the title, which would otherwise take the touch: the whole heading is the button.
             .overlay {
                 if fold != .none {
                     Color.clear
@@ -92,7 +79,6 @@ private struct SectionHeading: View {
                         .onTapGesture { reader.send(.toggleSection(index)) }
                 }
             }
-            // A heading is not selected in parts; a long press copies all of it.
             .contextMenu {
                 Button("Copy", systemImage: "doc.on.doc") {
                     UIPasteboard.general.string = MarkedMarkdown.plainText(title, baseURL: nil)
@@ -101,8 +87,6 @@ private struct SectionHeading: View {
     }
 }
 
-/// A heading on the page. A heading with a section under it shows a chevron that turns when the section opens, and
-/// how many blocks it hides while it is closed.
 struct HeadingView: View {
     let level: Int
     let title: String
@@ -125,7 +109,6 @@ struct HeadingView: View {
                 DisclosureChevron(open: fold == .open, width: chevronWidth)
             }
         }
-        // The column opens and closes the section at once; only the heading itself moves to its new look.
         .animation(.snappy(duration: 0.22), value: fold)
         .padding(.top, level <= 2 ? Tokens.gap : 4)
         .contentShape(.rect)
@@ -142,7 +125,6 @@ struct HeadingView: View {
     }
 }
 
-/// The cover an article opens with, full width above its title.
 struct LeadImage: View {
     let url: URL
 
@@ -154,13 +136,9 @@ struct LeadImage: View {
 }
 
 extension EnvironmentValues {
-    /// The width of the text inside a plate, once the column is laid out.
     @Entry var plateTextWidth: CGFloat?
 }
 
-/// A paragraph, list, quote, table or code block on its own rounded plate.
-/// Dragging it left uncovers its margin note, which lies under the plate all along; dragging it right far enough
-/// marks "read to here", with a tap of feedback where the mark takes hold.
 struct PlateView: View {
     @Environment(ReaderCoordinator.self) private var reader
     let markdown: String
@@ -173,57 +151,38 @@ struct PlateView: View {
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
     var spot: TextSpan?
-    /// How far the finger has moved the plate from where the mode puts it; zero whenever no finger is on it.
     @State private var drag: CGFloat = 0
     @State private var size = CGSize.zero
-    /// The height of the note's text, which the tab on the plate's edge follows.
     @State private var noteHeight: CGFloat = 0
 
-    /// Where the last swipe left the plate, until the mode catches up with it.
     @State private var side: Bool?
     @Environment(\.plateTextWidth) private var textWidth
     @AppStorage(ReaderAppearance.wordStartsKey) private var boldsWordStarts = false
 
     private var noting: Bool { mode == .noting(index) }
-    /// Whether the plate stands aside. The swipe decides this at once and the mode follows a moment later, so a
-    /// finger always moves the plate from where it is on the screen, however far behind the mode is.
     private var open: Bool { side ?? noting }
-    /// How far the plate moves aside for its note: a little over half its width.
     private var noteWidth: CGFloat { size.width * 0.58 }
-    /// The plate rests aside exactly while it is open; the finger only adds to it.
     private var offset: CGFloat { (open ? -noteWidth : 0) + drag }
     private static let slide = Animation.spring(duration: 0.35, bounce: 0.2)
-    /// How far the plate is pulled right before letting go marks "read to here".
     private static let commit: CGFloat = 96
-    /// The gap between the plate and the mark's button as the plate is pulled.
     private static let pullGap: CGFloat = 8
 
-    /// The note lies under the glass plate, blurred by it, and the plate slides off it; touches on the uncovered note
-    /// reach the note. The note is editable only while the plate stands aside: an editor is a UIKit view, which
-    /// draws over SwiftUI's own drawing, so under a moving plate it would show on top of the glass. Pulled right,
-    /// the plate uncovers the "read to here" button instead.
     var body: some View {
         ZStack(alignment: .trailing) {
             readButton
             MarginNote(saved: paragraphNote, active: noting && drag == 0, save: saveNote) { noteHeight = $0 }
                 .frame(width: max(noteWidth - Tokens.gap, 0), height: size.height)
-                // At rest the note's corners would show past the plate's rounded ones.
                 .opacity(offset < 0 ? 1 : 0)
                 .allowsHitTesting(noting)
             plate
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
                 .offset(x: offset)
-                // Leftward opens the note while reading and rightward closes it; rightward while reading pulls
-                // out the "read to here" button.
                 .gesture(HorizontalPan(starts: { open ? $0 > 0 : true }, changed: dragged, ended: released))
         }
         .animation(Self.slide, value: open)
         .onChange(of: noting) { side = nil }
     }
 
-    /// The button the plate uncovers as it is pulled right, as wide as the pull; it takes hold, with a tap of
-    /// feedback, once the plate has gone far enough for letting go to mark. Its icon stands over a short caption, so
-    /// both fit in the width the pull reaches before it takes hold.
     private var readButton: some View {
         let pull = max(offset, 0)
         return Color.accentColor
@@ -248,8 +207,6 @@ struct PlateView: View {
             .sensoryFeedback(.impact(weight: .medium), trigger: pull >= Self.commit) { _, taken in taken }
     }
 
-    /// The plate follows the finger: left up to a little past the note's edge, right with growing resistance once the
-    /// mark would take hold, and back toward the note's side while it is open, never past where it rests.
     private func dragged(_ translation: CGFloat) {
         if open {
             drag = min(max(translation, 0), noteWidth)
@@ -260,9 +217,6 @@ struct PlateView: View {
         }
     }
 
-    /// The plate changes sides only when it has gone, or is thrown, past half the note's width, and marks only past
-    /// the pull; otherwise it goes back to where the mode keeps it. The drag and the mode change in one animation,
-    /// so the plate goes straight from under the finger to its place.
     private func released(_ translation: CGFloat, _ velocity: CGFloat) {
         let thrown = translation + velocity * 0.2
         withAnimation(Self.slide) {
@@ -279,7 +233,6 @@ struct PlateView: View {
         }
     }
 
-    /// A selection stays inside its plate. What is read grays in the text; the glass stays as it is.
     private var plate: some View {
         StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts, finds: finds, activeFind: activeFind, spot: spot))
             .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts), AnyHashable(finds), AnyHashable(activeFind), AnyHashable(spot)])
@@ -298,8 +251,6 @@ struct PlateView: View {
             .sensoryFeedback(.selection, trigger: markedReadThrough)
     }
 
-    /// A tab on the right edge of a plate that has a note, as tall as the note's text within the plate; the note
-    /// itself shows when the plate is pulled aside.
     @ViewBuilder
     private var noteMark: some View {
         if !paragraphNote.isEmpty, offset == 0 {
@@ -311,8 +262,6 @@ struct PlateView: View {
         }
     }
 
-    /// The edit menu of a selection in this plate: each mark or its removal, ChatGPT, and saving the pictures inside
-    /// it. Keyed by the paragraph and its marks, so it changes only when they do.
     private var selectionMenu: TextSelectionMenu {
         let reader = reader, index = index, annotations = annotations, text = plainText
         return TextSelectionMenu(key: [AnyHashable(reader.materialID), AnyHashable(index), AnyHashable(annotations)]) { selected in
@@ -401,19 +350,13 @@ struct NoteEdit: Equatable {
     }
 }
 
-/// A note in the margin beside its paragraph: plain text on the page, no frame, saved when it closes.
-/// It is as tall as its paragraph; a longer note fades out at its lower edge and scrolls while it is edited.
-/// Closed, it is SwiftUI's own text, which the glass plate over it blurs. Open, it is an editor in a scroll view,
-/// both UIKit views that draw over everything SwiftUI draws; the text keeps the same place in either.
 private struct MarginNote: View {
     let saved: String
     let active: Bool
     let save: (String) -> Void
-    /// The height of the note's text, without the room around it.
     let measured: (CGFloat) -> Void
     @State private var note = NoteEdit(saved: "")
     @State private var overflow = Overflow()
-    /// The height the paragraph gives the note.
     @State private var room: CGFloat = 0
     @FocusState private var focused: Bool
     @AppStorage(ReaderAppearance.fontKey) private var readerFont = ReaderFont.system
@@ -444,7 +387,6 @@ private struct MarginNote: View {
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         overflow = Overflow(below: height > room + 1, text: height)
                     }
-                    // Without a minimum the frame grows to the fixed text, so a long note would show whole past its paragraph.
                     .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
                     .clipped()
             }
@@ -469,7 +411,6 @@ private struct MarginNote: View {
             }
             note.begin()
         }
-        // A plate shown alone goes away while its note is open when reading turns back to the column.
         .onDisappear {
             if let text = note.abandon() {
                 save(text)
@@ -491,7 +432,6 @@ private struct MarginNote: View {
         }
     }
 
-    /// The closed text and the editor stand in the same place, so the note does not move when it opens.
     private struct NoteLayout: ViewModifier {
         let font: Font
 
@@ -506,18 +446,13 @@ private struct MarginNote: View {
     private struct Overflow: Equatable {
         var above = false
         var below = false
-        /// The height of the text with the room above and below it.
         var text: CGFloat = 0
     }
 }
 
-/// A picture that stands on its own between paragraphs, never wider than the picture itself. A tap opens it on the
-/// whole screen.
 private struct StandaloneImage: View {
     let url: URL
     let alt: String
-    /// The picture's own size, read from its file header before the block is laid out: a picture that took its
-    /// height only after it appeared would push the text below it down while scrolling up.
     @State private var natural: CGSize?
 
     init(url: URL, alt: String) {
@@ -552,12 +487,10 @@ private struct StandaloneImage: View {
     }
 }
 
-/// A video in the text is its first frame under a play button; a tap plays it on the whole screen.
 struct ArticleVideo: View {
     let url: URL
     @State private var poster = Poster.loading
 
-    /// The first frame, shown before the video plays; a video whose frame cannot be read plays all the same.
     private enum Poster {
         case loading
         case frame(UIImage)

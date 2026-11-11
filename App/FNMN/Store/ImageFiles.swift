@@ -2,19 +2,14 @@ import ImageIO
 import SwiftUI
 import UIKit
 
-/// Pictures of articles on disk. A picture is decoded off the main thread, no larger than the place it is
-/// shown in, and kept in memory until iOS runs short of it; views never read picture files themselves.
 enum ImageFiles {
-    /// NSCache is thread-safe and empties itself when memory runs low.
     nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
 
-    /// The picture's size in pixels, read from the file's header without decoding it.
     @concurrent
     static func pixelSize(of url: URL) async -> CGSize? {
         headerSize(of: url)
     }
 
-    /// The same, read where it is asked; a header is a few hundred bytes, so a view can read it while it is laid out.
     nonisolated static func headerSize(of url: URL) -> CGSize? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -25,7 +20,6 @@ enum ImageFiles {
         return orientation >= 5 ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
     }
 
-    /// The picture decoded just large enough to cover `pixels`, never larger than the file itself.
     @concurrent
     static func picture(at url: URL, covering pixels: CGSize) async -> UIImage? {
         guard let natural = await pixelSize(of: url) else { return nil }
@@ -47,7 +41,6 @@ enum ImageFiles {
     }
 }
 
-/// A picture file filling the space it is given, decoded for that space once it is known.
 struct FileImage: View {
     let url: URL
     let contentMode: ContentMode
@@ -69,7 +62,6 @@ struct FileImage: View {
             }
     }
 
-    /// Pixels rounded up to a step, so small layout changes do not decode the picture again.
     private var request: Request {
         func pixels(_ points: CGFloat) -> CGFloat { ((points * displayScale) / 128).rounded(.up) * 128 }
         return Request(url: url, pixels: CGSize(width: pixels(size.width), height: pixels(size.height)))

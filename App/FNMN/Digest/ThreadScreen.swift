@@ -2,8 +2,6 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// One post with the chain it belongs to: the post it quotes or answers above it, the post itself, and the
-/// replies it drew under it. Opening the thread is what tells the Mac the post was read.
 struct ThreadScreen: View {
     let postID: String
     @Environment(DigestModel.self) private var digests
@@ -39,7 +37,6 @@ struct ThreadScreen: View {
         digests.post(postID)?.author.handle ?? "Thread"
     }
 
-    /// The post being answered or quoted, set smaller than the one the thread was opened for.
     private func parentCard(_ post: DigestPackage.Post.ContextPost, kind: DigestPackage.Post.Context.Kind) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             PostAuthorLine(name: post.author.name, handle: post.author.handle, size: .compact) {

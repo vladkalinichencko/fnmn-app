@@ -67,7 +67,6 @@ def _render(node, page_url: str, downloads: dict[str, str]) -> str:
     if live_figure(node):
         return _crop(page_url, selector(node))
     if widget(node) and not contains_prose(node):
-        # A script's mount named for comments, a menu or a banner is the site's, not the article's.
         if NEGATIVE.search(f"{node.get('id') or ''} {node.get('class') or ''}"):
             return ""
         return _crop(page_url, selector(node))
@@ -80,7 +79,6 @@ def _render(node, page_url: str, downloads: dict[str, str]) -> str:
     if tag in {"ul", "ol"}:
         return _list(node, ordered=tag == "ol", page_url=page_url, downloads=downloads)
     if tag == "blockquote":
-        # Its paragraphs and lists stay apart, under one mark that keeps the quote one block.
         return "\n".join(f"> {line}".rstrip() for line in _flow(node, page_url, downloads).splitlines())
     if tag == "pre":
         code = node.find("code")
@@ -249,7 +247,6 @@ def _joined(parts: list[str | _Emphasis]) -> str:
         trail = part.text[len(part.text.rstrip()) :]
         before = lead[-1:] or written[-1:] or " "
         after = trail[:1] or _first_character(merged[index + 1 :])
-        # A mark next to another emphasis's marks is one run of stars with them, so it is the text inside that counts.
         first, last = inner.lstrip("*")[:1] or "*", inner.rstrip("*")[-1:] or "*"
         written += lead
         if before.isalnum() and punctuation(first) and first not in CLOSING_PUNCTUATION:
@@ -314,5 +311,4 @@ def _piece(node, page_url: str, downloads: dict[str, str]) -> str | _Emphasis:
         return _image(node, page_url, downloads)
     if node.tag == "br":
         return "\n"
-    # A span keeps the spaces at its edges: sites put the space between two words inside one of them.
     return _inline_spaced(node, page_url, downloads)

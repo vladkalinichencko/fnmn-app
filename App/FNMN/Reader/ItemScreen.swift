@@ -1,7 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// Opens a material in its reader: the paragraph reader for articles and books, the player for videos.
 struct ItemScreen: View {
     let itemID: String
     let startPiece: Int?
@@ -21,15 +20,12 @@ struct ItemScreen: View {
 }
 
 private enum ArticleText {
-    /// Reading the archive, after it comes down from iCloud if the phone had let it go.
     case loading
     case article(ReaderCoordinator, sourceURL: URL?)
     case video(VideoCoordinator)
     case failed(String)
 }
 
-/// Reads an article's or video's package from disk when it opens, and lays an article out into blocks
-/// off the main thread; a new text reads it again.
 private struct ArticleOpener: View {
     let itemID: String
     let startPiece: Int?
@@ -69,7 +65,6 @@ private struct ArticleOpener: View {
         }
         guard let baseURL = library.articleFolder(itemID) else { throw LibraryError.cloudFolderMissing }
         let document = await Self.document(of: package)
-        // With the reading line, the block the line stands in is the first one not read.
         let place = (showsLine ? library.progress.lines[itemID]?.piece : nil)
             ?? library.progress.openingPiece(of: itemID, place: library.position(of: itemID)?.pieceIndex, count: document.blocks.count)
         let reader = ReaderCoordinator(
@@ -95,7 +90,6 @@ private struct ArticleOpener: View {
     }
 }
 
-/// The small source name above the large title at the top of a document.
 struct MaterialHeader: View {
     let title: String
     let source: SourceRef?

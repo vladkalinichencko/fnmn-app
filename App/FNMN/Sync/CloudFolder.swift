@@ -1,12 +1,6 @@
 import Foundation
 
-/// A folder picked from iCloud Drive may hold only placeholders on this device: the file
-/// `deliveries/abc.tar` is then `.abc.tar.icloud` until it is downloaded. Reading the folder
-/// before that sees no such file, so its material would show as a bare link.
 enum CloudFolder {
-    /// Asks iCloud for a file, or every file under a folder, and returns when all of them are on the device.
-    /// A folder holds thousands of files, so the walk runs off the main thread, and the check
-    /// waits longer each time nothing new has arrived: from half a second up to five.
     @concurrent
     static func download(_ item: URL, timeout: Duration = .seconds(600)) async throws {
         var pending = missing(in: item)
@@ -24,13 +18,10 @@ enum CloudFolder {
         }
     }
 
-    /// Whether the file is in the folder, on the device or still only in iCloud.
     static func contains(_ file: URL) -> Bool {
         FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)
     }
 
-    /// The delivery archives under one of the FNMN folder's subfolders, by name; a folder that is not there
-    /// holds none. The library and the digest list their deliveries the same way.
     @concurrent
     static func archives(in folder: URL?, subfolder: String) async throws -> [URL] {
         guard let folder else {
@@ -43,7 +34,6 @@ enum CloudFolder {
         return try await files(in: directory, withExtension: "tar")
     }
 
-    /// The folder's files, or those with the extension, by the names they have once downloaded, in name order.
     @concurrent
     static func files(in folder: URL, withExtension pathExtension: String? = nil) async throws -> [URL] {
         try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
@@ -52,7 +42,6 @@ enum CloudFolder {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    /// Files under the item that are still only in iCloud, by the names they will have once downloaded.
     private static func missing(in item: URL) -> [URL] {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -77,8 +66,6 @@ enum CloudFolder {
         file.deletingLastPathComponent().appending(path: ".\(file.lastPathComponent).icloud")
     }
 
-    /// A URL keeps the values it read until the run loop turns, and a check off the main thread has no run loop,
-    /// so each check reads them afresh; otherwise a file that has since downloaded would stay missing.
     static func isLocal(_ url: URL) -> Bool {
         var url = url
         url.removeAllCachedResourceValues()

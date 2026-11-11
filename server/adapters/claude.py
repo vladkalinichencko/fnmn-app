@@ -17,7 +17,6 @@ _FENCE = re.compile(r"(```[\s\S]*?```)")
 _HEADING = re.compile(r"^(#{1,4}) ", re.M)
 _LANGUAGES = {"application/vnd.ant.mermaid": "mermaid", "application/vnd.ant.react": "jsx"}
 
-# An HTML artifact is usually a whole document already; a fragment or an SVG drawing gets this page around it.
 _PAGE = """<!doctype html>
 <html>
 <head>

@@ -120,7 +120,6 @@ def main(libron_folder: Path) -> None:
             urllib.request.urlretrieve(f"{GOOGLE}{path}/OFL.txt", OUT / f"{license}-OFL.txt")
 
         for style, (weight, italic) in STYLES.items():
-            # Literata at its text optical size, the size the reader sets body text at.
             face = instance(literata_italic if italic else literata, weight, 12)
             name(face, "Literata", "Literata", style)
             face.save(OUT / f"Literata-{style}.ttf")

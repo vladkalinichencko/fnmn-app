@@ -19,8 +19,8 @@ args.add_argument('--retry-ngram', type=int, default=20)
 options = args.parse_args()
 output = options.output
 output.mkdir(parents=True, exist_ok=True)
-from mlx_vlm import generate, load  # noqa: E402
-from mlx_vlm.prompt_utils import apply_chat_template  # noqa: E402
+from mlx_vlm import generate, load
+from mlx_vlm.prompt_utils import apply_chat_template
 
 started = time.monotonic()
 model, processor = load(options.model, trust_remote_code=False)

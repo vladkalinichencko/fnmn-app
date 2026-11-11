@@ -2,7 +2,6 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// Reads an article or a book as one column of paragraphs and keeps the place on the paragraph at the top.
 struct MaterialReader: View {
     @Environment(LibraryModel.self) private var library
     let reader: ReaderCoordinator
@@ -36,8 +35,6 @@ struct MaterialReader: View {
     }
 }
 
-/// The heading of the section being read, as plain text on the left of the bar, once the heading itself has gone
-/// above the screen. A new one replaces the old through the system's blur.
 private struct SectionTitle: View {
     let heading: (index: Int, title: String)?
 

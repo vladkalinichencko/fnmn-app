@@ -2,7 +2,6 @@
 import Foundation
 import Testing
 
-/// The one rule a delivery's file names follow before anything is written.
 @Suite struct PackagePathTests {
     private let folder = URL(filePath: "/tmp/fnmn/article")
 
@@ -22,7 +21,6 @@ import Testing
         }
     }
 
-    /// A sentence such as "a..b" is not a parent directory; the rule is about the path, not two dots anywhere.
     @Test func twoDotsInsideANameAreStillAName() {
         #expect(LibraryFile.contained("a..b.jpg", in: folder)?.lastPathComponent == "a..b.jpg")
     }

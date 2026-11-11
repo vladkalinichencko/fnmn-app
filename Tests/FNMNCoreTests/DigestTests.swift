@@ -29,7 +29,6 @@ private func package(
     DigestPackage(id: id, window: window, folders: folders, posts: posts)
 }
 
-/// The encoder `DigestFile` reads with: ISO 8601 dates in UTC.
 private func encoder() -> JSONEncoder {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
@@ -42,7 +41,6 @@ private func temporaryFolder() throws -> URL {
     return folder
 }
 
-/// Writes a digest delivery with its package and optional media files.
 private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("assets/1.jpg", Data("jpg".utf8))]) throws -> URL {
     let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).tar")
     try writeTar(package: try encoder().encode(package), files: files, to: url)

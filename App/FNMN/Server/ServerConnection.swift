@@ -43,7 +43,6 @@ protocol ServerConnectionStorage {
 }
 
 struct KeychainServerConnectionStore: ServerConnectionStorage {
-    // Devices already hold a connection under these keys; a new name would lose it.
     private let addressKey = "macServiceAddress"
     private let account = "macServiceToken"
 

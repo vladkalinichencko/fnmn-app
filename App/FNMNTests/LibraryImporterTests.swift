@@ -2,7 +2,6 @@ import FNMNCore
 import XCTest
 @testable import FNMN
 
-/// Links, files and deliveries come in through one stateless importer and land in the catalog.
 @MainActor
 final class LibraryImporterTests: XCTestCase {
     private struct Fixture {
@@ -11,7 +10,6 @@ final class LibraryImporterTests: XCTestCase {
         let file: LibraryFile
     }
 
-    /// What the model's serialized write publishes, for a test that reads the catalog after a call.
     private final class Published {
         var snapshot = LibrarySnapshot()
         var write: LibraryImporter.Write {

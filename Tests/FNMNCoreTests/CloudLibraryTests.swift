@@ -76,7 +76,6 @@ private let illustrated = ImportPackage(
 
 private let page = ImportPackage.link(URL(string: "https://example.com/page")!)
 
-/// Two devices on one FNMN folder: the phone stores a delivery, and the pad finds it by looking at the folder.
 private func twoDevices() async throws -> (phone: LibraryFile, pad: LibraryFile, deliveries: [URL], root: URL) {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let cloud = root.appending(path: "FNMN")
@@ -149,6 +148,5 @@ private func twoDevices() async throws -> (phone: LibraryFile, pad: LibraryFile,
 
     try await file.removeDelivery(of: try #require(library.articles.first))
     #expect(!FileManager.default.fileExists(atPath: archive.path))
-    // A second delete, or a file already gone, is not an error.
     try await file.removeDelivery(of: try #require(library.articles.first))
 }

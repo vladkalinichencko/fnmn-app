@@ -1,11 +1,9 @@
 import Foundation
 import Observation
 
-/// The only way into the server: its saved address and token, and the port every request goes through.
 @MainActor @Observable
 final class ServerLink {
     private(set) var connection: ServerConnection?
-    /// Whether the saved connection has been read; a view shows its loading state until it is true.
     private(set) var hasReadConnection = false
     let port: any ServerPort
     private let storage: any ServerConnectionStorage
@@ -15,8 +13,6 @@ final class ServerLink {
         self.storage = storage
     }
 
-    /// The saved connection, read from the Keychain the first time something asks for it. Reading it in `init`
-    /// runs inside `FNMNApp.init`, and the synchronous Keychain call delays the first frame.
     func savedConnection() -> ServerConnection? {
         if !hasReadConnection {
             hasReadConnection = true

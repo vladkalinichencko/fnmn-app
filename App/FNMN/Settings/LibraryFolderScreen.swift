@@ -1,9 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The library lives in the FNMN folder in iCloud Drive. Without a paid developer account the app has no
-/// iCloud container of its own, so iOS lets it into that folder only after the reader points to it once;
-/// the app asks for it before anything else.
 struct LibraryFolderScreen: View {
     @Environment(ImportJobs.self) private var imports
 
@@ -23,8 +20,6 @@ struct LibraryFolderScreen: View {
     }
 }
 
-/// Picks the library folder and reads it as an import: its materials show as cards one by one, and its progress
-/// outside the app.
 struct ChooseLibraryFolderButton: View {
     let title: LocalizedStringKey
     @Environment(ImportJobs.self) private var imports

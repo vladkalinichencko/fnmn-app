@@ -3,15 +3,11 @@ import Foundation
 import Observation
 import os
 
-/// One link or file on its way into the library. It is kept as a card first, and the job shows on that card
-/// until the server's material takes its place; until the card exists, the job has a tile of its own in Unsorted.
 struct ImportJob: Identifiable, Equatable {
     enum Input: Equatable {
         case link(URL)
         case file(URL)
-        /// The FNMN folder in iCloud Drive, chosen as the library's home and read.
         case libraryFolder(URL)
-        /// A YouTube video the server downloads so the system player can play it offline.
         case videoFile(itemID: String, url: URL)
     }
 
@@ -47,7 +43,6 @@ struct ImportJob: Identifiable, Equatable {
         }
     }
 
-    /// The share done, when the stage knows it.
     var fraction: Double? {
         if case let .preparing(step, _) = phase {
             return step.fraction
@@ -55,7 +50,6 @@ struct ImportJob: Identifiable, Equatable {
         return nil
     }
 
-    /// Reading the library folder shows as the cards it adds, not as a tile, until it fails.
     var readsLibraryFolder: Bool {
         if case .libraryFolder = input { true } else { false }
     }
@@ -63,14 +57,12 @@ struct ImportJob: Identifiable, Equatable {
 
 enum ImportAction {
     case submit(ImportJob.Input, id: UUID)
-    /// The link or file is in the library as a card.
     case placed(UUID, itemID: String)
     case progressed(UUID, ImportStep)
     case finished(UUID)
     case failed(UUID, String)
     case retry(UUID)
     case dismiss(UUID)
-    /// The reader deleted a card, and whatever was being prepared for it stops.
     case deleted(itemID: String)
 }
 
@@ -121,7 +113,6 @@ func importReduce(_ jobs: [ImportJob], _ action: ImportAction) -> [ImportJob] {
     return jobs
 }
 
-/// Runs imports for the whole app, so closing a sheet or a window never loses one.
 @MainActor @Observable
 final class ImportJobs {
     private(set) var jobs: [ImportJob] = []
@@ -151,7 +142,6 @@ final class ImportJobs {
         showFirstPreparingJob(ending: action)
     }
 
-    /// The card that shows a material's job, if one is running or failed.
     func job(of itemID: String) -> ImportJob? {
         jobs.first { $0.itemID == itemID }
     }
@@ -171,8 +161,6 @@ final class ImportJobs {
         } catch {}
     }
 
-    /// The link is a card at once; the server's material from the page takes its place. A page the library
-    /// already holds a material of keeps that card, and the server prepares it again.
     private func addLink(_ link: URL, job: ImportJob) async throws {
         guard CaptureRoute.source(for: link) != nil else { throw CaptureError.notAWebLink }
         let url = link.withoutFragment
@@ -183,8 +171,6 @@ final class ImportJobs {
         try await prepareOnServer(jobID: job.id) { try await self.server.port.startJob(url: url, connection: $0) }
     }
 
-    /// The file is a card at once, with the file itself in `originals/`; the server's material has the same id,
-    /// known by the file's bytes, and replaces the card.
     private func addFile(_ url: URL, job: ImportJob) async throws {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -199,8 +185,6 @@ final class ImportJobs {
         }
     }
 
-    /// Runs a job on the server and stores the delivery it made in the card's place. A server that is not set up,
-    /// cannot be reached or could not read the material fails the job with its reason, and the card stays as it is.
     private func prepareOnServer(jobID: UUID, start: (ServerConnection) async throws -> ServerJob) async throws {
         let connection = try server.configured()
         let job = try await server.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
@@ -215,8 +199,6 @@ final class ImportJobs {
         await forget(job.id, connection: connection)
     }
 
-    /// The server drops the job and its file; one that does not hear this drops them when it restarts, so a lost
-    /// message does not fail the import.
     private func forget(_ id: String, connection: ServerConnection) async {
         try? await server.port.forget(id, connection: connection)
     }
@@ -235,7 +217,6 @@ final class ImportJobs {
         await forget(job.id, connection: connection)
     }
 
-    /// The Live Activity and the background task follow the oldest job still preparing.
     private func showFirstPreparingJob(ending action: ImportAction) {
         let shown = jobs.last { $0.isPreparing }
         if shown?.id != shownJobID, shownJobID != nil {
@@ -277,7 +258,6 @@ extension ImportJob.Input {
         }
     }
 
-    /// A video download belongs to its video from the start; a link or file gets its card once it is stored.
     var itemID: String? {
         if case let .videoFile(itemID, _) = self { itemID } else { nil }
     }

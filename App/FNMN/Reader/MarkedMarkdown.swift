@@ -2,14 +2,10 @@ import FNMNCore
 import SwiftUI
 import Textual
 
-/// Textual's Markdown with math, plus the reader's own marks: `==text==` in the source, and the highlights
-/// and strikethroughs saved for this paragraph.
 struct MarkedMarkdown: MarkupParser {
     let baseURL: URL?
     let marks: [QuoteMark]
-    /// The width of the plate's text, when the column is laid out; a picture is never wider.
     var width: CGFloat?
-    /// The opening letters of each word are bold.
     var boldsWordStarts = false
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
@@ -53,8 +49,6 @@ struct MarkedMarkdown: MarkupParser {
         return from..<text.characters.index(text.startIndex, offsetBy: end)
     }
 
-    /// Sets the opening letters of each word bold, outside code, formulas and pictures. The characters stay as they
-    /// are, so a quote is found in the text the same way.
     private static func boldWordStarts(_ text: inout AttributedString) {
         var index = text.startIndex
         var offset = 0
@@ -70,7 +64,6 @@ struct MarkedMarkdown: MarkupParser {
         }
     }
 
-    /// The paragraph's text as the reader shows it; annotation quotes are found in this string.
     static func plainText(_ markdown: String, baseURL: URL?) -> String {
         guard var text = try? parse(markdown, baseURL: baseURL) else { return markdown }
         markEqualsHighlights(&text)
@@ -82,15 +75,7 @@ struct MarkedMarkdown: MarkupParser {
             .attributedString(for: protectingMath(markdown))
     }
 
-    /// Markdown runs before the math extension, so it would eat `\,`, turn `_` into emphasis and split a
-    /// formula at its line breaks. Escaping punctuation inside `$…$` and `$$…$$` and joining the lines
-    /// hands the LaTeX through unchanged.
-    /// A display formula also becomes a paragraph of its own, so Textual draws it as a math block: one line
-    /// at its own width, which scrolls sideways when it is wider than the plate.
-    /// `\[…\]` and `\(…\)` are math too, and a `$…$` inside them would end them early, so those dollars go.
-    /// A line break inside `$…$` is a space; a price such as `$5 and $10` is text, not a formula.
     static func protectingMath(_ markdown: String) -> String {
-        // Code, a `\\` line break and an escaped dollar come first, so they are passed over whole.
         markdown.replacing(/(?s)(```.+?```|`[^`\n]+`|\\\\|\\\$)|\\\[(.+?)\\\]|\\\((.+?)\\\)|[ \t]*\n?[ \t]*\$\$(.+?)\$\$[ \t]*\n?|\$(?!\$)((?:[^$\n]|\n(?![ \t]*\n))+?)\$/) { match in
             if let code = match.output.1 { return String(code) }
             if let display = match.output.2 ?? match.output.4 {
@@ -101,7 +86,6 @@ struct MarkedMarkdown: MarkupParser {
                 if InlineMath.looksLikeProse(latex) {
                     return "\\$" + latex + "\\$"
                 }
-                // A formula this long would run past the line's end, where a line of text cannot scroll.
                 if latex.count > Self.longestInline { return "\n\n$$" + escaped(latex) + "$$\n\n" }
                 return "$" + escaped(latex) + "$"
             }
@@ -112,7 +96,6 @@ struct MarkedMarkdown: MarkupParser {
 
     private static let longestInline = 56
 
-    /// One line, and no dollar signs inside: a formula ends at the first one.
     private static func flattened(_ latex: String) -> String {
         latex.replacing(/\s*\n\s*/, with: " ").replacing(/(\\\$)|\$/) { $0.output.1.map(String.init) ?? "" }
     }
@@ -126,11 +109,6 @@ struct MarkedMarkdown: MarkupParser {
         return out
     }
 
-    /// A picture on disk takes its size from the file's header as the paragraph is parsed. Textual's own loader
-    /// reads the file only after the paragraph appears, so the paragraph grew by the picture's height and pushed
-    /// the column while it scrolled up. Textual first lays the text out before it knows its width, so the picture
-    /// is also no wider than the plate's text from the start. Textual draws a picture without taking touches, so the
-    /// picture is also a link to its own file, and a tap on it opens it on the whole screen like a link.
     private static func placePictures(_ text: inout AttributedString, within limit: CGFloat?) {
         for run in text.runs {
             guard let url = run.imageURL, url.isFileURL, let size = ImageFiles.headerSize(of: url) else { continue }
@@ -153,7 +131,6 @@ struct MarkedMarkdown: MarkupParser {
         }
     }
 
-    /// `==text==` outside code becomes a highlight and loses its delimiters.
     private static func markEqualsHighlights(_ text: inout AttributedString) {
         var searchStart = text.startIndex
         while searchStart < text.endIndex,
@@ -177,16 +154,13 @@ struct MarkedMarkdown: MarkupParser {
     }
 }
 
-/// A picture inside a paragraph, as wide as the file in pixels or the plate's text, whichever is narrower.
 private struct ParagraphPicture: Attachment {
     let url: URL
     let width: CGFloat
     let height: CGFloat
-    /// The picture's alt text.
     let description: String
 
     var body: some View {
-        // Its edge is the plate's padding in, like a code block's, so the corners share the plate's center.
         FileImage(url: url, contentMode: .fit)
             .clipShape(.rect(cornerRadius: Tokens.codeRadius, style: .continuous))
             .opensMedia(url)

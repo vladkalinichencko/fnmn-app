@@ -1,8 +1,6 @@
 import Foundation
 
 extension ReaderDocument {
-    /// The blocks on the page when these headings are folded: a folded heading stays and hides what it holds,
-    /// the cover and the title the header already shows are never in the column.
     public func visibleBlocks(folded: Set<Int>) -> [Int] {
         var visible: [Int] = []
         var index = 0
@@ -15,10 +13,6 @@ extension ReaderDocument {
         return visible
     }
 
-    /// The headings of the lowest level in each branch: those with text under them and no heading beneath that has
-    /// text of its own. Closing them hides the paragraphs and only empty headings, such as a closing "More in our
-    /// Telegram" under the last section, so every heading with text stays on the page as the contents.
-    /// The title the header shows is not one.
     public var lowestHeadings: Set<Int> {
         Set(sections.filter { index, section in
             index != repeatedTitle && section.size > 0
@@ -26,18 +20,14 @@ extension ReaderDocument {
         }.keys)
     }
 
-    /// The headings whose sections contain this block, so the block stays on the page when they are open.
     public func headings(holding block: Int) -> Set<Int> {
         Set(sections.filter { $0.key < block && $0.value.end > block }.keys)
     }
 
-    /// The headings whose whole sections lie above this block, read before it. Closed when the material opens again,
-    /// they leave what came before as contents, down to the subsections of the section the block stands in.
     public func headings(endingAbove block: Int) -> Set<Int> {
         Set(sections.filter { $0.key != repeatedTitle && $0.value.end <= block }.keys)
     }
 
-    /// Whether a heading holds anything to fold away.
     public func holdsBlocks(_ heading: Int) -> Bool {
         (sections[heading]?.end ?? 0) > heading + 1
     }

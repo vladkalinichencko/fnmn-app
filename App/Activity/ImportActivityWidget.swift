@@ -2,9 +2,6 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
-/// A wait outside the app, such as a Mac copying materials in: one row the way a system activity reads, with
-/// an icon, the title over the stage, and one ring for the share done. Imports show the system's own
-/// continued-processing view instead, so nothing starts this activity for them.
 struct ImportActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ImportActivityAttributes.self) { context in
@@ -47,7 +44,6 @@ struct ImportActivityWidget: Widget {
     }
 }
 
-/// A small ring in the Dynamic Island, the size of the icon beside it.
 private struct ShareDone: View {
     let fraction: Double?
 
@@ -57,7 +53,6 @@ private struct ShareDone: View {
     }
 }
 
-/// The share done as a ring that fills; empty while the share is unknown. It takes exactly the frame it is given.
 private struct Ring: View {
     let fraction: Double?
 

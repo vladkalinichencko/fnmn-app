@@ -6,8 +6,6 @@ protocol ImportActivityTask: AnyObject {
     func report(_ step: ImportStep)
 }
 
-/// Shows one import outside the app as a continued-processing task: the system draws it, and it keeps the app
-/// polling the server while it is in the background.
 @MainActor
 enum ImportActivity {
     @MainActor
@@ -106,7 +104,6 @@ enum ImportActivity {
         state = state.send(.end(success: status == "Ready"))
     }
 
-    /// iOS grants continued runtime only while the task reports progress; the server job runs either way.
     private static func request(id: String, title: String, step: ImportStep) -> Bool {
         let registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: id, using: .main) { task in
             MainActor.assumeIsolated {
@@ -118,7 +115,6 @@ enum ImportActivity {
         }
         let request = BGContinuedProcessingTaskRequest(identifier: id, title: title, subtitle: step.text)
         request.strategy = .fail
-        // The server job runs whether or not iOS grants the time, so a refused request only loses the background progress.
         Task { try? await BGTaskScheduler.shared.submitTaskRequest(request) }
         return true
     }
@@ -127,8 +123,6 @@ enum ImportActivity {
         guard let task = task as? BGContinuedProcessingTask else {
             return
         }
-        // The system calls this on a queue of its own, so it hops to the main actor instead of assuming it is there.
-        // The server job keeps running while the app is suspended, so losing the time is not a failed import.
         task.expirationHandler = { [weak task] in
             Task { @MainActor in
                 guard let task else {

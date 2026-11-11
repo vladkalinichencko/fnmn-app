@@ -2,7 +2,6 @@
 import Foundation
 import Testing
 
-/// Screens read `LibraryQueries` every frame, so its album summaries must fit the frame budget (5 ms).
 struct CollectedCatalogSpeedTests {
     private static let library: LibrarySnapshot = {
         var library = LibrarySnapshot()

@@ -69,8 +69,6 @@ public struct ImportPackage: Codable, Equatable, Sendable {
 }
 
 extension ImportPackage {
-    /// A link kept as it is, when the server cannot be reached; the server makes the same one (`package.link_delivery`)
-    /// when it cannot read the page, and a material made later from the page takes its place.
     public static func link(_ url: URL) -> ImportPackage {
         let path = ((url.host() ?? "") + url.path(percentEncoded: true))
         let title = path.hasSuffix("/") ? String(path.dropLast()) : path
@@ -80,8 +78,6 @@ extension ImportPackage {
         )
     }
 
-    /// A file kept as it is, known by its bytes like everything the server makes of a file (`package.file_delivery`),
-    /// so sending the same file to the server later replaces it.
     public static func file(_ file: URL) throws -> ImportPackage {
         let name = file.deletingPathExtension().lastPathComponent
         return ImportPackage(
@@ -102,16 +98,12 @@ extension ImportPackage {
 }
 
 public struct Material: Codable, Equatable, Identifiable, Sendable {
-    /// `link` is a page or file nothing could be made of: it has no text, and opening it opens its original.
     public enum Kind: String, Codable, Sendable { case article, video, book, link }
     public let id: String
     public let kind: Kind
     public let title: String
-    /// The page the material was made from; a material made from a file has none, and its original is that
-    /// file, kept in `originals/`.
     public let sourceURL: URL?
     public let byline: String?
-    /// The site or section the server found the page under; absent for a material made before it looked.
     public let source: PageSource?
 
     public init(id: String, kind: Kind, title: String, sourceURL: URL?, byline: String? = nil, source: PageSource? = nil) {
@@ -124,8 +116,6 @@ public struct Material: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-/// The page above an article that stands for its publisher: the blog's index, the author's profile or the
-/// site's front page, and the name the site gives itself when its pages say one.
 public struct PageSource: Codable, Equatable, Sendable {
     public let name: String?
     public let homepage: URL

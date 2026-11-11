@@ -1,7 +1,6 @@
 import Foundation
 import XCTest
 
-/// The app's Swift files, found from this test file: App/ sits beside Package.swift at the repository root.
 enum AppSources {
     static func files() throws -> [URL] {
         let url = URL(fileURLWithPath: #filePath)

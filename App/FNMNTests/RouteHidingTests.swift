@@ -1,7 +1,6 @@
 import XCTest
 @testable import FNMN
 
-/// A screen that grows out of a tile is read on its own; a list keeps the tabs.
 final class RouteHidingTests: XCTestCase {
     func testScreensHideTheTabBarAndListsKeepIt() {
         XCTAssertTrue(Route.item("a").hidesTabBar)

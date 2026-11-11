@@ -18,7 +18,6 @@ public enum CaptureRoute {
         return .web
     }
 
-    /// The server is reached over HTTPS; plain HTTP only on this device, for local testing.
     public static func acceptsService(_ url: URL) -> Bool {
         if url.scheme == "https" { return true }
         guard url.scheme == "http", let host = url.host?.lowercased() else { return false }

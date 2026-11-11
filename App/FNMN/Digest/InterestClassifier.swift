@@ -2,16 +2,12 @@ import CoreML
 import FNMNCore
 import NaturalLanguage
 
-/// The topic classifier a digest carries: a CoreML text model the Mac trained from the sources' folders and the
-/// engagement, compiled here once per sync and asked for one label per post.
 enum InterestClassifier {
     struct Labels: Sendable {
         let labels: [String: String]
         let error: String?
     }
 
-    /// The folder each post's text belongs to. A model that will not compile or load leaves every post without
-    /// a label, and the magazine keeps the sources' own folders; the error reaches the tab instead of vanishing.
     @concurrent
     static func labels(modelURL: URL, posts: [DigestPackage.Post]) async -> Labels {
         let loadedModel = loaded(at: modelURL)

@@ -10,21 +10,16 @@ enum SpeedPlayback: Equatable {
     case ended
 }
 
-/// The clock of speed reading: which tokens are on screen, whether they run on by themselves, and how far the text
-/// has been shown. What was shown becomes read only when the reader sends it to the coordinator.
 @MainActor @Observable
 final class SpeedPlayer {
     private(set) var text: SpeedText?
-    /// The tokens on screen.
     private(set) var frame = 0..<0
     private(set) var mode = SpeedPlayback.loading
-    /// The last token shown so far. Going back a sentence leaves it where it is, so rereading takes nothing read away.
     private(set) var furthest: Int?
     var wordsPerMinute = 250
     var pauseProfile = SpeedPauseProfile()
     var wordsPerFrame = 1 {
         didSet {
-            // A paused frame takes the new size at once; a running one at the next step.
             if mode != .playing, let text {
                 frame = text.frame(at: frame.lowerBound, words: wordsPerFrame)
             }
@@ -45,7 +40,6 @@ final class SpeedPlayer {
         return nil
     }
 
-    /// The text is split into tokens off the main thread: a book is hundreds of thousands of words.
     func load(_ document: ReaderDocument, from start: ReadingLine) async {
         guard text == nil else { return }
         startedAt = .now
@@ -65,7 +59,6 @@ final class SpeedPlayer {
         return frame.upperBound >= text.tokens.count
     }
 
-    /// The block of the last token shown and the share of that block's tokens shown up to it.
     var shown: ReadingLine? {
         guard let text, let furthest else { return nil }
         return ReadingLine(piece: text.tokens[furthest].block, fraction: text.tokens[furthest].share)
@@ -75,7 +68,6 @@ final class SpeedPlayer {
         isPlaying ? pause() : play()
     }
 
-    /// Words run on from the frame on screen. A block shown whole waits for Continue.
     func play() {
         guard mode != .playing, let token, !token.isStop else {
             return
@@ -120,7 +112,6 @@ final class SpeedPlayer {
         jump(to: next)
     }
 
-    /// From a block shown whole on to the words after it, running again.
     func continuePastStop() {
         guard !isAtEnd else { return }
         show(frame.upperBound)
@@ -231,10 +222,6 @@ struct Press: Equatable {
     }
 }
 
-/// Speed reading over the whole screen: the words one or two at a time at one point, the letter to rest the eye on in
-/// red and set under a mark, the words around them faint. It covers the reader instead of lying over the column, since
-/// nothing of the page should draw the eye away, and it leaves only through Done, which hands what was shown to the
-/// reader as read.
 struct SpeedReader: View {
     @Environment(LibraryModel.self) private var library
     @Environment(\.scenePhase) private var scenePhase
@@ -245,7 +232,6 @@ struct SpeedReader: View {
     @AppStorage private var wordsPerFrame: Int
     @AppStorage private var pauseProfileJSON: String
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
-    /// The current block shows whole while a finger rests on the words.
     @State private var press = Press()
     @State private var holdTimer: Task<Void, Never>?
 
@@ -259,7 +245,6 @@ struct SpeedReader: View {
     }
 
     private static let speeds = 150...600
-    /// Above this speed, studies find less of the text understood.
     private static let comfortable = 300
 
     var body: some View {
@@ -285,7 +270,6 @@ struct SpeedReader: View {
         .onChange(of: wordsPerMinute) { player.wordsPerMinute = wordsPerMinute }
         .onChange(of: wordsPerFrame) { player.wordsPerFrame = wordsPerFrame }
         .onChange(of: pauseProfileJSON) { player.pauseProfile = pauseProfile }
-        // A locked screen or another app stops the words, and what was shown is saved in case the app is closed.
         .onChange(of: scenePhase) {
             guard scenePhase != .active else { return }
             player.pause()
@@ -344,7 +328,6 @@ struct SpeedReader: View {
         pauseProfileJSON = next.json
     }
 
-    /// The section being read, how much of the material lies behind and how long the rest takes at this speed.
     private var progress: some View {
         let token = player.token
         let blocks = max(reader.document.blocks.count, 1)
@@ -405,7 +388,6 @@ struct SpeedReader: View {
         }
     }
 
-    /// The frame on its fixed point, the word before it and the word after it faint on either side.
     private func words(in text: SpeedText, token: SpeedToken) -> some View {
         let frame = player.frame
         let shown = text.tokens[frame].map(\.text).joined(separator: " ")
@@ -425,8 +407,6 @@ struct SpeedReader: View {
             .accessibilityAction { player.toggle() }
     }
 
-    /// One finger does all on the words: a tap plays or pauses, a swipe to the right goes back a sentence and one to
-    /// the left on a sentence, and resting the finger shows the whole block until it lifts.
     private var touch: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
@@ -464,7 +444,6 @@ struct SpeedReader: View {
             }
     }
 
-    /// A block as the column draws it, for what cannot be read a word at a time and for a look at the whole paragraph.
     private func plate(_ block: Int) -> some View {
         ScrollView {
             BlockView(
@@ -528,7 +507,6 @@ struct SpeedReader: View {
         }
     }
 
-    /// The heading of the section a block stands in, or the material's title before the first one.
     private func sectionTitle(of block: Int) -> String {
         guard let heading = reader.document.heading(before: block), heading.index != reader.document.repeatedTitle else {
             return reader.title
@@ -541,7 +519,6 @@ struct SpeedReader: View {
     }
 }
 
-/// The page color of the reader's chosen background, behind a block shown over the words.
 private struct ReaderBackgroundColor: View {
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
 
@@ -550,9 +527,6 @@ private struct ReaderBackgroundColor: View {
     }
 }
 
-/// Words set so the letter to rest the eye on stands at the same point whatever the word: the point lies a little left
-/// of the middle, where a word's recognition point falls, and two short marks above and below it show it apart from
-/// the color.
 private struct PivotWord: View {
     let text: String
     let before: String
@@ -595,7 +569,6 @@ private struct PivotWord: View {
 }
 
 extension HorizontalAlignment {
-    /// The point the eye rests on, a little left of the middle of the line.
     private enum Pivot: AlignmentID {
         static func defaultValue(in context: ViewDimensions) -> CGFloat { context.width * 0.42 }
     }

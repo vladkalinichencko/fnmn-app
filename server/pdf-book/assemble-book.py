@@ -12,8 +12,8 @@ import unicodedata
 import pymupdf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from grounding import blocks as grounding_blocks  # noqa: E402
-from math_issues import math_issues  # noqa: E402
+from grounding import blocks as grounding_blocks
+from math_issues import math_issues
 
 
 LABEL = re.compile(r'\(([A-Za-zε∞]?\d+(?:\.\d+)+)\)[,.]?')

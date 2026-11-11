@@ -2,9 +2,7 @@
 import Foundation
 import XCTest
 
-/// Test form of the `snapshot_catalog_selector_in_view` lint rule; see AGENTS.md.
 final class HotPathGuardTests: XCTestCase {
-    /// Only `LibraryModel` builds the queries, once per catalog change.
     private static let allowed = "LibraryModel.swift"
 
     func testViewBodiesDoNotBuildTheCatalog() throws {

@@ -1,9 +1,6 @@
 import FNMNCore
 import SwiftUI
 
-/// The digest tab: the newest delivery as a magazine, one column on a phone and as many as the width holds on
-/// an iPad, sectioned by the folders the subscriptions and the classifier name. The search field narrows the
-/// open digest; the Sources button shows what the Mac reads.
 struct DigestScreen: View {
     @Environment(DigestModel.self) private var digests
     @Environment(LibraryModel.self) private var library
@@ -129,6 +126,5 @@ struct DigestScreen: View {
         .noResults(for: query, when: found.isEmpty)
     }
 
-    /// A card is never narrower than about 330 points, so a phone holds one and an iPad two or three.
     private static let columns = [GridItem(.adaptive(minimum: 330, maximum: 640), spacing: Tokens.gap)]
 }

@@ -1,7 +1,5 @@
 import Foundation
 
-/// Items bucketed by a key, in the order the keys were first seen, with the name each key carries. A key given
-/// up front keeps its place even when no item falls into it; the caller decides whether an empty group shows.
 enum OrderedGroups {
     struct Group<Element> {
         let key: String

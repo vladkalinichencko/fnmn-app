@@ -2,8 +2,6 @@ import FNMNCore
 import UIKit
 import UniformTypeIdentifiers
 
-/// No screen: the link or PDF goes into the app group's inbox and the app opens over the sheet, which closes.
-/// The app imports the inbox as soon as it is active.
 @objc(ShareViewController)
 final class ShareViewController: UIViewController {
     private var didHandOff = false
@@ -29,8 +27,6 @@ final class ShareViewController: UIViewController {
         extensionContext?.completeRequest(returningItems: nil)
     }
 
-    /// An extension has no `UIApplication.shared`, and `extensionContext.open` is for other extension types; the
-    /// application object is still on the responder chain, and it opens the app's own scheme.
     private func openApp() {
         guard let url = URL(string: "fnmn://inbox") else { return }
         var responder: UIResponder? = self
@@ -62,7 +58,6 @@ final class ShareViewController: UIViewController {
     private func dropFile(of provider: NSItemProvider, as type: UTType, into inbox: CaptureInbox) async -> Bool {
         await withCheckedContinuation { continuation in
             provider.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, _ in
-                // The file is deleted when this handler returns, so it is copied in here.
                 continuation.resume(returning: url.flatMap { try? inbox.drop(file: $0) } != nil)
             }
         }

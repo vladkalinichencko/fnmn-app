@@ -5,8 +5,6 @@ public enum TextMark: String, Codable, CaseIterable, Sendable {
     case highlight, strikethrough
 }
 
-/// A run of a paragraph that carries a mark. The quote anchors it: character offsets move whenever the renderer
-/// changes, the paragraph text does not.
 public struct QuoteMark: Codable, Hashable, Sendable {
     public var quote: String
     public var mark: TextMark
@@ -17,13 +15,10 @@ public struct QuoteMark: Codable, Hashable, Sendable {
     }
 }
 
-/// Everything the reader keeps on one paragraph: its marked runs and its note. A paragraph has one record, so a
-/// second highlight joins the first and the note sits beside both.
 public struct Annotation: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var materialID: String
     public var piece: Int
-    /// The paragraph's plain text when the record was last written, so the shelf shows it without opening the material.
     public var text: String
     public var marks: [QuoteMark]
     public var note: String
@@ -42,19 +37,16 @@ public struct Annotation: Codable, Hashable, Identifiable, Sendable {
         self.updatedAt = updatedAt
     }
 
-    /// The same on every device, so a deletion made on one finds the record on the others.
     static func id(materialID: String, piece: Int) -> UUID {
         let digest = Array(SHA256.hash(data: Data("\(materialID)#\(piece)".utf8)).prefix(16))
         return digest.withUnsafeBytes { UUID(uuid: $0.load(as: uuid_t.self)) }
     }
 
-    /// What the card shows of the paragraph: the marked runs, or the whole paragraph when none is marked.
     public var quoted: String {
         marks.isEmpty ? text : marks.map(\.quote).joined(separator: "\n")
     }
 }
 
-/// A run of a paragraph's text in UTF-16 offsets, the unit UIKit selection reports.
 public struct TextSpan: Codable, Equatable, Hashable, Sendable {
     public var start: Int
     public var length: Int
@@ -85,7 +77,6 @@ public struct TextSpan: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// The paragraph an edit applies to, as the reader shows it. A nil span is the whole paragraph.
 public struct AnnotationTarget: Codable, Equatable, Sendable {
     public let materialID: String
     public let piece: Int
@@ -121,7 +112,6 @@ public struct AnnotationTarget: Codable, Equatable, Sendable {
     }
 }
 
-/// What the selection menu offers for a target: each mark or its removal, plus the note.
 public enum AnnotationCommand: Equatable, Sendable {
     case mark(TextMark)
     case unmark(TextMark)
@@ -134,7 +124,6 @@ public func annotationCommands(_ annotations: [Annotation], at target: Annotatio
 }
 
 extension Array where Element == Annotation {
-    /// Marks the target and folds every touching run with the same mark into one.
     func marking(_ mark: TextMark, at target: AnnotationTarget, date: Date) -> [Annotation] {
         editing(target, date: date) { record in
             var merged = target.resolvedSpan
@@ -147,7 +136,6 @@ extension Array where Element == Annotation {
         }
     }
 
-    /// Removes the mark from every run it touches; a paragraph that keeps its note stays as a note.
     func unmarking(_ mark: TextMark, at target: AnnotationTarget, date: Date) -> [Annotation] {
         guard contains(where: { target.touchesMark(mark, in: $0) }) else { return self }
         return editing(target, date: date) { record in
@@ -155,14 +143,11 @@ extension Array where Element == Annotation {
         }
     }
 
-    /// Writes the paragraph's note.
     func noting(_ note: String, at target: AnnotationTarget, date: Date) -> [Annotation] {
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
         return editing(target, date: date) { $0.note = text }
     }
 
-    /// Changes the paragraph's record, making it when the paragraph has none, and drops it once it holds neither a
-    /// mark nor a note.
     private func editing(_ target: AnnotationTarget, date: Date, _ change: (inout Annotation) -> Void) -> [Annotation] {
         var next = self
         let index = next.firstIndex { target.holds($0) }
@@ -181,8 +166,6 @@ extension Array where Element == Annotation {
     }
 }
 
-/// The part of a paragraph a card shows: all of it when it is short, otherwise a window that opens just before the
-/// first mark, cut between words, with an ellipsis where text was left out.
 public struct AnnotationExcerpt: Equatable, Sendable {
     public struct Run: Equatable, Sendable {
         public var range: NSRange
@@ -190,7 +173,6 @@ public struct AnnotationExcerpt: Equatable, Sendable {
     }
 
     public var text: String
-    /// The marked runs inside `text`, in UTF-16 offsets.
     public var runs: [Run]
 }
 

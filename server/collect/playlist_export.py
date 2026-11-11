@@ -24,7 +24,6 @@ from collect import ytdlp
 
 LIBRARY = "https://www.youtube.com/feed/playlists"
 
-# The two pseudo-playlists do not resolve as playlist?list= IDs.
 SPECIAL = {"WL": ":ytwatchlater", "LL": ":ytliked"}
 
 
@@ -132,8 +131,6 @@ def export_playlists(playlists: list[dict], output: Path, cookies_from_browser: 
             continue
         rows += found
         print(f"[{index}/{len(playlists)}] {playlist['title']}: {len(found)} videos", file=sys.stderr)
-    # Feed tabs (Watch Later) omit channel/title on some entries; backfill
-    # from rows where the same video appeared with full metadata.
     known: dict[str, dict] = {}
     for row in rows:
         if row["video_title"] or row["channel"]:
@@ -173,7 +170,6 @@ def main() -> None:
 
     if args.playlist:
         playlists = [{"id": value.split("list=")[-1] if "list=" in value else value, "title": value} for value in args.playlist]
-        # Resolve display titles through the library listing when possible.
         try:
             known = {item["id"]: item["title"] for item in list_library(args.cookies_from_browser, args.cookies)}
         except RuntimeError:

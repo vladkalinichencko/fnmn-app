@@ -1,24 +1,15 @@
 import CryptoKit
 import Foundation
 
-/// A prepared article or video as the catalog lists it. Its text stays on disk and is read when the reader
-/// opens it; what the screens show of it is worked out once, when it enters the library.
 public struct ArticleEntry: Codable, Equatable, Sendable {
     public let material: Material
     public let excerpt: String?
     public let cover: Cover?
-    /// Title, address, byline, section titles and headings, one per line and folded for search.
     public let searchText: String
-    /// Changes exactly when the text does, so a new text is noticed without the old one in memory.
     public let textDigest: String
-    /// The archive's name in the FNMN folder's `deliveries/` in iCloud Drive, where the material lives;
-    /// nil for a material kept inside the app.
     public let delivery: String?
-    /// When the archive last changed as this device read it; a file with another date was rewritten since.
     public let deliveredAt: Date?
 
-    /// A material that lives in iCloud keeps its cover as a small picture in the app, so a tile never
-    /// downloads the whole archive.
     public init(_ package: ImportPackage, delivery: String? = nil, deliveredAt: Date? = nil) {
         material = package.material
         self.deliveredAt = deliveredAt
@@ -50,8 +41,6 @@ public struct ArticleEntry: Codable, Equatable, Sendable {
 }
 
 extension ArticleEntry {
-    /// What the material's original is called in `originals/` without its extension: the delivery's name,
-    /// so a file and the material made from it sit side by side.
     public var originalStem: String? {
         delivery.map { ($0 as NSString).deletingPathExtension }
     }
