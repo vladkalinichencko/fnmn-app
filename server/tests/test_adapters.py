@@ -148,7 +148,7 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("So how can Astra read neural network weights?", package["body"])
         self.assertIn("https://x.com/rikiyatakehi/status/2117313742891327994", package["body"])
         self.assertNotIn("t.co/JKjY2S5KZ1", package["body"])
-        self.assertIn("## Quoted: Rikiya Takehi", package["body"])
+        self.assertIn("> We asked GPT-6 Astra", package["body"])
         images = [name for name in delivery.files if name.endswith(".jpg")]
         self.assertEqual(len(images), 1)
         self.assertEqual(delivery.files[images[0]], b"jpg-bytes")
@@ -167,7 +167,8 @@ class AdapterTests(unittest.TestCase):
             delivery = import_link("https://x.com/ravfogel/status/2118000000000000001", [], fakes.web(fetch_text, lambda url: b""))
         body = delivery.package["body"]
         self.assertLess(body.index("So how can Astra read"), body.index("Part two of the thread"))
-        self.assertIn("## Shauli Ravfogel", body)
+        self.assertIn("[thread on X](https://x.com/ravfogel/status/2117642301442752692)", body)
+        self.assertNotIn("## ", body)
 
     def test_the_readers_conversation_gives_the_threads_continuation(self):
         from adapters import x

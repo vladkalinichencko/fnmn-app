@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
 from urllib.parse import urlparse
 
 from lxml import html
@@ -109,30 +108,32 @@ def _article_parts(markup: str) -> tuple[str, str | None, list[str], list[str]]:
 
 def _thread(post: dict, url: str, web: Web, report: Report) -> Document:
     """The post and the messages above it come from the syndication payload; the author's continuation
-    below it, when the reader browser is there, from the conversation the permalink page renders."""
+    below it, when the reader browser is there, from the conversation the permalink page renders.
+    The thread is one author's run of posts, so the text stands without names or dates; the link
+    at the end opens the thread's first post on X."""
     files: dict[str, bytes] = {}
     user = post.get("user") or {}
     handle = (user.get("screen_name") or "").strip()
     name = (user.get("name") or "").strip() or "X"
-    sections: list[str] = []
-    for ancestor in _ancestors(web, post):
-        who = ((ancestor.get("user") or {}).get("name") or "X").strip()
-        sections.append(f"## {who} · {_date(ancestor.get('created_at'))}\n\n{_plain(ancestor)}")
-    sections.append(f"## {name} · {_date(post.get('created_at'))}\n\n{_message_markdown(post, web, files, report)}")
+    ancestors = _ancestors(web, post)
+    messages = [_plain(ancestor) for ancestor in ancestors]
+    messages.append(_message_markdown(post, web, files, report))
     quoted = post.get("quoted_tweet")
     if quoted:
-        who = ((quoted.get("user") or {}).get("name") or "X").strip()
-        sections.append(f"## Quoted: {who}\n\n> {_plain(quoted)}")
+        messages.append(f"> {_plain(quoted)}")
     try:
         with reader.job("x") as tab:
             tab.goto(_permalink(post))
             tab.crawl(4)
             continuation, media = _continuations(tab.html(), handle, post["id_str"], tab.fetch)
-            sections += continuation
+            messages += continuation
             files.update(media)
     except (reader.ReaderError, OSError):
         pass
-    return Document("# " + name + "\n\n" + "\n\n".join(sections) + "\n", name, (user.get("name") or "").strip() or None, files=files)
+    root = ancestors[0] if ancestors else post
+    body = "# " + name + "\n\n" + "\n\n".join(part for part in messages if part)
+    body += f"\n\n[thread on X]({_permalink(root)})\n"
+    return Document(body, name, (user.get("name") or "").strip() or None, files=files)
 
 
 def _ancestors(web: Web, post: dict) -> list[dict]:
@@ -163,7 +164,7 @@ def _continuations(markup: str, handle: str, focal_id: str, fetch) -> tuple[list
             if path not in files:
                 files[path] = fetch(source)
             parts.append(f"![{index + 1}]({path})")
-        sections.append(f"## {message['name']} · {_date(message['posted_at'])}\n\n" + "\n\n".join(parts))
+        sections.append("\n\n".join(parts))
         if len(sections) >= THREAD_LIMIT:
             break
     return sections, files
@@ -179,14 +180,10 @@ def _conversation(markup: str) -> list[dict]:
         if match is None:
             continue
         texts = article.xpath('.//div[@data-testid="tweetText"]')
-        names = article.xpath('.//div[@data-testid="User-Name"]//text()')
-        times = article.xpath('.//time/@datetime')
         messages.append({
             "handle": match.group(1),
             "id": match.group(2),
-            "name": next((n.strip() for n in names if n.strip()), match.group(1)),
             "text": texts[0].text_content().strip() if texts else None,
-            "posted_at": times[0] if times else None,
             "images": [src for src in article.xpath('.//img[contains(@src,"/media/")]/@src')],
         })
     return messages
@@ -231,14 +228,3 @@ def _plain(post: dict) -> str:
     for entity in (post.get("entities") or {}).get("urls") or []:
         text = text.replace(entity.get("url") or "", entity.get("expanded_url") or entity.get("url") or "")
     return _TRAILING_LINK.sub("", text).strip()
-
-
-def _first_words(text: str, count: int = 8) -> str:
-    words = text.split()
-    return " ".join(words[:count]) + ("…" if len(words) > count else "")
-
-
-def _date(value: str | None) -> str:
-    if not value:
-        return "undated"
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%-d %b %Y")
