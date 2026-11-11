@@ -86,6 +86,7 @@ struct PostCard: View {
             if digests.refreshing.contains(post.id) {
                 ProgressView()
                     .controlSize(.small)
+                    .progressViewStyle(GraySpinner())
             } else {
                 Button("Retry") {
                     Task { await digests.refresh(post, digest: digest) }

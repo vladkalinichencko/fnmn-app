@@ -1,8 +1,8 @@
 import Foundation
 
-enum CloudFolder {
+public enum CloudFolder {
     @concurrent
-    static func download(_ item: URL, timeout: Duration = .seconds(600)) async throws {
+    public static func download(_ item: URL, timeout: Duration = .seconds(600)) async throws {
         var pending = missing(in: item)
         for file in pending {
             try? FileManager.default.startDownloadingUbiquitousItem(at: file)
@@ -10,7 +10,7 @@ enum CloudFolder {
         let deadline = ContinuousClock.now + timeout
         var pause = Duration.milliseconds(500)
         while !pending.isEmpty {
-            guard ContinuousClock.now < deadline else { throw CloudFolderError.notDownloaded(pending.count) }
+            guard ContinuousClock.now < deadline else { throw CloudFolderError.notDownloaded(count: pending.count) }
             try await Task.sleep(for: pause)
             let still = pending.filter { !isLocal($0) }
             pause = still.count == pending.count ? min(pause * 2, .seconds(5)) : .milliseconds(500)
@@ -18,12 +18,12 @@ enum CloudFolder {
         }
     }
 
-    static func contains(_ file: URL) -> Bool {
+    public static func contains(_ file: URL) -> Bool {
         FileManager.default.fileExists(atPath: file.path) || FileManager.default.fileExists(atPath: placeholder(of: file).path)
     }
 
     @concurrent
-    static func archives(in folder: URL?, subfolder: String) async throws -> [URL] {
+    public static func archives(in folder: URL?, subfolder: String) async throws -> [URL] {
         guard let folder else {
             return []
         }
@@ -35,7 +35,7 @@ enum CloudFolder {
     }
 
     @concurrent
-    static func files(in folder: URL, withExtension pathExtension: String? = nil) async throws -> [URL] {
+    public static func files(in folder: URL, withExtension pathExtension: String? = nil) async throws -> [URL] {
         try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
             .map(downloadedName)
             .filter { pathExtension == nil ? !$0.lastPathComponent.hasPrefix(".") : $0.pathExtension == pathExtension }
@@ -66,7 +66,7 @@ enum CloudFolder {
         file.deletingLastPathComponent().appending(path: ".\(file.lastPathComponent).icloud")
     }
 
-    static func isLocal(_ url: URL) -> Bool {
+    public static func isLocal(_ url: URL) -> Bool {
         var url = url
         url.removeAllCachedResourceValues()
         let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
@@ -75,12 +75,18 @@ enum CloudFolder {
     }
 }
 
-enum CloudFolderError: LocalizedError {
-    case notDownloaded(Int)
+public enum CloudFolderError: LocalizedError {
+    case notDownloaded(count: Int, name: String? = nil)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
-        case let .notDownloaded(count): "\(count) files are still downloading from iCloud. Try again when they are on this device."
+        case let .notDownloaded(count, name):
+            if let name {
+                return "“\(name)” is still downloading from iCloud. Try again when it is on this device."
+            }
+            return count == 1
+                ? "1 file is still downloading from iCloud. Try again when it is on this device."
+                : "\(count) files are still downloading from iCloud. Try again when they are on this device."
         }
     }
 }

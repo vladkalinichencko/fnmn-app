@@ -102,6 +102,25 @@ struct SearchIndexTests {
         #expect(offMain.count == 1)
     }
 
+    @Test func hitsStreamAsTheyAreFound() async {
+        let bodies = [
+            "article:one": searchBody(["An entropy of ideas."], id: "article:one"),
+            "article:two": searchBody(["An entropy of words."], id: "article:two"),
+        ]
+        let index = await SearchIndex.load(bodies: bodies)
+        var yields: [[SearchHit]] = []
+        let found = await index.hits(
+            query: "entropy",
+            articles: [articleEntry("Entropy in kernels", id: "article:one")],
+            annotations: [],
+            addedAt: [:],
+            plainText: identity
+        ) { yields.append($0) }
+        #expect(yields.count == 3)
+        #expect(yields.first?.first?.source == .material)
+        #expect(Set(yields.flatMap(\.self).map(\.id)) == Set(found.map(\.id)))
+    }
+
     @Test func hitsOverCollectedBodiesFitTheFrameBudget() async {
         let bodies = Dictionary(uniqueKeysWithValues: (0 ..< 1500).map { index in
             ("article:\(index)", searchBody((1 ... 40).map { $0 == 20 ? "Paragraph \($0) about entropy." : "Paragraph \($0) about kernels." }, id: "article:\(index)"))

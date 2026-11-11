@@ -24,6 +24,7 @@ struct DigestScreen: View {
                         ToolbarItem(placement: .topBarTrailing) {
                             ProgressView()
                                 .controlSize(.small)
+                                .progressViewStyle(GraySpinner())
                         }
                     }
                 }

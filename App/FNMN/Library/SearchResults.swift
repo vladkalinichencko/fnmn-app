@@ -25,19 +25,20 @@ struct SearchResults: View {
                     }
                 }
             }
+            if state.isSearching {
+                HStack {
+                    ProgressView()
+                        .progressViewStyle(GraySpinner())
+                    Spacer(minLength: 0)
+                }
+                .listRowSeparator(.hidden)
+            }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .overlay {
-            switch state {
-            case .idle, .searching:
-                if state == .searching {
-                    Loading()
-                }
-            case let .ready(found):
-                if found.isEmpty {
-                    ContentUnavailableView.search(text: query)
-                }
+            if state.isReady, hits.isEmpty {
+                ContentUnavailableView.search(text: query)
             }
         }
         .task(id: query) {
@@ -51,8 +52,13 @@ struct SearchResults: View {
             state = .idle
             return
         }
-        state = .searching
-        let found = await library.search(needle)
+        state = .searching(needle, [])
+        let found = await library.search(needle) { newHits in
+            guard !Task.isCancelled, case let .searching(current, shown) = state, current == needle else {
+                return
+            }
+            state = .searching(needle, shown + newHits)
+        }
         guard !Task.isCancelled else {
             return
         }
@@ -75,14 +81,30 @@ struct SearchResults: View {
 
 private enum SearchScreenState: Equatable {
     case idle
-    case searching
+    case searching(String, [SearchHit])
     case ready([SearchHit])
 
     var hits: [SearchSource: [SearchHit]] {
-        guard case let .ready(found) = self else {
-            return [:]
+        switch self {
+        case .idle:
+            [:]
+        case let .searching(_, found), let .ready(found):
+            Dictionary(grouping: found, by: \.source)
         }
-        return Dictionary(grouping: found, by: \.source)
+    }
+
+    var isSearching: Bool {
+        if case .searching = self {
+            return true
+        }
+        return false
+    }
+
+    var isReady: Bool {
+        if case .ready = self {
+            return true
+        }
+        return false
     }
 }
 

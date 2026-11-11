@@ -72,9 +72,9 @@ final class LibraryImporter {
         in folder: URL?, onStep: @escaping @MainActor (ImportStep) -> Void = { _ in }, write: @escaping Write
     ) async throws {
         let target = LibraryDeliveries(file: file, write: write, onStep: onStep)
-        let failures = await DeliverySync.run(target, in: folder)
-        guard failures.isEmpty else {
-            throw DeliverySyncError.failed(failures.joined(separator: "; "))
+        let result = await DeliverySync.run(target, in: folder)
+        guard result.failures.isEmpty else {
+            throw DeliverySyncError.failed(result.failures.joined(separator: "; "))
         }
     }
 

@@ -99,7 +99,7 @@ struct SettingsScreen: View {
     private var status: some View {
         switch check {
         case .editing: EmptyView()
-        case .checking: ProgressView()
+        case .checking: ProgressView().progressViewStyle(GraySpinner())
         case .connected: Label("Connected", systemImage: "checkmark.circle")
         case let .failed(message, saved):
             VStack(alignment: .leading, spacing: 4) {

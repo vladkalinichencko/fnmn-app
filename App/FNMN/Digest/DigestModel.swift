@@ -154,9 +154,9 @@ final class DigestModel {
 
     private func take(in folder: URL) async -> (failures: [String], took: Bool) {
         let target = DigestDeliveries(file: file, index: index, unpacked: Set(digests.map(\.id)))
-        let failures = await DeliverySync.run(target, in: folder)
+        let result = await DeliverySync.run(target, in: folder)
         index = target.index
-        return (failures, target.took)
+        return (result.failures, target.took)
     }
 
     private func scoreIfNeeded() {

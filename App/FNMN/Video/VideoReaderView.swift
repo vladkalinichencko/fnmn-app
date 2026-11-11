@@ -127,6 +127,8 @@ struct VideoReaderView: View {
                     defer { downloading = nil }
                     do {
                         try await CloudFolder.download(file, timeout: .seconds(1800))
+                    } catch CloudFolderError.notDownloaded(_, _) {
+                        library.failure = CloudFolderError.notDownloaded(count: 1, name: package.material.title).localizedDescription
                     } catch {
                         library.failure = error.localizedDescription
                     }

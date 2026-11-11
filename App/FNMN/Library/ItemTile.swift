@@ -218,7 +218,7 @@ struct JobStatus: View {
             switch phase {
             case let .preparing(step, _):
                 if step.fraction == nil {
-                    ProgressView().controlSize(.mini)
+                    ProgressView().controlSize(.mini).progressViewStyle(GraySpinner())
                 }
                 Text(step.text).lineLimit(1)
             case let .failed(message, _):

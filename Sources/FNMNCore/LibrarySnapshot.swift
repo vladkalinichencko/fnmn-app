@@ -113,6 +113,7 @@ public enum LibraryError: Error, Equatable {
     case albumNameTaken(String)
     case emptyAlbumName
     case cloudFolderMissing
+    case catalogSyncing
 }
 
 extension LibraryError: LocalizedError {
@@ -124,6 +125,7 @@ extension LibraryError: LocalizedError {
         case let .albumNameTaken(name): "A collection named “\(name)” already exists."
         case .emptyAlbumName: "Enter a collection name."
         case .cloudFolderMissing: "This item lives in the FNMN folder in iCloud Drive. Choose that folder again with + → File."
+        case .catalogSyncing: "The folder’s catalog is still syncing from iCloud. Try again in a moment."
         }
     }
 }

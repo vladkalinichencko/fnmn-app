@@ -237,7 +237,13 @@ public actor LibraryFile {
     }
 
     public func applyBrowserCatalog(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let catalog = try decoder.decode(BrowserCatalog.self, from: Data(contentsOf: source.appending(path: "catalog.json")))
+        let data: Data
+        do {
+            data = try Data(contentsOf: source.appending(path: "catalog.json"))
+        } catch CocoaError.fileReadNoSuchFile {
+            throw LibraryError.catalogSyncing
+        }
+        let catalog = try decoder.decode(BrowserCatalog.self, from: data)
         var next = snapshot
         next.retireAlbums(catalog.collections.map(\.name))
         next.browserCatalog = catalog
@@ -262,10 +268,10 @@ public actor LibraryFile {
         return next
     }
 
-    public func changedDeliveries(_ files: [URL], in snapshot: LibrarySnapshot) throws -> (deliveries: [URL], snapshot: LibrarySnapshot) {
+    public func changedDeliveries(_ files: [URL], in snapshot: LibrarySnapshot) async throws -> (deliveries: [URL], snapshot: LibrarySnapshot) {
         var snapshot = snapshot
         if !deletionsKnown {
-            for event in try unreadJournalEvents(except: "", sync: JournalKnowledge()).events {
+            for event in try await unreadJournalEvents(except: "", sync: JournalKnowledge()).events {
                 guard case let .library(.delete(itemID)) = event.change else { continue }
                 snapshot.deletedAt[itemID] = max(snapshot.deletedAt[itemID] ?? .distantPast, event.time)
             }
@@ -501,7 +507,7 @@ public actor LibraryFile {
         if let coordination { throw coordination }
     }
 
-    public func unreadJournalEvents(except device: String, sync: JournalKnowledge) throws -> (events: [JournalEvent], applied: [String: Int]) {
+    public func unreadJournalEvents(except device: String, sync: JournalKnowledge) async throws -> (events: [JournalEvent], applied: [String: Int]) {
         guard let folder = journalFolder(),
               let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
             return ([], sync.applied)
@@ -510,6 +516,11 @@ public actor LibraryFile {
         var applied = sync.applied.filter { name, _ in others.contains { $0.lastPathComponent == name } }
         var events: [JournalEvent] = []
         for file in others {
+            do {
+                try await CloudFolder.download(file, timeout: .seconds(60))
+            } catch CloudFolderError.notDownloaded(_, _) {
+                continue
+            }
             let name = file.lastPathComponent
             var text = ""
             try coordinatedRead(at: file) { url in text = (try? String(contentsOf: url, encoding: .utf8)) ?? "" }

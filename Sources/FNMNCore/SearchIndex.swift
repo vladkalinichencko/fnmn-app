@@ -24,7 +24,8 @@ public struct SearchIndex: Sendable {
         articles: [ArticleEntry],
         annotations: [Annotation],
         addedAt: [String: Date],
-        plainText: @Sendable (String) -> String
+        plainText: @Sendable (String) -> String,
+        yield: @MainActor ([SearchHit]) -> Void = { _ in }
     ) async -> [SearchHit] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else {
@@ -38,25 +39,38 @@ public struct SearchIndex: Sendable {
             let text = article.excerpt ?? article.material.byline ?? article.material.sourceURL?.host() ?? ""
             return SearchHit(itemID: article.material.id, source: .material, text: text)
         }
+        if !hits.isEmpty {
+            await yield(hits)
+        }
         for (materialID, body) in bodies {
             guard !Task.isCancelled else {
                 return []
             }
+            var found: [SearchHit] = []
             for paragraph in body.paragraphs where foldedParagraphs[materialID]?[paragraph.piece]?.contains(folded) == true {
-                hits += Self.matches(in: plainText(paragraph.markdown), of: needle, itemID: materialID, source: .text, piece: paragraph.piece)
+                found += Self.matches(in: plainText(paragraph.markdown), of: needle, itemID: materialID, source: .text, piece: paragraph.piece)
             }
             for (index, cue) in body.cues.enumerated() where foldedCues[materialID]?[index]?.contains(folded) == true {
-                hits += Self.matches(in: cue.text, of: needle, itemID: materialID, source: .transcript, seconds: cue.seconds)
+                found += Self.matches(in: cue.text, of: needle, itemID: materialID, source: .transcript, seconds: cue.seconds)
+            }
+            if !found.isEmpty {
+                hits += found
+                await yield(found)
             }
         }
+        var noted: [SearchHit] = []
         for annotation in annotations {
             if !annotation.note.isEmpty, TextFold.folded(annotation.note).contains(folded) {
-                hits += Self.matches(in: annotation.note, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+                noted += Self.matches(in: annotation.note, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
             } else if let mark = annotation.marks.first(where: { TextFold.folded($0.quote).contains(folded) }) {
-                hits += Self.matches(in: mark.quote, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+                noted += Self.matches(in: mark.quote, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
             } else if TextFold.folded(annotation.text).contains(folded) {
-                hits += Self.matches(in: annotation.text, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
+                noted += Self.matches(in: annotation.text, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
             }
+        }
+        if !noted.isEmpty {
+            hits += noted
+            await yield(noted)
         }
         let order = Dictionary(uniqueKeysWithValues: SearchSource.allCases.enumerated().map { ($1, $0) })
         return hits.sorted { left, right in

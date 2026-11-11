@@ -13,24 +13,27 @@ protocol DeliveryTarget {
 
 @MainActor
 enum DeliverySync {
-    static func run(_ target: some DeliveryTarget, in folder: URL?) async -> [String] {
+    static func run(_ target: some DeliveryTarget, in folder: URL?) async -> (failures: [String], pending: Int) {
         let archives: [URL]
         do {
             archives = try await CloudFolder.archives(in: folder, subfolder: target.subfolder)
         } catch {
-            return ["the \(target.subfolder) folder could not be read: \(error.localizedDescription)"]
+            return (["the \(target.subfolder) folder could not be read: \(error.localizedDescription)"], 0)
         }
         let changed: [URL]
         do {
             changed = try await target.changed(archives)
         } catch {
-            return ["the \(target.subfolder) index could not be read: \(error.localizedDescription)"]
+            return (["the \(target.subfolder) index could not be read: \(error.localizedDescription)"], 0)
         }
         var failures: [String] = []
+        var pending = 0
         for (index, archive) in changed.enumerated() {
             do {
                 try await CloudFolder.download(archive)
                 try await target.add(archive, index: index, total: changed.count)
+            } catch CloudFolderError.notDownloaded(_, _) {
+                pending += 1
             } catch {
                 failures.append("\(archive.lastPathComponent): \(error.localizedDescription)")
             }
@@ -40,7 +43,7 @@ enum DeliverySync {
         } catch {
             failures.append("the \(target.subfolder) folder could not be finished: \(error.localizedDescription)")
         }
-        return failures
+        return (failures, pending)
     }
 }
 

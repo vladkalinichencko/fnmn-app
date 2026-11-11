@@ -278,6 +278,8 @@ final class LibraryModel {
         do {
             try await CloudFolder.download(original, timeout: .seconds(300))
             previewedOriginal = original
+        } catch CloudFolderError.notDownloaded(_, _) {
+            failure = CloudFolderError.notDownloaded(count: 1, name: original.lastPathComponent).localizedDescription
         } catch {
             failure = error.localizedDescription
         }
@@ -305,14 +307,18 @@ final class LibraryModel {
         guard let entry = entry(materialID) else { throw LibraryError.cloudFolderMissing }
         if await !file.isUnpacked(entry) {
             guard let archive = await file.deliveryURL(of: entry) else { throw LibraryError.cloudFolderMissing }
-            try await CloudFolder.download(archive, timeout: .seconds(120))
+            do {
+                try await CloudFolder.download(archive, timeout: .seconds(120))
+            } catch CloudFolderError.notDownloaded(_, _) {
+                throw CloudFolderError.notDownloaded(count: 1, name: entry.material.title)
+            }
         }
         return try await file.openCloudArticle(entry)
     }
 
     @ObservationIgnored private var searchIndex: SearchIndex?
 
-    func search(_ query: String) async -> [SearchHit] {
+    func search(_ query: String, yield: @MainActor @escaping ([SearchHit]) -> Void = { _ in }) async -> [SearchHit] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else {
             return []
@@ -327,10 +333,10 @@ final class LibraryModel {
             query: needle,
             articles: snapshot.articles,
             annotations: snapshot.annotations,
-            addedAt: snapshot.addedAt
-        ) {
-            MarkedMarkdown.plainText($0, baseURL: nil)
-        }
+            addedAt: snapshot.addedAt,
+            plainText: { MarkedMarkdown.plainText($0, baseURL: nil) },
+            yield: yield
+        )
     }
 
     func recordReadingMode(_ event: ReadingModeEvent) async {

@@ -52,6 +52,26 @@ private let article = ImportPackage(
     #expect(try Data(contentsOf: file.cachedFolder(of: entry).appending(path: "assets/p.png")) == Data("png".utf8))
 }
 
+@Test func aCatalogThatIsNotOnTheDeviceYetSaysItIsSyncing() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let folder = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let file = await libraryFile(root)
+    do {
+        _ = try await file.applyBrowserCatalog(from: folder, into: LibrarySnapshot())
+        Issue.record("a missing catalog read as syncing")
+    } catch let error as LibraryError {
+        #expect(error == .catalogSyncing)
+    }
+}
+
+@Test func anEvictedFileErrorCountsItsFilesAndNamesTheOneItKnows() {
+    #expect(CloudFolderError.notDownloaded(count: 1).localizedDescription.hasPrefix("1 file is"))
+    #expect(CloudFolderError.notDownloaded(count: 3).localizedDescription.hasPrefix("3 files are"))
+    let named = CloudFolderError.notDownloaded(count: 1, name: "Quantum Kernels").localizedDescription
+    #expect(named.contains("Quantum Kernels"))
+}
+
 func libraryFile(_ root: URL) async -> LibraryFile {
     let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
     await file.useCloudFolder(root.appending(path: "FNMN"))
