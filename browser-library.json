@@ -6325,9 +6325,9 @@
    "materials": [
     {
      "title": "",
-     "url": "https://ludwigabap.com/on-comparing-yourself-to-brilliant-people",
+     "url": "https://ludwigabap.com/posts/on-comparing-yourself-to-brilliant-people/",
      "saved_urls": [
-      "https://ludwigabap.com/on-comparing-yourself-to-brilliant-people"
+      "https://ludwigabap.com/posts/on-comparing-yourself-to-brilliant-people/"
      ],
      "saved_in": [
       "safari-reading-list"
@@ -6429,9 +6429,9 @@
    "materials": [
     {
      "title": "Visualizing 6D Mesh Parallelism",
-     "url": "https://main-horse.github.io/posts/visualizing-6d",
+     "url": "https://flaneur.sdan.io/links/link_28p3e00yvdt",
      "saved_urls": [
-      "https://main-horse.github.io/posts/visualizing-6d"
+      "https://flaneur.sdan.io/links/link_28p3e00yvdt"
      ],
      "saved_in": [
       "safari-reading-list"
@@ -7229,9 +7229,9 @@
    "materials": [
     {
      "title": "Principles of Effective Research – Michael Nielsen",
-     "url": "https://michaelnielsen.org/blog/principles-of-effective-research",
+     "url": "https://neural-mechanics.baulab.info/papers/nielsen-2004-principles-of-effective-research.pdf",
      "saved_urls": [
-      "https://michaelnielsen.org/blog/principles-of-effective-research"
+      "https://neural-mechanics.baulab.info/papers/nielsen-2004-principles-of-effective-research.pdf"
      ],
      "saved_in": [
       "safari-reading-list"
@@ -8967,9 +8967,9 @@
    "materials": [
     {
      "title": "Setting time on fire and the temptation of The Button",
-     "url": "https://oneusefulthing.org/p/setting-time-on-fire-and-the-temptation",
+     "url": "https://www.oneusefulthing.org/p/setting-time-on-fire-and-the-temptation",
      "saved_urls": [
-      "https://oneusefulthing.org/p/setting-time-on-fire-and-the-temptation"
+      "https://www.oneusefulthing.org/p/setting-time-on-fire-and-the-temptation"
      ],
      "saved_in": [
       "safari-reading-list"
@@ -16213,6 +16213,46 @@
     {
      "title": "geoffreylitt on X",
      "url": "https://x.com/geoffreylitt/status/2072522251300409556",
+     "saved_in": [
+      "dia-study-theory-sources"
+     ],
+     "found_in": [
+      "dia-study-theory-sources"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "thepalindrome article",
+   "url": "https://thepalindrome.org/p/matrices-and-graphs",
+   "kind": "site",
+   "saved_in": [
+    "dia-study-theory-sources"
+   ],
+   "materials": [
+    {
+     "title": "https://thepalindrome.org/p/matrices-and-graphs",
+     "url": "https://thepalindrome.org/p/matrices-and-graphs",
+     "saved_in": [
+      "dia-study-theory-sources"
+     ],
+     "found_in": [
+      "dia-study-theory-sources"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "alexwang article",
+   "url": "https://alexwang.ai/posts/reasoning-as-pathfinding/",
+   "kind": "site",
+   "saved_in": [
+    "dia-study-theory-sources"
+   ],
+   "materials": [
+    {
+     "title": "https://alexwang.ai/posts/reasoning-as-pathfinding/",
+     "url": "https://alexwang.ai/posts/reasoning-as-pathfinding/",
      "saved_in": [
       "dia-study-theory-sources"
      ],

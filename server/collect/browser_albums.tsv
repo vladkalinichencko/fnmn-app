@@ -103,13 +103,13 @@ Essays	safari-reading-list	Jessy Lin · Blog	The Continual Learning Problem	http
 Essays	safari-reading-list	John Schulman · Blog		https://joschu.net/blog/kl-approx.html
 Essays	safari-reading-list	Jürgen Schmidhuber · Website	A Nobel Prize for Plagiarism	https://people.idsia.ch/~juergen/physics-nobel-2024-plagiarism.html
 Essays	safari-reading-list	LessWrong	No, really, it predicts next tokens.	https://lesswrong.com/posts/Gn46SEKizaBxFzLN3/no-really-it-predicts-next-tokens
-Essays	safari-reading-list	Ludwig Abap · Blog		https://ludwigabap.com/on-comparing-yourself-to-brilliant-people
+Essays	safari-reading-list	Ludwig Abap · Blog		https://ludwigabap.com/posts/on-comparing-yourself-to-brilliant-people/
 Essays	safari-reading-list	Mainframe · Blog	Agent Clouds	https://blog.mainfra.me/p/agent-clouds
 Essays	safari-reading-list	Maxime Heckel · Blog	Shading Motion - The Blog of Maxime Heckel	https://blog.maximeheckel.com/posts/shading-motion
-Essays	safari-reading-list	Michael Nielsen · Blog	Principles of Effective Research – Michael Nielsen	https://michaelnielsen.org/blog/principles-of-effective-research
+Essays	safari-reading-list	Michael Nielsen · Blog	Principles of Effective Research – Michael Nielsen	https://neural-mechanics.baulab.info/papers/nielsen-2004-principles-of-effective-research.pdf
 Essays	safari-reading-list	Mrinal · Blog	Be an architect of software	https://mrinalxdev.github.io/mrinalxblogs/blogs/system-design.html
 Essays	safari-reading-list	Niantic Spatial · Blog	Ground Truth: How We Create Geometrically Accurate Reconstructions	https://nianticspatial.com/blog/geometrically-accurate-reconstruction?hss_channel=tw-631577690
-Essays	safari-reading-list	One Useful Thing · Ethan Mollick	Setting time on fire and the temptation of The Button	https://oneusefulthing.org/p/setting-time-on-fire-and-the-temptation
+Essays	safari-reading-list	One Useful Thing · Ethan Mollick	Setting time on fire and the temptation of The Button	https://www.oneusefulthing.org/p/setting-time-on-fire-and-the-temptation
 Essays	safari-reading-list	Paul Graham · Essays	How People Get Rich Now	https://paulgraham.com/richnow.html
 Essays	safari-reading-list	Paul Graham · Essays	How to Do Great Work	https://paulgraham.com/greatwork.html
 Essays	safari-reading-list	Paul Graham · Essays	How to Earn a Billion Dollars	https://paulgraham.com/earn.html
@@ -769,7 +769,7 @@ Rendering	dia-study-theory-sources	Habr · itmai	3D ML. Часть 1: формы
 Rendering	safari-reading-list+dia-study-theory-sources	Habr · itmai	3D ML. Часть 4: дифференциальный рендеринг / Хабр	https://habr.com/ru/companies/itmai/articles/520268
 Rendering	safari-reading-list	Habr · sberdevices	Генеративные 3D-модели	https://habr.com/ru/companies/sberdevices/articles/808243
 Rendering	dia-study-theory-videos	MIT 18.065 Matrix Methods in Data Analysis, Signal Processing, and Machine Learning, Spring 2018	Lecture 32: ImageNet is a Convolutional Neural Network (CNN), The Convolution Rule	https://youtube.com/watch?v=hwDRfkPSXng
-Rendering	safari-reading-list	Main Horse · Blog	Visualizing 6D Mesh Parallelism	https://main-horse.github.io/posts/visualizing-6d
+Rendering	safari-reading-list	Main Horse · Blog	Visualizing 6D Mesh Parallelism	https://flaneur.sdan.io/links/link_28p3e00yvdt
 Rendering	safari-reading-list	Making Software	Image compression.	https://makingsoftware.com/chapters/image-compression
 Rendering	dia-study-theory-sources	Mark Daws · Blog	Toy3D - simple 3D engine using Swift + Metal	https://markdaws.net/blog/2019-12-17-toy3d
 Rendering	dia-study-theory-videos	Math for Game Developers	Collision Detection with SAT (Math for Game Developers)	https://youtube.com/watch?v=-EsWKT7Doww
@@ -937,3 +937,5 @@ ML Theory	dia-study-theory-sources	Brain vs deep learning	Brain vs deep learning
 ML Theory	dia-study-theory-sources	Informal approach to attention	Informal approach to attention	https://maharshi.bearblog.dev/informal-approach-to-attention-in-transformers/
 ML Theory	dia-study-theory-sources	jeffreycider on X	jeffreycider on X	https://x.com/jeffreycider/status/2118452548080435232
 ML Engineering	dia-study-theory-sources	geoffreylitt on X	geoffreylitt on X	https://x.com/geoffreylitt/status/2072522251300409556
+Math	dia-study-theory-sources	thepalindrome article	https://thepalindrome.org/p/matrices-and-graphs	https://thepalindrome.org/p/matrices-and-graphs
+ML Theory	dia-study-theory-sources	alexwang article	https://alexwang.ai/posts/reasoning-as-pathfinding/	https://alexwang.ai/posts/reasoning-as-pathfinding/
