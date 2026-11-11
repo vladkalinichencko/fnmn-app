@@ -23,6 +23,16 @@ public struct BrowserCatalog: Codable, Equatable, Sendable {
             case savedIn = "saved_in"
             case foundIn = "found_in"
         }
+
+        public init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            name = try values.decode(String.self, forKey: .name)
+            url = try values.decode(String.self, forKey: .url)
+            kind = try values.decode(String.self, forKey: .kind)
+            savedIn = try values.decodeIfPresent([String].self, forKey: .savedIn) ?? []
+            foundIn = try values.decodeIfPresent([String].self, forKey: .foundIn) ?? []
+            materials = try values.decode([SavedMaterial].self, forKey: .materials)
+        }
     }
 
     public struct SavedMaterial: Codable, Equatable, Sendable {
@@ -44,8 +54,8 @@ public struct BrowserCatalog: Codable, Equatable, Sendable {
             title = try values.decode(String.self, forKey: .title)
             url = try values.decode(String.self, forKey: .url)
             savedURLs = try values.decodeIfPresent([String].self, forKey: .savedURLs) ?? []
-            savedIn = try values.decode([String].self, forKey: .savedIn)
-            foundIn = try values.decode([String].self, forKey: .foundIn)
+            savedIn = try values.decodeIfPresent([String].self, forKey: .savedIn) ?? []
+            foundIn = try values.decodeIfPresent([String].self, forKey: .foundIn) ?? []
         }
     }
 }

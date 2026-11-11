@@ -2,11 +2,11 @@ import Foundation
 
 public enum LibraryChange: Codable, Equatable, Sendable {
     case setArchived(Bool, itemID: String)
-    case createAlbum(String)
-    case renameAlbum(String, to: String)
-    case deleteAlbum(String)
-    case addToAlbum(String, itemIDs: [String])
-    case removeFromAlbum(String, itemID: String)
+    case createCollection(String)
+    case renameCollection(String, to: String)
+    case deleteCollection(String)
+    case addToCollection(String, itemIDs: [String])
+    case removeFromCollection(String, itemID: String)
     case mark(TextMark, AnnotationTarget)
     case unmark(TextMark, AnnotationTarget)
     case note(String, AnnotationTarget)
@@ -21,25 +21,23 @@ extension LibrarySnapshot {
         case let .setArchived(isArchived, itemID):
             next.archived.removeAll { $0 == itemID }
             if isArchived { next.archived.append(itemID) }
-        case let .createAlbum(name):
+        case let .createCollection(name):
             next.albums.append(try next.freshAlbumName(name))
-        case let .renameAlbum(name, newName):
+        case let .renameCollection(name, newName):
             let newName = try next.freshAlbumName(newName, replacing: name)
             next.albums = next.albums.map { $0 == name ? newName : $0 }
             next.placements = next.placements.mapValues { names in
                 LibrarySnapshot.ordered(names.map { $0 == name ? newName : $0 })
             }
-        case let .deleteAlbum(name):
+        case let .deleteCollection(name):
             next.albums.removeAll { $0 == name }
-            next.placements = next.placements.compactMapValues { names in
-                let rest = names.filter { $0 != name }
-                return rest.isEmpty ? nil : rest
+            next.placements = next.placements.mapValues { names in
+                LibrarySnapshot.ordered(names.filter { $0 != name })
             }
-        case let .addToAlbum(name, itemIDs):
+        case let .addToCollection(name, itemIDs):
             for itemID in itemIDs { next.place(itemID, in: [name]) }
-        case let .removeFromAlbum(name, itemID):
-            let rest = next.albums(of: itemID).filter { $0 != name }
-            next.placements[itemID] = rest.isEmpty ? nil : rest
+        case let .removeFromCollection(name, itemID):
+            next.placements[itemID] = LibrarySnapshot.ordered(next.albums(of: itemID).filter { $0 != name })
         case let .mark(mark, target):
             next.annotations = next.annotations.marking(mark, at: target, date: date)
         case let .unmark(mark, target):

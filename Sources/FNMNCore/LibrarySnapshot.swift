@@ -58,7 +58,7 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
             articles.append(entry)
             addedAt[id] = addedAt[id] ?? date
         }
-        if albums(of: id).isEmpty {
+        if placements[id] == nil {
             place(id, in: package.folders)
         }
     }
@@ -70,6 +70,9 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         for link in samePage where link.material.kind == .link {
             let linkID = link.material.id
             place(material.id, in: albums(of: linkID))
+            if placements[material.id] == nil, placements[linkID]?.isEmpty == true {
+                placements[material.id] = []
+            }
             if isArchived(linkID), !isArchived(material.id) { archived.append(material.id) }
             if addedAt[material.id] == nil { addedAt[material.id] = addedAt[linkID] }
             self = try applying(.delete(itemID: linkID))
@@ -86,9 +89,9 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
 
     mutating func retireAlbums(_ names: [String]) {
         albums.removeAll(where: names.contains)
-        placements = placements.compactMapValues { current in
+        for (id, current) in placements {
             let rest = current.filter { !names.contains($0) }
-            return rest.isEmpty ? nil : rest
+            placements[id] = rest.isEmpty && !current.isEmpty ? nil : rest
         }
     }
 
@@ -114,6 +117,7 @@ public enum LibraryError: Error, Equatable {
     case emptyAlbumName
     case cloudFolderMissing
     case catalogSyncing
+    case catalogMalformed(String)
 }
 
 extension LibraryError: LocalizedError {
@@ -126,6 +130,7 @@ extension LibraryError: LocalizedError {
         case .emptyAlbumName: "Enter a collection name."
         case .cloudFolderMissing: "This item lives in the FNMN folder in iCloud Drive. Choose that folder again with + → File."
         case .catalogSyncing: "The folder’s catalog is still syncing from iCloud. Try again in a moment."
+        case let .catalogMalformed(detail): "catalog.json could not be read: \(detail)"
         }
     }
 }

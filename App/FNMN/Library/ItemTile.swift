@@ -160,7 +160,7 @@ struct ItemActions: View {
         }
         if let album {
             Button("Remove from Collection", systemImage: "rectangle.stack.badge.minus") {
-                Task { await library.apply(.removeFromAlbum(album, itemID: item.id)) }
+                Task { await library.apply(.removeFromCollection(album, itemID: item.id)) }
             }
         }
         if item.kind != .link {

@@ -11,7 +11,7 @@ import Testing
     let file = LibraryFile(url: work, cache: work.appending(path: "cache"))
     await file.useCloudFolder(folder)
     var snapshot = try await file.load().catalog
-    snapshot = try await file.applyBrowserCatalog(from: folder, into: snapshot)
+    snapshot = try await file.applyBrowserCatalogIfChanged(from: folder, into: snapshot) ?? snapshot
     let deliveries = try FileManager.default.contentsOfDirectory(at: folder.appending(path: "deliveries"), includingPropertiesForKeys: nil)
         .filter { $0.pathExtension == "tar" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     for delivery in deliveries {

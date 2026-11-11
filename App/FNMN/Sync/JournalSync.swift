@@ -1,6 +1,12 @@
 import FNMNCore
 import Foundation
 
+struct JournalRead {
+    let events: [JournalEvent]
+    let applied: [String: Int]
+    let waiting: [String]
+}
+
 @MainActor
 final class JournalSync {
     private var known = JournalKnowledge()
@@ -35,7 +41,7 @@ final class JournalSync {
         pending = []
         do {
             try await file.appendJournal(events, device: device)
-            try await file.saveSync(known)
+            try await persist()
         } catch {
             pending = events + pending
             throw error
@@ -49,24 +55,29 @@ final class JournalSync {
         return FileManager.default.fileExists(atPath: folder.path) ? folder : nil
     }
 
-    func unread() async throws -> [JournalEvent]? {
+    func pendingRead() async throws -> JournalRead {
         let unread = try await file.unreadJournalEvents(except: device, sync: known)
-        guard unread.applied != known.applied else {
-            return nil
-        }
-        known.applied = unread.applied
-        return unread.events
+        return JournalRead(events: unread.events, applied: unread.applied, waiting: unread.waiting)
     }
 
     func merging(
         _ events: [JournalEvent], into snapshot: LibrarySnapshot, _ progress: ReadingProgress
-    ) -> (catalog: LibrarySnapshot, progress: ReadingProgress) {
-        let merged = merge(events, into: snapshot, progress, sync: known)
-        known = merged.sync
-        return (merged.catalog, merged.progress)
+    ) -> (catalog: LibrarySnapshot, progress: ReadingProgress, sync: JournalKnowledge) {
+        merge(events, into: snapshot, progress, sync: known)
+    }
+
+    func commit(_ sync: JournalKnowledge? = nil, applied: [String: Int]) {
+        known.applied = applied
+        for (key, date) in sync?.clock ?? [:] {
+            known.clock[key] = max(known.clock[key] ?? .distantPast, date)
+        }
     }
 
     func save() async throws {
+        try await persist()
+    }
+
+    private func persist() async throws {
         try await file.saveSync(known)
     }
 

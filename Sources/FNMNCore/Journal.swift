@@ -16,8 +16,8 @@ public struct JournalEvent: Codable, Equatable, Sendable {
 
     public static func events(for change: Change, at time: Date) -> [JournalEvent] {
         switch change {
-        case let .library(.addToAlbum(name, itemIDs)):
-            itemIDs.map { JournalEvent(time: time, change: .library(.addToAlbum(name, itemIDs: [$0]))) }
+        case let .library(.addToCollection(name, itemIDs)):
+            itemIDs.map { JournalEvent(time: time, change: .library(.addToCollection(name, itemIDs: [$0]))) }
         default:
             [JournalEvent(time: time, change: change)]
         }
@@ -34,8 +34,8 @@ public struct JournalEvent: Codable, Equatable, Sendable {
         case let .progress(.fold(_, itemID)): "fold:\(itemID)"
         case let .progress(.reset(itemID)): "reset:\(itemID)"
         case let .library(.setArchived(_, itemID)): "archived:\(itemID)"
-        case let .library(.addToAlbum(name, itemIDs)) where itemIDs.count == 1: "placement:\(itemIDs[0]):\(name)"
-        case let .library(.removeFromAlbum(name, itemID)): "placement:\(itemID):\(name)"
+        case let .library(.addToCollection(name, itemIDs)) where itemIDs.count == 1: "placement:\(itemIDs[0]):\(name)"
+        case let .library(.removeFromCollection(name, itemID)): "placement:\(itemID):\(name)"
         case let .library(.removeAnnotation(id)): "removed:\(id)"
         default: nil
         }
@@ -71,16 +71,18 @@ public func merge(
     var progress = progress
     var sync = sync
     for event in events.sorted(by: { $0.time < $1.time }) {
-        if let key = event.key {
-            guard (sync.clock[key] ?? .distantPast) < event.time else { continue }
-            sync.clock[key] = event.time
+        if let key = event.key, (sync.clock[key] ?? .distantPast) >= event.time {
+            continue
         }
         switch event.change {
         case let .library(change):
             if let id = change.annotationID, let removed = sync.clock["removed:\(id)"], event.time <= removed { continue }
-            guard let next = try? catalog.applying(change, at: event.time) else { continue }
+            let next = catalog.applyingJournal(change, at: event.time)
             progress = next.progressChanges(since: catalog).reduce(progress) { $0.applying($1) }
             catalog = next
+            if let key = event.key {
+                sync.clock[key] = event.time
+            }
         case let .progress(.reset(itemID)):
             let before = progress
             progress = progress.applying(.reset(itemID: itemID), at: event.time)
@@ -92,13 +94,49 @@ public func merge(
             if later("readThrough") { progress.readThrough[itemID] = before.readThrough[itemID] }
             if later("line") { progress.lines[itemID] = before.lines[itemID] }
             if later("opened") { progress.readings[itemID, default: MaterialReading()].openedAt = before.readings[itemID]?.openedAt }
-            if later("read") { progress.readings[itemID, default: MaterialReading()].isRead = before.readings[itemID]?.isRead ?? false }
+            if later("read") {
+                progress.readings[itemID, default: MaterialReading()].isRead = before.readings[itemID]?.isRead ?? false
+            }
+            if let key = event.key {
+                sync.clock[key] = event.time
+            }
         case let .progress(change):
             if let itemID = change.readingItemID, let reset = sync.clock["reset:\(itemID)"], event.time <= reset { continue }
             progress = progress.applying(change, at: event.time)
+            if let key = event.key {
+                sync.clock[key] = event.time
+            }
         }
     }
     return (catalog, progress, sync)
+}
+
+extension LibrarySnapshot {
+    func applyingJournal(_ change: LibraryChange, at date: Date) -> LibrarySnapshot {
+        switch change {
+        case let .createCollection(name):
+            let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !albums.contains(name) else {
+                return self
+            }
+            var next = self
+            next.albums.append(name)
+            return next
+        case let .renameCollection(name, newName):
+            let newName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard albums.contains(name), !newName.isEmpty, newName != name, !albums.contains(newName) else {
+                return self
+            }
+            var next = self
+            next.albums = next.albums.map { $0 == name ? newName : $0 }
+            next.placements = next.placements.mapValues { names in
+                LibrarySnapshot.ordered(names.map { $0 == name ? newName : $0 })
+            }
+            return next
+        default:
+            return (try? applying(change, at: date)) ?? self
+        }
+    }
 }
 
 extension LibraryChange {

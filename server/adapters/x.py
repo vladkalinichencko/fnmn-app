@@ -6,7 +6,7 @@ thread and a long-form article's body — is read in the reader browser, the hid
 logged-in profile, and parsed from the page it renders. Without the reader a thread still imports as
 the post and the messages above it, and an article refuses with its reason.
 
-    read(url, web, report) -> Document | Video
+    read(url, web, report) -> Document
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 from lxml import html
 
-from package import Document, Report, Video, asset_path
+from package import Document, Report, asset_path
 import reader
 from web import Web
 
@@ -30,7 +30,7 @@ _TRAILING_LINK = re.compile(r"(?:\s*https://t\.co/\w+)+\s*$")
 THREAD_LIMIT = 25
 
 
-def read(url: str, web: Web, report: Report) -> Document | Video:
+def read(url: str, web: Web, report: Report) -> Document:
     report("fetchingPage", None, None)
     path = urlparse(url).path
     if _ARTICLE.search(path):
@@ -42,8 +42,6 @@ def read(url: str, web: Web, report: Report) -> Document | Video:
     article = _article_link(post)
     if article is not None:
         return _article(article, report)
-    if _main_video(post) is not None:
-        return _video(post, url)
     return _thread(post, url, web, report)
 
 
@@ -55,7 +53,7 @@ def _tweet(web: Web, status_id: str) -> dict:
 
 
 def _article_link(post: dict) -> str | None:
-    """An article card post: its only content is an https://x.com/i/article/… link."""
+    """A post that is only an article card: its whole content is an https://x.com/i/article/… link."""
     for entity in (post.get("entities") or {}).get("urls") or []:
         expanded = entity.get("expanded_url") or ""
         if _ARTICLE.search(urlparse(expanded).path):
@@ -65,17 +63,14 @@ def _article_link(post: dict) -> str | None:
     return None
 
 
-def _main_video(post: dict) -> dict | None:
-    for item in post.get("mediaDetails") or []:
-        if item.get("type") in ("video", "animated_gif"):
-            return item
-    return None
-
-
-def _video(post: dict, url: str) -> Video:
-    user = post.get("user") or {}
-    title = _first_words(post.get("text") or "") or (user.get("name") or "X")
-    return Video(f"x-{post['id_str']}", title, (user.get("name") or "").strip() or None, page=url)
+def _stream(item: dict) -> str | None:
+    """The playable address the syndication payload carries: adaptive HLS first, then the largest mp4."""
+    variants = ((item.get("video_info") or {}).get("variants")) or []
+    hls = next((v.get("url") for v in variants if v.get("content_type") == "application/x-mpegURL" and v.get("url")), None)
+    if hls:
+        return hls
+    mp4s = [v for v in variants if v.get("content_type") == "video/mp4" and v.get("url")]
+    return max(mp4s, key=lambda v: v.get("bitrate") or 0).get("url") if mp4s else None
 
 
 def _article(url: str, report: Report) -> Document:
@@ -201,17 +196,28 @@ def _message_markdown(post: dict, web: Web, files: dict[str, bytes], report: Rep
     parts = [_plain(post)]
     index = 0
     for item in post.get("mediaDetails") or []:
-        if item.get("type") != "photo":
-            continue
-        source = item.get("media_url_https")
-        if not source:
-            continue
-        path = asset_path(source, f"-{index}.jpg")
-        index += 1
-        if path not in files:
-            report("fetchingAssets", len(files), None)
-            files[path] = web.bytes(f"{source}?name=large")
-        parts.append(f"![{index}]({path})")
+        if item.get("type") == "photo":
+            source = item.get("media_url_https")
+            if not source:
+                continue
+            path = asset_path(source, f"-{index}.jpg")
+            index += 1
+            if path not in files:
+                report("fetchingAssets", len(files), None)
+                files[path] = web.bytes(f"{source}?name=large")
+            parts.append(f"![{index}]({path})")
+        elif item.get("type") in ("video", "animated_gif"):
+            poster = item.get("media_url_https")
+            if poster:
+                path = asset_path(poster, f"-{index}.jpg")
+                index += 1
+                if path not in files:
+                    report("fetchingAssets", len(files), None)
+                    files[path] = web.bytes(poster)
+                parts.append(f"![{index}]({path})")
+            stream = _stream(item) or item.get("expanded_url")
+            if stream:
+                parts.append(f"[video]({stream})")
     return "\n\n".join(part for part in parts if part)
 
 

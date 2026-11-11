@@ -105,6 +105,100 @@ private func twoDevices() async throws -> (phone: LibraryFile, pad: LibraryFile,
     #expect(try await pad.changedDeliveries(deliveries, in: library).deliveries.isEmpty)
 }
 
+@Test func anOlderDuplicateDeliveryDoesNotComeBackButANewerOneDoes() async throws {
+    let (_, pad, deliveries, root) = try await twoDevices()
+    let cloud = root.appending(path: "FNMN/deliveries")
+    var library = try await pad.addCloudDelivery(deliveries[0], into: LibrarySnapshot())
+    let duplicate = cloud.appending(path: "duplicate.tar")
+    try FileManager.default.copyItem(at: deliveries[0], to: duplicate)
+    try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-86_400)], ofItemAtPath: duplicate.path)
+
+    var all = try FileManager.default.contentsOfDirectory(at: cloud, includingPropertiesForKeys: nil)
+    #expect(try await pad.changedDeliveries(all, in: library).deliveries.isEmpty)
+
+    try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(60)], ofItemAtPath: duplicate.path)
+    all = try FileManager.default.contentsOfDirectory(at: cloud, includingPropertiesForKeys: nil)
+    let second = try await pad.changedDeliveries(all, in: library).deliveries
+    #expect(second.map(\.lastPathComponent) == ["duplicate.tar"])
+    library = try await pad.addCloudDelivery(second[0], into: library)
+    all = try FileManager.default.contentsOfDirectory(at: cloud, includingPropertiesForKeys: nil)
+    #expect(try await pad.changedDeliveries(all, in: library).deliveries.isEmpty)
+}
+
+private func writeLateIDDelivery(materialID: String, bodyBytes: Int, to url: URL) throws {
+    let body = String(repeating: "x", count: bodyBytes)
+    let json = "{\"body\":\"\(body)\",\"folders\":[],\"sections\":[],\"version\":1,\"material\":{\"id\":\"\(materialID)\",\"title\":\"Late\",\"kind\":\"article\"},\"blocks\":[]}"
+    let content = Data(json.utf8)
+    var bytes = [UInt8](repeating: 0, count: 512)
+    for (index, byte) in "package.json".utf8.enumerated() {
+        bytes[index] = byte
+    }
+    let size = String(repeating: "0", count: 11 - String(content.count, radix: 8).count) + String(content.count, radix: 8)
+    for (index, byte) in size.utf8.enumerated() {
+        bytes[124 + index] = byte
+    }
+    for (index, byte) in "0000644".utf8.enumerated() {
+        bytes[100 + index] = byte
+    }
+    for index in 148..<156 {
+        bytes[index] = UInt8(ascii: " ")
+    }
+    bytes[156] = UInt8(ascii: "0")
+    for (index, byte) in "ustar".utf8.enumerated() {
+        bytes[257 + index] = byte
+    }
+    for (index, byte) in "00".utf8.enumerated() {
+        bytes[263 + index] = byte
+    }
+    let sum = bytes.reduce(0) { $0 + Int($1) }
+    let checksum = String(repeating: "0", count: 6 - String(sum, radix: 8).count) + String(sum, radix: 8)
+    for (index, byte) in checksum.utf8.enumerated() {
+        bytes[148 + index] = byte
+    }
+    bytes[154] = 0
+    bytes[155] = UInt8(ascii: " ")
+    var archive = Data(bytes)
+    archive.append(content)
+    archive.append(Data(count: (512 - content.count % 512) % 512))
+    archive.append(Data(count: 1024))
+    try archive.write(to: url)
+}
+
+@Test func aStaleDuplicateWithALateMaterialIDIsSkipped() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let phone = LibraryFile(url: root.appending(path: "phone"), cache: root.appending(path: "phone-cache"))
+    let pad = LibraryFile(url: root.appending(path: "pad"), cache: root.appending(path: "pad-cache"))
+    await phone.useCloudFolder(cloud)
+    await pad.useCloudFolder(cloud)
+    let source = root.appending(path: "late.tar")
+    try writeLateIDDelivery(materialID: "article:late-id", bodyBytes: 40_000, to: source)
+    _ = try await phone.storeArticle(archive: source, into: LibrarySnapshot())
+    let folder = cloud.appending(path: "deliveries")
+    let deliveries = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+    var library = try await pad.addCloudDelivery(deliveries[0], into: LibrarySnapshot())
+    let duplicate = folder.appending(path: "duplicate.tar")
+    try FileManager.default.copyItem(at: deliveries[0], to: duplicate)
+    try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-86_400)], ofItemAtPath: duplicate.path)
+
+    let all = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+    #expect(try await pad.changedDeliveries(all, in: library).deliveries.isEmpty)
+}
+
+@Test func aDuplicateOfADeletedMaterialCannotResurrectIt() async throws {
+    let (_, pad, deliveries, root) = try await twoDevices()
+    let cloud = root.appending(path: "FNMN/deliveries")
+    var library = try await pad.addCloudDelivery(deliveries[0], into: LibrarySnapshot())
+    let duplicate = cloud.appending(path: "old-name.tar")
+    try FileManager.default.copyItem(at: deliveries[0], to: duplicate)
+    library = try library.applying(.delete(itemID: page.material.id), at: .now.addingTimeInterval(120))
+
+    let all = try FileManager.default.contentsOfDirectory(at: cloud, includingPropertiesForKeys: nil)
+    let found = try await pad.changedDeliveries(all, in: library)
+    #expect(found.deliveries.isEmpty)
+}
+
 @Test func aCatalogFromBeforeDeletionsWereKeptLearnsThemFromTheJournals() async throws {
     let (phone, _, deliveries, root) = try await twoDevices()
     try await phone.appendJournal([JournalEvent(time: .now.addingTimeInterval(60), change: .library(.delete(itemID: page.material.id)))], device: "phone")

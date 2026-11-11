@@ -22,6 +22,7 @@ enum LibraryPhase: Equatable {
 enum LibrarySyncState: Equatable {
     case idle
     case syncing
+    case waiting(Int)
 }
 
 @MainActor @Observable
@@ -47,11 +48,11 @@ final class LibraryModel {
     private let file: LibraryFile
     private let importer: LibraryImporter
     private let journal: JournalSync
+    private let sync: LibrarySync
     private var lastWrite: Task<Void, Never>?
     @ObservationIgnored private var places: [ProgressChange] = []
     @ObservationIgnored private var progressWrite: Task<Void, Never>?
     @ObservationIgnored private var progressUnsaved = false
-    @ObservationIgnored private var journalRead: Task<Void, Never>?
     @ObservationIgnored private var reindex: Task<Void, Never>?
 
     init(
@@ -63,6 +64,7 @@ final class LibraryModel {
         self.file = file
         importer = LibraryImporter(file: file)
         journal = JournalSync(file: file)
+        sync = LibrarySync(journal: journal, importer: importer, file: file)
     }
 
     var deviceID: String {
@@ -153,34 +155,50 @@ final class LibraryModel {
     }
 
     func syncWithOtherDevices() async {
-        guard syncState == .idle else {
+        guard syncState != .syncing else {
             return
         }
         syncState = .syncing
-        defer { syncState = .idle }
         SyncLog.library.log("Sync started for \(self.deviceID, privacy: .public); private library: \(self.storageURL.path, privacy: .public)")
         logLocalState()
         journal.logState()
-        await readJournals()
+        let host = LibrarySync.Host(
+            cloudFolder: cloudFolder,
+            write: self.write,
+            progress: { self.progress },
+            setProgress: { self.progress = $0 },
+            saveProgress: { await self.saveProgress() }
+        )
+        let outcome = await sync.run(host: host)
         await readOriginals()
-        var pending: [URL] = []
-        do {
-            pending = try await importer.readChangedDeliveries(in: cloudFolder, write: self.write)
-        } catch {
-            failure = error.localizedDescription
-            SyncLog.library.error("Sync failure: \(error.localizedDescription, privacy: .public)")
+        switch outcome {
+        case let .finished(pending) where pending > 0:
+            syncState = .waiting(pending)
+            SyncLog.library.log("Sync finished with \(pending, privacy: .public) files still in iCloud")
+        case .finished:
+            syncState = .idle
+            SyncLog.library.log("Sync finished")
+        case let .failed(message):
+            syncState = .idle
+            failure = message
+            SyncLog.library.error("Sync failure: \(message, privacy: .public)")
+        default:
+            syncState = .idle
         }
-        SyncLog.library.log("Sync finished with \(pending.count, privacy: .public) pending deliveries")
         logLocalState()
         reindex = Task { await reindexSearch() }
     }
 
     private func logLocalState() {
         SyncLog.library.log("Local catalog: \(self.snapshot.articles.count, privacy: .public) materials, \(self.snapshot.albums, privacy: .public), deletions: \(self.snapshot.deletedAt, privacy: .public)")
-        for entry in snapshot.articles {
-            let id = entry.material.id
-            let reading = progress.readings[id]
-            SyncLog.library.log("Material \(id, privacy: .public); title: \(entry.material.title, privacy: .public); delivery: \(entry.delivery ?? "none", privacy: .public); collections: \(self.snapshot.albums(of: id), privacy: .public); opened: \(reading?.openedAt.map { $0.description } ?? "never", privacy: .public); read: \(reading?.isRead == true, privacy: .public); position: \(self.progress.positions[id].map { String(describing: $0) } ?? "none", privacy: .public)")
+        let snapshot = self.snapshot
+        let progress = self.progress
+        Task.detached(priority: .utility) {
+            for entry in snapshot.articles {
+                let id = entry.material.id
+                let reading = progress.readings[id]
+                SyncLog.library.log("Material \(id, privacy: .public); title: \(entry.material.title, privacy: .public); delivery: \(entry.delivery ?? "none", privacy: .public); collections: \(snapshot.albums(of: id), privacy: .public); opened: \(reading?.openedAt.map { $0.description } ?? "never", privacy: .public); read: \(reading?.isRead == true, privacy: .public); position: \(progress.positions[id].map { String(describing: $0) } ?? "none", privacy: .public)")
+            }
         }
     }
 
@@ -195,38 +213,6 @@ final class LibraryModel {
             _ = try? await article(entry.material.id)
         }
         searchIndex = nil
-    }
-
-    private func readJournals() async {
-        if let running = journalRead {
-            return await running.value
-        }
-        let read = Task { await readJournalsOnce() }
-        journalRead = read
-        await read.value
-        journalRead = nil
-    }
-
-    private func readJournalsOnce() async {
-        guard let folder = await journal.folderToRead() else {
-            return
-        }
-        do {
-            try await CloudFolder.download(folder, timeout: .seconds(60))
-            await saveProgress()
-            guard let events = try await journal.unread() else {
-                return
-            }
-            try await write(saving: true) { [self] snapshot in
-                let merged = journal.merging(events, into: snapshot, progress)
-                progress = merged.progress
-                return merged.catalog
-            }
-            try await file.saveProgress(progress)
-            try await journal.save()
-        } catch {
-            failure = error.localizedDescription
-        }
     }
 
     private func scheduleSave() {

@@ -39,7 +39,7 @@ private let article = ImportPackage(
     try writeDelivery(article, files: [("assets/p.png", Data("png".utf8))], to: delivery)
 
     let file = await libraryFile(root)
-    let catalogued = try await file.applyBrowserCatalog(from: folder, into: LibrarySnapshot())
+    let catalogued = try await file.applyBrowserCatalogIfChanged(from: folder, into: LibrarySnapshot()) ?? LibrarySnapshot()
     let imported = try await file.addCloudDelivery(delivery, into: catalogued)
     try await file.save(imported, previous: LibrarySnapshot())
     #expect(imported.browserCatalog?.sources.first?.materials.isEmpty == true)
@@ -52,17 +52,13 @@ private let article = ImportPackage(
     #expect(try Data(contentsOf: file.cachedFolder(of: entry).appending(path: "assets/p.png")) == Data("png".utf8))
 }
 
-@Test func aCatalogThatIsNotOnTheDeviceYetSaysItIsSyncing() async throws {
+@Test func aCatalogThatIsNotOnTheDeviceYetChangesNothing() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let folder = root.appending(path: "FNMN")
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     let file = await libraryFile(root)
-    do {
-        _ = try await file.applyBrowserCatalog(from: folder, into: LibrarySnapshot())
-        Issue.record("a missing catalog read as syncing")
-    } catch let error as LibraryError {
-        #expect(error == .catalogSyncing)
-    }
+    let applied = try await file.applyBrowserCatalogIfChanged(from: folder, into: LibrarySnapshot())
+    #expect(applied == nil)
 }
 
 @Test func anEvictedFileErrorCountsItsFilesAndNamesTheOneItKnows() {
@@ -137,7 +133,7 @@ private let paperLink = ImportPackage(
     let delivery = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".tar")
     try writeDelivery(packaged, to: delivery)
     var library = try await file.storeArticle(archive: delivery, into: LibrarySnapshot())
-    library = try library.applying(.renameAlbum("Inbox", to: "Later"))
+    library = try library.applying(.renameCollection("Inbox", to: "Later"))
     #expect(try await file.openCloudArticle(try #require(library.articles.first)).body == "A $x$ line.")
     #expect(library.albums(of: article.material.id) == ["Later"])
 }
@@ -429,6 +425,15 @@ private func blog(_ name: String?, _ address: String) -> PageSource {
     #expect(names["/about"] == "hughbzhang")
 }
 
+@Test func aCatalogSourceWithoutDiscoveryFieldsStillDecodes() throws {
+    let catalog = #"{"collections":[],"sources":[{"name":"Delta","url":"https:\u002f\u002fdelta.dev","kind":"site","saved_in":["c"],"materials":[{"title":"A","url":"https:\u002f\u002fdelta.dev\u002fa","saved_in":["c"],"found_in":["c"]}]}]}"#
+    let decoded = try JSONDecoder().decode(BrowserCatalog.self, from: Data(catalog.utf8))
+    let source = try #require(decoded.sources.first)
+    #expect(source.foundIn.isEmpty)
+    #expect(source.savedIn == ["c"])
+    #expect(source.materials.first?.savedURLs.isEmpty == true)
+}
+
 @Test func articlesOfOneBlogShareThePublisherTheServerFoundForAnyOfThem() throws {
     var library = LibrarySnapshot()
     let zhang = blog("Alex L. Zhang", "https://alexzhang13.github.io/blog/")
@@ -706,23 +711,23 @@ private func span(_ quote: String) -> AnnotationTarget {
     try library.importPackage(namedBook, at: .now)
     var queries = LibraryQueries(library)
     #expect(queries.unsortedItems.map(\.id) == [namedBook.material.id])
-    library = try library.applying(.addToAlbum("Web", itemIDs: [article.material.id]))
+    library = try library.applying(.addToCollection("Web", itemIDs: [article.material.id]))
     queries = LibraryQueries(library)
-    library = try library.applying(.addToAlbum("Reading", itemIDs: [namedBook.material.id]))
+    library = try library.applying(.addToCollection("Reading", itemIDs: [namedBook.material.id]))
     queries = LibraryQueries(library)
     #expect(queries.unsortedItems.isEmpty)
     #expect(queries.items(inAlbum: "Inbox").map(\.id) == [article.material.id])
     #expect(queries.items(inAlbum: "Web").map(\.id) == [article.material.id])
-    library = try library.applying(.renameAlbum("Inbox", to: "Papers"))
+    library = try library.applying(.renameCollection("Inbox", to: "Papers"))
     queries = LibraryQueries(library)
     #expect(queries.items(inAlbum: "Papers").map(\.id) == [article.material.id])
     #expect(throws: LibraryError.albumNameTaken("Web")) {
-        try library.applying(.renameAlbum("Papers", to: "Web"))
+        try library.applying(.renameCollection("Papers", to: "Web"))
     }
-    library = try library.applying(.deleteAlbum("Reading"))
+    library = try library.applying(.deleteCollection("Reading"))
     queries = LibraryQueries(library)
     #expect(queries.unsortedItems.map(\.id) == [namedBook.material.id])
-    library = try library.applying(.removeFromAlbum("Web", itemID: article.material.id))
+    library = try library.applying(.removeFromCollection("Web", itemID: article.material.id))
     queries = LibraryQueries(library)
     #expect(queries.albumSummaries.map(\.count) == [1, 0])
 }

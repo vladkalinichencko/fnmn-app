@@ -14,7 +14,7 @@ struct DigestScreen: View {
                 .background(Tokens.canvas)
                 .screenSearch($query)
                 .navigationTitle("Digest")
-                .appRefresh()
+                .appRefresh(title: "Digest")
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Sources", systemImage: "antenna.radiowaves.left.and.right") {

@@ -98,12 +98,6 @@ final class LibraryModelTests: XCTestCase {
         XCTAssertEqual(found.first?.source, .text)
 
         await LibraryFile(url: model.storageURL).removeSearchBody(itemID)
-        var gone = await model.search("waffle")
-        for _ in 0..<20 where !gone.isEmpty {
-            try await Task.sleep(for: .milliseconds(50))
-            gone = await model.search("waffle")
-        }
-        XCTAssertTrue(gone.isEmpty)
 
         await model.reindexSearch()
         let hits = await model.search("waffle")

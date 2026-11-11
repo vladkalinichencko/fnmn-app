@@ -203,16 +203,18 @@ class AdapterTests(unittest.TestCase):
             delivery = import_link("https://x.com/ravfogel/status/2118000000000000001", [], fakes.web(fetch_text, lambda url: b"jpg"))
         self.assertIn("Part two of the thread", delivery.package["body"])
 
-    def test_a_video_post_becomes_a_video(self):
+    def test_a_video_post_stays_a_post_with_the_video_linked(self):
         payload = (Path(__file__).parent / "fixtures" / "x-video-post.json").read_text(encoding="utf-8")
-        delivery = import_link("https://x.com/ryolu_/status/2119586846657454152", [], fakes.web(lambda url: payload, lambda url: b""))
+        with patch("adapters.x.reader.job") as no_reader:
+            no_reader.side_effect = OSError("no browser in tests")
+            delivery = import_link("https://x.com/ryolu_/status/2119586846657454152", [], fakes.web(lambda url: payload, lambda url: b""))
         material = delivery.package["material"]
-        self.assertEqual(material["kind"], "video")
-        self.assertEqual(material["id"], "youtube:x-2119586846657454152")
+        self.assertEqual(material["kind"], "article")
         self.assertEqual(material["sourceURL"], "https://x.com/ryolu_/status/2119586846657454152")
-        self.assertIsNone(delivery.package["blocks"][0]["mediaURL"])
+        self.assertIn("[video](https://video.twimg.com/amplify_video/2119584955290595328/pl/P0UJr2qw4OHDc1BT.m3u8?v=c99)",
+                      delivery.package["body"])
 
-    def test_a_post_that_is_only_an_article_card_stops(self):
+    def test_a_post_that_is_only_an_article_card_reads_the_article(self):
         post = {"__typename": "Tweet", "id_str": "2094833633983107384", "text": "https://t.co/aaaa",
                 "created_at": "2026-09-01T00:00:00.000Z", "user": {"name": "deep Manifold"},
                 "entities": {"urls": [{"url": "https://t.co/aaaa",
@@ -222,6 +224,18 @@ class AdapterTests(unittest.TestCase):
             no_reader.side_effect = OSError("no browser in tests")
             import_link("https://x.com/betatomorrow/status/2094833633983107384", [], fakes.web(lambda url: json.dumps(post), lambda url: b""))
         self.assertIn("article", str(caught.exception).lower())
+
+    def test_a_post_with_words_and_an_article_link_stays_a_post(self):
+        post = {"__typename": "Tweet", "id_str": "2089785345240129576", "text": "Read this. https://t.co/ciKubFvBK8",
+                "created_at": "2026-08-18T00:00:00.000Z", "user": {"name": "kepano"},
+                "entities": {"urls": [{"url": "https://t.co/ciKubFvBK8",
+                                       "expanded_url": "https://x.com/i/article/2089772224790319104"}]}}
+
+        with patch("adapters.x.reader.job") as no_reader:
+            no_reader.side_effect = OSError("no browser in tests")
+            delivery = import_link("https://x.com/kepano/status/2089785345240129576", [], fakes.web(lambda url: json.dumps(post), lambda url: b""))
+        self.assertIn("Read this.", delivery.package["body"])
+        self.assertIn("https://x.com/i/article/2089772224790319104", delivery.package["body"])
 
     def test_x_without_a_status_stops(self):
         with self.assertRaises(ImportFailure) as caught:

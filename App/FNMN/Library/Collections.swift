@@ -134,7 +134,7 @@ private struct AlbumTileBehavior: ViewModifier {
         if album.grouping == .albums {
             content
                 .dropDestination(for: String.self) { ids, _ in
-                    Task { await library.apply(.addToAlbum(album.name, itemIDs: ids)) }
+                    Task { await library.apply(.addToCollection(album.name, itemIDs: ids)) }
                     return !ids.isEmpty
                 }
                 .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
@@ -207,7 +207,7 @@ struct AlbumPicker: View {
                     ForEach(library.queries.albumSummaries.filter { !current.contains($0.name) }) { album in
                         AlbumTile(album: album) {
                             dialogs.send(.dismiss)
-                            Task { await library.apply(.addToAlbum(album.name, itemIDs: [itemID])) }
+                            Task { await library.apply(.addToCollection(album.name, itemIDs: [itemID])) }
                         }
                     }
                 }

@@ -27,8 +27,8 @@ private func library() throws -> LibrarySnapshot {
     let changes: [JournalEvent.Change] = [
         .progress(.open(itemID: paper.material.id)),
         .progress(.savePosition(.piece(1), itemID: paper.material.id, progress: 1)),
-        .library(.createAlbum("Later")),
-        .library(.addToAlbum("Later", itemIDs: [paper.material.id])),
+        .library(.createCollection("Later")),
+        .library(.addToCollection("Later", itemIDs: [paper.material.id])),
         .library(.mark(.highlight, target)),
     ]
     let events = changes.enumerated().flatMap { JournalEvent.events(for: $1, at: Date(timeIntervalSinceReferenceDate: Double($0))) }

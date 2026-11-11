@@ -82,6 +82,8 @@ def prepare(row: dict, output: Path, enrich_videos: bool = False, refetch: bool 
         write_delivery(destination, delivery)
         return url, None
     except Exception as error:
+        if not destination.exists():
+            write_delivery(_link_path(output, url), link_delivery(url, row["title"], row["folders"]))
         return url, str(error)
 
 
@@ -181,7 +183,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Prepare the browser library for FNMN")
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--limit", type=int, help="Process only the first N materials")
     parser.add_argument("--kind", choices=("all", "web", "video"), default="all")
     parser.add_argument("--seed-videos", action="store_true", help="Create playable video records without fetching captions")

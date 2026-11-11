@@ -48,10 +48,16 @@ final class JournalSyncTests: XCTestCase {
         device("tablet")
         let tablet = JournalSync(file: fixture.file)
         try await tablet.load()
-        let first = try await tablet.unread()
-        XCTAssertEqual(first?.count, 1)
-        let second = try await tablet.unread()
-        XCTAssertNil(second)
+        let first = try await tablet.pendingRead()
+        XCTAssertEqual(first.events.count, 1)
+        let second = try await tablet.pendingRead()
+        XCTAssertEqual(second.events.count, 1)
+        tablet.commit(applied: second.applied)
+        try await tablet.save()
+        let third = JournalSync(file: fixture.file)
+        try await third.load()
+        let after = try await third.pendingRead()
+        XCTAssertEqual(after.events.count, 0)
     }
 
     func testAChangeThatDidNotReachTheDiskWaitsForTheNextWrite() async throws {
@@ -76,6 +82,38 @@ final class JournalSyncTests: XCTestCase {
         XCTAssertEqual(written.split(separator: "\n").count, 1)
     }
 
+    func testAnUnreadJournalIsNotConsumedUntilItIsCommitted() async throws {
+        let fixture = try await makeFixture()
+        defer {
+            try? FileManager.default.removeItem(at: fixture.root)
+            UserDefaults.standard.removeObject(forKey: "deviceID")
+        }
+
+        device("phone")
+        let phone = JournalSync(file: fixture.file)
+        phone.record(.library(.mark(.highlight, target)))
+        try await phone.flush()
+
+        device("tablet")
+        let tablet = JournalSync(file: fixture.file)
+        try await tablet.load()
+        let read = try await tablet.pendingRead()
+        let events = read.events
+        XCTAssertEqual(events.count, 1)
+
+        let again = try await tablet.pendingRead()
+        XCTAssertEqual(again.events.count, 1)
+
+        let merged = tablet.merging(events, into: LibrarySnapshot(), ReadingProgress())
+        tablet.commit(merged.sync, applied: read.applied)
+        try await tablet.save()
+
+        let reloaded = JournalSync(file: fixture.file)
+        try await reloaded.load()
+        let after = try await reloaded.pendingRead()
+        XCTAssertEqual(after.events.count, 0)
+    }
+
     func testMergingAppliesAnotherDevicesChange() async throws {
         let fixture = try await makeFixture()
         defer {
@@ -91,8 +129,8 @@ final class JournalSyncTests: XCTestCase {
         device("tablet")
         let tablet = JournalSync(file: fixture.file)
         try await tablet.load()
-        let unread = try await tablet.unread()
-        let events = try XCTUnwrap(unread)
+        let read = try await tablet.pendingRead()
+        let events = read.events
         let merged = tablet.merging(events, into: LibrarySnapshot(), ReadingProgress())
         XCTAssertEqual(merged.catalog.annotations.count, 1)
         XCTAssertEqual(merged.catalog.annotations.first?.text, "First paragraph.")

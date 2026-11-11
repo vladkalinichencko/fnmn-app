@@ -236,18 +236,46 @@ public actor LibraryFile {
         try .file(file)
     }
 
-    public func applyBrowserCatalog(from source: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {
-        let data: Data
-        do {
-            data = try Data(contentsOf: source.appending(path: "catalog.json"))
-        } catch CocoaError.fileReadNoSuchFile {
-            throw LibraryError.catalogSyncing
+    public func applyBrowserCatalogIfChanged(from source: URL, into snapshot: LibrarySnapshot) async throws -> LibrarySnapshot? {
+        let file = source.appending(path: "catalog.json")
+        guard CloudFolder.contains(file) else {
+            return nil
         }
-        let catalog = try decoder.decode(BrowserCatalog.self, from: data)
+        try await CloudFolder.download(file)
+        guard let data = try? Data(contentsOf: file) else {
+            throw CloudFolderError.notDownloaded(count: 1, name: file.lastPathComponent)
+        }
+        let catalog: BrowserCatalog
+        do {
+            catalog = try decoder.decode(BrowserCatalog.self, from: data)
+        } catch let error as DecodingError {
+            throw LibraryError.catalogMalformed("\(data.count) bytes, \(describeCatalogError(error))")
+        }
+        guard catalog != snapshot.browserCatalog else {
+            return nil
+        }
         var next = snapshot
         next.retireAlbums(catalog.collections.map(\.name))
         next.browserCatalog = catalog
         return next
+    }
+
+    private func describeCatalogError(_ error: DecodingError) -> String {
+        func path(_ codingPath: [CodingKey]) -> String {
+            codingPath.map(\.stringValue).joined(separator: ".")
+        }
+        switch error {
+        case let .keyNotFound(key, context):
+            return "missing key \"\(key.stringValue)\" at \(path(context.codingPath))"
+        case let .typeMismatch(_, context):
+            return "wrong type at \(path(context.codingPath)): \(context.debugDescription)"
+        case let .valueNotFound(_, context):
+            return "missing value at \(path(context.codingPath))"
+        case let .dataCorrupted(context):
+            return "corrupt data at \(path(context.codingPath)): \(context.debugDescription)"
+        @unknown default:
+            return error.localizedDescription
+        }
     }
 
     public func addCloudDelivery(_ archive: URL, into snapshot: LibrarySnapshot) throws -> LibrarySnapshot {        let cover = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
@@ -278,6 +306,9 @@ public actor LibraryFile {
             deletionsKnown = true
         }
         let read = Dictionary(snapshot.articles.compactMap { entry in entry.delivery.map { ($0, entry.deliveredAt) } }, uniquingKeysWith: { first, _ in first })
+        let delivered = Dictionary(snapshot.articles.compactMap { entry in
+            entry.deliveredAt.map { (entry.material.id, $0) }
+        }, uniquingKeysWith: max)
         let deleted = Dictionary(snapshot.deletedAt.map { (Self.deliveryName($0.key), $0.value) }, uniquingKeysWith: max)
         let changed = files.filter { file in
             let changedAt = Self.changeDate(of: file)
@@ -285,11 +316,45 @@ public actor LibraryFile {
             case let readAt??: return changedAt.map { $0 != readAt } ?? false
             case .some(nil): return false
             case nil:
-                guard let deletedAt = deleted[file.lastPathComponent] else { return true }
+                guard let deletedAt = deleted[file.lastPathComponent] else {
+                    return Self.isNewDelivery(file, changedAt: changedAt, deliveredAt: delivered, deletedAt: snapshot.deletedAt)
+                }
                 return changedAt.map { $0 > deletedAt } ?? false
             }
         }
         return (changed, snapshot)
+    }
+
+    private static func isNewDelivery(_ file: URL, changedAt: Date?, deliveredAt: [String: Date], deletedAt: [String: Date]) -> Bool {
+        guard let id = materialID(in: file) else {
+            return true
+        }
+        if let removedAt = deletedAt[id] {
+            return changedAt.map { $0 > removedAt } ?? false
+        }
+        guard let changedAt, let recorded = deliveredAt[id] else {
+            return true
+        }
+        return changedAt > recorded
+    }
+
+    private static func materialID(in archive: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: archive),
+              let header = try? handle.read(upToCount: 512), header.count == 512 else { return nil }
+        defer { try? handle.close() }
+        var digits = ""
+        for scalar in String(decoding: header[124..<136], as: UTF8.self).unicodeScalars {
+            guard scalar.value >= 48, scalar.value <= 55 else {
+                break
+            }
+            digits.unicodeScalars.append(scalar)
+        }
+        guard let size = Int(digits, radix: 8), size > 0,
+              let data = try? handle.read(upToCount: min(size, 4 * 1024 * 1024)),
+              let text = String(data: data, encoding: .utf8),
+              let match = text.firstMatch(of: /"id"\s*:\s*("(?:[^"\\]|\\.)*")/),
+              let id = try? JSONDecoder().decode(String.self, from: Data(match.1.utf8)) else { return nil }
+        return id
     }
 
     private static func changeDate(of file: URL) -> Date? {
@@ -507,23 +572,30 @@ public actor LibraryFile {
         if let coordination { throw coordination }
     }
 
-    public func unreadJournalEvents(except device: String, sync: JournalKnowledge) async throws -> (events: [JournalEvent], applied: [String: Int]) {
+    public func unreadJournalEvents(except device: String, sync: JournalKnowledge) async throws -> (events: [JournalEvent], applied: [String: Int], waiting: [String]) {
         guard let folder = journalFolder(),
               let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
-            return ([], sync.applied)
+            return ([], sync.applied, [])
         }
         let others = files.filter { $0.pathExtension == "jsonl" && !Self.isJournal($0, of: device) }
         var applied = sync.applied.filter { name, _ in others.contains { $0.lastPathComponent == name } }
         var events: [JournalEvent] = []
+        var waiting: [String] = []
         for file in others {
+            let name = file.lastPathComponent
             do {
                 try await CloudFolder.download(file, timeout: .seconds(60))
             } catch CloudFolderError.notDownloaded(_, _) {
+                waiting.append(name)
                 continue
             }
-            let name = file.lastPathComponent
             var text = ""
-            try coordinatedRead(at: file) { url in text = (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
+            do {
+                try coordinatedRead(at: file) { url in text = (try? String(contentsOf: url, encoding: .utf8)) ?? "" }
+            } catch {
+                waiting.append(name)
+                continue
+            }
             let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
             var read = applied[name] ?? 0
             for line in lines.dropFirst(read) {
@@ -533,7 +605,7 @@ public actor LibraryFile {
             }
             applied[name] = read
         }
-        return (events, applied)
+        return (events, applied, waiting)
     }
 
 

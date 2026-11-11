@@ -123,7 +123,7 @@ private struct LibraryDialogsModifier: ViewModifier {
                 titleVisibility: .visible,
                 presenting: dialogs.dialog.deletedAlbum
             ) { name in
-                Button("Delete Collection", role: .destructive) { Task { await library.apply(.deleteAlbum(name)) } }
+                Button("Delete Collection", role: .destructive) { Task { await library.apply(.deleteCollection(name)) } }
             } message: { _ in
                 Text("Items stay in the library.")
             }
@@ -136,14 +136,16 @@ private struct LibraryDialogsModifier: ViewModifier {
     private func createAlbum(adding itemID: String?) {
         let name = dialogs.dialog.draft
         Task {
-            await library.apply(.createAlbum(name))
-            if let itemID { await library.apply(.addToAlbum(name, itemIDs: [itemID])) }
+            await library.apply(.createCollection(name))
+            if let itemID {
+                await library.apply(.addToCollection(name, itemIDs: [itemID]))
+            }
         }
     }
 
     private func rename(_ name: String) {
         let newName = dialogs.dialog.draft
-        Task { await library.apply(.renameAlbum(name, to: newName)) }
+        Task { await library.apply(.renameCollection(name, to: newName)) }
     }
 }
 

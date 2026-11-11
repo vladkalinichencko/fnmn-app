@@ -16,9 +16,11 @@ struct VideoReaderView: View {
     private var package: ImportPackage { video.package }
     private var materialID: String { package.material.id }
 
-    private var videoID: String? {
-        [package.blocks.first { $0.kind == .video }?.mediaURL, package.material.sourceURL]
-            .compactMap { $0 }.compactMap(YouTube.videoID(in:)).first
+    private var playback: VideoPlayback {
+        VideoPlayback.of(
+            mediaURL: package.blocks.first { $0.kind == .video }?.mediaURL,
+            sourceURL: package.material.sourceURL
+        )
     }
 
     private var download: ImportJob? {
@@ -102,18 +104,10 @@ struct VideoReaderView: View {
     }
 
     private var stage: some View {
-        VStack(spacing: 0) {
-            player
-                .aspectRatio(16 / 9, contentMode: .fit)
-            if case let .failed(message) = embedState, library.originalFile(materialID) == nil {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(Tokens.tilePadding)
-            }
-        }
-        .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
-        .plate(cornerRadius: Tokens.plateRadius)
+        player
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: Tokens.plateRadius, style: .continuous))
+            .plate(cornerRadius: Tokens.plateRadius)
     }
 
     @ViewBuilder
@@ -145,29 +139,50 @@ struct VideoReaderView: View {
             .aspectRatio(16 / 9, contentMode: .fit)
         case .embed:
             ZStack {
-                if let videoID, let origin = server.connection?.endpoint {
-                    YouTubeEmbedView(
-                        videoID: videoID,
-                        origin: origin,
+                switch playback {
+                case let .youTube(id):
+                    if let origin = server.connection?.endpoint {
+                        YouTubeEmbedView(
+                            videoID: id,
+                            origin: origin,
+                            start: video.start,
+                            seekTo: video.state.seekTo,
+                            phase: video.state.embed,
+                            onSeekDone: { video.send(.seekDone) },
+                            onPhase: { video.send(.embed($0)) },
+                            onSeconds: { video.send(.played($0)) },
+                            onPause: { video.send(.paused) }
+                        )
+                        .aspectRatio(16 / 9, contentMode: .fit)
+                        .opacity(video.state.embed == .ready ? 1 : 0)
+                    }
+                case let .stream(url):
+                    SystemPlayer(
+                        url: url,
                         start: video.start,
                         seekTo: video.state.seekTo,
-                        phase: video.state.embed,
                         onSeekDone: { video.send(.seekDone) },
-                        onPhase: { video.send(.embed($0)) },
                         onSeconds: { video.send(.played($0)) },
                         onPause: { video.send(.paused) }
                     )
                     .aspectRatio(16 / 9, contentMode: .fit)
-                    .opacity(video.state.embed == .ready ? 1 : 0)
+                case .unavailable:
+                    EmptyView()
                 }
-                switch embedState {
+                switch playerPhase {
                 case .loading:
                     VideoPlaceholder { Loading() }
                 case .ready:
                     EmptyView()
-                case .failed:
+                case let .failed(message):
                     VideoPlaceholder {
-                        Image(systemName: "play.fill").font(.largeTitle).foregroundStyle(.tertiary)
+                        VStack(spacing: Tokens.gap) {
+                            Image(systemName: "play.fill").font(.largeTitle).foregroundStyle(.tertiary)
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
                     }
                 }
             }
@@ -178,13 +193,21 @@ struct VideoReaderView: View {
         VideoSource.of(original: library.originalFile(materialID), downloading: downloading, onDevice: CloudFolder.isLocal)
     }
 
-    private var embedState: EmbedPhase {
-        guard videoID != nil else { return .failed("Not a YouTube video") }
-        guard server.hasReadConnection else {
-            return .loading
+    private var playerPhase: EmbedPhase {
+        switch playback {
+        case .youTube:
+            guard server.hasReadConnection else {
+                return .loading
+            }
+            guard server.connection != nil else {
+                return .failed("Connect the server in Settings to play here")
+            }
+            return video.state.embed
+        case .stream:
+            return .ready
+        case .unavailable:
+            return .failed("This video has no playable source")
         }
-        guard server.connection != nil else { return .failed("Connect the server in Settings to play here") }
-        return video.state.embed
     }
 
     private var captions: some View {

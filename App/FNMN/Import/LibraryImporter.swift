@@ -60,12 +60,23 @@ final class LibraryImporter {
         _ folder: URL, onStep: @escaping @MainActor (ImportStep) -> Void, write: @escaping Write
     ) async throws {
         onStep(.readingLibraryFolder)
-        let catalog = folder.appending(path: "catalog.json")
-        if CloudFolder.contains(catalog) {
-            try await CloudFolder.download(catalog)
-            try await write(true) { [file] snapshot in try await file.applyBrowserCatalog(from: folder, into: snapshot) }
-        }
+        _ = try await refreshCatalog(in: folder, write: write)
         _ = try await readChangedDeliveries(in: folder, onStep: onStep, write: write)
+    }
+
+    func refreshCatalog(in folder: URL?, write: Write) async throws -> Bool {
+        guard let folder else {
+            return false
+        }
+        var changed = false
+        try await write(true) { [file] snapshot in
+            guard let next = try await file.applyBrowserCatalogIfChanged(from: folder, into: snapshot) else {
+                return snapshot
+            }
+            changed = true
+            return next
+        }
+        return changed
     }
 
     func readChangedDeliveries(
