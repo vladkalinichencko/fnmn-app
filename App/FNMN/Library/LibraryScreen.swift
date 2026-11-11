@@ -23,6 +23,7 @@ struct LibraryScreen: View {
             .background(Tokens.canvas)
             .screenSearch($query)
             .navigationTitle("Library")
+            .appRefresh()
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Settings", systemImage: "gearshape") { dialogs.send(.openSettings) }

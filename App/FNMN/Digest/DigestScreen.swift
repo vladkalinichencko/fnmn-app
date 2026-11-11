@@ -14,17 +14,11 @@ struct DigestScreen: View {
                 .background(Tokens.canvas)
                 .screenSearch($query)
                 .navigationTitle("Digest")
+                .appRefresh()
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Sources", systemImage: "antenna.radiowaves.left.and.right") {
                             navigation.digest.append(.sources)
-                        }
-                    }
-                    if digests.syncState == .syncing {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            ProgressView()
-                                .controlSize(.small)
-                                .progressViewStyle(GraySpinner())
                         }
                     }
                 }
@@ -93,9 +87,6 @@ struct DigestScreen: View {
                     results(of: digest)
                 }
             }
-        }
-        .refreshable {
-            await digests.sync(folder: library.cloudFolder)
         }
     }
 

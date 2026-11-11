@@ -69,4 +69,8 @@ final class JournalSync {
     func save() async throws {
         try await file.saveSync(known)
     }
+
+    func logState() {
+        SyncLog.library.log("Journal device: \(self.device, privacy: .public); unwritten events: \(self.pending.count, privacy: .public); read offsets: \(self.known.applied, privacy: .public); event clocks: \(self.known.clock, privacy: .public)")
+    }
 }

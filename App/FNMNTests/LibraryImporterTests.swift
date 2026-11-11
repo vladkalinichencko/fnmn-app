@@ -90,4 +90,41 @@ final class LibraryImporterTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("b.tar"))
         }
     }
+
+    func testAPendingDeliveryIsNamedAndReadByTheNextSync() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "pending-\(UUID().uuidString)")
+        let deliveries = root.appending(path: "deliveries")
+        try FileManager.default.createDirectory(at: deliveries, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let archive = deliveries.appending(path: "article.tar")
+        try Data("delivery".utf8).write(to: archive)
+        let target = PendingTarget()
+
+        let waiting = await DeliverySync.run(target, in: root) { _ in
+            throw CloudFolderError.notDownloaded(count: 1)
+        }
+
+        XCTAssertEqual(waiting.pending, [archive])
+        XCTAssertTrue(target.added.isEmpty)
+        let finished = await DeliverySync.run(target, in: root) { _ in }
+        XCTAssertTrue(finished.pending.isEmpty)
+        XCTAssertEqual(target.added, [archive])
+    }
+
+    @MainActor
+    private final class PendingTarget: DeliveryTarget {
+        let subfolder = "deliveries"
+        private(set) var added: [URL] = []
+
+        func changed(_ archives: [URL]) async throws -> [URL] {
+            archives
+        }
+
+        func add(_ archive: URL, index: Int, total: Int) async throws {
+            added.append(archive)
+        }
+
+        func finish(_ archives: [URL]) async throws {
+        }
+    }
 }

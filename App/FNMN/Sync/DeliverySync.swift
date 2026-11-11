@@ -1,5 +1,10 @@
 import FNMNCore
 import Foundation
+import os
+
+enum SyncLog {
+    static let library = Logger(subsystem: "local.fnmn.reader", category: "LibrarySync")
+}
 
 @MainActor
 protocol DeliveryTarget {
@@ -13,29 +18,37 @@ protocol DeliveryTarget {
 
 @MainActor
 enum DeliverySync {
-    static func run(_ target: some DeliveryTarget, in folder: URL?) async -> (failures: [String], pending: Int) {
+    static func run(
+        _ target: some DeliveryTarget,
+        in folder: URL?,
+        download: @escaping (URL) async throws -> Void = { try await CloudFolder.download($0) }
+    ) async -> (failures: [String], pending: [URL]) {
         let archives: [URL]
         do {
             archives = try await CloudFolder.archives(in: folder, subfolder: target.subfolder)
         } catch {
-            return (["the \(target.subfolder) folder could not be read: \(error.localizedDescription)"], 0)
+            return (["the \(target.subfolder) folder could not be read: \(error.localizedDescription)"], [])
         }
         let changed: [URL]
         do {
             changed = try await target.changed(archives)
         } catch {
-            return (["the \(target.subfolder) index could not be read: \(error.localizedDescription)"], 0)
+            return (["the \(target.subfolder) index could not be read: \(error.localizedDescription)"], [])
         }
+        SyncLog.library.log("Changed \(target.subfolder, privacy: .public): \(changed.map(\.lastPathComponent), privacy: .public)")
         var failures: [String] = []
-        var pending = 0
+        var pending: [URL] = []
         for (index, archive) in changed.enumerated() {
             do {
-                try await CloudFolder.download(archive)
+                try await download(archive)
                 try await target.add(archive, index: index, total: changed.count)
+                SyncLog.library.log("Imported \(archive.lastPathComponent, privacy: .public)")
             } catch CloudFolderError.notDownloaded(_, _) {
-                pending += 1
+                pending.append(archive)
+                SyncLog.library.log("Pending \(archive.lastPathComponent, privacy: .public): waiting for iCloud")
             } catch {
                 failures.append("\(archive.lastPathComponent): \(error.localizedDescription)")
+                SyncLog.library.error("Failed \(archive.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
         do {

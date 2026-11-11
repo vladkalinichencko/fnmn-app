@@ -65,17 +65,18 @@ final class LibraryImporter {
             try await CloudFolder.download(catalog)
             try await write(true) { [file] snapshot in try await file.applyBrowserCatalog(from: folder, into: snapshot) }
         }
-        try await readChangedDeliveries(in: folder, onStep: onStep, write: write)
+        _ = try await readChangedDeliveries(in: folder, onStep: onStep, write: write)
     }
 
     func readChangedDeliveries(
         in folder: URL?, onStep: @escaping @MainActor (ImportStep) -> Void = { _ in }, write: @escaping Write
-    ) async throws {
+    ) async throws -> [URL] {
         let target = LibraryDeliveries(file: file, write: write, onStep: onStep)
         let result = await DeliverySync.run(target, in: folder)
         guard result.failures.isEmpty else {
             throw DeliverySyncError.failed(result.failures.joined(separator: "; "))
         }
+        return result.pending
     }
 
     func originalFiles(in folder: URL) async throws -> [String: URL] {

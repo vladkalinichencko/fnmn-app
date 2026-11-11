@@ -38,6 +38,7 @@ struct ShelfScreen: View {
             .noResults(for: query, when: annotations.isEmpty && archived.isEmpty)
             .screenSearch($query)
             .navigationTitle("Shelf")
+            .appRefresh()
         } destination: { route in
             RouteScreen(route: route)
         }

@@ -19,12 +19,18 @@ enum LibraryPhase: Equatable {
     case failed(String)
 }
 
+enum LibrarySyncState: Equatable {
+    case idle
+    case syncing
+}
+
 @MainActor @Observable
 final class LibraryModel {
     private(set) var snapshot = LibrarySnapshot()
     private(set) var progress = ReadingProgress()
     private(set) var queries = LibraryQueries(LibrarySnapshot())
     private(set) var loadState = LoadState.idle
+    private(set) var syncState = LibrarySyncState.idle
 
     var phase: LibraryPhase {
         switch loadState {
@@ -147,14 +153,35 @@ final class LibraryModel {
     }
 
     func syncWithOtherDevices() async {
+        guard syncState == .idle else {
+            return
+        }
+        syncState = .syncing
+        defer { syncState = .idle }
+        SyncLog.library.log("Sync started for \(self.deviceID, privacy: .public); private library: \(self.storageURL.path, privacy: .public)")
+        logLocalState()
+        journal.logState()
         await readJournals()
         await readOriginals()
+        var pending: [URL] = []
         do {
-            try await importer.readChangedDeliveries(in: cloudFolder, write: self.write)
+            pending = try await importer.readChangedDeliveries(in: cloudFolder, write: self.write)
         } catch {
             failure = error.localizedDescription
+            SyncLog.library.error("Sync failure: \(error.localizedDescription, privacy: .public)")
         }
+        SyncLog.library.log("Sync finished with \(pending.count, privacy: .public) pending deliveries")
+        logLocalState()
         reindex = Task { await reindexSearch() }
+    }
+
+    private func logLocalState() {
+        SyncLog.library.log("Local catalog: \(self.snapshot.articles.count, privacy: .public) materials, \(self.snapshot.albums, privacy: .public), deletions: \(self.snapshot.deletedAt, privacy: .public)")
+        for entry in snapshot.articles {
+            let id = entry.material.id
+            let reading = progress.readings[id]
+            SyncLog.library.log("Material \(id, privacy: .public); title: \(entry.material.title, privacy: .public); delivery: \(entry.delivery ?? "none", privacy: .public); collections: \(self.snapshot.albums(of: id), privacy: .public); opened: \(reading?.openedAt.map { $0.description } ?? "never", privacy: .public); read: \(reading?.isRead == true, privacy: .public); position: \(self.progress.positions[id].map { String(describing: $0) } ?? "none", privacy: .public)")
+        }
     }
 
     func reindexSearch() async {
