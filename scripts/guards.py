@@ -172,6 +172,8 @@ def comments_in_sources(root=ROOT):
     problems = []
     for path in listed.stdout.splitlines():
         top = path.split("/")[0]
+        if not (root / path).exists():
+            continue
         if path.endswith(".swift") and top in ("App", "Sources", "Tests"):
             problems += swift_comments(root / path, path)
         elif path.endswith(".py") and top in ("server", "scripts"):

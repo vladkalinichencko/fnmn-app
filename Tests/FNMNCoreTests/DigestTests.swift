@@ -144,7 +144,7 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     let file = DigestFile(url: root, cache: root)
     let index = DigestIndex(
         imported: [.init(file: "digest-1.tar", id: "digest-1", at: postedAt)],
-        seen: ["x/1"], hidden: ["x/2"]
+        hidden: ["x/2"]
     )
     try await file.saveIndex(index)
     let loaded = try await file.loadIndex()
