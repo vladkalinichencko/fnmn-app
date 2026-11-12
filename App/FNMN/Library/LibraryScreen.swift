@@ -50,8 +50,8 @@ struct LibraryScreen: View {
             LibrarySection("Collections") {
                 CollectionOptions(grouping: $grouping, sort: $sort)
             } content: {
-                LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    ForEach(library.queries.groups(by: grouping, sortedBy: sort, progress: library.progress)) { AlbumTile(album: $0) }
+                CardColumns(items: library.queries.groups(by: grouping, sortedBy: sort, progress: library.progress), idealWidth: 170) { album in
+                    AlbumTile(album: album)
                 }
             }
         }
@@ -69,12 +69,30 @@ private struct UnsortedSection: View {
         let unsorted = library.queries.unsortedItems
         if !preparing.isEmpty || !unsorted.isEmpty {
             LibrarySection("Unsorted") {
-                LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    ForEach(preparing) { PreparingTile(job: $0) }
-                    ForEach(unsorted) { ItemTile(item: $0) }
+                CardColumns(items: UnsortedEntry.all(preparing: preparing, unsorted: unsorted), idealWidth: 170) { entry in
+                    switch entry {
+                    case let .job(job): PreparingTile(job: job)
+                    case let .item(item): ItemTile(item: item)
+                    }
                 }
             }
         }
+    }
+}
+
+private enum UnsortedEntry: Identifiable {
+    case job(ImportJob)
+    case item(LibraryItem)
+
+    var id: String {
+        switch self {
+        case let .job(job): "job-\(job.id)"
+        case let .item(item): "item-\(item.id)"
+        }
+    }
+
+    static func all(preparing: [ImportJob], unsorted: [LibraryItem]) -> [UnsortedEntry] {
+        preparing.map(UnsortedEntry.job) + unsorted.map(UnsortedEntry.item)
     }
 }
 

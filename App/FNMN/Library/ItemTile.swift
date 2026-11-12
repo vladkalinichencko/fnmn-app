@@ -7,10 +7,8 @@ struct ItemGrid: View {
     var query = ""
 
     var body: some View {
-        LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-            ForEach(items) { item in
-                ItemTile(item: item, album: album, query: query)
-            }
+        CardColumns(items: items, idealWidth: 170) { item in
+            ItemTile(item: item, album: album, query: query)
         }
     }
 }

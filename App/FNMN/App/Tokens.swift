@@ -10,20 +10,11 @@ enum Tokens {
     static let plateRadius: CGFloat = 28
     static let embedHeight: CGFloat = 180
     static let readOpacity = 0.6
-    static let grid = [GridItem(.adaptive(minimum: 158, maximum: 260), spacing: gap)]
     static let canvas = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark ? UIColor(white: 0.05, alpha: 1) : UIColor(white: 0.965, alpha: 1)
     })
     static let plateTint = Color(uiColor: .secondarySystemGroupedBackground)
     static let sectionTitle = Font.title.bold()
-
-    static func annotationColumns(forWidth width: CGFloat) -> Int {
-        switch width {
-        case ..<640: 1
-        case ..<1100: 2
-        default: 4
-        }
-    }
 
     static let readingFraction: CGFloat = 0.6
     static let minReading: CGFloat = 560

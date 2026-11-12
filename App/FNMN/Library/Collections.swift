@@ -202,13 +202,11 @@ struct AlbumPicker: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                    let current = Set(library.snapshot.albums(of: itemID))
-                    ForEach(library.queries.albumSummaries.filter { !current.contains($0.name) }) { album in
-                        AlbumTile(album: album) {
-                            dialogs.send(.dismiss)
-                            Task { await library.apply(.addToCollection(album.name, itemIDs: [itemID])) }
-                        }
+                let current = Set(library.snapshot.albums(of: itemID))
+                CardColumns(items: library.queries.albumSummaries.filter { !current.contains($0.name) }, idealWidth: 170) { album in
+                    AlbumTile(album: album) {
+                        dialogs.send(.dismiss)
+                        Task { await library.apply(.addToCollection(album.name, itemIDs: [itemID])) }
                     }
                 }
                 .padding(.horizontal, Tokens.gutter)

@@ -181,6 +181,28 @@ struct PostCard: View {
         Tokens.concentric(Tokens.plateRadius, inset: Tokens.tilePadding)
     }
 
+    static func estimatedHeight(_ post: DigestPackage.Post, width: CGFloat) -> Double {
+        var total = 170.0
+        if let text = post.text, !text.isEmpty {
+            total += (Double(text.count) / max(width / 8.5, 20)).rounded(.up) * 21
+        }
+        if post.media.count == 1, let only = post.media.first {
+            total += width * Double(only.height) / Double(max(only.width, 1))
+        } else if !post.media.isEmpty {
+            total += Double((post.media.count + 1) / 2) * width / 2
+        }
+        if let poster = post.video?.poster {
+            total += width * Double(poster.height) / Double(max(poster.width, 1))
+        }
+        if post.context != nil {
+            total += 26
+        }
+        if (post.mediaErrors ?? 0) > 0, post.media.isEmpty {
+            total += 30
+        }
+        return total
+    }
+
     static func icon(_ kind: DigestPackage.Post.Context.Kind) -> String {
         switch kind {
         case .reply: "arrowshape.turn.up.left"

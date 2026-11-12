@@ -94,10 +94,8 @@ struct DigestScreen: View {
         LazyVStack(alignment: .leading, spacing: Tokens.sectionGap) {
             ForEach(digest.package.sections(labels: digests.labels, hidden: digests.hidden)) { section in
                 LibrarySection(section.folder.uppercased()) {
-                    LazyVGrid(columns: Self.columns, spacing: Tokens.gap) {
-                        ForEach(section.posts) { post in
-                            PostCard(post: post, digest: digest, read: digests.seen.contains(post.id))
-                        }
+                    CardColumns(items: section.posts, idealWidth: 330, height: PostCard.estimatedHeight) { post in
+                        PostCard(post: post, digest: digest, read: digests.seen.contains(post.id))
                     }
                 }
             }
@@ -108,15 +106,11 @@ struct DigestScreen: View {
 
     private func results(of digest: Digest) -> some View {
         let found = digest.package.posts(matching: query, hidden: digests.hidden)
-        return LazyVGrid(columns: Self.columns, spacing: Tokens.gap) {
-            ForEach(found) { post in
-                PostCard(post: post, digest: digest, read: digests.seen.contains(post.id))
-            }
+        return CardColumns(items: found, idealWidth: 330, height: PostCard.estimatedHeight) { post in
+            PostCard(post: post, digest: digest, read: digests.seen.contains(post.id))
         }
         .padding(.horizontal, Tokens.gutter)
         .padding(.bottom, Tokens.sectionGap)
         .noResults(for: query, when: found.isEmpty)
     }
-
-    private static let columns = [GridItem(.adaptive(minimum: 330, maximum: 640), spacing: Tokens.gap)]
 }

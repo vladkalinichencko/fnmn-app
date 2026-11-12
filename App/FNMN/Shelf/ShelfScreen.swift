@@ -18,7 +18,15 @@ struct ShelfScreen: View {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
                     if !annotations.isEmpty {
                         ShelfSection("Annotations", route: .annotations) {
-                            AnnotationColumns(entries: annotations, preview: !searching)
+                            CardColumns(
+                                items: annotations,
+                                idealWidth: 300,
+                                spacing: Tokens.sectionGap,
+                                height: { entry, _ in Double(entry.weight) },
+                                limit: searching ? nil : { $0 == 1 ? 3 : 2 * $0 }
+                            ) { entry in
+                                AnnotationCard(entry: entry)
+                            }
                         }
                     }
                     if !archived.isEmpty {
@@ -98,9 +106,11 @@ struct AnnotationsScreen: View {
     var body: some View {
         let entries = AnnotationEntry.all(in: library.queries.annotationGroups(matching: query))
         ScrollView {
-            AnnotationColumns(entries: entries)
-                .padding(.horizontal, Tokens.gutter)
-                .padding(.vertical, Tokens.gap)
+            CardColumns(items: entries, idealWidth: 300, spacing: Tokens.sectionGap, height: { entry, _ in Double(entry.weight) }) { entry in
+                AnnotationCard(entry: entry)
+            }
+            .padding(.horizontal, Tokens.gutter)
+            .padding(.vertical, Tokens.gap)
         }
         .background(Tokens.canvas)
         .noResults(for: query, when: entries.isEmpty)
@@ -136,39 +146,6 @@ private struct AnnotationEntry: Identifiable {
 
     var weight: Int {
         60 + min(annotation.text.count, 260) + annotation.note.count + item.title.count / 4
-    }
-}
-
-private struct AnnotationColumns: View {
-    let entries: [AnnotationEntry]
-    var preview = false
-    @State private var width: CGFloat = 0
-
-    var body: some View {
-        let count = Tokens.annotationColumns(forWidth: width)
-        let shown = preview ? Array(entries.prefix(count == 1 ? 3 : 2 * count)) : entries
-        HStack(alignment: .top, spacing: Tokens.sectionGap) {
-            ForEach(Array(Self.split(shown, into: count).enumerated()), id: \.offset) { _, column in
-                LazyVStack(spacing: Tokens.sectionGap) {
-                    ForEach(column) { AnnotationCard(entry: $0) }
-                }
-                .frame(maxWidth: .infinity, alignment: .top)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        .opacity(width > 0 ? 1 : 0)
-    }
-
-    private static func split(_ entries: [AnnotationEntry], into count: Int) -> [[AnnotationEntry]] {
-        var columns = Array(repeating: [AnnotationEntry](), count: count)
-        var heights = Array(repeating: 0, count: count)
-        for entry in entries {
-            let shortest = heights.indices.min { heights[$0] < heights[$1] } ?? 0
-            columns[shortest].append(entry)
-            heights[shortest] += entry.weight
-        }
-        return columns
     }
 }
 
