@@ -104,10 +104,21 @@ struct DigestScreen: View {
 
     private func sections(of digest: Digest) -> some View {
         LazyVStack(alignment: .leading, spacing: Tokens.sectionGap) {
-            ForEach(digest.package.sections(labels: digests.labels, hidden: digests.hidden)) { section in
-                LibrarySection(section.folder.uppercased()) {
-                    CardColumns(items: section.posts, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
-                        PostCard(post: post, digest: digest, opensThread: post.hasThread)
+            ForEach(digest.package.sections(hidden: digests.hidden)) { network in
+                VStack(alignment: .leading, spacing: Tokens.gap) {
+                    Text(network.network.name)
+                        .font(.largeTitle.weight(.bold))
+                    ForEach(network.topics) { topic in
+                        VStack(alignment: .leading, spacing: Tokens.gap) {
+                            if network.topics.count > 1 {
+                                Text(topic.folder.uppercased())
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            CardColumns(items: topic.posts, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
+                                PostCard(post: post, digest: digest, opensThread: post.hasThread)
+                            }
+                        }
                     }
                 }
             }

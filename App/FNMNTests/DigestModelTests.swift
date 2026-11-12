@@ -17,7 +17,7 @@ final class DigestModelTests: XCTestCase {
     }
 
     private func model() -> DigestModel {
-        DigestModel(device: "phone", file: DigestFile(url: root, cache: root))
+        DigestModel(file: DigestFile(url: root, cache: root))
     }
 
     private func package(id: String = "digest-2026-11-08T08-00-00Z") -> DigestPackage {
@@ -119,7 +119,7 @@ final class DigestModelTests: XCTestCase {
         XCTAssertEqual(digests.current?.package.posts.count, 2)
     }
 
-    func testRecordingHiddenPostsAndWritesTheJournal() async throws {
+    func testHidingAPostKeepsItOutOfTheSections() async throws {
         let folder = root.appending(path: "FNMN")
         let tar = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
         let file = DigestFile(url: root, cache: root)
@@ -127,24 +127,16 @@ final class DigestModelTests: XCTestCase {
         let digests = model()
         await digests.sync(folder: folder)
         let post = try XCTUnwrap(digests.post("x/1"))
-        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
-        digests.record(.opened, post: post, digest: digest)
-        digests.record(.hidden, post: post, digest: digest)
+        digests.hide(post)
         await digests.settle()
         XCTAssertTrue(digests.hidden.contains("x/1"))
-        let journal = folder.appending(path: "digest-state/phone.jsonl")
-        let lines = try String(contentsOf: journal, encoding: .utf8).split(separator: "\n")
-        XCTAssertEqual(lines.count, 2)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let last = try decoder.decode(DigestEngagement.self, from: Data(lines[1].utf8))
-        XCTAssertEqual(last.kind, .hidden)
-        XCTAssertEqual(last.postID, "x/1")
+        let saved = try await DigestFile(url: root, cache: root).loadIndex()
+        XCTAssertTrue(saved.hidden.contains("x/1"))
     }
 
     func testAHiddenPostLeavesItsSection() throws {
-        let sections = package().sections(labels: [:], hidden: ["x/1"])
-        XCTAssertEqual(sections.flatMap(\.posts).map(\.id), ["x/2"])
+        let sections = package().sections(hidden: ["x/1"])
+        XCTAssertEqual(sections.flatMap { $0.topics.flatMap(\.posts) }.map(\.id), ["x/2"])
     }
 
     func testTheSearchFindsTextAndAuthor() {
@@ -163,42 +155,6 @@ final class DigestModelTests: XCTestCase {
         XCTAssertEqual(digests.hidden, ["x/2"])
         let saved = try await DigestFile(url: root, cache: root).loadIndex()
         XCTAssertEqual(saved.hidden, ["x/2"])
-    }
-
-    func testEveryEngagementKindIsRecorded() async throws {
-        let folder = root.appending(path: "FNMN")
-        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
-        let digests = model()
-        await digests.sync(folder: folder)
-        let post = try XCTUnwrap(digests.post("x/1"))
-        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
-        for kind in DigestEngagement.Kind.allCases {
-            digests.record(kind, post: post, digest: digest)
-        }
-        await digests.settle()
-        let journal = folder.appending(path: "digest-state/phone.jsonl")
-        let lines = try String(contentsOf: journal, encoding: .utf8).split(separator: "\n")
-        XCTAssertEqual(lines.count, DigestEngagement.Kind.allCases.count)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let kinds = try lines.map { try decoder.decode(DigestEngagement.self, from: Data($0.utf8)).kind }
-        XCTAssertEqual(Set(kinds), Set(DigestEngagement.Kind.allCases))
-    }
-
-    func testSavingAPostRecordsIt() async throws {
-        let folder = root.appending(path: "FNMN")
-        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
-        let digests = model()
-        await digests.sync(folder: folder)
-        let post = try XCTUnwrap(digests.post("x/1"))
-        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
-        XCTAssertEqual(digests.save(post, digest: digest), post.permalink)
-        await digests.settle()
-        let journal = folder.appending(path: "digest-state/phone.jsonl")
-        let last = try String(contentsOf: journal, encoding: .utf8).split(separator: "\n").last
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        XCTAssertEqual(try decoder.decode(DigestEngagement.self, from: Data(try XCTUnwrap(last).utf8)).kind, .saved)
     }
 
     func testABadDeliveryKeepsTheGoodOneAndTheMagazine() async throws {
@@ -244,9 +200,9 @@ final class DigestModelTests: XCTestCase {
         let digests = model()
         await digests.sync(folder: folder)
         let post = try XCTUnwrap(digests.post("x/1"))
-        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
-        digests.record(.hidden, post: post, digest: digest)
-        let found = digest.package.posts(matching: "karpathy", hidden: digests.hidden)
+        digests.hide(post)
+        let package = try XCTUnwrap(digests.current?.package)
+        let found = package.posts(matching: "karpathy", hidden: digests.hidden)
         XCTAssertEqual(found.map(\.id), ["x/2"])
     }
 
@@ -283,31 +239,20 @@ final class DigestModelTests: XCTestCase {
         }
     }
 
-    func testRecordingAMarkNotifiesTheReader() async throws {
+    func testHidingAMarkNotifiesTheReader() async throws {
         let folder = root.appending(path: "FNMN")
         _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
         let digests = model()
         await digests.sync(folder: folder)
         let post = try XCTUnwrap(digests.post("x/1"))
-        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
         let seen = expectation(description: "the reader sees the mark")
         withObservationTracking {
             _ = digests.hidden
         } onChange: {
             seen.fulfill()
         }
-        digests.record(.hidden, post: post, digest: digest)
+        digests.hide(post)
         await fulfillment(of: [seen], timeout: 1)
-    }
-
-    func testABrokenClassifierIsReported() async throws {
-        let missing = await InterestClassifier.labels(modelURL: root.appending(path: "missing.mlmodel"), posts: [])
-        XCTAssertNotNil(missing.error)
-        let broken = root.appending(path: "broken.mlmodel")
-        try Data("not a model".utf8).write(to: broken)
-        let loaded = await InterestClassifier.labels(modelURL: broken, posts: [])
-        XCTAssertNotNil(loaded.error)
-        XCTAssertTrue(loaded.labels.isEmpty)
     }
 
     func testARefreshBringsOnePicture() async throws {
@@ -317,7 +262,7 @@ final class DigestModelTests: XCTestCase {
         port.media = [.init(path: "media/p.jpg", width: 2, height: 2)]
         let connection = try ServerConnection(address: "https://example.com", token: "token")
         let server = ServerLink(port: port, storage: FakeStorage(connection: connection))
-        let digests = DigestModel(device: "phone", file: DigestFile(url: root, cache: root), server: server)
+        let digests = DigestModel(file: DigestFile(url: root, cache: root), server: server)
         await digests.sync(folder: folder)
         let post = try XCTUnwrap(digests.post("x/1"))
         let digest = try XCTUnwrap(digests.digest(of: "x/1"))

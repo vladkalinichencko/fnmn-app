@@ -8,7 +8,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
     public let window: Window
     public let folders: [String]
     public let sources: [Source]
-    public let model: ModelRef?
     public let posts: [Post]
 
     public init(
@@ -17,7 +16,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         window: Window,
         folders: [String] = [],
         sources: [Source] = [],
-        model: ModelRef? = nil,
         posts: [Post] = []
     ) {
         self.schema = schema
@@ -25,7 +23,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         self.window = window
         self.folders = folders
         self.sources = sources
-        self.model = model
         self.posts = posts
     }
 
@@ -48,18 +45,6 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         public init(from: Date, to: Date) {
             self.from = from
             self.to = to
-        }
-    }
-
-    public struct ModelRef: Codable, Equatable, Sendable {
-        public let file: String
-        public let trainedAt: Date
-        public let examples: Int
-
-        public init(file: String, trainedAt: Date, examples: Int) {
-            self.file = file
-            self.trainedAt = trainedAt
-            self.examples = examples
         }
     }
 
@@ -247,7 +232,21 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         }
     }
 
-    public struct Section: Equatable, Identifiable, Sendable {
+    public struct NetworkSection: Equatable, Identifiable, Sendable {
+        public let network: Network
+        public let topics: [TopicSection]
+
+        public var id: Network {
+            network
+        }
+
+        public init(network: Network, topics: [TopicSection]) {
+            self.network = network
+            self.topics = topics
+        }
+    }
+
+    public struct TopicSection: Equatable, Identifiable, Sendable {
         public let folder: String
         public let posts: [Post]
 
@@ -264,22 +263,28 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 
 extension DigestPackage {
     public static let otherFolder = "Other"
+    public static let networkOrder: [Network] = [.telegram, .x, .instagram]
 
-    public func sections(labels: [String: String], hidden: Set<String>) -> [Section] {
-        OrderedGroups.of(posts.filter { !hidden.contains($0.id) }, startingWith: folders) { post in
-            let folder = folder(of: post, labels: labels)
-            return (folder, folder)
-        }
-        .map { group in
-            Section(folder: group.key, posts: group.items.sorted { $0.postedAt > $1.postedAt })
+    public func sections(hidden: Set<String>) -> [NetworkSection] {
+        let visible = posts.filter { !hidden.contains($0.id) }
+        return Self.networkOrder.compactMap { network in
+            let own = visible.filter { $0.network == network }
+            guard !own.isEmpty else {
+                return nil
+            }
+            let topics = OrderedGroups.of(own, startingWith: folders) { post in
+                let folder = folder(of: post)
+                return (folder, folder)
+            }
+            .map { group in
+                TopicSection(folder: group.key, posts: group.items.sorted { $0.postedAt > $1.postedAt })
+            }
+            return NetworkSection(network: network, topics: topics)
         }
     }
 
-    public func folder(of post: Post, labels: [String: String]) -> String {
-        if let label = labels[post.id], folders.contains(label) {
-            return label
-        }
-        return post.folders.first ?? Self.otherFolder
+    public func folder(of post: Post) -> String {
+        post.folders.first ?? Self.otherFolder
     }
 
     public func posts(matching query: String, hidden: Set<String> = []) -> [Post] {
@@ -338,20 +343,4 @@ public struct DigestIndex: Codable, Equatable, Sendable {
     }
 }
 
-public struct DigestEngagement: Codable, Equatable, Sendable {
-    public enum Kind: String, Codable, CaseIterable, Sendable {
-        case opened, saved, hidden
-    }
 
-    public let at: Date
-    public let kind: Kind
-    public let postID: String
-    public let digestID: String
-
-    public init(at: Date = .now, kind: Kind, postID: String, digestID: String) {
-        self.at = at
-        self.kind = kind
-        self.postID = postID
-        self.digestID = digestID
-    }
-}

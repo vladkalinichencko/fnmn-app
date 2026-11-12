@@ -67,13 +67,6 @@ public actor DigestFile {
         }
     }
 
-    public func append(_ engagement: DigestEngagement, device: String, to folder: URL) throws {
-        let state = folder.appending(path: "digest-state")
-        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-        let journal = state.appending(path: "\(device).jsonl")
-        try JSONLines.append(try JSONLines.line(engagement, encoder: Self.encoder()), to: journal)
-    }
-
     public func saveMedia(_ data: Data, as name: String, of digest: Digest) throws -> String {
         let path = "media/\(name)"
         try Self.check(path)

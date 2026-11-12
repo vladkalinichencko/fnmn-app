@@ -58,7 +58,6 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
         {"id": "x/karpathy", "network": "x", "name": "Andrej Karpathy", "folders": ["ml"], "status": "ok"},
         {"id": "tg/durov", "network": "telegram", "name": "Pavel Durov", "folders": ["design"], "status": "stale", "detail": "the login expired"}
       ],
-      "model": {"file": "classifier.mlmodel", "trainedAt": "2026-11-08T07:12:00Z", "examples": 231},
       "posts": [{
         "id": "x/1587", "network": "x",
         "author": {"handle": "karpathy", "name": "Andrej Karpathy"},
@@ -87,7 +86,6 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(decoded.id == "digest-2026-11-08T08:00:00Z")
     #expect(decoded.folders == ["ml", "design"])
     #expect(decoded.sources[1].status == .stale)
-    #expect(decoded.model?.examples == 231)
     let post = try #require(decoded.posts.first)
     #expect(post.media.first?.width == 1280)
     #expect(post.video?.duration == 42)
@@ -151,37 +149,6 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(loaded == index)
 }
 
-@Test func engagementIsAppendedOneLineAtATime() async throws {
-    let root = try temporaryFolder()
-    let file = DigestFile(url: root, cache: root)
-    let folder = try temporaryFolder()
-    try await file.append(DigestEngagement(kind: .opened, postID: "x/1", digestID: "digest-1"), device: "phone", to: folder)
-    try await file.append(DigestEngagement(kind: .saved, postID: "x/1", digestID: "digest-1"), device: "phone", to: folder)
-    let journal = folder.appending(path: "digest-state/phone.jsonl")
-    let lines = try String(contentsOf: journal, encoding: .utf8).split(separator: "\n")
-    #expect(lines.count == 2)
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    let last = try decoder.decode(DigestEngagement.self, from: Data(lines[1].utf8))
-    #expect(last.kind == .saved)
-    #expect(last.postID == "x/1")
-}
-
-@Test func aJournalFieldWithANewlineStaysOneLine() async throws {
-    let root = try temporaryFolder()
-    let file = DigestFile(url: root, cache: root)
-    let folder = try temporaryFolder()
-    let id = "x/1\nnot a second line"
-    try await file.append(DigestEngagement(kind: .opened, postID: id, digestID: "digest-1"), device: "phone", to: folder)
-    let journal = folder.appending(path: "digest-state/phone.jsonl")
-    let lines = try String(contentsOf: journal, encoding: .utf8)
-        .split(separator: "\n", omittingEmptySubsequences: true)
-    #expect(lines.count == 1)
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    #expect(try decoder.decode(DigestEngagement.self, from: Data(lines[0].utf8)).postID == id)
-}
-
 @Test func aRefreshedPictureLandsInTheDigestAndAHostileNameIsRefused() async throws {
     let root = try temporaryFolder()
     let file = DigestFile(url: root, cache: root)
@@ -207,24 +174,34 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(left.map(\.id) == ["digest-2", "digest-1"])
 }
 
-@Test func sectionsFollowTheFoldersAndTheClassifier() {
+@Test func sectionsFollowTheNetworksThenTheFolders() {
     let package = package(posts: [
         post("x/1", folder: "ml", date: postedAt),
         post("x/2", folder: "ml", date: postedAt.addingTimeInterval(-60)),
         post("x/3", folder: "design", date: postedAt),
         post("x/4", folder: "unknown", date: postedAt),
     ])
-    let sections = package.sections(labels: ["x/2": "design"], hidden: [])
-    #expect(sections.map(\.folder) == ["ml", "design", "unknown"])
-    #expect(sections[0].posts.map(\.id) == ["x/1"])
-    #expect(sections[1].posts.map(\.id) == ["x/3", "x/2"])
-    #expect(sections[2].posts.map(\.id) == ["x/4"])
+    let sections = package.sections(hidden: [])
+    #expect(sections.map(\.network) == [.x])
+    let topics = sections[0].topics
+    #expect(topics.map(\.folder) == ["ml", "design", "unknown"])
+    #expect(topics[0].posts.map(\.id) == ["x/1", "x/2"])
+    #expect(topics[1].posts.map(\.id) == ["x/3"])
+    #expect(topics[2].posts.map(\.id) == ["x/4"])
+}
+
+@Test func networksComeInTheirOrder() {
+    let package = package(posts: [
+        post("x/1"),
+        DigestPackage.Post(id: "tg/1", network: .telegram, author: author, permalink: permalink, postedAt: postedAt, text: "tg", folders: ["ml"]),
+    ])
+    #expect(package.sections(hidden: []).map(\.network) == [.telegram, .x])
 }
 
 @Test func aHiddenPostLeavesItsSection() {
     let package = package(posts: [post("x/1"), post("x/2")])
-    let sections = package.sections(labels: [:], hidden: ["x/2"])
-    #expect(sections.flatMap(\.posts).map(\.id) == ["x/1"])
+    let sections = package.sections(hidden: ["x/2"])
+    #expect(sections.flatMap { $0.topics.flatMap(\.posts) }.map(\.id) == ["x/1"])
 }
 
 @Test func searchReadsTextAndAuthor() {
@@ -304,14 +281,4 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(package.posts(matching: "ZURICH").map(\.id) == ["x/1"])
 }
 
-@Test func everyEngagementKindSurvivesTheJournal() throws {
-    let encoder = encoder()
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    for kind in DigestEngagement.Kind.allCases {
-        let event = DigestEngagement(kind: kind, postID: "x/1", digestID: "digest-1")
-        let decoded = try decoder.decode(DigestEngagement.self, from: try encoder.encode(event))
-        #expect(decoded.kind == kind)
-        #expect(decoded.postID == "x/1")
-    }
-}
+

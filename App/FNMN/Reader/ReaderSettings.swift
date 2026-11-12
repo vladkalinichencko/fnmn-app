@@ -271,12 +271,10 @@ struct ReaderAppearanceControls: View {
     @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
 
     var body: some View {
-        ControlGroup {
-            Button("Smaller", systemImage: "textformat.size.smaller") { size -= 1 }
-                .disabled(size <= 0)
-            Button("Larger", systemImage: "textformat.size.larger") { size += 1 }
-                .disabled(size >= ReaderAppearance.sizes.count - 1)
-        }
+        Button("Smaller", systemImage: "textformat.size.smaller") { size -= 1 }
+            .disabled(size <= 0)
+        Button("Larger", systemImage: "textformat.size.larger") { size += 1 }
+            .disabled(size >= ReaderAppearance.sizes.count - 1)
         Picker("Background", selection: $background) {
             ForEach(ReaderBackground.allCases) { option in
                 Label { Text(option.name) } icon: { option.swatch }

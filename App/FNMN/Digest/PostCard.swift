@@ -49,10 +49,9 @@ struct PostCard: View {
                 if let context = post.context {
                     contextBlock(context)
                 }
-                footer
             }
         }
-        .padding(.vertical, Tokens.gap)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect)
         .onTapGesture {
@@ -74,11 +73,12 @@ struct PostCard: View {
     }
 
     private var header: some View {
-        PostAuthorLine(name: post.author.name, handle: post.author.handle) {
-            Text("\(post.network.name) · \(post.postedAt.formatted(.relative(presentation: .numeric)))")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(post.author.name)
+                .font(.body.weight(.semibold))
                 .lineLimit(1)
+            Spacer(minLength: 8)
+            PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)", font: .title3)
         }
     }
 
@@ -180,41 +180,15 @@ struct PostCard: View {
         .padding(.leading, 8)
     }
 
-    private var footer: some View {
-        HStack(spacing: 12) {
-            if let stats = post.stats {
-                if let likes = stats.likes {
-                    Label("\(likes.formatted(.number.notation(.compactName)))", systemImage: "heart")
-                }
-                if let replies = stats.replies {
-                    Label("\(replies.formatted(.number.notation(.compactName)))", systemImage: "bubble.left")
-                }
-                if let reposts = stats.reposts {
-                    Label("\(reposts.formatted(.number.notation(.compactName)))", systemImage: "arrow.2.squarepath")
-                }
-            }
-            Spacer()
-            if opensThread {
-                Image(systemName: "chevron.forward")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)", font: .callout)
-        }
-        .font(.caption2)
-        .foregroundStyle(.tertiary)
-    }
-
     @ViewBuilder private var menu: some View {
         Button("Save to Library", systemImage: "books.vertical") {
-            let link = digests.save(post, digest: digest)
-            imports.send(.submit(.link(link), id: UUID()))
+            imports.send(.submit(.link(post.permalink), id: UUID()))
         }
         Button("Open in \(post.network.name)", systemImage: "arrow.up.right.square") {
             openURL(post.permalink)
         }
         Button("Hide", systemImage: "eye.slash") {
-            digests.record(.hidden, post: post, digest: digest)
+            digests.hide(post)
         }
     }
 
@@ -223,7 +197,7 @@ struct PostCard: View {
     }
 
     static func estimatedHeight(_ post: DigestPackage.Post, width: CGFloat) -> Double {
-        var total = 170.0
+        var total = 120.0
         if let text = post.text, !text.isEmpty {
             total += (Double(text.count) / max(width / 8.5, 20)).rounded(.up) * 21
         }
@@ -236,7 +210,7 @@ struct PostCard: View {
             total += width * Double(poster.height) / Double(max(poster.width, 1))
         }
         if post.context != nil {
-            total += 26
+            total += 40
         }
         if (post.mediaErrors ?? 0) > 0, post.media.isEmpty {
             total += 30

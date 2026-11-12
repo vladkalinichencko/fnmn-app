@@ -15,7 +15,7 @@ struct FNMNApp: App {
         _library = State(initialValue: library)
         _server = State(initialValue: server)
         _imports = State(initialValue: ImportJobs(library: library, server: server))
-        _digests = State(initialValue: DigestModel(device: library.deviceID, server: server))
+        _digests = State(initialValue: DigestModel(server: server))
         ReaderAppearance.makeSpeedProfiles()
     }
 

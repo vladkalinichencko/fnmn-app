@@ -54,10 +54,10 @@ final class ArchitectureGuardTests: XCTestCase {
     func testPostCardsShareTheirParts() throws {
         for file in ["PostCard.swift", "ThreadScreen.swift"] {
             let source = try contents(of: file)
-            XCTAssertTrue(source.contains("PostAuthorLine("), "\(file) builds its own author line")
             XCTAssertTrue(source.contains("PostText("), "\(file) builds its own post text")
             XCTAssertTrue(source.contains("PostOpenButton("), "\(file) builds its own open button")
         }
+        XCTAssertTrue(try contents(of: "ThreadScreen.swift").contains("PostAuthorLine("), "ThreadScreen builds its own author line")
     }
 
     func testWebViewsAppearOnlyInTheLiveCropAndThePlayer() throws {

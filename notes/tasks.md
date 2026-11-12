@@ -351,7 +351,8 @@
 - [x] Записывать в журнал скорость, паузы и возвраты в каждом режиме: при выходе из скорочтения и подсветки `LibraryFile.appendReadingMode` пишет строку в `state/<device>.reading.jsonl` — материал, режим, слова в минуту, профиль пауз, показанные слова и возвраты назад (`ReadingModeEvent`). Обычное чтение не пишется: у него нет темпа.
 - [ ] Адаптивный темп по сложности предложения: замедление и повтор трудного места. После M5, когда у плашки есть оценка сложности.
 - [x] Быстрое чтение: текст материала показывается по слову в одной точке экрана (RSVP, `SpeedReader`) с выбором скорости; показанное при выходе засчитывается прочитанным через журнал, как прокрутка или красная линия.
-- [ ] Режимы чтения — горизонтальные кнопки вверху контекстного меню `···` читателя (`ReaderMenu` в `ReaderSettings.swift`) вместо пунктов с галочками: reader (колонка), posts, fast (скорочтение). Spot Reading удалить полностью: `SpotState`/`WordSpans`-подсветка, `SpotControls` в `ReadingSession.swift`, кейсы `.spot`/`.spotPaused`/`.spotMove` в `ReaderCoordinator` и `SpeedText`-подсветка по месту.
+- [x] Режимы чтения — горизонтальные кнопки вверху контекстного меню `···` читателя (`ReaderMenu` в `ReaderSettings.swift`) вместо пунктов с галочками: reader (колонка), posts, fast (скорочтение). Spot Reading удалить полностью: `SpotState`/`WordSpans`-подсветка, `SpotControls` в `ReadingSession.swift`, кейсы `.spot`/`.spotPaused`/`.spotMove` в `ReaderCoordinator` и `SpeedText`-подсветка по месту.
+- [x] Доводка интерфейса читателя: акцент один везде — `Color.accentColor` у опорной буквы и рисок `mark`, у `find`/`findActive` (раньше жёлтый/оранжевый) и у линии чтения; `.spot` убран и из `ReadingModeEvent.Mode`. В `SpeedReader` кадр ужимается целиком по ширине экрана вместо клипа (`PivotWord` меряет идеальную и предложенную ширину и давит `scaleEffect` к пивоту), `.interactive`-блоки пропускаются в `SpeedText`, нажатие Play во время отдыха после абзаца отдых не отменяет. `PlatePager` поворачивает плашку по дистанции и скорости щелчка (`context.velocity`), а не только по overscroll. `ReaderAppearanceControls(showsColumn:)` прячет Column Width там, где ему нечего менять (скорочтение, видео); статус соединения в `SettingsScreen` — одна строка с ошибкой.
 
 ## M4. Основа платформы
 
@@ -485,7 +486,7 @@
 
 ## M10. Дайджест соцсетей
 
-Mac следит за выбранными каналами Telegram и постами X через отдельный headless-профиль браузера, копит посты и дважды в день кладёт дайджест поставкой в папку FNMN. Вкладка Digest показывает его журнальной страницей на SwiftUI; маленький классификатор на телефоне раскладывает посты по темам, а реакция чтения уходит обратно на Mac для следующего обучения. Замысел и границы: [research/social-digest.md](research/social-digest.md).
+Mac следит за выбранными каналами Telegram и постами X через отдельный headless-профиль браузера, копит посты и дважды в день кладёт дайджест поставкой в папку FNMN. Вкладка Digest показывает его журнальной страницей на SwiftUI. Замысел и границы: [research/social-digest.md](research/social-digest.md).
 
 - [x] Решить, что дайджест идёт через папку FNMN поставкой того же формата, без новых эндпоинтов сервера; вход в соцсети — отдельный постоянный профиль Chromium, Dia не трогаем.
 - [x] Типы дайджеста в FNMNCore: `DigestPackage`, `DigestFile`, общий разбор USTAR для пакетов двух видов.
@@ -516,7 +517,6 @@ Mac следит за выбранными каналами Telegram и пост
 - [x] Классификатор учился на одной папке; теперь нужно минимум две, иначе модель не пишется.
 - [x] X и Instagram качают картинки контекстом залогиненной страницы; Telegram читает публичный Web.
 - [x] Нет автоматического обучения: журнал реакций копится, модель не обновляется; `fnmn-digest.sh` не умеет тренировать. Тренер добавлен агентом в 21:00.
-- [ ] Прогнать `fnmn-digest.sh train` на реальном журнале и проверить, что `NLModel` принимает собранную модель.
 - [x] launchd-сборщик задан без `Minute`: срабатывает каждую минуту в 8 и 20, а не в 8:00 и 20:00.
 
 Экран
@@ -551,7 +551,6 @@ Mac следит за выбранными каналами Telegram и пост
 - [x] `scripts/guards.py` потерял бит исполнения (755 → 644).
 - [x] `server/digest/profiles/` не в `.gitignore`; профиль с cookies лежит в рабочем дереве.
 - [x] Proof и not-in лежат в разделе «После ревью» заметки и в реестре AGENTS.md.
-- [ ] Очередь закрывает классификатор «модель едет в поставке» без прогона.
 - [x] Коммиты несут `tasks.md` и research-заметки; правки владельца сохранены.
 
 ### Unification pass (branch `refactor/unification`, 2026-11-08)
@@ -631,8 +630,8 @@ One branch, one PR, a commit per step.
 
 Удалить
 
-- [ ] D1. Обучение целиком: `server/digest/train.py`, `server/digest/classifier/`, тренер-агент в `fnmn-digest.sh` и его `StartCalendarInterval`, `.saved` из `DigestEngagement.Kind` в FNMNCore, поле `model` в `DigestPackage` и `_model()` в `build.py`, `InterestClassifier.swift` (NLModel) и `scoreIfNeeded()` в `DigestModel`, тесты тренера и `DigestModelTests` на модель. Журнал `opened`/`hidden` остаётся — он несёт прочитанное/скрытое, только обучение из него уходит.
-- [ ] D2. Save to Library: пункт меню в `PostCard.swift`, `DigestModel.save`, кейс `.saved` (с D1). Сохранение X-статей в библиотеку идёт обычным импортом ссылки, дайджест его не касается.
+- [x] D1. Обучение и классификатор удалены целиком: `server/digest/train.py`, `server/digest/classifier/`, тренер-агент в `fnmn-digest.sh`, `.saved` из `DigestEngagement.Kind`, поле `model` в `DigestPackage` и `_model()` в `build.py`, `InterestClassifier.swift` и `scoreIfNeeded()` в `DigestModel`, тесты тренера и `DigestModelTests` на модель, журнал реакций `digest-state/<device>.jsonl`. В `DigestIndex` остался только `hidden` — локальный набор скрытых постов, на сервер он не уходит. Save to Library из поста убран вместе с фидбеком (D2). Проверка: `python3 -m unittest discover -s tests` в `server/` (173 теста), `python3 scripts/guards.py --app`.
+- [x] D2. Save to Library убран вместе с фидбеком: пункта меню в `PostCard`, `DigestModel.save` и кейса `.saved` нет. Сохранение X-статей в библиотеку идёт обычным импортом ссылки, дайджест его не касается.
 - [ ] D3. Повтор по медиа: `mediaErrors`, плейсхолдер и кнопка у отдельной картинки/видео, `refresh.py` и `POST /digest/refresh` как «один файл», per-post `refreshed` в `DigestModel` со списком медиа. Пост атомарен: либо целиком в одном tar, либо нет. Механизм перезагрузки целого поста остаётся на сервере (один пост — одно чтение источника), но вызывается он из плейсхолдера поста, а не из меню и не по файлу.
 
 Классификация на сервере
@@ -738,14 +737,23 @@ One branch, one PR, a commit per step.
 - [x] Пост без плашек: текст прямо на фоне канваса, посты разделяются линиями; `.plate` у `PostCard` уходит. Тап по посту без треда ничего не открывает.
 - [x] Тред открывается только когда он есть: `context` (ответ/цитата/репост — визуально «это часть треда», ответ на кого-то сверху) или comments. Переход в `ThreadScreen` с zoom transition, как у статей (namespace уже есть в `AppShell`).
 - [x] Комментарии: под постом отдельной секцией — аватарки и имена авторов топ-комментов (данные с главной страницы источника). Сейчас `Comment` несёт только строку `author`; сервер должен начать отдавать профиль/аватар — см. задачу конвейера.
-- [x] Состояние «прочитано» у поста убрано: `digests.seen`, приглушение `read`, `.opened` из визуала. Журнальный `DigestEngagement.opened` для классификатора решить отдельно — либо оставить запись без UI, либо убрать.
+- [x] Состояние «прочитано» у поста убрано: `digests.seen`, приглушение `read`, `.opened` из визуала. Журнальный `DigestEngagement` убран вместе с классификатором (D1).
 - [x] Настройки вида дайджеста — те же, что в читалке: `ReaderAppearanceControls`/`ReaderAppearanceModifier` переиспользуются как есть (кегль, шрифт, фон/тема), тот же код, без копий.
 - [x] Медиа поста открывается в `MediaViewer` с zoom-переходом и сохранением, как в статьях: `opensMedia` отвязывается от `ReaderCoordinator` (общий презентер медиа на уровне экрана), `PostCard` вешает его на `digest.url(of: media.path)`. Видео: file URL играется во viewer, удалённое — открывается наружу; что кладёт поставщик в тар — не наша забота, поддерживаем оба случая.
 - [x] Конвейер дайджеста подготовлен, не запущен: `digest.scan` (`fnmn-digest.sh scan`) проходит по профилям X/Instagram/Telegram и дописывает аккаунты в `subscriptions.json`, только добавляя; `scope: "recommendations"` у источника читает ленту рекомендаций сети (X For you, Instagram home; Telegram отказывает — такого нет). Приложению подписки не нужны — владелец правит JSON руками. Запуск: `login` в нужных сетях → заполнить `subscriptions.json` (папки = топики) → `fnmn-digest.sh on`. Сейчас `subscriptions.json` пуст, launchd-агенты digest не загружены.
 
 Скорочтение и режимы
 
-- [~] UI скорочтения (`SpeedReader.swift`): убрать подпись «Above 300 words a minute…», разрулить одновременные Continue и Play/Pause на стоп-блоках (`token.isStop`), определить поведение на формулах/медиа и при выходе из режима (Done и `scenePhase` → `saveShown`/`speedRead`), опорная буква красная захардкожена (`PivotWord.red`) вместо системного цвета, вертикальные риски `mark` над и под словом, текст «Saved; the server did not answer» в `SettingsScreen` — решить, нужен ли.
-- [~] «One plate at a time»: свайп до конца плашки на телефоне слишком тяжёлый и в конце анимации лагает — `PlatePager.swift`: порог `turn = 56` и spring 0.42, `onScrollPhaseChange`/`pull`.
-- [~] Унифицировать акцентные цвета на системный `accentColor`: опорная буква и линия чтения в `SpeedReader` (`PivotWord.red`, риски `mark`), выделения и прочие красные акценты по приложению — найти все захардкоженные красные/акцентные `Color(red:…)` и перевести на единый источник цвета акцента.
+- [x] UI скорочтения (`SpeedReader.swift`): убрать подпись «Above 300 words a minute…», разрулить одновременные Continue и Play/Pause на стоп-блоках (`token.isStop`), определить поведение на формулах/медиа и при выходе из режима (Done и `scenePhase` → `saveShown`/`speedRead`), опорная буква красная захардкожена (`PivotWord.red`) вместо системного цвета, вертикальные риски `mark` над и под словом, текст «Saved; the server did not answer» в `SettingsScreen` — решить, нужен ли.
+- [x] «One plate at a time»: свайп до конца плашки на телефоне слишком тяжёлый и в конце анимации лагает — `PlatePager.swift`: порог `turn` и spring.
+- [x] Унифицировать акцентные цвета на системный `accentColor`: опорная буква и линия чтения в `SpeedReader`, выделения и прочие красные акценты по приложению — все акценты уже на `accentColor`; `Color.spot` удалён вместе с Spot Reading.
 - [x] Удалять delivery-tar из iCloud вместе с материалом: user-delete уже делал это через `removeDelivery` (`LibraryModel.removeDeleted`); добавлен GC link-близнецов — `addCloudDelivery` после `importPackage` сносит архивы link-материалов, которых не стало в snapshot (реплейс article/video). Оба пути идут через iCloud: журнал `delete` и удаление файла доезжают независимо, порядок не важен (`deletedAt` и отсутствие файла скрывают материал одинаково). Guard: `CloudLibraryTests.anArticleDeliveryRemovesTheArchiveOfTheLinkItReplaces`, доказан падением до фикса. Край: сервер может переписать tar при refetch — `isNewDelivery` (`changedAt > deletedAt`) воскресит материал, это существующее правило.
+
+### Живой прогон конвейера (2026-11-12)
+
+- [x] `digest.scan` вживую: X — 97 аккаунтов (`/{me}/following` после ухода Cloudflare-проверки; headless-профиль проходит только после однократного headed-прогрева, `cf_clearance` живёт в профиле), Instagram — ~120 из 535 (диалог Following скроллится виртуализированно, добор неполный — список догружается порциями, стабилизация по три итерации без новых строк), Telegram — 241 канал через `telegram chats --type channel` (MTProto-сессия better-tg-cli, публичные username; приватные каналы без username не читаются — у `t.me` нет их страницы).
+- [x] `digest.monitor` вживную на трёх источниках: `telegram/temno` — 60 постов, `x/3blue1brown` — 10, `instagram/temalebedev` — 8; статусы источников пишутся в store.
+- [x] `digest.build --force` собрал `digest-2026-11-12T16-48-34Z.tar` (78 постов, ~2.9 МБ, медиа telegram-постов внутри) в `FNMN/digests` iCloud-папки.
+- [ ] Полный monitor по всем ~460 источникам не прогонялся — это часы; launchd-агенты (`fnmn-digest.sh on`) не загружены и не проверены.
+- [ ] X под Cloudflare: headless-профиль работает только с живым `cf_clearance`; при протухании нужен headed-прогрев (`reader.ensure("x", headed=True)` + открыть x.com). Кандидат на автопрогрев в monitor.
+- [ ] Темы/ключевые слова: обучаемый классификатор и фидбек удалены (D1); отбор по темам — это D4 (готовая zero-shot-модель) + D13 (ключевые слова по источнику). `subscriptions.json` несёт `folders: []` у всех найденных источников.

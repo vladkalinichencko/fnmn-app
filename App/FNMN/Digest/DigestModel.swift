@@ -12,22 +12,16 @@ final class DigestModel {
     private(set) var state = LoadState.idle
     private(set) var syncState = DigestSyncState.idle
     private(set) var digests: [Digest] = []
-    private(set) var labels: [String: String] = [:]
     private(set) var index = DigestIndex()
     private(set) var refreshed: [String: [DigestPackage.Post.Media]] = [:]
     private(set) var refreshing: Set<String> = []
     private(set) var lastError: String?
     private let file: DigestFile
-    private let device: String
     private let server: ServerLink?
-    @ObservationIgnored private var folder: URL?
     @ObservationIgnored private var loaded = false
-    @ObservationIgnored private var pending: [DigestEngagement] = []
     @ObservationIgnored private var indexSave: Task<Void, Never>?
-    @ObservationIgnored private var scoring: Task<Void, Never>?
 
-    init(device: String, file: DigestFile = DigestFile(), server: ServerLink? = nil) {
-        self.device = device
+    init(file: DigestFile = DigestFile(), server: ServerLink? = nil) {
         self.file = file
         self.server = server
     }
@@ -87,9 +81,6 @@ final class DigestModel {
         if state == .idle {
             state = .loading
         }
-        if let folder {
-            self.folder = folder
-        }
         do {
             try await load()
             digests = try await file.packages()
@@ -101,8 +92,6 @@ final class DigestModel {
                 }
             }
             state = .ready
-            scoreIfNeeded()
-            await writePending()
         } catch is CancellationError {
             if state == .loading {
                 state = .idle
@@ -116,26 +105,14 @@ final class DigestModel {
         }
     }
 
-    func record(_ kind: DigestEngagement.Kind, post: DigestPackage.Post, digest: Digest) {
-        pending.append(DigestEngagement(kind: kind, postID: post.id, digestID: digest.id))
-        switch kind {
-        case .opened, .saved:
-            break
-        case .hidden:
-            index.hidden.insert(post.id)
-        }
+    func hide(_ post: DigestPackage.Post) {
+        index.hidden.insert(post.id)
         scheduleIndexSave()
-    }
-
-    func save(_ post: DigestPackage.Post, digest: Digest) -> URL {
-        record(.saved, post: post, digest: digest)
-        return post.permalink
     }
 
     func settle() async {
         try? await file.saveIndex(index)
         indexSave?.cancel()
-        await writePending()
     }
 
     private func load() async throws {
@@ -153,26 +130,6 @@ final class DigestModel {
         return (result.failures, target.took)
     }
 
-    private func scoreIfNeeded() {
-        scoring?.cancel()
-        guard let newest = digests.first, let model = newest.package.model else {
-            labels = [:]
-            return
-        }
-        let posts = digests.flatMap { $0.package.posts }
-        let url = newest.url(of: model.file)
-        scoring = Task { [weak self] in
-            let scored = await InterestClassifier.labels(modelURL: url, posts: posts)
-            guard !Task.isCancelled else {
-                return
-            }
-            self?.labels = scored.labels
-            if let error = scored.error {
-                self?.lastError = error
-            }
-        }
-    }
-
     private func scheduleIndexSave() {
         indexSave?.cancel()
         indexSave = Task { [weak self] in
@@ -187,22 +144,6 @@ final class DigestModel {
 
     private func saveIndexNow() async {
         try? await file.saveIndex(index)
-    }
-
-    private func writePending() async {
-        guard let folder, !pending.isEmpty else {
-            return
-        }
-        let events = pending
-        pending = []
-        for event in events {
-            do {
-                try await file.append(event, device: device, to: folder)
-            } catch {
-                pending = events + pending
-                return
-            }
-        }
     }
 }
 

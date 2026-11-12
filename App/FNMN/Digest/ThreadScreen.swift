@@ -21,9 +21,6 @@ struct ThreadScreen: View {
                 .padding(.horizontal, Tokens.gutter)
                 .padding(.top, Tokens.gap)
                 .padding(.bottom, Tokens.sectionGap)
-                .task {
-                    digests.record(.opened, post: post, digest: digest)
-                }
             } else {
                 ContentUnavailableView("The post is gone", systemImage: "text.bubble")
             }

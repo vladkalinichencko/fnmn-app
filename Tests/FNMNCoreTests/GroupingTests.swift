@@ -85,9 +85,11 @@ import Testing
                 post("3", folder: "design", at: 1_700),
             ]
         )
-        let sections = package.sections(labels: ["3": "design"], hidden: [])
-        #expect(sections.map(\.folder) == ["ml", "design", "tech"])
-        #expect(sections.first(where: { $0.folder == "ml" })?.posts.map(\.id) == ["1"])
+        let sections = package.sections(hidden: [])
+        #expect(sections.map(\.network) == [.x])
+        let topics = sections[0].topics
+        #expect(topics.map(\.folder) == ["ml", "design", "tech"])
+        #expect(topics.first(where: { $0.folder == "ml" })?.posts.map(\.id) == ["1"])
     }
 
     @Test func aDeclaredFolderWithoutPostsIsNotASection() {
@@ -98,6 +100,6 @@ import Testing
             postedAt: Date(timeIntervalSince1970: 1_500), text: "A post", folders: ["ml"]
         )
         let package = DigestPackage(id: "digest-1", window: window, folders: ["ml", "design", "film"], posts: [post])
-        #expect(package.sections(labels: [:], hidden: []).map(\.folder) == ["ml"])
+        #expect(package.sections(hidden: []).first?.topics.map(\.folder) == ["ml"])
     }
 }

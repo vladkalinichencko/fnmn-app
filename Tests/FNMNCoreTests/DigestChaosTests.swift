@@ -100,6 +100,6 @@ import Testing
         #expect(package.sources.first?.network == .telegram)
         #expect(package.sources.first?.status == .ok)
         #expect(package.posts.allSatisfy { $0.text?.isEmpty == false })
-        #expect(package.sections(labels: [:], hidden: []).count == 1)
+        #expect(package.sections(hidden: []).count == 1)
     }
 }
