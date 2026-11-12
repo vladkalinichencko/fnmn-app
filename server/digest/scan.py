@@ -36,15 +36,17 @@ def main(argv: list[str] | None = None) -> int:
     subscriptions = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"folders": [], "sources": []}
     networks = [options.network] if options.network else sorted(HOME)
     additions: list[dict] = []
+    scanned: list[str] = []
     for network in networks:
         try:
             with browser(network) as tab:
                 additions += _SCANNERS[network](tab)
+            scanned.append(network)
         except SourceFailure as failure:
             print(f"{network}: {failure.reason}")
         except Exception as error:
             print(f"{network}: the scan failed: {error}")
-    merged, fresh = merge(subscriptions, additions)
+    merged, fresh = merge(subscriptions, additions, scanned)
     for source in fresh:
         name = f" ({source['name']})" if source.get("name") else ""
         print(f"+ {source['id']}{name}")
@@ -56,9 +58,16 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def merge(subscriptions: dict, additions: list[dict]) -> tuple[dict, list[dict]]:
-    """The subscriptions with the discovered sources appended; an id already there keeps its entry."""
-    sources = list(subscriptions.get("sources", []))
+def merge(subscriptions: dict, additions: list[dict], scanned: list[str]) -> tuple[dict, list[dict]]:
+    """The subscriptions reconciled with what the profiles showed: an id already there keeps its entry,
+    a scanned source the profile no longer follows is dropped, and a source written by hand always stays."""
+    followed = {source["id"] for source in additions}
+    sources = [
+        source for source in subscriptions.get("sources", [])
+        if source.get("network") not in scanned
+        or not source.get("scanned")
+        or source["id"] in followed
+    ]
     known = {source["id"] for source in sources}
     fresh = [source for source in additions if source["id"] not in known]
     return {**subscriptions, "sources": sources + fresh}, fresh
@@ -103,7 +112,7 @@ def _telegram(tab) -> list[dict]:
     hrefs = tab.eval("[...document.querySelectorAll('a[href*=\"t.me/\"]')].map(a => a.href)") or []
     channels = sorted({match.group(1) for href in hrefs if (match := T_ME.search(href or ""))})
     return [
-        {"id": f"telegram/{channel}", "network": "telegram", "channel": channel, "folders": []}
+        {"id": f"telegram/{channel}", "network": "telegram", "channel": channel, "folders": [], "scanned": True}
         for channel in channels if channel.lower() not in RESERVED
     ]
 
@@ -117,7 +126,7 @@ def _account_sources(network: str, rows: list[dict], me: str) -> list[dict]:
         if not handle or handle == me.lower() or handle in seen or handle in RESERVED:
             continue
         seen.add(handle)
-        source = {"id": f"{network}/{handle}", "network": network, "handle": handle, "folders": []}
+        source = {"id": f"{network}/{handle}", "network": network, "handle": handle, "folders": [], "scanned": True}
         name = (row.get("name") or "").strip()
         if name:
             source["name"] = name

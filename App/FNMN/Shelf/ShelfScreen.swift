@@ -40,12 +40,8 @@ struct ShelfScreen: View {
             }
             .background(Tokens.canvas)
             .overlay {
-                if !searching, annotations.isEmpty && archived.isEmpty {
-                    switch Self.placeholder(settling: settling) {
-                    case .loading: Loading()
-                    case .empty:
-                        ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
-                    }
+                if !searching, Self.claimsEmpty(settling: settling, empty: annotations.isEmpty && archived.isEmpty) {
+                    ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
                 }
             }
             .noResults(for: query, when: annotations.isEmpty && archived.isEmpty)
@@ -61,12 +57,8 @@ struct ShelfScreen: View {
         library.syncState == .syncing || imports.jobs.contains { $0.isPreparing }
     }
 
-    enum Placeholder {
-        case loading, empty
-    }
-
-    static func placeholder(settling: Bool) -> Placeholder {
-        settling ? .loading : .empty
+    static func claimsEmpty(settling: Bool, empty: Bool) -> Bool {
+        !settling && empty
     }
 }
 

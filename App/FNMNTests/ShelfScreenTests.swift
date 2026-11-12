@@ -3,7 +3,8 @@ import XCTest
 
 final class ShelfScreenTests: XCTestCase {
     func testTheShelfWaitsForTheLibraryBeforeClaimingItIsEmpty() {
-        XCTAssertEqual(ShelfScreen.placeholder(settling: true), .loading)
-        XCTAssertEqual(ShelfScreen.placeholder(settling: false), .empty)
+        XCTAssertFalse(ShelfScreen.claimsEmpty(settling: true, empty: true))
+        XCTAssertTrue(ShelfScreen.claimsEmpty(settling: false, empty: true))
+        XCTAssertFalse(ShelfScreen.claimsEmpty(settling: false, empty: false))
     }
 }

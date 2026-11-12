@@ -20,13 +20,29 @@ class MergeTests(unittest.TestCase):
         }
         additions = [
             {"id": "x/karpathy", "network": "x", "handle": "karpathy", "folders": []},
-            {"id": "x/sama", "network": "x", "handle": "sama", "folders": []},
+            {"id": "x/sama", "network": "x", "handle": "sama", "folders": [], "scanned": True},
         ]
-        merged, fresh = scan.merge(subscriptions, additions)
+        merged, fresh = scan.merge(subscriptions, additions, ["x"])
         self.assertEqual([source["id"] for source in fresh], ["x/sama"])
         self.assertEqual(merged["sources"][0]["folders"], ["ml"])
         self.assertEqual(merged["sources"][0]["scope"], "recommendations")
         self.assertEqual(merged["folders"], ["ml"])
+
+    def test_a_scanned_source_the_profile_dropped_is_removed_but_a_manual_one_stays(self):
+        subscriptions = {
+            "folders": [],
+            "sources": [
+                {"id": "x/gone", "network": "x", "handle": "gone", "folders": ["ml"], "scanned": True},
+                {"id": "x/manual", "network": "x", "handle": "manual", "folders": ["tech"]},
+                {"id": "x/feed", "network": "x", "scope": "recommendations", "folders": []},
+                {"id": "telegram/gone", "network": "telegram", "channel": "gone", "folders": [], "scanned": True},
+            ],
+        }
+        merged, _ = scan.merge(subscriptions, [], ["x"])
+        self.assertEqual(
+            [source["id"] for source in merged["sources"]],
+            ["x/manual", "x/feed", "telegram/gone"],
+        )
 
     def test_account_rows_become_sources_without_the_profile_itself_or_reserved_pages(self):
         rows = [
@@ -37,7 +53,7 @@ class MergeTests(unittest.TestCase):
             {"href": "/", "name": ""},
         ]
         sources = scan._account_sources("x", rows, "owner")
-        self.assertEqual(sources, [{"id": "x/sama", "network": "x", "handle": "sama", "folders": [], "name": "Sam"}])
+        self.assertEqual(sources, [{"id": "x/sama", "network": "x", "handle": "sama", "folders": [], "scanned": True, "name": "Sam"}])
 
 
 class FeedTab:
