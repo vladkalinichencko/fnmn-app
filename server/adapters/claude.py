@@ -6,13 +6,14 @@ from html import unescape
 from urllib.parse import urlparse
 
 from adapters.chatgpt import normalize_copied_math
+from adapters.conversation import turn
 from package import Document, ImportFailure, Report, asset_path
 from web import Web
 
 _SHARE = re.compile(r"/share/([0-9A-Fa-f-]{36})")
 _SNAPSHOT = "https://claude.ai/api/chat_snapshots/{}?rendering_mode=messages&render_all_tools=true"
 _PRE = re.compile(r"<pre[^>]*>([\s\S]*?)</pre>", re.I)
-_LABELS = {"human": "User", "assistant": "Assistant"}
+_SENDERS = {"human", "assistant"}
 _FENCE = re.compile(r"(```[\s\S]*?```)")
 _HEADING = re.compile(r"^(#{1,4}) ", re.M)
 _LANGUAGES = {"application/vnd.ant.mermaid": "mermaid", "application/vnd.ant.react": "jsx"}
@@ -80,7 +81,7 @@ def _snapshot(raw: str) -> dict | None:
 
 
 def _visible(message, artifacts: dict[str, dict], files: dict[str, bytes]) -> str | None:
-    if not isinstance(message, dict) or message.get("sender") not in _LABELS:
+    if not isinstance(message, dict) or message.get("sender") not in _SENDERS:
         return None
     blocks = message.get("content")
     if isinstance(blocks, list) and blocks:
@@ -90,7 +91,7 @@ def _visible(message, artifacts: dict[str, dict], files: dict[str, bytes]) -> st
     body = "\n\n".join(piece.strip() for piece in pieces if piece and piece.strip())
     if not body:
         return None
-    return f"## {_LABELS[message['sender']]}\n\n{body}"
+    return turn(message["sender"], body)
 
 
 def _block(block: dict, artifacts: dict[str, dict], files: dict[str, bytes]) -> str | None:

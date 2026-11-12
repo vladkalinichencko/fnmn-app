@@ -4,11 +4,11 @@ import json
 import re
 from urllib.parse import urlparse
 
+from adapters.conversation import turn
 from package import Document, Report, asset_path
 from web import Web
 
 _SHARE = re.compile(r"/share/([A-Za-z0-9-]+)")
-_LABELS = {"user": "User", "assistant": "Assistant"}
 _ENTITY = re.compile("\ue200([a-z_]+)\ue202(.*?)\ue201", re.S)
 _WIKI = re.compile(r"\[\[([^\[\]]+)\]\]")
 _DISPLAY = re.compile(r"\\\[(.*?)\\\]", re.S)
@@ -117,11 +117,10 @@ def _visible(message, files: dict[str, bytes]) -> str | None:
     texts = [part.strip() for part in content.get("parts") or [] if isinstance(part, str) and part.strip()]
     if not texts:
         return None
-    label = _LABELS.get(author, author or "Message")
     body = normalize_copied_math(_entities("\n\n".join(texts), files)).strip()
     if not body:
         return None
-    return f"## {label}\n\n{body}"
+    return turn(author, body)
 
 
 def _entities(text: str, files: dict[str, bytes]) -> str:

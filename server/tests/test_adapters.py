@@ -285,10 +285,26 @@ class AdapterTests(unittest.TestCase):
         package = import_link("https://chatgpt.com/share/abc-1", [], fakes.web(fetch_text, lambda url: b"")).package
         body = package["body"]
         self.assertEqual(package["material"]["title"], "A proof")
-        self.assertLess(body.index("## User"), body.index("## Assistant"))
+        self.assertLess(body.index("> Why?"), body.index("Because $x$."))
         self.assertIn("Why?", body)
         self.assertIn("Because $x$.", body)
+        self.assertNotIn("## User", body)
+        self.assertNotIn("## Assistant", body)
         self.assertNotIn("hidden instructions", body)
+
+    def test_chat_prompt_is_one_quoted_plate_and_the_answer_stays_text(self):
+        payload = {
+            "title": "T",
+            "linear_conversation": [
+                {"message": {"author": {"role": "user"}, "content": {"content_type": "text", "parts": ["First line.\n\nSecond paragraph."]}}},
+                {"message": {"author": {"role": "assistant"}, "content": {"content_type": "text", "parts": ["Answer one.\n\nAnswer two."]}}},
+            ],
+        }
+
+        package = import_link("https://chatgpt.com/share/abc-3", [], fakes.web(lambda url: json.dumps(payload), lambda url: b"")).package
+        body = package["body"]
+        self.assertIn("> First line.\n>\n> Second paragraph.", body)
+        self.assertIn("Answer one.\n\nAnswer two.", body)
 
     def test_chatgpt_share_page_turns_copied_math_into_reader_delimiters(self):
         copied = (
@@ -398,7 +414,10 @@ class AdapterTests(unittest.TestCase):
         body = delivered["body"]
         self.assertEqual(delivered["material"]["title"], "Ряды Фурье")
         self.assertEqual(delivered["material"]["byline"], "Claude")
-        self.assertLess(body.index("## User"), body.index("## Assistant"))
+        self.assertLess(body.index("> Почему?"), body.index("Потому что"))
+        self.assertIn("> Legacy text only.", body)
+        self.assertNotIn("## User", body)
+        self.assertNotIn("## Assistant", body)
         self.assertIn("$$\\sum_n a_n e^{inx}$$", body)
         self.assertIn("$x$", body)
         self.assertIn("### Конспект", body)
