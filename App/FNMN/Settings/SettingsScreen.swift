@@ -4,7 +4,7 @@ enum ConnectionCheck: Equatable {
     case editing
     case checking
     case connected
-    case failed(String, saved: Bool)
+    case failed(String)
 
     enum Event {
         case edited
@@ -18,11 +18,11 @@ enum ConnectionCheck: Equatable {
         case .edited:
             return .editing
         case let .saveFailed(message):
-            return .failed(message, saved: false)
+            return .failed(message)
         case .checkPassed:
             return .connected
         case let .checkFailed(message):
-            return .failed(message, saved: true)
+            return .failed(message)
         }
     }
 }
@@ -101,15 +101,8 @@ struct SettingsScreen: View {
         case .editing: EmptyView()
         case .checking: ProgressView().progressViewStyle(GraySpinner())
         case .connected: Label("Connected", systemImage: "checkmark.circle")
-        case let .failed(message, saved):
-            VStack(alignment: .leading, spacing: 4) {
-                Text(message)
-                if saved {
-                    Text("Saved; the server did not answer.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+        case let .failed(message):
+            Text(message)
         }
     }
 
