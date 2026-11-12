@@ -27,7 +27,7 @@ struct SourcesScreen: View {
                 ContentUnavailableView("No digest yet", systemImage: "newspaper")
             }
         }
-        .background(Tokens.canvas)
+        .modifier(ReaderAppearanceModifier())
         .navigationTitle("Sources")
         .navigationBarTitleDisplayMode(.inline)
     }

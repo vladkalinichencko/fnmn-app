@@ -28,7 +28,7 @@ struct ThreadScreen: View {
                 ContentUnavailableView("The post is gone", systemImage: "text.bubble")
             }
         }
-        .background(Tokens.canvas)
+        .modifier(ReaderAppearanceModifier())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }

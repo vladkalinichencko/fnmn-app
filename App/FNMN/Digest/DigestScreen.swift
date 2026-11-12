@@ -5,13 +5,14 @@ struct DigestScreen: View {
     @Environment(DigestModel.self) private var digests
     @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
+    @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
     @State private var query = ""
 
     var body: some View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.digest) {
             content
-                .background(Tokens.canvas)
+                .modifier(ReaderAppearanceModifier())
                 .screenSearch($query)
                 .navigationTitle("Digest")
                 .appRefresh(title: "Digest")
@@ -19,6 +20,11 @@ struct DigestScreen: View {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Sources", systemImage: "antenna.radiowaves.left.and.right") {
                             navigation.digest.append(.sources)
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu("Display", systemImage: "textformat") {
+                            ReaderAppearanceControls()
                         }
                     }
                 }
@@ -95,7 +101,7 @@ struct DigestScreen: View {
         LazyVStack(alignment: .leading, spacing: Tokens.sectionGap) {
             ForEach(digest.package.sections(labels: digests.labels, hidden: digests.hidden)) { section in
                 LibrarySection(section.folder.uppercased()) {
-                    CardColumns(items: section.posts, idealWidth: 330, height: PostCard.estimatedHeight, separates: true) { post in
+                    CardColumns(items: section.posts, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
                         PostCard(post: post, digest: digest, opensThread: post.hasThread)
                     }
                 }
@@ -107,11 +113,21 @@ struct DigestScreen: View {
 
     private func results(of digest: Digest) -> some View {
         let found = digest.package.posts(matching: query, hidden: digests.hidden)
-        return CardColumns(items: found, idealWidth: 330, height: PostCard.estimatedHeight, separates: true) { post in
+        return CardColumns(items: found, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
             PostCard(post: post, digest: digest, opensThread: post.hasThread)
         }
         .padding(.horizontal, Tokens.gutter)
         .padding(.bottom, Tokens.sectionGap)
         .noResults(for: query, when: found.isEmpty)
+    }
+}
+
+private extension ReaderColumn {
+    var cardWidth: CGFloat {
+        switch self {
+        case .narrow: 280
+        case .regular: 330
+        case .wide: 420
+        }
     }
 }
