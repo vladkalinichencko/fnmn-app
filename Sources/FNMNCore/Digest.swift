@@ -220,11 +220,15 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 
         public struct Comment: Codable, Equatable, Sendable {
             public let author: String
+            public let handle: String?
+            public let avatar: Media?
             public let text: String
             public let permalink: URL?
 
-            public init(author: String, text: String, permalink: URL? = nil) {
+            public init(author: String, handle: String? = nil, avatar: Media? = nil, text: String, permalink: URL? = nil) {
                 self.author = author
+                self.handle = handle
+                self.avatar = avatar
                 self.text = text
                 self.permalink = permalink
             }

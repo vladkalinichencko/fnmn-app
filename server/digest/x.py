@@ -53,7 +53,7 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     for post in sorted(posts, key=lambda post: (post.stats or {}).get("replies") or 0, reverse=True)[:TOP_DISCUSSED]:
         if (post.stats or {}).get("replies"):
             try:
-                post.comments = _replies(page, post)
+                post.comments = _replies(page, post, web, store, fetch)
             except (OSError, SourceFailure):
                 note = note or "the replies did not load"
     name = next((post.author["name"] for post in posts if post.author["name"]), None)
@@ -190,22 +190,41 @@ def _context_post(payload: dict) -> dict:
     }
 
 
-def _replies(tab, post: Post) -> list[dict]:
-    """The first replies under a post, as the permalink page draws them; the post itself is the first article."""
+def _replies(tab, post: Post, web: Web, store, fetch) -> list[dict]:
+    """The first replies under a post, as the permalink page draws them; the post itself is the first article.
+    Each reply's avatar is downloaded into the store like the post's own pictures."""
     try:
         tab.goto(post.permalink)
         tab.wait_for_selector('article[data-testid="tweet"]', timeout=20)
     except Exception as error:
         raise SourceFailure(f"the replies of {post.id} did not load: {error}") from error
-    return tab.eval(REPLIES) or []
+    replies = tab.eval(REPLIES) or []
+    for index, reply in enumerate(replies):
+        url = reply.pop("avatar", None)
+        reply["avatar"] = save_photo(web, store, post.id, f"reply-{index}", _avatar_url(url), fetch) if url else None
+    return replies
+
+
+def _avatar_url(url: str) -> str:
+    return f"{url.split('?')[0]}?format=jpg&name=400x400"
 
 
 REPLIES = """[...document.querySelectorAll('article[data-testid="tweet"]')].slice(1, 4).map(a => {
     const text = a.querySelector('[data-testid="tweetText"]');
     const link = a.querySelector('a[href*="/status/"]');
     const author = a.querySelector('[data-testid="User-Name"]');
+    const avatar = a.querySelector('img[src*="profile_images"]');
+    let handle = null;
+    if (author) {
+        const profile = [...author.querySelectorAll('a[href]')].map(l => l.getAttribute('href') || '')
+            .find(h => /^https:\\/\\/x\\.com\\/[A-Za-z0-9_]+\\/?$/.test(h));
+        const found = (profile || '').match(/x\\.com\\/([A-Za-z0-9_]+)/) || author.innerText.match(/@([A-Za-z0-9_]+)/);
+        if (found) handle = found[1];
+    }
     return {
         author: author ? author.innerText.split("\\n")[0].trim() : "",
+        handle: handle,
+        avatar: avatar ? avatar.getAttribute('src') : null,
         text: text ? text.innerText.trim() : null,
         permalink: link ? link.href : null,
     };

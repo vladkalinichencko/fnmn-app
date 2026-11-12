@@ -28,4 +28,18 @@ final class PostCardTests: XCTestCase {
         let comment = DigestPackage.Post.Comment(author: "a", text: "hi")
         XCTAssertTrue(post(comments: [comment]).hasThread)
     }
+
+    func testACommentWithoutProfileFieldsStillDecodes() throws {
+        let data = Data(#"{"author":"a","text":"hi"}"#.utf8)
+        let comment = try JSONDecoder().decode(DigestPackage.Post.Comment.self, from: data)
+        XCTAssertNil(comment.handle)
+        XCTAssertNil(comment.avatar)
+    }
+
+    func testACommentDecodesItsProfile() throws {
+        let data = Data(#"{"author":"a","handle":"h","avatar":{"path":"media/a.jpg","width":10,"height":10},"text":"hi"}"#.utf8)
+        let comment = try JSONDecoder().decode(DigestPackage.Post.Comment.self, from: data)
+        XCTAssertEqual(comment.handle, "h")
+        XCTAssertEqual(comment.avatar?.path, "media/a.jpg")
+    }
 }

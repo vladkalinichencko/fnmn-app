@@ -168,6 +168,51 @@ class PictureTests(unittest.TestCase):
             self.assertTrue(post.text)
 
 
+class RepliesTab:
+    """The permalink page as `_replies` drives it: navigation stubs plus the evaluated reply list."""
+
+    def __init__(self, replies: list[dict]):
+        self.replies = replies
+        self.context = FakeContext()
+
+    def goto(self, url, **kwargs):
+        return None
+
+    def wait_for_selector(self, *args, **kwargs):
+        return None
+
+    def eval(self, script):
+        return self.replies
+
+
+class RepliesTests(unittest.TestCase):
+    def test_a_reply_carries_its_author_handle_and_avatar(self):
+        replies = [{
+            "author": "Grigory Sapunov",
+            "handle": "gsapunov",
+            "avatar": "https://pbs.twimg.com/profile_images/1/abc_normal.jpg",
+            "text": "agreed",
+            "permalink": "https://x.com/gsapunov/status/2",
+        }]
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            comments = x._replies(RepliesTab(replies), fakes.post(), fake_web(), store, lambda url: png())
+            comment = comments[0]
+            self.assertEqual(comment["author"], "Grigory Sapunov")
+            self.assertEqual(comment["handle"], "gsapunov")
+            avatar = comment["avatar"]
+            self.assertTrue(avatar["path"].startswith("media/x-1-reply-0"))
+            self.assertTrue((store.root / avatar["path"]).exists())
+
+    def test_a_reply_the_network_serves_no_avatar_for_keeps_the_rest(self):
+        replies = [{"author": "a", "handle": None, "avatar": None, "text": "hi", "permalink": None}]
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            comments = x._replies(RepliesTab(replies), fakes.post(), fake_web(), store, lambda url: png())
+            self.assertIsNone(comments[0]["avatar"])
+            self.assertEqual(comments[0]["text"], "hi")
+
+
 class InstagramTests(unittest.TestCase):
     def test_a_post_page_reads_its_caption_picture_and_time(self):
         with TemporaryDirectory() as folder:

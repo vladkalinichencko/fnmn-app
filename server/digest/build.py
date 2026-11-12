@@ -125,6 +125,10 @@ def _write(package: dict, posts: list[Post], store: Store, destination: Path) ->
         poster = (post.video or {}).get("poster")
         if poster:
             files.append((poster["path"], store.root / poster["path"]))
+        for comment in post.comments:
+            avatar = comment.get("avatar")
+            if avatar:
+                files.append((avatar["path"], store.root / avatar["path"]))
     model = HERE / "out/classifier.mlmodel"
     if package["model"] and model.exists():
         files.append(("classifier.mlmodel", model))

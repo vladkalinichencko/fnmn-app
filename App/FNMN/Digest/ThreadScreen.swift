@@ -15,7 +15,7 @@ struct ThreadScreen: View {
                     }
                     PostCard(post: post, digest: digest)
                     if !post.comments.isEmpty {
-                        comments(post)
+                        comments(post, digest: digest)
                     }
                 }
                 .padding(.horizontal, Tokens.gutter)
@@ -59,28 +59,49 @@ struct ThreadScreen: View {
         .plate(cornerRadius: Tokens.plateRadius)
     }
 
-    private func comments(_ post: DigestPackage.Post) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func comments(_ post: DigestPackage.Post, digest: Digest) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Replies")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
             ForEach(Array(post.comments.enumerated()), id: \.offset) { _, comment in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(comment.author)
-                            .font(.caption.weight(.semibold))
-                        Spacer()
-                        if let link = comment.permalink {
-                            PostOpenButton(url: link, label: "Open the reply", font: .caption2)
+                HStack(alignment: .top, spacing: 10) {
+                    avatar(comment, digest: digest)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(comment.author)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                            if let handle = comment.handle {
+                                Text("@\(handle)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 8)
+                            if let link = comment.permalink {
+                                PostOpenButton(url: link, label: "Open the reply", font: .caption2)
+                            }
                         }
+                        Text(comment.text)
+                            .font(.callout)
                     }
-                    Text(comment.text)
-                        .font(.callout)
                 }
-                .padding(Tokens.tilePadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .plate(cornerRadius: Tokens.plateRadius)
             }
         }
+    }
+
+    private func avatar(_ comment: DigestPackage.Post.Comment, digest: Digest) -> some View {
+        Group {
+            if let avatar = comment.avatar {
+                FileImage(url: digest.url(of: avatar.path), contentMode: .fill)
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 30, height: 30)
+        .clipShape(.circle)
     }
 }
