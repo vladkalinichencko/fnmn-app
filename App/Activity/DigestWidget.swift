@@ -86,45 +86,54 @@ private struct DigestGrid: View {
     }
 
     var body: some View {
-        Group {
+        VStack(spacing: WidgetLayout.gap) {
+            WidgetSectionHeader(title: "Digest")
             if posts.isEmpty {
                 EmptyWidget(text: "No digest yet", symbol: "newspaper")
             } else {
-                let rowHeight = (size.height - WidgetLayout.spacing * CGFloat(max(0, rows - 1))) / CGFloat(max(1, rows))
-                VStack(spacing: WidgetLayout.spacing) {
+                VStack(spacing: WidgetLayout.gap) {
                     ForEach(rowPosts.indices, id: \.self) { index in
-                        HStack(spacing: WidgetLayout.spacing) {
+                        HStack(spacing: WidgetLayout.gap) {
                             ForEach(rowPosts[index]) { post in
-                                DigestCell(post: post, large: columns == 1 && rows == 1)
+                                PostCell(post: post)
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .frame(height: rowHeight)
+                        .frame(maxHeight: .infinity)
                     }
                 }
-                .frame(width: size.width, height: size.height)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 }
 
-private struct DigestCell: View {
+private struct PostCell: View {
     let post: WidgetPost
-    let large: Bool
+
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var text: Text {
+        Text(post.text).font(.subheadline.weight(.medium))
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(post.text)
-                .font(large ? .callout.weight(.medium) : .caption)
-                .lineLimit(large ? 8 : 5)
-            Spacer(minLength: 0)
-            Text("\(post.author) · \(post.network)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        ViewThatFits(in: .vertical) {
+            text.lineLimit(12)
+            text.lineLimit(9)
+            text.lineLimit(6)
+            text.lineLimit(4)
         }
+        .padding(WidgetLayout.spacing * 1.5)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .widgetSurface()
+        .background {
+            if renderingMode == .accented {
+                ConcentricRectangle().fill(.primary.opacity(0.14))
+            } else {
+                ConcentricRectangle().fill(.ultraThinMaterial)
+            }
+        }
     }
 }
+

@@ -44,22 +44,19 @@ struct ReadingLineView: View {
     private static let grip: CGFloat = 44
     private static let inset: CGFloat = 4
 
-    private var red: Color {
-        colorScheme == .dark ? Color(red: 0.78, green: 0.02, blue: 0.06) : Color(red: 1, green: 0.13, blue: 0.18)
-    }
-    private var glow: Color { red.opacity(colorScheme == .dark ? 0.6 : 0.9) }
+    private var glow: Color { Color.accentColor.opacity(colorScheme == .dark ? 0.6 : 0.9) }
     private var glowRadius: CGFloat { colorScheme == .dark ? 3 : 5 }
 
     var body: some View {
         if let line = reader.state.line, let y = reader.y(of: line) {
             ZStack(alignment: side.alignment) {
                 Rectangle()
-                    .fill(red)
+                    .fill(Color.accentColor)
                     .frame(height: 1.5)
                     .shadow(color: glow, radius: glowRadius)
                     .allowsHitTesting(false)
                 Capsule()
-                    .fill(red)
+                    .fill(Color.accentColor)
                     .frame(width: Self.pin.width, height: Self.pin.height)
                     .shadow(color: glow, radius: glowRadius + 1)
                     .frame(width: Self.grip, height: Self.grip, alignment: side.alignment)

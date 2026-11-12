@@ -36,24 +36,29 @@ struct ContinueEntryView: View {
     @Environment(\.widgetFamily) private var family
     let entry: ContinueEntry
 
-    private func shown(count: Int) -> [WidgetItem] {
+    private func stream(count: Int) -> (items: [WidgetItem], othersStart: Int?) {
         let snapshot = entry.snapshot
-        var shown = Array(snapshot.items.prefix(count))
-        if shown.isEmpty, let spare = snapshot.spare(at: entry.date) {
-            shown = [spare]
+        let items = Array(snapshot.items.prefix(count))
+        var known = Set(items.map(\.id))
+        var others: [WidgetItem] = []
+        if items.isEmpty, let spare = snapshot.spare(at: entry.date) {
+            others.append(spare)
+            known.insert(spare.id)
         }
-        if shown.count < count {
-            let known = Set(shown.map(\.id))
-            let fill = snapshot.spares(from: entry.date, count: count - shown.count).filter { !known.contains($0.id) }
-            shown.append(contentsOf: fill)
+        let remaining = count - items.count - others.count
+        if remaining > 0 {
+            for spare in snapshot.spares(from: entry.date, count: remaining) where known.insert(spare.id).inserted {
+                others.append(spare)
+            }
         }
-        return shown
+        return (items + others, others.isEmpty ? nil : items.count)
     }
 
     var body: some View {
         GeometryReader { geometry in
             let plan = WidgetLayout.continuePlan(for: family)
-            ContinueContent(items: shown(count: plan.itemCount), plan: plan, size: geometry.size)
+            let stream = stream(count: plan.itemCount)
+            ContinueContent(items: stream.items, othersStart: stream.othersStart, plan: plan, size: geometry.size)
         }
         .containerBackground(.background, for: .widget)
     }
@@ -61,6 +66,7 @@ struct ContinueEntryView: View {
 
 private struct ContinueContent: View {
     let items: [WidgetItem]
+    let othersStart: Int?
     let plan: WidgetLayout.ContinuePlan
     let size: CGSize
 
@@ -68,205 +74,251 @@ private struct ContinueContent: View {
         Group {
             if items.isEmpty {
                 EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
-            } else if plan.columns > 1, items.count >= plan.itemCount {
-                ContinueMosaic(items: items, columns: plan.columns, size: size)
+            } else if plan.columns > 1 {
+                ContinueColumns(items: items, othersStart: othersStart, size: size)
             } else {
-                ContinueColumn(items: items, plan: plan, size: size)
+                ContinueColumn(items: items, othersStart: othersStart, plan: plan, size: size)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+private enum ContinueCell {
+    case item(Int)
+    case header(String)
+}
+
+private func sectionTitle(othersStart: Int?) -> String {
+    othersStart == 0 ? "Other" : "Continue"
+}
+
+private func continueCells(items: [WidgetItem], othersStart: Int?, in range: Range<Int>) -> [ContinueCell] {
+    var cells: [ContinueCell] = []
+    for index in range where index < items.count {
+        if let othersStart, othersStart > 0, index == othersStart {
+            cells.append(.header("Other"))
+        }
+        cells.append(.item(index))
+    }
+    return cells
 }
 
 private struct ContinueColumn: View {
     let items: [WidgetItem]
+    let othersStart: Int?
     let plan: WidgetLayout.ContinuePlan
     let size: CGSize
 
+    private var cells: [ContinueCell] {
+        continueCells(items: items, othersStart: othersStart, in: 0 ..< items.count)
+    }
+
+    private var headerCount: Int {
+        cells.count - items.count + 1
+    }
+
+    private var featured: Bool {
+        plan.featured && !items.isEmpty
+    }
+
+    private var rowUnits: Int {
+        items.count - (featured ? 1 : 0)
+    }
+
+    private var unit: CGFloat {
+        guard featured, rowUnits > 0 else {
+            return 0
+        }
+        let chrome = CGFloat(headerCount) * (WidgetLayout.headerHeight + WidgetLayout.gap)
+        return (size.height - chrome - WidgetLayout.gap * CGFloat(rowUnits + 1)) / CGFloat(rowUnits + 2)
+    }
+
+    private var featuredHeight: CGFloat {
+        guard featured else {
+            return 0
+        }
+        if rowUnits == 0 {
+            return size.height - CGFloat(headerCount) * (WidgetLayout.headerHeight + WidgetLayout.gap)
+        }
+        return unit * 2 + WidgetLayout.gap
+    }
+
     var body: some View {
-        Group {
-            if let head = items.first {
-                if plan.featured {
-                    let rowCount = max(0, min(plan.rows, items.count - 1))
-                    if rowCount == 0 {
-                        ContinueFeature(item: head, width: size.width, height: size.height)
+        VStack(spacing: WidgetLayout.gap) {
+            WidgetSectionHeader(title: sectionTitle(othersStart: othersStart))
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
+                switch cell {
+                case .header(let title):
+                    WidgetSectionHeader(title: title)
+                case .item(let index):
+                    let cell = ItemCell(
+                        item: items[index],
+                        prominent: (featured && index == 0) || plan.rows == 1,
+                        adaptive: plan.rows != 1
+                    )
+                    if featured && index == 0 {
+                        cell.frame(width: size.width, height: featuredHeight)
+                    } else if featured {
+                        cell.frame(height: unit)
                     } else {
-                        let unit = (size.height - WidgetLayout.spacing * CGFloat(rowCount + 1)) / CGFloat(rowCount + 2)
-                        let featuredHeight = unit * 2 + WidgetLayout.spacing
-                        VStack(spacing: WidgetLayout.spacing) {
-                            ContinueFeature(item: head, width: size.width, height: featuredHeight)
-                            ForEach(Array(items.dropFirst().prefix(rowCount))) { item in
-                                ContinueRow(item: item, coverSide: WidgetLayout.coverSide(width: size.width, height: unit))
-                                    .frame(height: unit)
-                            }
-                        }
-                        .frame(width: size.width, height: size.height)
+                        cell
                     }
-                } else {
-                    let rowCount = max(1, min(plan.rows, items.count))
-                    let rowHeight = (size.height - WidgetLayout.spacing * CGFloat(rowCount - 1)) / CGFloat(rowCount)
-                    VStack(spacing: WidgetLayout.spacing) {
-                        ForEach(Array(items.prefix(rowCount))) { item in
-                            ContinueRow(
-                                item: item,
-                                coverSide: WidgetLayout.coverSide(width: size.width, height: rowHeight),
-                                lines: rowHeight > 120 ? 4 : 2
-                            )
-                            .frame(height: rowHeight)
-                        }
-                    }
-                    .frame(width: size.width, height: size.height)
                 }
-            } else {
-                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 }
 
-private struct ContinueMosaic: View {
+private struct ContinueColumns: View {
     let items: [WidgetItem]
-    let columns: Int
+    let othersStart: Int?
     let size: CGSize
 
+    private var columnWidth: CGFloat {
+        (size.width - WidgetLayout.gap) / 2
+    }
+
+    private var unit: CGFloat {
+        var height = size.height - WidgetLayout.headerHeight - WidgetLayout.gap
+        if let othersStart, othersStart > 0 {
+            height -= WidgetLayout.headerHeight + WidgetLayout.gap
+        }
+        return (height - WidgetLayout.gap * 3) / 4
+    }
+
     var body: some View {
+        VStack(spacing: WidgetLayout.gap) {
+            WidgetSectionHeader(title: sectionTitle(othersStart: othersStart))
+            HStack(alignment: .top, spacing: WidgetLayout.gap) {
+                column(cells: continueCells(items: items, othersStart: othersStart, in: 0 ..< 3))
+                column(cells: continueCells(items: items, othersStart: othersStart, in: 3 ..< 7))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    private func column(cells: [ContinueCell]) -> some View {
+        VStack(spacing: WidgetLayout.gap) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
+                switch cell {
+                case .header(let title):
+                    WidgetSectionHeader(title: title)
+                case .item(let index):
+                    let cell = ItemCell(item: items[index], prominent: index == 0)
+                    if index == 0 {
+                        cell.frame(width: columnWidth, height: unit * 2 + WidgetLayout.gap)
+                    } else {
+                        cell.frame(height: unit)
+                    }
+                }
+            }
+        }
+        .frame(width: columnWidth, alignment: .top)
+    }
+}
+
+private struct ItemCell: View {
+    let item: WidgetItem
+    var prominent: Bool = false
+    var adaptive: Bool = true
+
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    private var showsCover: Bool {
+        renderingMode == .fullColor && WidgetStore.cover(named: item.cover) != nil
+    }
+
+    private var titleFont: Font {
+        prominent ? .callout.weight(.semibold) : .footnote.weight(.semibold)
+    }
+
+    var body: some View {
+        Link(destination: item.deepLink) { face }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var face: some View {
+        GeometryReader { geometry in
+            Group {
+                if showsCover {
+                    HStack(spacing: WidgetLayout.spacing) {
+                        WidgetCover(name: item.cover, width: min(geometry.size.width * 0.4, geometry.size.height))
+                        label
+                    }
+                } else {
+                    label
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private var label: some View {
         Group {
-            if let head = items.first {
-                let columnWidth = (size.width - WidgetLayout.spacing * CGFloat(columns - 1)) / CGFloat(columns)
-                let rowHeight = (size.height - WidgetLayout.spacing) / 2
-                let featuredWidth = columnWidth * 2 + WidgetLayout.spacing
-                let rest = Array(items.dropFirst().prefix(columns * 2 - 2))
-                VStack(spacing: WidgetLayout.spacing) {
-                    HStack(spacing: WidgetLayout.spacing) {
-                        ContinueFeature(item: head, width: featuredWidth, height: rowHeight)
-                        ForEach(rest.prefix(columns - 2)) { item in
-                            ContinueRow(
-                                item: item,
-                                coverSide: WidgetLayout.coverSide(width: columnWidth, height: rowHeight)
-                            )
-                            .frame(width: columnWidth, height: rowHeight)
-                        }
-                    }
-                    HStack(spacing: WidgetLayout.spacing) {
-                        ForEach(rest.dropFirst(columns - 2).prefix(columns)) { item in
-                            ContinueRow(
-                                item: item,
-                                coverSide: WidgetLayout.coverSide(width: columnWidth, height: rowHeight)
-                            )
-                            .frame(width: columnWidth, height: rowHeight)
-                        }
-                    }
+            if adaptive {
+                ViewThatFits(in: .vertical) {
+                    content(lines: 6)
+                    content(lines: 4)
+                    content(lines: 3)
+                    content(lines: 2)
+                    content(lines: 1)
                 }
-                .frame(width: size.width, height: size.height)
             } else {
-                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct ContinueFeature: View {
-    let item: WidgetItem
-    let width: CGFloat
-    let height: CGFloat
-
-    var body: some View {
-        Link(destination: item.deepLink) {
-            HStack(spacing: WidgetLayout.spacing) {
-                WidgetCover(item: item, side: WidgetLayout.coverSide(width: width, height: height))
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.85)
-                    Text(item.source ?? item.kind.capitalized)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .font(titleFont)
+                        .lineLimit(prominent ? 6 : 2)
+                    Spacer(minLength: 0)
+                    meta
                 }
-                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
-        .widgetSurface()
-        .frame(width: width, height: height)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .widgetAccentable()
     }
-}
 
-private struct ContinueRow: View {
-    let item: WidgetItem
-    let coverSide: CGFloat
-    var lines: Int = 2
-
-    var body: some View {
-        Link(destination: item.deepLink) {
-            HStack(spacing: WidgetLayout.spacing) {
-                WidgetCover(item: item, side: coverSide)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title)
-                        .font(.footnote.weight(.semibold))
-                        .lineLimit(lines)
-                        .minimumScaleFactor(0.85)
-                    Text(item.source ?? item.kind.capitalized)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    private func content(lines: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(item.title)
+                .font(titleFont)
+                .lineLimit(lines)
+            meta
         }
-        .widgetSurface()
+    }
+
+    private var meta: some View {
+        HStack(spacing: 6) {
+            Text(item.source ?? item.kind.capitalized)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if item.progress > 0 {
+                ProgressLine(progress: item.progress)
+                    .frame(minWidth: 12, maxWidth: 72)
+            }
+        }
     }
 }
 
 private struct WidgetCover: View {
-    let item: WidgetItem
-    let side: CGFloat
+    let name: String?
+    let width: CGFloat
 
     var body: some View {
-        Color.clear
-            .frame(width: side, height: side)
-            .background {
-                if let url = WidgetStore.cover(named: item.cover), let image = UIImage(contentsOfFile: url.path) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Color.secondary.opacity(0.12)
-                        .overlay {
-                            Image(systemName: item.symbol)
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
+        if let url = WidgetStore.cover(named: name) {
+            Color.clear
+                .frame(width: width)
+                .frame(maxHeight: .infinity)
+                .background(Color.secondary.opacity(0.12))
+                .overlay {
+                    FileImage(url: url, contentMode: .fill)
                 }
-            }
-            .clipShape(.rect(cornerRadius: WidgetLayout.spacing))
-            .overlay(alignment: .bottom) {
-                if item.progress > 0 {
-                    WidgetProgress(progress: item.progress, height: 4)
-                        .padding(.horizontal, 6)
-                        .padding(.bottom, 6)
-                }
-            }
-    }
-}
-
-struct WidgetProgress: View {
-    let progress: Double
-    var height: CGFloat = 5
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.secondary.opacity(0.25))
-                Capsule().fill(.primary)
-                    .frame(width: geometry.size.width * min(max(progress, 0), 1))
-            }
+                .clipShape(.rect(cornerRadius: WidgetLayout.spacing))
         }
-        .frame(height: height)
     }
 }
 
@@ -283,21 +335,9 @@ struct EmptyWidget: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
         }
+        .widgetAccentable()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
-private extension WidgetItem {
-    var symbol: String {
-        switch kind {
-        case "video":
-            return "play.rectangle.fill"
-        case "book":
-            return "book.closed"
-        case "link":
-            return "link"
-        default:
-            return "doc.text"
-        }
-    }
-}
+

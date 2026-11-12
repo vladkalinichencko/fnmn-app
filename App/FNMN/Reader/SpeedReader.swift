@@ -338,11 +338,11 @@ struct SpeedReader: View {
                 .font(.headline)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            GeometryReader { _ in
+            GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.secondary.opacity(0.25))
                     Capsule().fill(Color.accentColor)
-                        .scaleEffect(x: min(max(share, 0), 1), anchor: .leading)
+                        .frame(width: geometry.size.width * min(max(share, 0), 1))
                 }
             }
             .frame(height: 3)
@@ -545,7 +545,7 @@ private struct PivotWord: View {
                 Text(head)
                 Text(letter)
                     .bold()
-                    .foregroundStyle(Self.red)
+                    .foregroundStyle(Color.accentColor)
                     .alignmentGuide(.pivot) { $0[HorizontalAlignment.center] }
                 Text(tail)
                 Text(after.isEmpty ? "" : " " + after).foregroundStyle(.tertiary)
@@ -557,8 +557,6 @@ private struct PivotWord: View {
         .frame(maxWidth: .infinity, alignment: Alignment(horizontal: .pivot, vertical: .center))
         .clipped()
     }
-
-    private static let red = Color(red: 0.9, green: 0.12, blue: 0.16)
 
     private static var mark: some View {
         Capsule()

@@ -91,6 +91,7 @@
             "Activity/compile-sources",
           ],
         },
+        { "path": "FNMN/Store/ImageFiles.swift", "index": true, "target-membership": [ "Activity/compile-sources" ] },
         { "path": "Activity/Info.plist" },
         { "path": "Share/Info.plist" },
       ],

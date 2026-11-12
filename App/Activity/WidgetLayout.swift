@@ -2,7 +2,9 @@ import SwiftUI
 import WidgetKit
 
 enum WidgetLayout {
-    static let spacing: CGFloat = 8
+    static let spacing: CGFloat = 4
+    static let gap: CGFloat = 8
+    static let headerHeight: CGFloat = 16
 
     struct ContinuePlan: Equatable {
         var featured: Bool
@@ -20,16 +22,12 @@ enum WidgetLayout {
         case .systemLarge:
             return ContinuePlan(featured: true, rows: 2, columns: 1, itemCount: 3)
         case .systemExtraLarge:
-            return ContinuePlan(featured: true, rows: 2, columns: 4, itemCount: 7)
+            return ContinuePlan(featured: true, rows: 4, columns: 2, itemCount: 7)
         case .systemExtraLargePortrait:
             return ContinuePlan(featured: true, rows: 5, columns: 1, itemCount: 6)
-        @unknown default:
+        default:
             return ContinuePlan(featured: false, rows: 1, columns: 1, itemCount: 1)
         }
-    }
-
-    static func coverSide(width: CGFloat, height: CGFloat) -> CGFloat {
-        max(32, min(height - 24, width * 0.38))
     }
 
     static func digestColumns(for family: WidgetFamily) -> Int {
@@ -38,7 +36,7 @@ enum WidgetLayout {
             return 4
         case .systemSmall:
             return 1
-        @unknown default:
+        default:
             return 2
         }
     }
@@ -59,19 +57,60 @@ enum WidgetLayout {
             return 2
         case .systemExtraLargePortrait:
             return 5
-        @unknown default:
+        default:
             return 1
         }
+    }
+
+}
+
+struct ProgressLine: View {
+    let progress: Double?
+    var color: Color = .accentColor
+
+    static let inset: CGFloat = 9
+    static let thickness: CGFloat = 5
+    static var clearance: CGFloat { inset + thickness + 6 }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                if let progress, progress > 0 {
+                    Capsule()
+                        .fill(color)
+                        .frame(width: max(geometry.size.width * min(progress, 1), Self.thickness))
+                }
+            }
+        }
+        .frame(height: Self.thickness)
     }
 }
 
 extension View {
-    func widgetSurface() -> some View {
-        padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background {
-                ConcentricRectangle().fill(.quaternary)
+    func progressLine(_ progress: Double?, cornerRadius: CGFloat, color: Color = .accentColor) -> some View {
+        overlay(alignment: .bottom) {
+            if let progress, progress > 0 {
+                ProgressLine(progress: progress, color: color)
+                    .padding(.horizontal, cornerRadius)
+                    .padding(.bottom, ProgressLine.inset)
+                    .allowsHitTesting(false)
             }
-            .clipShape(ConcentricRectangle())
+        }
     }
 }
+
+struct WidgetSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+

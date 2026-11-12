@@ -79,7 +79,7 @@ struct ItemTile: View {
                 .padding(Tokens.tilePadding - 2)
                 .padding(.bottom, (progress ?? 0) > 0 ? ProgressLine.clearance - (Tokens.tilePadding - 2) : 0)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.captionRadius, color: job == nil ? .accentColor : .secondary) }
+                .progressLine(progress, cornerRadius: Tokens.captionRadius, color: job == nil ? .accentColor : .secondary)
                 .glassEffect(.regular, in: .rect(cornerRadius: Tokens.captionRadius, style: .continuous))
                 .padding(Tokens.captionInset)
             }
@@ -261,38 +261,9 @@ struct TileCard<Content: View>: View {
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .aspectRatio(Tokens.tileAspect, contentMode: .fit)
-            .overlay { ProgressLine(progress: progress, cornerRadius: Tokens.tileRadius, color: color) }
+            .progressLine(progress, cornerRadius: Tokens.tileRadius, color: color)
             .plate(cornerRadius: Tokens.tileRadius)
             .contentShape(.rect(cornerRadius: Tokens.tileRadius, style: .continuous))
-    }
-}
-
-struct ProgressLine: View {
-    let progress: Double?
-    let cornerRadius: CGFloat
-    var color: Color = .accentColor
-
-    static let inset: CGFloat = 9
-    static let thickness: CGFloat = 5
-    static var clearance: CGFloat { inset + thickness + 6 }
-
-    var body: some View {
-        if let progress, progress > 0 {
-            GeometryReader { geometry in
-                Capsule()
-                    .fill(.quaternary)
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(color)
-                            .scaleEffect(x: max(min(progress, 1), Self.thickness / max(geometry.size.width, 1)), anchor: .leading)
-                    }
-            }
-            .frame(height: Self.thickness)
-            .padding(.horizontal, cornerRadius)
-            .padding(.bottom, Self.inset)
-            .frame(maxHeight: .infinity, alignment: .bottom)
-            .allowsHitTesting(false)
-        }
     }
 }
 

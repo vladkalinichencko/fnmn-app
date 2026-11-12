@@ -24,8 +24,8 @@ final class WidgetLayoutTests: XCTestCase {
 
         let wide = WidgetLayout.continuePlan(for: .systemExtraLarge)
         XCTAssertTrue(wide.featured)
-        XCTAssertEqual(wide.rows, 2)
-        XCTAssertEqual(wide.columns, 4)
+        XCTAssertEqual(wide.rows, 4)
+        XCTAssertEqual(wide.columns, 2)
         XCTAssertEqual(wide.itemCount, 7)
 
         let portrait = WidgetLayout.continuePlan(for: .systemExtraLargePortrait)
