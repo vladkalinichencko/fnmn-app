@@ -180,28 +180,37 @@ private struct ContinueColumns: View {
         (size.width - WidgetLayout.gap) / 2
     }
 
-    private var unit: CGFloat {
-        var height = size.height - WidgetLayout.headerHeight - WidgetLayout.gap
-        if let othersStart, othersStart > 0 {
-            height -= WidgetLayout.headerHeight + WidgetLayout.gap
-        }
-        return (height - WidgetLayout.gap * 3) / 4
-    }
-
     var body: some View {
-        VStack(spacing: WidgetLayout.gap) {
-            WidgetSectionHeader(title: sectionTitle(othersStart: othersStart))
-            HStack(alignment: .top, spacing: WidgetLayout.gap) {
-                column(cells: continueCells(items: items, othersStart: othersStart, in: 0 ..< 3))
-                column(cells: continueCells(items: items, othersStart: othersStart, in: 3 ..< 7))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        HStack(alignment: .top, spacing: WidgetLayout.gap) {
+            column(range: 0 ..< 3, title: sectionTitle(othersStart: othersStart))
+            column(range: 3 ..< 7)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
-    private func column(cells: [ContinueCell]) -> some View {
-        VStack(spacing: WidgetLayout.gap) {
+    private func column(range: Range<Int>, title: String? = nil) -> some View {
+        var cells = continueCells(items: items, othersStart: othersStart, in: range)
+        if let title {
+            cells.insert(.header(title), at: 0)
+        }
+        var headers = 0
+        var units = 0
+        var featured = false
+        for cell in cells {
+            switch cell {
+            case .header:
+                headers += 1
+            case .item(let index):
+                units += index == 0 ? 2 : 1
+                featured = featured || index == 0
+            }
+        }
+        let chrome = CGFloat(headers) * WidgetLayout.headerHeight
+            + WidgetLayout.gap * CGFloat(max(cells.count - 1, 0))
+            + (featured ? WidgetLayout.gap : 0)
+        let unit = (size.height - chrome) / CGFloat(max(units, 1))
+        return VStack(spacing: WidgetLayout.gap) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
                 switch cell {
                 case .header(let title):
