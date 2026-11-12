@@ -79,6 +79,11 @@ extension View {
         modifier(ZoomSourceModifier(id: id))
     }
 
+    @ViewBuilder
+    func zoomDestination(of id: some Hashable & Sendable) -> some View {
+        modifier(ZoomDestinationModifier(id: id))
+    }
+
     func interactiveOnlyAtStackTop(_ route: some Hashable) -> some View {
         modifier(StackTopInteraction(route: AnyHashable(route)))
     }

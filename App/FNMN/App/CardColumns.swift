@@ -6,6 +6,7 @@ struct CardColumns<Item: Identifiable, Content: View>: View {
     var spacing: CGFloat = Tokens.gap
     var height: (Item, CGFloat) -> Double = { _, _ in 1 }
     var limit: ((Int) -> Int)? = nil
+    var separates = false
     @ViewBuilder let content: (Item) -> Content
 
     @State private var width: CGFloat = 0
@@ -17,7 +18,12 @@ struct CardColumns<Item: Identifiable, Content: View>: View {
         HStack(alignment: .top, spacing: spacing) {
             ForEach(Array(Self.split(shown, into: count, columnWidth: columnWidth, height: height).enumerated()), id: \.offset) { _, column in
                 LazyVStack(spacing: spacing) {
-                    ForEach(column) { content($0) }
+                    ForEach(Array(column.enumerated()), id: \.element.id) { index, item in
+                        if separates, index > 0 {
+                            Divider()
+                        }
+                        content(item)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
             }

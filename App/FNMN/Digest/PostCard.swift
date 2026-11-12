@@ -2,40 +2,61 @@ import FNMNCore
 import SwiftUI
 import Textual
 
+extension DigestPackage.Post {
+    var hasThread: Bool {
+        context != nil || !comments.isEmpty
+    }
+}
+
 struct PostCard: View {
     let post: DigestPackage.Post
     let digest: Digest
-    let read: Bool
-    var opensThread = true
+    var read = false
+    var opensThread = false
     @Environment(WindowNavigation.self) private var navigation
     @Environment(DigestModel.self) private var digests
     @Environment(ImportJobs.self) private var imports
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        let media = digests.media(for: post)
-        VStack(alignment: .leading, spacing: 10) {
-            header
-            if let text = post.text {
-                PostText(text: text)
-                    .opacity(read ? Tokens.readOpacity : 1)
-            }
-            if let video = post.video, video.poster != nil {
-                poster(video)
-            }
-            if (post.mediaErrors ?? 0) > 0, media.isEmpty {
-                mediaPlaceholder
-            }
-            pictures(media)
-            if let context = post.context {
-                contextLine(context)
-            }
-            footer
+        if opensThread {
+            card.zoomSource(of: post.id)
+        } else {
+            card
         }
-        .padding(Tokens.tilePadding)
+    }
+
+    private var card: some View {
+        let media = digests.media(for: post)
+        return HStack(alignment: .top, spacing: 12) {
+            if opensThread {
+                Rectangle()
+                    .fill(.secondary.opacity(0.4))
+                    .frame(width: 3)
+                    .frame(maxHeight: .infinity)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                if let text = post.text {
+                    PostText(text: text)
+                        .opacity(read ? Tokens.readOpacity : 1)
+                }
+                if let video = post.video, video.poster != nil {
+                    poster(video)
+                }
+                if (post.mediaErrors ?? 0) > 0, media.isEmpty {
+                    mediaPlaceholder
+                }
+                pictures(media)
+                if let context = post.context {
+                    contextBlock(context)
+                }
+                footer
+            }
+        }
+        .padding(.vertical, Tokens.gap)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .plate(cornerRadius: Tokens.plateRadius)
-        .contentShape(RoundedRectangle(cornerRadius: Tokens.plateRadius))
+        .contentShape(.rect)
         .onTapGesture {
             openThread()
         }
@@ -133,15 +154,30 @@ struct PostCard: View {
         }
     }
 
-    private func contextLine(_ context: DigestPackage.Post.Context) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: Self.icon(context.kind))
-                .font(.caption)
-            Text(Self.contextLabel(context))
-                .font(.caption)
-                .lineLimit(1)
+    private func contextBlock(_ context: DigestPackage.Post.Context) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Rectangle()
+                .fill(.secondary.opacity(0.4))
+                .frame(width: 2)
+                .frame(maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: Self.icon(context.kind))
+                        .font(.caption2)
+                    Text(Self.contextLabel(context))
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(.secondary)
+                if let text = context.post?.text {
+                    Text(text)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+            }
         }
-        .foregroundStyle(.secondary)
+        .padding(.leading, 8)
     }
 
     private var footer: some View {
@@ -158,6 +194,11 @@ struct PostCard: View {
                 }
             }
             Spacer()
+            if opensThread {
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
             PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)", font: .callout)
         }
         .font(.caption2)

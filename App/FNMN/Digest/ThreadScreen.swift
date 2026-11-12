@@ -13,7 +13,7 @@ struct ThreadScreen: View {
                     if let context = post.context, let parent = context.post {
                         parentCard(parent, kind: context.kind)
                     }
-                    PostCard(post: post, digest: digest, read: false, opensThread: false)
+                    PostCard(post: post, digest: digest)
                     if !post.comments.isEmpty {
                         comments(post)
                     }
