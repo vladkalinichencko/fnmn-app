@@ -8,9 +8,7 @@ struct PostText: View {
 
     var body: some View {
         StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
-            .textual.overflowMode(.wrap)
-            .plateMarkdownStyles()
-            .textual.textSelection(.enabled)
+            .plateText()
             .onChange(of: typeSize) { _, value in
                 print("PostText typeSize → \(value)")
             }

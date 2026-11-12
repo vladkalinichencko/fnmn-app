@@ -7,6 +7,12 @@ extension View {
             .textual.blockQuoteStyle(BarQuote())
             .textual.codeBlockStyle(PlateCode())
     }
+
+    func plateText() -> some View {
+        textual.overflowMode(.wrap)
+            .plateMarkdownStyles()
+            .textual.textSelection(.enabled)
+    }
 }
 
 private struct HairlineTable: StructuredText.TableStyle {

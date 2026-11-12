@@ -236,9 +236,7 @@ struct PlateView: View {
     private var plate: some View {
         StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts, finds: finds, activeFind: activeFind))
             .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts), AnyHashable(finds), AnyHashable(activeFind)])
-            .textual.overflowMode(.wrap)
-            .plateMarkdownStyles()
-            .textual.textSelection(.enabled)
+            .plateText()
             .environment(\.textualSelectionMenu, selectionMenu)
             .padding(Tokens.tilePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
