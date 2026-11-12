@@ -78,7 +78,7 @@ struct PostCard: View {
                 .font(.body.weight(.semibold))
                 .lineLimit(1)
             Spacer(minLength: 8)
-            PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)", font: .title3)
+            PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)", font: .callout)
         }
     }
 

@@ -6,7 +6,17 @@ struct PostText: View {
     let text: String
 
     var body: some View {
-        StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
+        if Self.isPlain(text) {
+            Text(text)
+                .textSelection(.enabled)
+        } else {
+            StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
+                .textual.textSelection(.enabled)
+        }
+    }
+
+    static func isPlain(_ text: String) -> Bool {
+        !text.contains { "`*_[]<>#~|".contains($0) } && !text.contains("http")
     }
 }
 

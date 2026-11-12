@@ -271,10 +271,12 @@ struct ReaderAppearanceControls: View {
     @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
 
     var body: some View {
-        Button("Smaller", systemImage: "textformat.size.smaller") { size -= 1 }
-            .disabled(size <= 0)
-        Button("Larger", systemImage: "textformat.size.larger") { size += 1 }
-            .disabled(size >= ReaderAppearance.sizes.count - 1)
+        ControlGroup {
+            Button("Smaller", systemImage: "textformat.size.smaller") { size -= 1 }
+                .disabled(size <= 0)
+            Button("Larger", systemImage: "textformat.size.larger") { size += 1 }
+                .disabled(size >= ReaderAppearance.sizes.count - 1)
+        }
         Picker("Background", selection: $background) {
             ForEach(ReaderBackground.allCases) { option in
                 Label { Text(option.name) } icon: { option.swatch }
@@ -398,6 +400,10 @@ struct ReaderAppearanceModifier: ViewModifier {
             .background(background.canvas)
             .environment(\.plateTint, background.plate)
             .textual.inlineStyle(.default.link(.foregroundColor(background.link), .underlineStyle(.single)))
+            .onChange(of: size) { _, value in
+                let resolved = ReaderAppearance.sizes[min(max(value, 0), ReaderAppearance.sizes.count - 1)]
+                print("ReaderAppearance size \(value) → \(resolved)")
+            }
     }
 }
 

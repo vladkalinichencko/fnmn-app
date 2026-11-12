@@ -25,11 +25,6 @@ struct DigestScreen: View {
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Settings", systemImage: "gear") {
-                            navigation.digest.append(.settings)
-                        }
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
                         Menu("Display", systemImage: "textformat") {
                             ReaderAppearanceControls()
                         }
@@ -44,9 +39,6 @@ struct DigestScreen: View {
                     .interactiveOnlyAtStackTop(route)
             case .sources:
                 SourcesScreen()
-                    .interactiveOnlyAtStackTop(route)
-            case .settings:
-                DigestSettingsScreen()
                     .interactiveOnlyAtStackTop(route)
             }
         }
@@ -100,7 +92,8 @@ struct DigestScreen: View {
                 .padding(.horizontal, Tokens.gutter)
                 .padding(.top, Tokens.gap)
             }
-            if let digest = digests.current {
+            ForEach(digests.digests) { digest in
+                digestHeader(digest)
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     sections(of: digest)
                 } else {
@@ -108,6 +101,15 @@ struct DigestScreen: View {
                 }
             }
         }
+    }
+
+    private func digestHeader(_ digest: Digest) -> some View {
+        let end = digest.package.window.to
+        let period = Calendar.current.component(.hour, from: end) < 16 ? "Morning" : "Evening"
+        return Text("\(period) digest — \(end.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))")
+            .font(.title2.weight(.bold))
+            .padding(.horizontal, Tokens.gutter)
+            .padding(.top, Tokens.sectionGap)
     }
 
     private func sections(of digest: Digest) -> some View {
@@ -118,11 +120,9 @@ struct DigestScreen: View {
                         .font(.largeTitle.weight(.bold))
                     ForEach(network.topics) { topic in
                         VStack(alignment: .leading, spacing: Tokens.gap) {
-                            if network.topics.count > 1 {
-                                Text(topic.folder.uppercased())
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(topic.folder.uppercased())
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
                             CardColumns(items: topic.posts, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
                                 PostCard(post: post, digest: digest, opensThread: post.hasThread)
                             }
