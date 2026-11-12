@@ -268,7 +268,13 @@ private struct ItemCell: View {
     private var label: some View {
         Group {
             if adaptive {
-                adaptiveContent
+                ViewThatFits(in: .vertical) {
+                    content(lines: 6)
+                    content(lines: 4)
+                    content(lines: 3)
+                    content(lines: 2)
+                    content(lines: 1)
+                }
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
@@ -283,29 +289,13 @@ private struct ItemCell: View {
         .widgetAccentable()
     }
 
-    private static let metaHeight: CGFloat = 18
-
-    private var adaptiveContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ViewThatFits(in: .vertical) {
-                title(lines: 6)
-                title(lines: 4)
-                title(lines: 3)
-                title(lines: 2)
-                title(lines: 1)
-            }
-            .padding(.bottom, Self.metaHeight)
-            Spacer(minLength: 0)
-        }
-        .overlay(alignment: .bottomLeading) {
+    private func content(lines: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(item.title)
+                .font(titleFont)
+                .lineLimit(lines)
             meta
         }
-    }
-
-    private func title(lines: Int) -> some View {
-        Text(item.title)
-            .font(titleFont)
-            .lineLimit(lines)
     }
 
     private var meta: some View {

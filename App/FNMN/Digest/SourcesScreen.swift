@@ -67,9 +67,6 @@ struct SourcesScreen: View {
                             }
                         }
                     }
-                    Text("The Mac reads \(digest.package.sources.count) sources in these folders.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
             } else {
                 ContentUnavailableView("No digest yet", systemImage: "newspaper")
