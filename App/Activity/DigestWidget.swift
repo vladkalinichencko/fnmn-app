@@ -37,110 +37,94 @@ struct DigestEntryView: View {
     let entry: DigestEntry
 
     var body: some View {
-        Group {
-            if let digest = entry.digest, let first = digest.posts.first {
-                switch family {
-                case .systemSmall:
-                    DigestHead(digest: digest, post: first)
-                default:
-                    DigestGrid(
-                        digest: digest,
-                        count: WidgetLayout.digestCount(for: family),
-                        columns: WidgetLayout.digestColumns(for: family)
-                    )
-                }
-            } else {
-                EmptyWidget(text: "No digest yet", symbol: "newspaper")
-            }
+        GeometryReader { geometry in
+            DigestContent(digest: entry.digest, family: family, size: geometry.size)
         }
         .containerBackground(.background, for: .widget)
         .widgetURL(URL(string: "fnmn://digest"))
     }
 }
 
-private struct DigestHead: View {
-    let digest: WidgetDigest
-    let post: WidgetPost
+private struct DigestContent: View {
+    let digest: WidgetDigest?
+    let family: WidgetFamily
+    let size: CGSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            DigestCaption(digest: digest, count: nil)
-            Text(post.text)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(5)
-                .minimumScaleFactor(0.85)
-            Text("\(post.author) · \(post.network)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer(minLength: 0)
+        Group {
+            if let digest, !digest.posts.isEmpty {
+                DigestGrid(digest: digest, family: family, size: size)
+            } else {
+                EmptyWidget(text: "No digest yet", symbol: "newspaper")
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct DigestGrid: View {
     let digest: WidgetDigest
-    let count: Int
-    let columns: Int
+    let family: WidgetFamily
+    let size: CGSize
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DigestCaption(digest: digest, count: digest.posts.count)
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .topLeading), count: columns),
-                alignment: .leading,
-                spacing: 8
-            ) {
-                ForEach(digest.posts.prefix(count)) { post in
-                    DigestCell(post: post)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    private var columns: Int {
+        WidgetLayout.digestColumns(for: family)
     }
-}
 
-private struct DigestCaption: View {
-    let digest: WidgetDigest
-    let count: Int?
+    private var rows: Int {
+        WidgetLayout.digestRows(for: family, postCount: digest.posts.count)
+    }
+
+    private var posts: [WidgetPost] {
+        Array(digest.posts.prefix(columns * rows))
+    }
+
+    private var rowPosts: [[WidgetPost]] {
+        stride(from: 0, to: posts.count, by: columns).map { start in
+            Array(posts[start..<min(start + columns, posts.count)])
+        }
+    }
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: digest.deliveredAt.hour < 12 ? "sunrise" : "sunset")
-            Text(digest.deliveredAt.hour < 12 ? "Morning" : "Evening")
-            Spacer(minLength: 0)
-            if let count {
-                Text(count, format: .number)
-                    .foregroundStyle(.tertiary)
+        Group {
+            if posts.isEmpty {
+                EmptyWidget(text: "No digest yet", symbol: "newspaper")
+            } else {
+                let rowHeight = (size.height - WidgetLayout.spacing * CGFloat(max(0, rows - 1))) / CGFloat(max(1, rows))
+                VStack(spacing: WidgetLayout.spacing) {
+                    ForEach(rowPosts.indices, id: \.self) { index in
+                        HStack(spacing: WidgetLayout.spacing) {
+                            ForEach(rowPosts[index]) { post in
+                                DigestCell(post: post, large: columns == 1 && rows == 1)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: rowHeight)
+                    }
+                }
+                .frame(width: size.width, height: size.height)
             }
         }
-        .font(.caption2.weight(.semibold))
-        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct DigestCell: View {
     let post: WidgetPost
+    let large: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(post.text)
-                .font(.caption)
-                .lineLimit(4)
-                .minimumScaleFactor(0.85)
-            Text(post.author)
+                .font(large ? .callout.weight(.medium) : .caption)
+                .lineLimit(large ? 8 : 5)
+            Spacer(minLength: 0)
+            Text("\(post.author) · \(post.network)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private extension Date {
-    var hour: Int {
-        Calendar.current.component(.hour, from: self)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .widgetSurface()
     }
 }

@@ -31,11 +31,16 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     var sparesChosenAt: Date = .distantPast
 
     func spare(at date: Date) -> WidgetItem? {
-        guard !spares.isEmpty else {
-            return nil
+        spares(from: date, count: 1).first
+    }
+
+    func spares(from date: Date, count: Int) -> [WidgetItem] {
+        guard !spares.isEmpty, count > 0 else {
+            return []
         }
         let halfDays = Int(date.timeIntervalSince1970 / 43_200)
-        return spares[abs(halfDays) % spares.count]
+        let start = abs(halfDays) % spares.count
+        return (0..<count).map { spares[(start + $0) % spares.count] }
     }
 }
 

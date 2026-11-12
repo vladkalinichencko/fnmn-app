@@ -36,90 +36,189 @@ struct ContinueEntryView: View {
     @Environment(\.widgetFamily) private var family
     let entry: ContinueEntry
 
-    private var shown: [WidgetItem] {
-        let items = entry.snapshot.items
-        let first = items.first ?? entry.snapshot.spare(at: entry.date)
-        guard let first else {
-            return []
+    private func shown(count: Int) -> [WidgetItem] {
+        let snapshot = entry.snapshot
+        var shown = Array(snapshot.items.prefix(count))
+        if shown.isEmpty, let spare = snapshot.spare(at: entry.date) {
+            shown = [spare]
         }
-        return [first] + items.dropFirst().prefix(WidgetLayout.continueCount(for: family) - 1)
+        if shown.count < count {
+            let known = Set(shown.map(\.id))
+            let fill = snapshot.spares(from: entry.date, count: count - shown.count).filter { !known.contains($0.id) }
+            shown.append(contentsOf: fill)
+        }
+        return shown
     }
 
     var body: some View {
-        Group {
-            if let head = shown.first {
-                switch family {
-                case .systemSmall:
-                    ContinueHead(item: head, cover: nil, lines: 4)
-                case .systemMedium:
-                    ContinueHead(item: head, cover: 78, lines: 3)
-                default:
-                    VStack(alignment: .leading, spacing: 10) {
-                        ContinueHead(item: head, cover: 92, lines: 2)
-                        ForEach(shown.dropFirst()) { item in
-                            ContinueLine(item: item)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-            } else {
-                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
-            }
+        GeometryReader { geometry in
+            let plan = WidgetLayout.continuePlan(for: family)
+            ContinueContent(items: shown(count: plan.itemCount), plan: plan, size: geometry.size)
         }
         .containerBackground(.background, for: .widget)
     }
 }
 
-private struct ContinueHead: View {
-    let item: WidgetItem
-    let cover: CGFloat?
-    let lines: Int
+private struct ContinueContent: View {
+    let items: [WidgetItem]
+    let plan: WidgetLayout.ContinuePlan
+    let size: CGSize
 
     var body: some View {
-        Link(destination: item.deepLink) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 10) {
-                    if let cover {
-                        WidgetCover(item: item, side: cover)
-                    }
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Continue")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text(item.title)
-                            .font(cover == nil ? .subheadline.weight(.semibold) : .headline)
-                            .lineLimit(lines)
-                            .minimumScaleFactor(0.85)
-                        Text(item.source ?? item.kind.capitalized)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }
-                WidgetProgress(progress: item.progress)
+        Group {
+            if items.isEmpty {
+                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
+            } else if plan.columns > 1, items.count >= plan.itemCount {
+                ContinueMosaic(items: items, columns: plan.columns, size: size)
+            } else {
+                ContinueColumn(items: items, plan: plan, size: size)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-private struct ContinueLine: View {
+private struct ContinueColumn: View {
+    let items: [WidgetItem]
+    let plan: WidgetLayout.ContinuePlan
+    let size: CGSize
+
+    var body: some View {
+        Group {
+            if let head = items.first {
+                if plan.featured {
+                    let rowCount = max(0, min(plan.rows, items.count - 1))
+                    if rowCount == 0 {
+                        ContinueFeature(item: head, width: size.width, height: size.height)
+                    } else {
+                        let unit = (size.height - WidgetLayout.spacing * CGFloat(rowCount + 1)) / CGFloat(rowCount + 2)
+                        let featuredHeight = unit * 2 + WidgetLayout.spacing
+                        VStack(spacing: WidgetLayout.spacing) {
+                            ContinueFeature(item: head, width: size.width, height: featuredHeight)
+                            ForEach(Array(items.dropFirst().prefix(rowCount))) { item in
+                                ContinueRow(item: item, coverSide: WidgetLayout.coverSide(width: size.width, height: unit))
+                                    .frame(height: unit)
+                            }
+                        }
+                        .frame(width: size.width, height: size.height)
+                    }
+                } else {
+                    let rowCount = max(1, min(plan.rows, items.count))
+                    let rowHeight = (size.height - WidgetLayout.spacing * CGFloat(rowCount - 1)) / CGFloat(rowCount)
+                    VStack(spacing: WidgetLayout.spacing) {
+                        ForEach(Array(items.prefix(rowCount))) { item in
+                            ContinueRow(
+                                item: item,
+                                coverSide: WidgetLayout.coverSide(width: size.width, height: rowHeight),
+                                lines: rowHeight > 120 ? 4 : 2
+                            )
+                            .frame(height: rowHeight)
+                        }
+                    }
+                    .frame(width: size.width, height: size.height)
+                }
+            } else {
+                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct ContinueMosaic: View {
+    let items: [WidgetItem]
+    let columns: Int
+    let size: CGSize
+
+    var body: some View {
+        Group {
+            if let head = items.first {
+                let columnWidth = (size.width - WidgetLayout.spacing * CGFloat(columns - 1)) / CGFloat(columns)
+                let rowHeight = (size.height - WidgetLayout.spacing) / 2
+                let featuredWidth = columnWidth * 2 + WidgetLayout.spacing
+                let rest = Array(items.dropFirst().prefix(columns * 2 - 2))
+                VStack(spacing: WidgetLayout.spacing) {
+                    HStack(spacing: WidgetLayout.spacing) {
+                        ContinueFeature(item: head, width: featuredWidth, height: rowHeight)
+                        ForEach(rest.prefix(columns - 2)) { item in
+                            ContinueRow(
+                                item: item,
+                                coverSide: WidgetLayout.coverSide(width: columnWidth, height: rowHeight)
+                            )
+                            .frame(width: columnWidth, height: rowHeight)
+                        }
+                    }
+                    HStack(spacing: WidgetLayout.spacing) {
+                        ForEach(rest.dropFirst(columns - 2).prefix(columns)) { item in
+                            ContinueRow(
+                                item: item,
+                                coverSide: WidgetLayout.coverSide(width: columnWidth, height: rowHeight)
+                            )
+                            .frame(width: columnWidth, height: rowHeight)
+                        }
+                    }
+                }
+                .frame(width: size.width, height: size.height)
+            } else {
+                EmptyWidget(text: "Everything read", symbol: "checkmark.circle")
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct ContinueFeature: View {
     let item: WidgetItem
+    let width: CGFloat
+    let height: CGFloat
 
     var body: some View {
         Link(destination: item.deepLink) {
-            HStack(spacing: 8) {
-                WidgetProgress(progress: item.progress, height: 2)
-                    .frame(width: 26)
-                Text(item.title)
-                    .font(.footnote)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.9)
+            HStack(spacing: WidgetLayout.spacing) {
+                WidgetCover(item: item, side: WidgetLayout.coverSide(width: width, height: height))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.title)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.85)
+                    Text(item.source ?? item.kind.capitalized)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
+        .widgetSurface()
+        .frame(width: width, height: height)
+    }
+}
+
+private struct ContinueRow: View {
+    let item: WidgetItem
+    let coverSide: CGFloat
+    var lines: Int = 2
+
+    var body: some View {
+        Link(destination: item.deepLink) {
+            HStack(spacing: WidgetLayout.spacing) {
+                WidgetCover(item: item, side: coverSide)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.title)
+                        .font(.footnote.weight(.semibold))
+                        .lineLimit(lines)
+                        .minimumScaleFactor(0.85)
+                    Text(item.source ?? item.kind.capitalized)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        }
+        .widgetSurface()
     }
 }
 
@@ -128,19 +227,36 @@ private struct WidgetCover: View {
     let side: CGFloat
 
     var body: some View {
-        if let url = WidgetStore.cover(named: item.cover), let image = UIImage(contentsOfFile: url.path) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: side, height: side)
-                .clipShape(.rect(cornerRadius: 8, style: .continuous))
-        }
+        Color.clear
+            .frame(width: side, height: side)
+            .background {
+                if let url = WidgetStore.cover(named: item.cover), let image = UIImage(contentsOfFile: url.path) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color.secondary.opacity(0.12)
+                        .overlay {
+                            Image(systemName: item.symbol)
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                }
+            }
+            .clipShape(.rect(cornerRadius: WidgetLayout.spacing))
+            .overlay(alignment: .bottom) {
+                if item.progress > 0 {
+                    WidgetProgress(progress: item.progress, height: 4)
+                        .padding(.horizontal, 6)
+                        .padding(.bottom, 6)
+                }
+            }
     }
 }
 
 struct WidgetProgress: View {
     let progress: Double
-    var height: CGFloat = 3
+    var height: CGFloat = 5
 
     var body: some View {
         GeometryReader { geometry in
@@ -159,13 +275,29 @@ struct EmptyWidget: View {
     let symbol: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Image(systemName: symbol)
-                .font(.title3)
-            Text(text)
-                .font(.footnote)
+                .font(.title2)
                 .foregroundStyle(.secondary)
+            Text(text)
+                .font(.headline)
+                .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
+private extension WidgetItem {
+    var symbol: String {
+        switch kind {
+        case "video":
+            return "play.rectangle.fill"
+        case "book":
+            return "book.closed"
+        case "link":
+            return "link"
+        default:
+            return "doc.text"
+        }
     }
 }

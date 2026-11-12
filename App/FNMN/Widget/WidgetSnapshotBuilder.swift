@@ -22,7 +22,7 @@ enum WidgetSnapshotBuilder {
                         return nil
                     }
                     return WidgetPost(id: post.id, text: text, author: post.author.name, network: post.network.name)
-                }.prefix(6).map { $0 }
+                }
             )
         }
         snapshot.generatedAt = .now
