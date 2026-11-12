@@ -118,7 +118,7 @@ struct ReadingSession: View {
             .allowsHitTesting(!paging)
             .accessibilityHidden(paging)
             .environment(\.mediaZoom, paging ? nil : mediaZoom)
-            .task {
+            .task(id: ObjectIdentifier(reader)) {
                 reader.scroll = { proxy.scrollTo($0, anchor: .top) }
                 await Task.yield()
                 reader.send(.opened)
