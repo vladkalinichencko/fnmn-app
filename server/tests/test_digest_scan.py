@@ -1,7 +1,9 @@
 import json
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from digest import instagram, scan, telegram, x
 from digest.reading import SourceFailure
@@ -146,15 +148,20 @@ class TelegramScopeTests(unittest.TestCase):
             with self.assertRaises(SourceFailure):
                 telegram.collect(source, fake_web(), Store(Path(folder)), [], lambda stage: None)
 
-    def test_the_scan_finds_the_t_me_links_the_chats_contain(self):
-        class TmeTab(FeedTab):
-            def eval(self, script):
-                return ["https://t.me/s/durov", "https://t.me/telegram/123", "https://t.me/s/home"]
-
-        sources = scan._telegram(TmeTab())
+    def test_the_scan_lists_the_channels_the_cli_session_follows(self):
+        chats = json.dumps([
+            {"id": "-1", "title": "World Models", "type": "channel", "username": "gonzo_worlds"},
+            {"id": "-2", "title": "Private", "type": "channel"},
+            {"id": "-3", "title": "A group", "type": "supergroup", "username": "somegroup"},
+        ])
+        done = subprocess.CompletedProcess([], 0, stdout=chats, stderr="")
+        with patch.object(scan.shutil, "which", return_value="/usr/local/bin/telegram"), \
+                patch.object(scan.subprocess, "run", return_value=done):
+            sources = scan._telegram()
         self.assertEqual(
-            [source["id"] for source in sources],
-            ["telegram/durov", "telegram/telegram"],
+            sources,
+            [{"id": "telegram/gonzo_worlds", "network": "telegram", "channel": "gonzo_worlds",
+              "folders": [], "scanned": True, "name": "World Models"}],
         )
 
 
