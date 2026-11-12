@@ -26,7 +26,7 @@ private struct AppRefresh: ViewModifier {
                             .lineLimit(1)
                         if library.syncState == .syncing || digests.syncState == .syncing {
                             ProgressView()
-                                .controlSize(.medium)
+                                .controlSize(.regular)
                                 .progressViewStyle(GraySpinner())
                         } else if case let .waiting(pending) = library.syncState {
                             Image(systemName: "icloud.and.arrow.down")
