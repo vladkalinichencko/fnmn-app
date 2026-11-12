@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from digest import build, train
+from digest import build
 from digest.store import Store
 from package import read_delivery
 from tests.fakes import post
@@ -161,44 +161,6 @@ class ScheduleTests(unittest.TestCase):
             store = Store(Path(folder))
             store.record_build({"id": "digest-1", "at": (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat(), "post_ids": []})
             self.assertFalse(build.due(store, datetime.now(timezone.utc)))
-
-
-class TrainRowsTests(unittest.TestCase):
-    def test_one_folder_is_not_enough_to_train(self):
-        with TemporaryDirectory() as folder:
-            Store(Path(folder)).append([post(f"x/{index}") for index in range(20)])
-            self.assertEqual(train.main(["--root", folder, "--folder", folder]), 0)
-
-    def test_engagement_weights_the_rows_and_hides_the_hidden(self):
-        with TemporaryDirectory() as folder:
-            store = Store(Path(folder))
-            store.append([
-                post("x/1", text="hidden one"),
-                post("x/2", text="saved one"),
-                post("x/3", text="opened one"),
-                post("x/4", text="plain one"),
-            ])
-            events = [
-                {"kind": "hidden", "postID": "x/1"},
-                {"kind": "saved", "postID": "x/2"},
-                {"kind": "opened", "postID": "x/3"},
-            ]
-            texts, labels = train.rows(store, events)
-            self.assertNotIn("hidden one", texts)
-            self.assertEqual(texts.count("saved one"), 3)
-            self.assertEqual(texts.count("opened one"), 2)
-            self.assertEqual(texts.count("plain one"), 1)
-            self.assertEqual(set(labels), {"ml"})
-
-    def test_a_journal_of_engagement_reads_across_devices(self):
-        with TemporaryDirectory() as folder:
-            fnmn = Path(folder)
-            state = fnmn / "digest-state"
-            state.mkdir()
-            (state / "phone.jsonl").write_text('{"kind": "opened", "postID": "x/1"}\n')
-            (state / "tablet.jsonl").write_text('{"kind": "saved", "postID": "x/2"}\nbroken\n')
-            events = train.engagement(fnmn)
-            self.assertEqual(len(events), 2)
 
 
 if __name__ == "__main__":

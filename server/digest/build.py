@@ -102,19 +102,8 @@ def _package(posts: list[Post], store: Store, subscriptions: dict, now: datetime
         "window": {"from": iso(start), "to": iso(now)},
         "folders": subscriptions["folders"],
         "sources": store.source_statuses(),
-        "model": _model(),
         "posts": [wire(post) for post in sorted(posts, key=lambda post: post.posted_at, reverse=True)],
     }
-
-
-def _model() -> dict | None:
-    """The classifier the last training wrote, when it is there."""
-    manifest = HERE / "out/model.json"
-    classifier = HERE / "out/classifier.mlmodel"
-    if not manifest.exists() or not classifier.exists():
-        return None
-    trained = json.loads(manifest.read_text(encoding="utf-8"))
-    return {"file": "classifier.mlmodel", "trainedAt": trained["trained_at"], "examples": trained["examples"]}
 
 
 def _write(package: dict, posts: list[Post], store: Store, destination: Path) -> None:
@@ -129,9 +118,6 @@ def _write(package: dict, posts: list[Post], store: Store, destination: Path) ->
             avatar = comment.get("avatar")
             if avatar:
                 files.append((avatar["path"], store.root / avatar["path"]))
-    model = HERE / "out/classifier.mlmodel"
-    if package["model"] and model.exists():
-        files.append(("classifier.mlmodel", model))
     write_delivery_from(destination, package, files)
 
 

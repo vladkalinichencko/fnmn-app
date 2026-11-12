@@ -175,7 +175,7 @@ def write_delivery(path: Path, delivery: Delivery) -> None:
 
 
 def write_delivery_from(path: Path, package: dict, files: list[tuple[str, Path]]) -> None:
-    """The same archive, for files that already live on disk: a digest's media and its classifier model."""
+    """The same archive, for files that already live on disk: a digest's media."""
     path.parent.mkdir(parents=True, exist_ok=True)
     incoming = path.with_suffix(".incoming")
     with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:

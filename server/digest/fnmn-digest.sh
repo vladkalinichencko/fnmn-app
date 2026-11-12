@@ -6,7 +6,6 @@
 #   server/digest/fnmn-digest.sh status   show the agents and the newest delivery
 #   server/digest/fnmn-digest.sh monitor  read every source once, now
 #   server/digest/fnmn-digest.sh build    build a digest if the schedule is due, now
-#   server/digest/fnmn-digest.sh train    train the classifier on the engagement journal
 #   server/digest/fnmn-digest.sh scan     add the followed accounts of each network to subscriptions.json
 #   server/digest/fnmn-digest.sh login x|instagram|telegram   log the reader in once
 set -euo pipefail
@@ -19,7 +18,6 @@ AGENTS="$HOME/Library/LaunchAgents"
 LOGS="$HOME/Library/Logs/FNMN"
 MONITOR=local.fnmn.digest.monitor
 BUILDER=local.fnmn.digest.builder
-TRAINER=local.fnmn.digest.trainer
 
 agent() {
   local label=$1; shift
@@ -52,7 +50,6 @@ case "${1:-}" in
     mkdir -p "$AGENTS" "$LOGS" "$DIGEST/out"
     agent $MONITOR "$PYTHON" -m digest.monitor
     agent $BUILDER "$PYTHON" -m digest.build
-    agent $TRAINER "$PYTHON" -m digest.train
     /usr/libexec/PlistBuddy -c "Add :StartInterval integer 7200" "$AGENTS/$MONITOR.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval array" "$AGENTS/$BUILDER.plist"
     hours=($(cd "$SERVER" && "$PYTHON" -c "from digest.build import BUILD_HOURS; print(*BUILD_HOURS)"))
@@ -63,26 +60,19 @@ case "${1:-}" in
       /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:$slot:Minute integer 0" "$AGENTS/$BUILDER.plist"
       slot=$((slot + 1))
     done
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval array" "$AGENTS/$TRAINER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0 dict" "$AGENTS/$TRAINER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Hour integer 21" "$AGENTS/$TRAINER.plist"
-    /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:0:Minute integer 0" "$AGENTS/$TRAINER.plist"
     start $MONITOR
     start $BUILDER
-    start $TRAINER
-    echo "The digest monitor runs every two hours; the builder at 08:00 and 20:00; the trainer at 21:00."
+    echo "The digest monitor runs every two hours; the builder at 08:00 and 20:00."
     ;;
   off)
     launchctl bootout "gui/$UID/$MONITOR" 2>/dev/null || true
     launchctl bootout "gui/$UID/$BUILDER" 2>/dev/null || true
-    launchctl bootout "gui/$UID/$TRAINER" 2>/dev/null || true
-    rm -f "$AGENTS/$MONITOR.plist" "$AGENTS/$BUILDER.plist" "$AGENTS/$TRAINER.plist"
+    rm -f "$AGENTS/$MONITOR.plist" "$AGENTS/$BUILDER.plist"
     echo "The digest agents are off."
     ;;
   status)
     launchctl print "gui/$UID/$MONITOR" 2>/dev/null | grep -E "state|last exit" || echo "$MONITOR: not loaded"
     launchctl print "gui/$UID/$BUILDER" 2>/dev/null | grep -E "state|last exit" || echo "$BUILDER: not loaded"
-    launchctl print "gui/$UID/$TRAINER" 2>/dev/null | grep -E "state|last exit" || echo "$TRAINER: not loaded"
     ls -1t "$HOME/Library/Mobile Documents/com~apple~CloudDocs/FNMN/digests" 2>/dev/null | head -3 || echo "no deliveries yet"
     ;;
   monitor)
@@ -90,9 +80,6 @@ case "${1:-}" in
     ;;
   build)
     cd "$SERVER" && "$PYTHON" -m digest.build
-    ;;
-  train)
-    cd "$SERVER" && "$PYTHON" -m digest.train
     ;;
   scan)
     shift
@@ -102,7 +89,7 @@ case "${1:-}" in
     cd "$SERVER" && "$PYTHON" -m digest.login "${2:?usage: fnmn-digest.sh login x|instagram|telegram}"
     ;;
   *)
-    echo "usage: fnmn-digest.sh on|off|status|monitor|build|train|scan|login x|instagram|telegram"
+    echo "usage: fnmn-digest.sh on|off|status|monitor|build|scan|login x|instagram|telegram"
     exit 2
     ;;
 esac
