@@ -13,7 +13,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-from digest import instagram, telegram, x
+from digest import instagram, settings as digest_settings, telegram, x
 from digest.reading import SourceFailure, browser, needs_browser
 from digest.store import Store, iso
 from web import LIVE
@@ -27,10 +27,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", help="one source id from subscriptions.json")
     parser.add_argument("--verbose", action="store_true")
     options = parser.parse_args(argv)
+    prefs = digest_settings.load()
+    if not prefs["enabled"]:
+        print("the digest is off in its settings")
+        return 0
     subscriptions = json.loads((HERE / "subscriptions.json").read_text(encoding="utf-8"))
+    sources = list(subscriptions["sources"])
+    for network in digest_settings.RECOMMENDATION_NETWORKS:
+        if digest_settings.recommendations(prefs, network):
+            sources.append({
+                "id": f"{network}/recommendations",
+                "network": network,
+                "name": "Recommendations",
+                "scope": "recommendations",
+                "folders": [],
+            })
     store = Store()
     statuses = {status["id"]: status for status in store.source_statuses()}
-    for source in subscriptions["sources"]:
+    for source in sources:
         if options.only and source["id"] != options.only:
             continue
         status = _run(source, subscriptions["folders"], store, options.verbose)
@@ -41,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
             "folders": source.get("folders", []),
             **status,
         }
-    ordered = [statuses[source["id"]] for source in subscriptions["sources"] if source["id"] in statuses]
+    ordered = [statuses[source["id"]] for source in sources if source["id"] in statuses]
     store.save_source_statuses(ordered)
     print(f"{iso(datetime.now(timezone.utc))}: {len(ordered)} sources, statuses written")
     return 0

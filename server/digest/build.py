@@ -15,6 +15,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from digest import settings as digest_settings
+from digest import topics
 from digest.store import Post, Store, iso, wire
 from package import write_delivery_from
 
@@ -32,13 +34,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--now", default=None, help="ISO time to build as, for tests")
     parser.add_argument("--force", action="store_true", help="build even when the schedule is not due")
     options = parser.parse_args(argv)
+    prefs = digest_settings.load(Path(options.folder))
+    if not prefs["enabled"]:
+        print("the digest is off in its settings")
+        return 0
     now = datetime.fromisoformat(options.now) if options.now else datetime.now(timezone.utc)
     store = Store(Path(options.root)) if options.root else Store()
     pending = store.unconsumed()
     if not pending:
         print("nothing new since the last digest")
         return 0
-    if not options.force and not due(store, now):
+    if not options.force and not due(store, now, prefs):
         print("the next build time has not come yet")
         return 0
     subscriptions = _subscriptions(Path(options.subscriptions) if options.subscriptions else HERE / "subscriptions.json")
@@ -48,6 +54,9 @@ def main(argv: list[str] | None = None) -> int:
         if reason:
             skipped[post.id] = reason
     buildable = [post for post in pending if post.id not in skipped]
+    scores = topics.classify(buildable, prefs)
+    buildable, over = topics.cap(buildable, scores, prefs["limit"])
+    skipped.update(over)
     if not buildable:
         store.record_build({"at": iso(now), "post_ids": list(skipped), "skipped": skipped, "file": None})
         for post_id, reason in skipped.items():
@@ -73,20 +82,21 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def due(store: Store, now: datetime) -> bool:
+def due(store: Store, now: datetime, prefs: dict | None = None) -> bool:
     last = store.last_build_at()
-    return last is None or next_build_time(last) <= now
+    hours = digest_settings.hours(prefs) if prefs else BUILD_HOURS
+    return last is None or next_build_time(last, hours) <= now
 
 
-def next_build_time(after: datetime) -> datetime:
+def next_build_time(after: datetime, hours: tuple[int, ...] = BUILD_HOURS) -> datetime:
     """The first scheduled time strictly after `after`, in the Mac's own time zone."""
     local = after.astimezone()
-    for hour in BUILD_HOURS:
+    for hour in hours:
         candidate = local.replace(hour=hour, minute=0, second=0, microsecond=0)
         if candidate > local:
             return candidate
     tomorrow = local + timedelta(days=1)
-    return tomorrow.replace(hour=BUILD_HOURS[0], minute=0, second=0, microsecond=0)
+    return tomorrow.replace(hour=hours[0], minute=0, second=0, microsecond=0)
 
 
 def _subscriptions(path: Path) -> dict:

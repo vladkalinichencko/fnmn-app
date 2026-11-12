@@ -128,6 +128,32 @@ class BuildTests(unittest.TestCase):
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual(package["folders"], ["alpha"])
 
+    def test_the_settings_file_topics_relabel_the_posts_and_the_limit_drops_the_rest(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({
+                "networks": {"x": {"topics": ["small model", "nothing alike"]}},
+                "limit": 1,
+            }), encoding="utf-8")
+            Store(root).append([post("x/1"), post("x/2")])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertEqual(len(package["posts"]), 1)
+            self.assertEqual(package["posts"][0]["folders"], ["small model"])
+            self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/2": "over the digest limit"})
+
+    def test_a_disabled_digest_builds_nothing(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({"enabled": False}), encoding="utf-8")
+            Store(root).append([post("x/1")])
+            self.assertEqual(self.build(root, fnmn), 0)
+            self.assertEqual(list((fnmn / "digests").glob("digest-*.tar")), [])
+
     def test_pruning_keeps_the_newest_deliveries(self):
         with TemporaryDirectory() as folder:
             fnmn = Path(folder)

@@ -25,6 +25,11 @@ struct DigestScreen: View {
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
+                        Button("Settings", systemImage: "gear") {
+                            navigation.digest.append(.settings)
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
                         Menu("Display", systemImage: "textformat") {
                             ReaderAppearanceControls()
                         }
@@ -39,6 +44,9 @@ struct DigestScreen: View {
                     .interactiveOnlyAtStackTop(route)
             case .sources:
                 SourcesScreen()
+                    .interactiveOnlyAtStackTop(route)
+            case .settings:
+                DigestSettingsScreen()
                     .interactiveOnlyAtStackTop(route)
             }
         }
