@@ -119,7 +119,7 @@ final class DigestModelTests: XCTestCase {
         XCTAssertEqual(digests.current?.package.posts.count, 2)
     }
 
-    func testRecordingKeepsReadAndHiddenPostsAndWritesTheJournal() async throws {
+    func testRecordingHiddenPostsAndWritesTheJournal() async throws {
         let folder = root.appending(path: "FNMN")
         let tar = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
         let file = DigestFile(url: root, cache: root)
@@ -131,7 +131,6 @@ final class DigestModelTests: XCTestCase {
         digests.record(.opened, post: post, digest: digest)
         digests.record(.hidden, post: post, digest: digest)
         await digests.settle()
-        XCTAssertTrue(digests.seen.contains("x/1"))
         XCTAssertTrue(digests.hidden.contains("x/1"))
         let journal = folder.appending(path: "digest-state/phone.jsonl")
         let lines = try String(contentsOf: journal, encoding: .utf8).split(separator: "\n")
@@ -154,17 +153,15 @@ final class DigestModelTests: XCTestCase {
         XCTAssertEqual(package.posts(matching: "karpathy").count, 2)
     }
 
-    func testASyncBeforeOpenKeepsTheReadPosts() async throws {
+    func testASyncBeforeOpenKeepsTheHiddenPosts() async throws {
         let folder = root.appending(path: "FNMN")
         _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
         let file = DigestFile(url: root, cache: root)
-        try await file.saveIndex(DigestIndex(imported: [], seen: ["x/1"], hidden: ["x/2"]))
+        try await file.saveIndex(DigestIndex(hidden: ["x/2"]))
         let digests = model()
         await digests.sync(folder: folder)
-        XCTAssertEqual(digests.seen, ["x/1"])
         XCTAssertEqual(digests.hidden, ["x/2"])
         let saved = try await DigestFile(url: root, cache: root).loadIndex()
-        XCTAssertEqual(saved.seen, ["x/1"])
         XCTAssertEqual(saved.hidden, ["x/2"])
     }
 
@@ -295,11 +292,11 @@ final class DigestModelTests: XCTestCase {
         let digest = try XCTUnwrap(digests.digest(of: "x/1"))
         let seen = expectation(description: "the reader sees the mark")
         withObservationTracking {
-            _ = digests.seen
+            _ = digests.hidden
         } onChange: {
             seen.fulfill()
         }
-        digests.record(.opened, post: post, digest: digest)
+        digests.record(.hidden, post: post, digest: digest)
         await fulfillment(of: [seen], timeout: 1)
     }
 

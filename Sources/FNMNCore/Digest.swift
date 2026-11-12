@@ -318,12 +318,10 @@ public struct Digest: Identifiable, Equatable, Sendable {
 
 public struct DigestIndex: Codable, Equatable, Sendable {
     public var imported: [Imported]
-    public var seen: Set<String>
     public var hidden: Set<String>
 
-    public init(imported: [Imported] = [], seen: Set<String> = [], hidden: Set<String> = []) {
+    public init(imported: [Imported] = [], hidden: Set<String> = []) {
         self.imported = imported
-        self.seen = seen
         self.hidden = hidden
     }
 

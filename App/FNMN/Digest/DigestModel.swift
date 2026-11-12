@@ -36,10 +36,6 @@ final class DigestModel {
         digests.first
     }
 
-    var seen: Set<String> {
-        index.seen
-    }
-
     var hidden: Set<String> {
         index.hidden
     }
@@ -123,12 +119,10 @@ final class DigestModel {
     func record(_ kind: DigestEngagement.Kind, post: DigestPackage.Post, digest: Digest) {
         pending.append(DigestEngagement(kind: kind, postID: post.id, digestID: digest.id))
         switch kind {
-        case .opened:
-            index.seen.insert(post.id)
+        case .opened, .saved:
+            break
         case .hidden:
             index.hidden.insert(post.id)
-        case .saved:
-            break
         }
         scheduleIndexSave()
     }

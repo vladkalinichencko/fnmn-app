@@ -96,7 +96,7 @@ struct DigestScreen: View {
             ForEach(digest.package.sections(labels: digests.labels, hidden: digests.hidden)) { section in
                 LibrarySection(section.folder.uppercased()) {
                     CardColumns(items: section.posts, idealWidth: 330, height: PostCard.estimatedHeight, separates: true) { post in
-                        PostCard(post: post, digest: digest, read: digests.seen.contains(post.id), opensThread: post.hasThread)
+                        PostCard(post: post, digest: digest, opensThread: post.hasThread)
                     }
                 }
             }
@@ -108,7 +108,7 @@ struct DigestScreen: View {
     private func results(of digest: Digest) -> some View {
         let found = digest.package.posts(matching: query, hidden: digests.hidden)
         return CardColumns(items: found, idealWidth: 330, height: PostCard.estimatedHeight, separates: true) { post in
-            PostCard(post: post, digest: digest, read: digests.seen.contains(post.id), opensThread: post.hasThread)
+            PostCard(post: post, digest: digest, opensThread: post.hasThread)
         }
         .padding(.horizontal, Tokens.gutter)
         .padding(.bottom, Tokens.sectionGap)

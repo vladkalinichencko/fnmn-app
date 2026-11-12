@@ -11,7 +11,6 @@ extension DigestPackage.Post {
 struct PostCard: View {
     let post: DigestPackage.Post
     let digest: Digest
-    var read = false
     var opensThread = false
     @Environment(WindowNavigation.self) private var navigation
     @Environment(DigestModel.self) private var digests
@@ -39,7 +38,6 @@ struct PostCard: View {
                 header
                 if let text = post.text {
                     PostText(text: text)
-                        .opacity(read ? Tokens.readOpacity : 1)
                 }
                 if let video = post.video, video.poster != nil {
                     poster(video)
