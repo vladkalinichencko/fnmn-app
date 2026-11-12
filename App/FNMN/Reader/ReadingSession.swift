@@ -86,8 +86,7 @@ struct ReadingSession: View {
                             annotations: marks[index] ?? [],
                             fold: fold(of: index, in: document),
                             finds: findsByBlock[index]?.map(\.span) ?? [],
-                            activeFind: activeFind?.piece == index ? activeFind?.span : nil,
-                            spot: reader.spotSpan(of: index)
+                            activeFind: activeFind?.piece == index ? activeFind?.span : nil
                         )
                         .equatable()
                         .padding(.bottom, Tokens.gap)
@@ -142,17 +141,13 @@ struct ReadingSession: View {
         .environment(\.mediaPresenter, mediaPresenter)
         .environment(\.plateTextWidth, columnWidth > 0 ? columnWidth - 2 * Tokens.tilePadding : nil)
         .environment(\.openURL, OpenURLAction { url in
-            guard url.isFileURL, ImageFiles.headerSize(of: url) != nil else { return .systemAction }
+            guard url.isFileURL, ImageFiles.headerSize(of: url) != nil else {
+                return .systemAction
+            }
             mediaPresenter.open(url)
             return .handled
         })
         .presentsMedia(mediaPresenter)
-        .overlay(alignment: .bottom) {
-            if let spot = reader.state.spot {
-                SpotControls(reader: reader, running: spot.running)
-                    .padding(.bottom, 12)
-            }
-        }
         .toolbar {
             if reader.state.mode != .reading {
                 ToolbarItem(placement: .confirmationAction) {
@@ -192,22 +187,4 @@ private struct Reveal: ViewModifier {
     }
 }
 
-struct SpotControls: View {
-    let reader: ReaderCoordinator
-    let running: Bool
 
-    var body: some View {
-        GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
-                Button(running ? "Pause" : "Play", systemImage: running ? "pause.fill" : "play.fill") {
-                    reader.send(.spotPaused(running))
-                }
-                .buttonStyle(.glass)
-                Button("Done", systemImage: "xmark") {
-                    reader.send(.spot(false))
-                }
-                .buttonStyle(.glass)
-            }
-        }
-    }
-}

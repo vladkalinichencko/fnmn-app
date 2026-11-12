@@ -14,7 +14,7 @@ struct BlockView: View, Equatable {
     let fold: HeadingFold
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
-    var spot: TextSpan?
+    var panGestures = true
 
     var body: some View {
         switch block {
@@ -25,7 +25,7 @@ struct BlockView: View, Equatable {
             PlateView(
                 markdown: markdown, index: index, baseURL: baseURL, mode: mode,
                 readShare: readShare, markedReadThrough: markedReadThrough, annotations: annotations,
-                finds: finds, activeFind: activeFind, spot: spot
+                finds: finds, activeFind: activeFind, panGestures: panGestures
             )
         case let .image(alt, path):
             StandaloneImage(url: resolve(path), alt: alt)
@@ -150,7 +150,7 @@ struct PlateView: View {
     let annotations: [Annotation]
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
-    var spot: TextSpan?
+    var panGestures = true
     @State private var drag: CGFloat = 0
     @State private var size = CGSize.zero
     @State private var noteHeight: CGFloat = 0
@@ -177,7 +177,7 @@ struct PlateView: View {
             plate
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
                 .offset(x: offset)
-                .gesture(HorizontalPan(starts: { open ? $0 > 0 : true }, changed: dragged, ended: released))
+                .gesture(HorizontalPan(starts: { panGestures && (open ? $0 > 0 : true) }, changed: dragged, ended: released))
         }
         .animation(Self.slide, value: open)
         .onChange(of: noting) { side = nil }
@@ -234,8 +234,8 @@ struct PlateView: View {
     }
 
     private var plate: some View {
-        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts, finds: finds, activeFind: activeFind, spot: spot))
-            .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts), AnyHashable(finds), AnyHashable(activeFind), AnyHashable(spot)])
+        StructuredText(markdown, parser: MarkedMarkdown(baseURL: baseURL, marks: marks, width: textWidth, boldsWordStarts: boldsWordStarts, finds: finds, activeFind: activeFind))
+            .id([AnyHashable(marks), AnyHashable(textWidth), AnyHashable(boldsWordStarts), AnyHashable(finds), AnyHashable(activeFind)])
             .textual.overflowMode(.wrap)
             .plateMarkdownStyles()
             .textual.textSelection(.enabled)

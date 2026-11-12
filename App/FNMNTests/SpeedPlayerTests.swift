@@ -94,6 +94,31 @@ final class SpeedPlayerTests: XCTestCase {
         XCTAssertEqual(player.token?.isStop, false)
     }
 
+    func testTogglingOnAStopContinuesPastIt() async {
+        let player = await loaded("$$\nx^2\n$$\n\nText after.")
+        XCTAssertEqual(player.token?.isStop, true)
+
+        player.toggle()
+        XCTAssertEqual(player.mode, .playing)
+        XCTAssertEqual(player.token?.isStop, false)
+        player.pause()
+    }
+
+    func testTheSummaryCountsOnlyWhatCameSinceTheLast() async {
+        let player = await loaded()
+        player.play()
+        try? await Task.sleep(for: .milliseconds(350))
+        player.sentenceBack()
+        player.pause()
+        let first = player.summary(itemID: "text", wordsPerMinute: 600, pauses: SpeedPauseProfile(.off).json)
+        XCTAssertGreaterThan(first.words, 0)
+        XCTAssertEqual(first.backs, 1)
+
+        let second = player.summary(itemID: "text", wordsPerMinute: 600, pauses: SpeedPauseProfile(.off).json)
+        XCTAssertEqual(second.words, 0)
+        XCTAssertEqual(second.backs, 0)
+    }
+
     func testTheSummaryCountsShownWordsAndReturns() async {
         let player = await loaded("One two three. Four five six. Seven eight nine.")
         player.play()

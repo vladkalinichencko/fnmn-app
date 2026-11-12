@@ -2,7 +2,7 @@ import Foundation
 
 public struct ReadingModeEvent: Codable, Equatable, Sendable {
     public enum Mode: String, Codable, Sendable {
-        case rsvp, spot
+        case rsvp
     }
 
     public let itemID: String

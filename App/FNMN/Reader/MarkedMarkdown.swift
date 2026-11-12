@@ -9,7 +9,6 @@ struct MarkedMarkdown: MarkupParser {
     var boldsWordStarts = false
     var finds: [TextSpan] = []
     var activeFind: TextSpan?
-    var spot: TextSpan?
 
     func attributedString(for input: String) throws -> AttributedString {
         var text = try Self.parse(input, baseURL: baseURL)
@@ -23,9 +22,6 @@ struct MarkedMarkdown: MarkupParser {
         }
         if let activeFind {
             Self.paint(activeFind, .findActive, in: &text)
-        }
-        if let spot {
-            Self.paint(spot, .spot, in: &text)
         }
         if boldsWordStarts { Self.boldWordStarts(&text) }
         return text
@@ -174,7 +170,6 @@ private struct ParagraphPicture: Attachment {
 
 extension Color {
     static let highlight = Color.accentColor.opacity(0.3)
-    static let find = Color.yellow.opacity(0.38)
-    static let findActive = Color.orange.opacity(0.6)
-    static let spot = Color.accentColor.opacity(0.32)
+    static let find = Color.accentColor.opacity(0.4)
+    static let findActive = Color.accentColor.opacity(0.8)
 }

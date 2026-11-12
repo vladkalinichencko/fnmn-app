@@ -263,6 +263,7 @@ enum ReaderAppearance {
 }
 
 struct ReaderAppearanceControls: View {
+    var showsColumn = true
     @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
@@ -301,15 +302,17 @@ struct ReaderAppearanceControls: View {
             Text(spacing.name)
         }
         .pickerStyle(.menu)
-        Picker(selection: $column) {
-            ForEach(ReaderColumn.allCases) { option in
-                Text(option.name).tag(option)
+        if showsColumn {
+            Picker(selection: $column) {
+                ForEach(ReaderColumn.allCases) { option in
+                    Text(option.name).tag(option)
+                }
+            } label: {
+                Label("Column Width", systemImage: "arrow.left.and.right.text.vertical")
+                Text(column.name)
             }
-        } label: {
-            Label("Column Width", systemImage: "arrow.left.and.right.text.vertical")
-            Text(column.name)
+            .pickerStyle(.menu)
         }
-        .pickerStyle(.menu)
     }
 }
 
@@ -319,21 +322,21 @@ struct ReaderMenu: View {
     @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
     @AppStorage(ReaderAppearance.wordStartsKey) private var boldsWordStarts = false
 
+    private enum ReadingMode: Hashable {
+        case column, posts, fast
+    }
+
     var body: some View {
         Menu("Reading Options", systemImage: "ellipsis") {
+            Picker("Reading Mode", selection: mode) {
+                Text("Reader").tag(ReadingMode.column)
+                Text("Posts").tag(ReadingMode.posts)
+                Text("Fast").tag(ReadingMode.fast)
+            }
+            .pickerStyle(.segmented)
             ReaderAppearanceControls()
             Toggle("Reading Line", systemImage: "ruler",isOn: $showsLine)
             Toggle("Bold Word Starts", systemImage: "bold", isOn: $boldsWordStarts)
-            Toggle("One Plate at a Time", systemImage: "rectangle.stack", isOn: Binding(
-                get: { reader.state.shownPlate != nil },
-                set: { reader.send(.onePlate($0)) }
-            ))
-            Button("Speed Reading", systemImage: "hare") { reader.send(.speedReading(true)) }
-            if reader.state.spot == nil {
-                Button("Spot Reading", systemImage: "text.cursor") { reader.send(.spot(true)) }
-            } else {
-                Button("Stop Spot Reading", systemImage: "xmark.circle") { reader.send(.spot(false)) }
-            }
             Button("Find in Text", systemImage: "magnifyingglass") {
                 if reader.state.shownPlate != nil {
                     reader.send(.onePlate(false))
@@ -350,6 +353,36 @@ struct ReaderMenu: View {
             }
             OpenOriginalButton(itemID: reader.materialID, page: page)
         }
+    }
+
+    private var mode: Binding<ReadingMode> {
+        Binding(
+            get: {
+                if reader.state.shownPlate != nil {
+                    return .posts
+                }
+                if reader.state.speedStart != nil {
+                    return .fast
+                }
+                return .column
+            },
+            set: { mode in
+                switch mode {
+                case .column:
+                    if reader.state.shownPlate != nil {
+                        reader.send(.onePlate(false))
+                    }
+                    if reader.state.speedStart != nil {
+                        reader.send(.speedReading(false))
+                    }
+                case .posts:
+                    reader.send(.speedReading(false))
+                    reader.send(.onePlate(true))
+                case .fast:
+                    reader.send(.speedReading(true))
+                }
+            }
+        )
     }
 }
 

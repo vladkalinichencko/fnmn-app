@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import FNMNCore
 
@@ -40,6 +41,7 @@ private func words(_ tokens: [SpeedToken]) -> [String] {
     #expect(words(SpeedText.tokens(in: .text("| a | b |\n|---|---|\n| 1 | 2 |"), at: 0)) == ["■"])
     #expect(words(SpeedText.tokens(in: .image(alt: "", path: "a.png"), at: 0)) == ["■"])
     #expect(SpeedText.tokens(in: .heading(level: 2, title: "Title"), at: 0).isEmpty)
+    #expect(SpeedText.tokens(in: .interactive(url: URL(string: "https://x.org/a")!, selector: "main"), at: 0).isEmpty)
 }
 
 @Test func theTextStartsPastWhatTheLineHasRead() {

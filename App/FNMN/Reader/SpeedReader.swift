@@ -27,7 +27,9 @@ final class SpeedPlayer {
     }
     @ObservationIgnored private var clock: Task<Void, Never>?
     private(set) var backs = 0
-    @ObservationIgnored private var startedAt = Date.now
+    @ObservationIgnored private var reportedWords = 0
+    @ObservationIgnored private var reportedBacks = 0
+    @ObservationIgnored private var reportedAt = Date.now
 
     var isPlaying: Bool {
         mode == .playing
@@ -42,7 +44,7 @@ final class SpeedPlayer {
 
     func load(_ document: ReaderDocument, from start: ReadingLine) async {
         guard text == nil else { return }
-        startedAt = .now
+        reportedAt = .now
         let text = await Task.detached(priority: .userInitiated) { SpeedText(document: document, from: start) }.value
         self.text = text
         frame = text.frame(at: 0, words: wordsPerFrame)
@@ -65,7 +67,16 @@ final class SpeedPlayer {
     }
 
     func toggle() {
-        isPlaying ? pause() : play()
+        guard resting == nil else {
+            return
+        }
+        if isPlaying {
+            pause()
+        } else if token?.isStop == true {
+            continuePastStop()
+        } else {
+            play()
+        }
     }
 
     func play() {
@@ -95,16 +106,21 @@ final class SpeedPlayer {
     }
 
     func summary(itemID: String, wordsPerMinute: Int, pauses: String) -> ReadingModeEvent {
-        ReadingModeEvent(
+        let shown = (furthest ?? -1) + 1
+        let event = ReadingModeEvent(
             itemID: itemID,
             mode: .rsvp,
             wordsPerMinute: wordsPerMinute,
             pauses: pauses,
-            words: (furthest ?? -1) + 1,
-            backs: backs,
-            startedAt: startedAt,
+            words: max(shown - reportedWords, 0),
+            backs: max(backs - reportedBacks, 0),
+            startedAt: reportedAt,
             endedAt: .now
         )
+        reportedWords = shown
+        reportedBacks = backs
+        reportedAt = .now
+        return event
     }
 
     func sentenceForward() {
@@ -234,6 +250,8 @@ struct SpeedReader: View {
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
     @State private var press = Press()
     @State private var holdTimer: Task<Void, Never>?
+    @Namespace private var mediaZoom
+    @State private var mediaPresenter = MediaPresenter()
 
     init(reader: ReaderCoordinator, start: ReadingLine) {
         self.reader = reader
@@ -245,7 +263,6 @@ struct SpeedReader: View {
     }
 
     private static let speeds = 150...600
-    private static let comfortable = 300
 
     var body: some View {
         VStack(spacing: 0) {
@@ -261,6 +278,16 @@ struct SpeedReader: View {
         .padding(.horizontal, Tokens.gutter)
         .modifier(ReaderAppearanceModifier())
         .environment(reader)
+        .environment(\.mediaZoom, mediaZoom)
+        .environment(\.mediaPresenter, mediaPresenter)
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.isFileURL, ImageFiles.headerSize(of: url) != nil else {
+                return .systemAction
+            }
+            mediaPresenter.open(url)
+            return .handled
+        })
+        .presentsMedia(mediaPresenter)
         .task {
             player.wordsPerMinute = wordsPerMinute
             player.wordsPerFrame = wordsPerFrame
@@ -274,14 +301,13 @@ struct SpeedReader: View {
             guard scenePhase != .active else { return }
             player.pause()
             saveShown()
+            if scenePhase == .background {
+                recordSummary()
+            }
         }
         .onDisappear {
             player.pause()
-            let summary = player.summary(itemID: reader.materialID, wordsPerMinute: wordsPerMinute, pauses: pauseProfile.json)
-            guard summary.words > 0 else {
-                return
-            }
-            Task { await library.recordReadingMode(summary) }
+            recordSummary()
         }
     }
 
@@ -309,7 +335,7 @@ struct SpeedReader: View {
                             .pickerStyle(.inline)
                         }
                     }
-                    ReaderAppearanceControls()
+                    ReaderAppearanceControls(showsColumn: false)
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.glass)
@@ -361,13 +387,8 @@ struct SpeedReader: View {
                     .transition(.opacity)
             } else if let token = player.token {
                 if token.isStop {
-                    VStack(spacing: Tokens.gap) {
-                        plate(token.block)
-                        Button("Continue") { player.continuePastStop() }
-                            .buttonStyle(.glassProminent)
-                            .disabled(player.isAtEnd)
-                    }
-                    .padding(.vertical, Tokens.gap)
+                    plate(token.block)
+                        .padding(.vertical, Tokens.gap)
                 } else {
                     words(in: text, token: token)
                         .overlay {
@@ -454,7 +475,8 @@ struct SpeedReader: View {
                 readShare: 0,
                 markedReadThrough: false,
                 annotations: library.snapshot.annotations.filter { $0.materialID == reader.materialID && $0.piece == block },
-                fold: .none
+                fold: .none,
+                panGestures: false
             )
             .frame(maxWidth: Tokens.minReading)
             .frame(maxWidth: .infinity)
@@ -467,12 +489,12 @@ struct SpeedReader: View {
             HStack(spacing: 36) {
                 Button("Previous Sentence", systemImage: "backward.fill") { player.sentenceBack() }
                     .font(.title2)
-                Button(player.isPlaying ? "Pause" : "Play", systemImage: player.isPlaying ? "pause.fill" : "play.fill") { player.toggle() }
+                Button(centerTitle, systemImage: player.isPlaying ? "pause.fill" : "play.fill") { player.toggle() }
                     .font(.largeTitle)
                     .frame(width: 84, height: 84)
                     .contentTransition(.symbolEffect(.replace))
                     .glassEffect(.regular.interactive(), in: Circle())
-                    .disabled(player.token?.isStop ?? true)
+                    .disabled(player.token == nil || (player.token?.isStop == true && player.isAtEnd))
                 Button("Next Sentence", systemImage: "forward.fill") { player.sentenceForward() }
                     .font(.title2)
             }
@@ -498,13 +520,14 @@ struct SpeedReader: View {
             .labelStyle(.iconOnly)
             .buttonStyle(.glass)
             .animation(.snappy, value: wordsPerMinute)
-            if wordsPerMinute > Self.comfortable {
-                Text("Above \(Self.comfortable) words a minute, less of the text is understood.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
         }
+    }
+
+    private var centerTitle: String {
+        if player.isPlaying {
+            return "Pause"
+        }
+        return player.token?.isStop == true ? "Continue" : "Play"
     }
 
     private func sectionTitle(of block: Int) -> String {
@@ -516,6 +539,14 @@ struct SpeedReader: View {
 
     private func saveShown() {
         if let shown = player.shown { reader.send(.speedRead(shown)) }
+    }
+
+    private func recordSummary() {
+        let summary = player.summary(itemID: reader.materialID, wordsPerMinute: wordsPerMinute, pauses: pauseProfile.json)
+        guard summary.words > 0 else {
+            return
+        }
+        Task { await library.recordReadingMode(summary) }
     }
 }
 
@@ -531,6 +562,8 @@ private struct PivotWord: View {
     let text: String
     let before: String
     let after: String
+    @State private var ideal: CGFloat = 0
+    @State private var offered: CGFloat = 0
 
     var body: some View {
         let characters = Array(text)
@@ -541,26 +574,42 @@ private struct PivotWord: View {
         VStack(alignment: .pivot, spacing: 6) {
             Self.mark
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(before.isEmpty ? "" : before + " ").foregroundStyle(.tertiary)
-                Text(head)
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text(before.isEmpty ? "" : before + " ").foregroundStyle(.tertiary)
+                    Text(head)
+                }
+                .scaleEffect(shrink, anchor: UnitPoint(x: 1, y: 0.5))
                 Text(letter)
                     .bold()
                     .foregroundStyle(Color.accentColor)
                     .alignmentGuide(.pivot) { $0[HorizontalAlignment.center] }
-                Text(tail)
-                Text(after.isEmpty ? "" : " " + after).foregroundStyle(.tertiary)
+                    .scaleEffect(shrink, anchor: UnitPoint(x: 0.5, y: 0.5))
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text(tail)
+                    Text(after.isEmpty ? "" : " " + after).foregroundStyle(.tertiary)
+                }
+                .scaleEffect(shrink, anchor: UnitPoint(x: 0, y: 0.5))
             }
             .lineLimit(1)
             .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { ideal = $0 }
             Self.mark
         }
         .frame(maxWidth: .infinity, alignment: Alignment(horizontal: .pivot, vertical: .center))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { offered = $0 }
         .clipped()
+    }
+
+    private var shrink: CGFloat {
+        guard offered > 0, ideal > 0 else {
+            return 1
+        }
+        return min(1, offered / ideal)
     }
 
     private static var mark: some View {
         Capsule()
-            .fill(.secondary)
+            .fill(Color.accentColor)
             .frame(width: 2, height: 12)
             .alignmentGuide(.pivot) { $0[HorizontalAlignment.center] }
     }

@@ -8,8 +8,8 @@ struct PlatePager: View {
     let width: CGFloat?
     @State private var forward = true
     @State private var viewport: CGFloat = 0
-    private static let turn: CGFloat = 56
-    private static let slide = Animation.spring(duration: 0.42, bounce: 0.12)
+    private static let turn: CGFloat = 36
+    private static let slide = Animation.spring(duration: 0.3, bounce: 0.08)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,10 +48,14 @@ struct PlatePager: View {
         .onScrollGeometryChange(for: CGFloat.self, of: Self.pull) { _, pull in
             if pull > 4 { forward = true } else if pull < -4 { forward = false }
         }
-        .onScrollPhaseChange { old, new, context in
+        .onScrollPhaseChange { (old: ScrollPhase, new: ScrollPhase, context: ScrollPhaseChangeContext) in
             guard old == .interacting, new != .interacting else { return }
             let pull = Self.pull(context.geometry)
-            guard abs(pull) >= Self.turn else { return }
+            let fling = abs(context.velocity?.dy ?? 0)
+            let needed = max(Self.turn - fling / 10, Self.turn * 0.4)
+            guard abs(pull) >= needed else {
+                return
+            }
             reader.send(.turnPlate(forward: pull > 0))
         }
     }

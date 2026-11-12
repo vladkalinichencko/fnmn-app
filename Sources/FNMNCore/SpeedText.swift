@@ -134,8 +134,8 @@ public struct SpeedText: Sendable {
 
     public static func tokens(in block: DocumentBlock, at index: Int) -> [SpeedToken] {
         let parts: [[String]?] = switch block {
-        case .heading: []
-        case .image, .video, .interactive: [nil]
+        case .heading, .interactive: []
+        case .image, .video: [nil]
         case let .text(markdown):
             segments(of: markdown).map { isRich($0) ? nil : paragraphs(of: $0) }
         }

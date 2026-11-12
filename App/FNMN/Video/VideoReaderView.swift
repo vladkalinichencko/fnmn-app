@@ -80,7 +80,7 @@ struct VideoReaderView: View {
 
     @ViewBuilder
     private var videoMenu: some View {
-        ReaderAppearanceControls()
+        ReaderAppearanceControls(showsColumn: false)
         if library.originalFile(materialID) != nil {
             Button("Remove Download", systemImage: "trash") {
                 Task { await library.removeOriginal(of: materialID) }

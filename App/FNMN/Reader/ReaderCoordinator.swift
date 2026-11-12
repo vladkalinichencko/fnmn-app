@@ -31,25 +31,6 @@ struct FindState: Equatable {
     }
 }
 
-struct SpotState: Equatable {
-    var piece: Int
-    var word: Int
-    var span: TextSpan
-    var running: Bool
-    var words = 0
-    var startedAt = Date.now
-}
-
-struct SpotWord: Equatable {
-    let span: TextSpan
-    let token: SpeedToken
-}
-
-struct SpotPiece: Equatable {
-    let piece: Int
-    let words: [SpotWord]
-}
-
 struct ReaderState: Equatable {
     var mode = PlateMode.reading
     var folded: Set<Int> = []
@@ -75,7 +56,6 @@ struct ReaderState: Equatable {
     var shownPlate: Int?
     var speedStart: ReadingLine?
     var find: FindState?
-    var spot: SpotState?
 }
 
 enum ReaderAction {
@@ -100,9 +80,6 @@ enum ReaderAction {
     case findQuery(String)
     case findStep(Int)
     case found([TextMatch], query: String)
-    case spot(Bool)
-    case spotPaused(Bool)
-    case spotMove(SpotState)
 }
 
 func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: ReaderDocument) -> ReaderState {
@@ -210,23 +187,6 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
             return state
         }
         state.find?.result = .matches(matches, current: 0)
-    case .spot(true):
-        guard state.spot == nil else {
-            return state
-        }
-        let around = state.place ?? state.scrollID ?? document.visibleBlocks(folded: state.folded).first ?? 0
-        guard let start = document.plate(holding: around) else {
-            return state
-        }
-        state.spot = SpotState(piece: start, word: 0, span: TextSpan(start: 0, length: 0), running: true)
-    case .spot(false):
-        state.spot = nil
-    case let .spotPaused(paused):
-        state.spot?.running = !paused
-    case var .spotMove(next):
-        next.words = (state.spot?.words ?? 0) + 1
-        next.startedAt = state.spot?.startedAt ?? .now
-        state.spot = next.running ? next : SpotState(piece: next.piece, word: next.word, span: next.span, running: false, words: next.words, startedAt: next.startedAt)
     }
     return state
 }
@@ -248,8 +208,6 @@ final class ReaderCoordinator {
     @ObservationIgnored private let library: LibraryModel
     @ObservationIgnored private var texts: [Int: String]?
     @ObservationIgnored private let plainText: @Sendable (String) -> String
-    @ObservationIgnored private var spotClock: Task<Void, Never>?
-    @ObservationIgnored private var spotPieces: [Int: SpotPiece] = [:]
 
     init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, kind: FNMNCore.Material.Kind, place: Int?, note: Int?, showsLine: Bool, onePlate: Bool, library: LibraryModel, plainText: @escaping @Sendable (String) -> String) {
         self.document = document
@@ -381,7 +339,7 @@ final class ReaderCoordinator {
     private func animation(for action: ReaderAction) -> Animation? {
         switch action {
         case .plate: .snappy
-        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .onePlate, .turnPlate, .speedReading, .speedRead, .find, .findQuery, .findStep, .found, .spot, .spotPaused, .spotMove: nil
+        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .onePlate, .turnPlate, .speedReading, .speedRead, .find, .findQuery, .findStep, .found: nil
         }
     }
 
@@ -456,38 +414,6 @@ final class ReaderCoordinator {
                 return
             }
             scroll(find.matches[current].piece)
-        case .spot(true):
-            startSpot()
-        case .spot(false):
-            stopSpot()
-            if let spot = before.spot {
-                let defaults = UserDefaults.standard
-                let event = ReadingModeEvent(
-                    itemID: materialID,
-                    mode: .spot,
-                    wordsPerMinute: defaults.integer(forKey: ReaderAppearance.SpeedSetting.wordsPerMinute.key(kind)),
-                    pauses: defaults.string(forKey: ReaderAppearance.SpeedSetting.pauses.key(kind)) ?? "",
-                    words: spot.words,
-                    backs: 0,
-                    startedAt: spot.startedAt,
-                    endedAt: .now
-                )
-                Task { await library.recordReadingMode(event) }
-            }
-            savePlace(next.place)
-        case let .spotPaused(paused):
-            if paused {
-                spotClock?.cancel()
-                spotClock = nil
-            } else {
-                scheduleSpot()
-            }
-        case let .spotMove(next):
-            if let before = before.spot, before.piece != next.piece {
-                scroll(next.piece)
-                savePlace(next.piece)
-            }
-            scheduleSpot()
         case .find:
             break
         case .speedRead:
@@ -513,83 +439,6 @@ final class ReaderCoordinator {
         }
         let position = place.map(ReadingPosition.piece) ?? library.position(of: materialID) ?? .piece(0)
         library.apply(.savePosition(position, itemID: materialID, progress: Double(read + 1) / Double(document.blocks.count)))
-    }
-
-    func spotSpan(of piece: Int) -> TextSpan? {
-        guard let spot = state.spot, spot.piece == piece, spot.span.length > 0 else {
-            return nil
-        }
-        return spot.span
-    }
-
-    private func startSpot() {
-        guard let spot = state.spot else {
-            return
-        }
-        scroll(spot.piece)
-        guard let plan = spotPiece(spot.piece), let first = plan.words.first else {
-            send(.spot(false))
-            return
-        }
-        send(.spotMove(SpotState(piece: spot.piece, word: 0, span: first.span, running: true)))
-    }
-
-    private func stopSpot() {
-        spotClock?.cancel()
-        spotClock = nil
-    }
-
-    private func advanceSpot() {
-        guard let spot = state.spot, let plan = spotPiece(spot.piece) else {
-            send(.spot(false))
-            return
-        }
-        if spot.word + 1 < plan.words.count {
-            let next = plan.words[spot.word + 1]
-            send(.spotMove(SpotState(piece: spot.piece, word: spot.word + 1, span: next.span, running: true)))
-            return
-        }
-        guard let following = document.plate(after: spot.piece), let next = spotPiece(following)?.words.first else {
-            send(.spot(false))
-            return
-        }
-        send(.spotMove(SpotState(piece: following, word: 0, span: next.span, running: true)))
-    }
-
-    private func scheduleSpot() {
-        spotClock?.cancel()
-        guard let spot = state.spot, spot.running, let plan = spotPiece(spot.piece),
-              plan.words.indices.contains(spot.word) else {
-            return
-        }
-        let defaults = UserDefaults.standard
-        let profile = SpeedPauseProfile(json: defaults.string(forKey: ReaderAppearance.SpeedSetting.pauses.key(kind)))
-        let wordsPerMinute = max(defaults.integer(forKey: ReaderAppearance.SpeedSetting.wordsPerMinute.key(kind)), 60)
-        let beats = 1 + plan.words[spot.word].token.extraBeats(profile)
-        let seconds = beats * 60 / Double(wordsPerMinute)
-        spotClock = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled, self?.state.spot?.running == true else {
-                return
-            }
-            self?.advanceSpot()
-        }
-    }
-
-    private func spotPiece(_ piece: Int) -> SpotPiece? {
-        if let cached = spotPieces[piece] {
-            return cached
-        }
-        guard document.plates.contains(piece), case let .text(markdown) = document.blocks[piece] else {
-            return nil
-        }
-        let plain = plainText(markdown)
-        let spans = WordSpans.spans(in: plain)
-        let tokens = SpeedText.tokens(in: .text(plain), at: piece).filter { !$0.isStop }
-        let words = zip(spans, tokens).map { SpotWord(span: $0, token: $1) }
-        let plan = SpotPiece(piece: piece, words: words)
-        spotPieces[piece] = plan
-        return plan
     }
 
     private func search(_ query: String) {
