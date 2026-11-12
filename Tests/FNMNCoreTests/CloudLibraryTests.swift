@@ -230,6 +230,30 @@ private func writeLateIDDelivery(materialID: String, bodyBytes: Int, to url: URL
     #expect(try JSONDecoder().decode(JournalEvent.self, from: Data(lines[0].utf8)) == event)
 }
 
+@Test func anArticleDeliveryRemovesTheArchiveOfTheLinkItReplaces() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let pageURL = URL(string: "https://example.com/page")!
+    let linkArchive = cloud.appending(path: "deliveries/link.tar")
+    let articleArchive = cloud.appending(path: "deliveries/article.tar")
+    try writeDelivery(ImportPackage.link(pageURL), to: linkArchive)
+    try writeDelivery(ImportPackage(
+        material: Material(id: "article:page", kind: .article, title: "Page", sourceURL: pageURL),
+        sections: [], blocks: [], body: "A long enough body so the article has an excerpt."
+    ), to: articleArchive)
+    let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
+    await file.useCloudFolder(cloud)
+
+    var library = try await file.addCloudDelivery(linkArchive, into: LibrarySnapshot())
+    #expect(library.articles.map(\.material.kind) == [.link])
+    library = try await file.addCloudDelivery(articleArchive, into: library)
+
+    #expect(library.articles.map(\.material.kind) == [.article])
+    #expect(!FileManager.default.fileExists(atPath: linkArchive.path))
+    #expect(FileManager.default.fileExists(atPath: articleArchive.path))
+}
+
 @Test func aDeletedMaterialTakesItsArchiveOutOfTheFolderSoNothingReadsItBackIn() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let cloud = root.appending(path: "FNMN")

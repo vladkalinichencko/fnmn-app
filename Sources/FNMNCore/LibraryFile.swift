@@ -292,6 +292,10 @@ public actor LibraryFile {
         try writeSearchBody(package)
         var next = snapshot
         try next.importPackage(package, at: .now, delivery: archive.lastPathComponent, deliveredAt: Self.changeDate(of: archive))
+        let remaining = Set(next.articles.map(\.material.id))
+        for entry in snapshot.articles where entry.material.kind == .link && !remaining.contains(entry.material.id) {
+            try? removeDelivery(of: entry)
+        }
         next.articleRevisions[package.material.id] = nil
         return next
     }
