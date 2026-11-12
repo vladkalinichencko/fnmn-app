@@ -45,6 +45,7 @@ struct ReadingSession: View {
     @AppStorage(ReaderAppearance.lineKey) private var showsLine = false
     @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
     @Namespace private var mediaZoom
+    @State private var mediaPresenter = MediaPresenter()
 
     var body: some View {
         let document = reader.document
@@ -138,18 +139,14 @@ struct ReadingSession: View {
         }
         .environment(reader)
         .environment(\.mediaZoom, mediaZoom)
+        .environment(\.mediaPresenter, mediaPresenter)
         .environment(\.plateTextWidth, columnWidth > 0 ? columnWidth - 2 * Tokens.tilePadding : nil)
         .environment(\.openURL, OpenURLAction { url in
             guard url.isFileURL, ImageFiles.headerSize(of: url) != nil else { return .systemAction }
-            reader.send(.openMedia(url))
+            mediaPresenter.open(url)
             return .handled
         })
-        .fullScreenCover(isPresented: Binding(get: { reader.state.media != nil }, set: { if !$0 { reader.send(.closeMedia) } })) {
-            if let media = reader.state.media {
-                MediaViewer(url: media)
-                    .navigationTransition(.zoom(sourceID: media, in: mediaZoom))
-            }
-        }
+        .presentsMedia(mediaPresenter)
         .overlay(alignment: .bottom) {
             if let spot = reader.state.spot {
                 SpotControls(reader: reader, running: spot.running)

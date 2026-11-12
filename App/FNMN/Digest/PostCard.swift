@@ -122,10 +122,11 @@ struct PostCard: View {
         return FileImage(url: digest.url(of: item.path), contentMode: .fill)
             .aspectRatio(ratio, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
+            .opensMedia(digest.url(of: item.path))
     }
 
-    private func poster(_ video: DigestPackage.Post.Video) -> some View {
-        ZStack {
+    @ViewBuilder private func poster(_ video: DigestPackage.Post.Video) -> some View {
+        let poster = ZStack {
             if let poster = video.poster {
                 FileImage(url: digest.url(of: poster.path), contentMode: .fill)
                 Image(systemName: "play.fill")
@@ -146,9 +147,10 @@ struct PostCard: View {
         }
         .aspectRatio(CGFloat(video.poster?.width ?? 16) / CGFloat(max(video.poster?.height ?? 9, 1)), contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
-        .onTapGesture {
-            openURL(post.permalink)
+        if let media = video.poster {
+            poster.opensMedia(digest.url(of: media.path))
+        } else {
+            poster
         }
     }
 

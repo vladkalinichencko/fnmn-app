@@ -2,27 +2,75 @@ import AVKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+@Observable
+final class MediaPresenter {
+    var media: URL?
+
+    func open(_ media: URL) {
+        self.media = media
+    }
+
+    func close() {
+        media = nil
+    }
+}
+
 extension EnvironmentValues {
     @Entry var mediaZoom: Namespace.ID?
+    @Entry var mediaPresenter: MediaPresenter?
 }
 
 extension View {
     func opensMedia(_ url: URL) -> some View {
         modifier(MediaSource(url: url))
     }
+
+    func presentsMedia(_ presenter: MediaPresenter) -> some View {
+        modifier(MediaPresenterCover(presenter: presenter))
+    }
 }
 
 private struct MediaSource: ViewModifier {
     let url: URL
-    @Environment(ReaderCoordinator.self) private var reader: ReaderCoordinator?
+    @Environment(\.mediaPresenter) private var presenter: MediaPresenter?
     @Environment(\.mediaZoom) private var zoom
 
     func body(content: Content) -> some View {
-        if let reader, let zoom {
-            content.contentShape(.rect).onTapGesture { reader.send(.openMedia(url)) }.matchedTransitionSource(id: url, in: zoom)
+        if let presenter, let zoom {
+            content.contentShape(.rect).onTapGesture { presenter.open(url) }.matchedTransitionSource(id: url, in: zoom)
         } else {
             content
         }
+    }
+}
+
+private struct MediaPresenterCover: ViewModifier {
+    let presenter: MediaPresenter
+
+    func body(content: Content) -> some View {
+        content.background(MediaCover(presenter: presenter))
+    }
+}
+
+private struct MediaCover: View {
+    @Bindable var presenter: MediaPresenter
+    @Environment(\.mediaZoom) private var zoom
+
+    var body: some View {
+        Color.clear
+            .fullScreenCover(isPresented: Binding(
+                get: { presenter.media != nil },
+                set: { if !$0 { presenter.close() } }
+            )) {
+                if let media = presenter.media {
+                    if let zoom {
+                        MediaViewer(url: media)
+                            .navigationTransition(.zoom(sourceID: media, in: zoom))
+                    } else {
+                        MediaViewer(url: media)
+                    }
+                }
+            }
     }
 }
 

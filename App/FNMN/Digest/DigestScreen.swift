@@ -7,6 +7,8 @@ struct DigestScreen: View {
     @Environment(WindowNavigation.self) private var navigation
     @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
     @State private var query = ""
+    @State private var mediaPresenter = MediaPresenter()
+    @Namespace private var mediaZoom
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -40,6 +42,9 @@ struct DigestScreen: View {
                     .interactiveOnlyAtStackTop(route)
             }
         }
+        .environment(\.mediaPresenter, mediaPresenter)
+        .environment(\.mediaZoom, mediaZoom)
+        .presentsMedia(mediaPresenter)
     }
 
     @ViewBuilder private var content: some View {

@@ -72,7 +72,6 @@ struct ReaderState: Equatable {
     }
     var showsLine = false
     var line: ReadingLine?
-    var media: URL?
     var shownPlate: Int?
     var speedStart: ReadingLine?
     var find: FindState?
@@ -93,8 +92,6 @@ enum ReaderAction {
     case settleLine
     case ask(String)
     case copyPrompt(String)
-    case openMedia(URL)
-    case closeMedia
     case onePlate(Bool)
     case turnPlate(forward: Bool)
     case speedReading(Bool)
@@ -145,10 +142,6 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         }
     case let .moveLine(line):
         state.line = line
-    case let .openMedia(media):
-        state.media = media
-    case .closeMedia:
-        state.media = nil
     case .onePlate(true):
         guard state.shownPlate == nil else { return state }
         let start: Int? = if state.showsLine, let line = state.line {
@@ -388,7 +381,7 @@ final class ReaderCoordinator {
     private func animation(for action: ReaderAction) -> Animation? {
         switch action {
         case .plate: .snappy
-        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .openMedia, .closeMedia, .onePlate, .turnPlate, .speedReading, .speedRead, .find, .findQuery, .findStep, .found, .spot, .spotPaused, .spotMove: nil
+        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .onePlate, .turnPlate, .speedReading, .speedRead, .find, .findQuery, .findStep, .found, .spot, .spotPaused, .spotMove: nil
         }
     }
 
@@ -429,7 +422,7 @@ final class ReaderCoordinator {
         case .opened:
             guard next != before, let target = next.scrollID else { return }
             scroll(target)
-        case .plate, .openMedia, .closeMedia:
+        case .plate:
             break
         case .toggleSection, .foldAll:
             guard next.folded != before.folded else { return }
