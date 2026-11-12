@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ShelfScreen: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(ImportJobs.self) private var imports
     @Environment(WindowNavigation.self) private var navigation
     @State private var query = ""
 
@@ -32,7 +33,11 @@ struct ShelfScreen: View {
             .background(Tokens.canvas)
             .overlay {
                 if !searching, annotations.isEmpty && archived.isEmpty {
-                    ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
+                    switch Self.placeholder(settling: settling) {
+                    case .loading: Loading()
+                    case .empty:
+                        ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
+                    }
                 }
             }
             .noResults(for: query, when: annotations.isEmpty && archived.isEmpty)
@@ -42,6 +47,18 @@ struct ShelfScreen: View {
         } destination: { route in
             RouteScreen(route: route)
         }
+    }
+
+    private var settling: Bool {
+        library.syncState == .syncing || imports.jobs.contains { $0.isPreparing }
+    }
+
+    enum Placeholder {
+        case loading, empty
+    }
+
+    static func placeholder(settling: Bool) -> Placeholder {
+        settling ? .loading : .empty
     }
 }
 
