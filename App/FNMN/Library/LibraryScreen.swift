@@ -3,7 +3,6 @@ import SwiftUI
 
 struct LibraryScreen: View {
     @Environment(LibraryModel.self) private var library
-    @Environment(ImportJobs.self) private var imports
     @Environment(WindowNavigation.self) private var navigation
     @Environment(LibraryDialogs.self) private var dialogs
     @AppStorage("collectionGrouping") private var grouping = LibraryGrouping.albums
@@ -12,7 +11,7 @@ struct LibraryScreen: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        RouteStack(path: $navigation.library, hidesTabBar: { $0.hidesTabBar }) {
+        RouteStack(path: $navigation.library) {
             Group {
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     ScrollView { sections }
@@ -47,16 +46,7 @@ struct LibraryScreen: View {
             if !continued.isEmpty {
                 LibrarySection("Continue") { ItemGrid(items: continued) }
             }
-            let preparing = imports.jobs.filter { $0.itemID == nil && !($0.readsLibraryFolder && $0.isPreparing) }
-            let unsorted = library.queries.unsortedItems
-            if !preparing.isEmpty || !unsorted.isEmpty {
-                LibrarySection("Unsorted") {
-                    LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
-                        ForEach(preparing) { PreparingTile(job: $0) }
-                        ForEach(unsorted) { ItemTile(item: $0) }
-                    }
-                }
-            }
+            UnsortedSection()
             LibrarySection("Collections") {
                 CollectionOptions(grouping: $grouping, sort: $sort)
             } content: {
@@ -67,6 +57,24 @@ struct LibraryScreen: View {
         }
         .padding(.horizontal, Tokens.gutter)
         .padding(.bottom, Tokens.sectionGap)
+    }
+}
+
+private struct UnsortedSection: View {
+    @Environment(LibraryModel.self) private var library
+    @Environment(ImportJobs.self) private var imports
+
+    var body: some View {
+        let preparing = imports.jobs.filter { $0.itemID == nil && !($0.readsLibraryFolder && $0.isPreparing) }
+        let unsorted = library.queries.unsortedItems
+        if !preparing.isEmpty || !unsorted.isEmpty {
+            LibrarySection("Unsorted") {
+                LazyVGrid(columns: Tokens.grid, spacing: Tokens.gap) {
+                    ForEach(preparing) { PreparingTile(job: $0) }
+                    ForEach(unsorted) { ItemTile(item: $0) }
+                }
+            }
+        }
     }
 }
 

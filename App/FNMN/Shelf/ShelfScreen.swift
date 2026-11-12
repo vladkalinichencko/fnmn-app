@@ -8,7 +8,7 @@ struct ShelfScreen: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        RouteStack(path: $navigation.shelf, hidesTabBar: { $0.hidesTabBar }) {
+        RouteStack(path: $navigation.shelf) {
             let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let annotations = AnnotationEntry.all(in: library.queries.annotationGroups(matching: query))
                 .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }

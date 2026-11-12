@@ -55,6 +55,13 @@ final class LibraryDialogs {
         dialog = dialogReduce(dialog, action)
     }
 
+    func sendAfterMenu(_ action: DialogAction) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            send(action)
+        }
+    }
+
     func isShowing(_ matches: @escaping (LibraryDialog) -> Bool) -> Binding<Bool> {
         Binding(get: { matches(self.dialog) }, set: { if !$0, matches(self.dialog) { self.send(.dismiss) } })
     }

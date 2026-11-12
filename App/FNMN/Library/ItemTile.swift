@@ -184,7 +184,7 @@ struct ItemActions: View {
             Task { await library.apply(.setArchived(!archived, itemID: item.id)) }
         }
         Button("Delete", systemImage: "trash", role: .destructive) {
-            dialogs.send(.confirmDelete(itemID: item.id))
+            dialogs.sendAfterMenu(.confirmDelete(itemID: item.id))
         }
     }
 }

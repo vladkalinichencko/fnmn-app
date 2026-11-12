@@ -21,24 +21,6 @@ enum DigestRoute: Hashable {
     case sources
 }
 
-extension Route {
-    var hidesTabBar: Bool {
-        switch self {
-        case .item, .album, .source, .group: true
-        case .annotations, .archive: false
-        }
-    }
-}
-
-extension DigestRoute {
-    var hidesTabBar: Bool {
-        if case .thread = self {
-            return true
-        }
-        return false
-    }
-}
-
 enum PendingRoute: Equatable {
     case none
     case continueReading
@@ -170,18 +152,17 @@ struct AppShell: View {
 
 struct RouteStack<Path: Hashable, Root: View, Destination: View>: View {
     @Binding var path: [Path]
-    let hidesTabBar: (Path) -> Bool
     let root: Root
     let destination: (Path) -> Destination
+    @State private var locked = false
+    @State private var unlock: Task<Void, Never>?
 
     init(
         path: Binding<[Path]>,
-        hidesTabBar: @escaping (Path) -> Bool,
         @ViewBuilder root: () -> Root,
         @ViewBuilder destination: @escaping (Path) -> Destination
     ) {
         _path = path
-        self.hidesTabBar = hidesTabBar
         self.root = root()
         self.destination = destination
     }
@@ -192,7 +173,19 @@ struct RouteStack<Path: Hashable, Root: View, Destination: View>: View {
                 .navigationDestination(for: Path.self) { destination($0) }
         }
         .environment(\.stackTop, path.last.map { AnyHashable($0) })
-        .toolbarVisibility(path.last.map(hidesTabBar) ?? false ? .hidden : .automatic, for: .tabBar)
+        .toolbarVisibility(path.isEmpty ? .automatic : .hidden, for: .tabBar)
+        .allowsHitTesting(!locked)
+        .onChange(of: path) {
+            locked = true
+            unlock?.cancel()
+            unlock = Task {
+                try? await Task.sleep(for: .milliseconds(450))
+                guard !Task.isCancelled else {
+                    return
+                }
+                locked = false
+            }
+        }
     }
 }
 

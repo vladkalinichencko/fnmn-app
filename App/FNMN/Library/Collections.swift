@@ -92,7 +92,7 @@ private struct AlbumFan: View {
                 .scaleEffect(place.scale)
                 .rotationEffect(.degrees(place.degrees))
                 .offset(place.offset)
-                .background { Color.clear.plate(in: turned) }
+                .background { Color.clear.padding(3).plate(in: turned) }
         } else {
             Text(item.title)
                 .font(.headline.weight(.black))
@@ -107,8 +107,8 @@ private struct AlbumFan: View {
         }
     }
 
-    private static let angles: [Double] = [2, -7, 7]
-    private static let shifts: [CGFloat] = [0, -10, 10]
+    private static let angles: [Double] = [-4, 0, 6]
+    private static let shifts: [CGFloat] = [-10, 0, 10]
 }
 
 private struct AlbumZoomSource: ViewModifier {
@@ -140,7 +140,7 @@ private struct AlbumTileBehavior: ViewModifier {
                 .sensoryFeedback(.success, trigger: album.count) { old, new in new > old }
                 .contextMenu {
                     Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(album.name)) }
-                    Button("Delete Collection", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(album.name)) }
+                    Button("Delete Collection", systemImage: "trash", role: .destructive) { dialogs.sendAfterMenu(.confirmAlbumDelete(album.name)) }
                 }
         } else {
             content
@@ -188,7 +188,7 @@ struct AlbumScreen: View {
         .toolbar {
             Menu("More", systemImage: "ellipsis") {
                 Button("Rename", systemImage: "pencil") { dialogs.send(.renameAlbum(name)) }
-                Button("Delete Collection", systemImage: "trash", role: .destructive) { dialogs.send(.confirmAlbumDelete(name)) }
+                Button("Delete Collection", systemImage: "trash", role: .destructive) { dialogs.sendAfterMenu(.confirmAlbumDelete(name)) }
             }
         }
     }

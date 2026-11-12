@@ -9,7 +9,7 @@ struct DigestScreen: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        RouteStack(path: $navigation.digest, hidesTabBar: { $0.hidesTabBar }) {
+        RouteStack(path: $navigation.digest) {
             content
                 .background(Tokens.canvas)
                 .screenSearch($query)

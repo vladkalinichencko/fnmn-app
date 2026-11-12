@@ -139,6 +139,28 @@
 5. Координатор читателя. Сделано: `ReaderDocument` вне главного потока, pinch через `PinchScale`. Осталось: действия через окружение вместо замыканий и `read` вместо `current` в плашке, чтобы прокрутка не пересчитывала все видимые плашки. Это перестройка экрана, проверять глазами.
 6. Граница. Сделано: разбор выбранного файла в `LibraryFile.storePicked`, обход iCloud вне главного потока с растущим ожиданием, порт `ImageFiles`. Осталось: импорт по одной поставке с `evictUbiquitousItem` (проверять на iPhone) и формат пакета с файлами рядом (Mac и приложение, сначала `architect`).
 
+## Фреймдропы на переходах (2026-11-12)
+
+Разбор по коду, без замеров. Стек: `TabView` → `RouteStack` (`NavigationStack` + path) → `RouteScreen`; zoom через общий `@Namespace`, `matchedTransitionSource` на `ItemTile`/`AlbumTile`, `.navigationTransition(.zoom)` на назначении.
+
+Кандидаты на dropped frames при открытии коллекции/альбома/источника, по убыванию подозрительности:
+
+1. **Запись прогресса посреди анимации — исправлено.** `.open`/`.openGroup` переведены на `places` вместе с `.savePosition`: `LibraryModel.apply` складывает их в батч, `progress` не меняется до `foldPlaces` (через ~2 с тишины или при ближайшем мгновенном изменении — `.line`, `.setRead`, `.reset` и т.д.). Отложенные метки журналируются при свёртке; позиции по-прежнему журналируются последними по материалу. `foldPlaces` присваивает `progress` только при реальном изменении — `saveProgress` больше не будит читателей впустую. Тесты: `testOpenMarksWaitForTheProgressBatch`, `testAnImmediateProgressChangeFoldsTheWaitingOnes`.
+2. **Первый кадр назначения.** `AlbumScreen.body` синхронно считает `items(inAlbum)` + `search` + `LibraryQueries.arrange` (сортировка со `localizedStandardCompare` на каждое сравнение) — O(n log n) локале-зависимых сравнений на главном потоке в первые кадры перехода. Открыто.
+3. **Всплеск декодирования обложек — смягчено.** `ImageFiles.picture` теперь двухуровневый: `NSCache` по ключу `path#WxH` (попадание не трогает диск вообще — заголовок читается только при промахе) и дисковый кэш миниатюр в `Caches/FNMN/thumbs` для запросов ≤1024 px (обложки; большие картинки статей остаются только в памяти). Миниатюры пишутся JPEG 0.9 или PNG при альфе-канале. Осталось: `onGeometryChange`→`@State size` даёт второй body-eval на плитку, и первый прогон после установки кэша всё ещё декодирует — проверить на устройстве, пропал ли всплеск на втором открытии.
+4. **Стекло без `GlassEffectContainer`.** `glassEffect` стоит на подписи каждой cover-плитки, на каждой `.plate` (тинтованное стекло), на `AlbumFan` — стекло на повёрнутых `TurnedRectangle`, три на альбом; контейнер есть только в `SpotControls` и `SpeedReader`. При zoom-переходе всё видимое дерево (сетка-источник + сетка-назначение) рисует стекло на каждом кадре — самый дорогой элемент iOS 26 по fill-rate. `CollectionOptions` — `.buttonStyle(.glass)`.
+5. **`.scrollEdgeEffectStyle(.soft, for: .all)`** на `TabView` — мягкий blur под краями всех scroll view, лишний композитинг при переходах и скролле.
+6. **Опрос заданий — смягчено.** `ImportJobs.send` уже отсекает неизменённые `jobs`; `LibraryScreen.sections` больше не читает `imports.jobs` — секция Unsorted вынесена в `UnsortedSection`, поэтому тики импорта не пересчитывают Continue и Collections. `ItemTile`/`ItemActions` по-прежнему читают `imports.job(of:)` на уровне плитки — это осознанно: подъём lookup в родителя заставил бы `ArrangedItems` пересчитывать `arrange` на каждый тик.
+7. `ProgressLine` с `GeometryReader` на каждой плитке с прогрессом — расход вторичен.
+
+Шит «Add to Collection»: `AlbumPicker` — `NavigationStack` в `.sheet` с detents; каждая `AlbumTile` → `AlbumFan` → до трёх `CoverImage` + стеклянные плашки на трансформированных формах. `albumSummaries`/`unsortedItems`/`annotationGroups` теперь считаются один раз в `LibraryQueries.init`, а не на каждый body — O(n) сборки каталога ушли из view. Остались декоды (теперь с дисковым кэшем) и стекло на веере; веер перетасован: передняя карточка −4° со сдвигом −10, средняя 0° по центру, задняя +6°/+10, стекло под обложками утоплено на 3 pt.
+
+Тап сквозь уходящий экран — исправлено на уровне `RouteStack`: любой `path`-переход (push, pop, свайп, `show`) ставит `locked` на 450 мс и `.allowsHitTesting(false)` на весь `NavigationStack`, так что сетка под анимирующимся экраном не получает касаний. `interactiveOnlyAtStackTop` оставлен для стеков глубже одного. Живьём на iPad не проверено.
+
+Выделение при long tap: на плашке живут одновременно `HorizontalPan` (`UIGestureRecognizerRepresentable`), `TapGesture`, Textual `textSelection` и `.offset(x:)` с пружиной `open`. `shouldRecognizeSimultaneouslyWith` разрешает pan параллельно не-scrollview жестам → pan может идти одновременно с long-press Textual, а `offset`/`.animation(value: open)` двигает плашку под неподвижным selection-оверлеем UIKit — «плывущая рамка». Тот же класс бага, что раньше чинили с границами scroll view (tasks.md, выделение после прокрутки): UIKit держит selection в координатах `textInput`, а плашка смещается рендер-трансформом. Не исправлено — нужен живой репро.
+
+Диалог удаления — обход поставлен: `LibraryDialogs.sendAfterMenu` откладывает `confirmDelete`/`confirmAlbumDelete` на 350 мс после закрытия context menu; `confirmationDialog` поднимался, пока меню ещё dismiss'илось, и карточка выглядела неактивной. Живьём не проверено; если 350 мс мало или много — поправить одну константу.
+
 ## Решения
 
 - Каталог и прогресс разделяются на два хранилища.

@@ -134,6 +134,37 @@ final class LibraryModelTests: XCTestCase {
         try archive.write(to: url)
     }
 
+    func testOpenMarksWaitForTheProgressBatch() async {
+        UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
+        let (model, root) = makeModel()
+        defer { try? FileManager.default.removeItem(at: root) }
+        await model.load()
+
+        model.apply(.open(itemID: "article:one"))
+        model.apply(.openGroup(id: AlbumSummary.id(.albums, "Reading")))
+
+        XCTAssertNil(model.progress.readings["article:one"]?.openedAt)
+        XCTAssertTrue(model.progress.groupsOpened.isEmpty)
+
+        await model.saveProgress()
+
+        XCTAssertNotNil(model.progress.readings["article:one"]?.openedAt)
+        XCTAssertNotNil(model.progress.groupsOpened[AlbumSummary.id(.albums, "Reading")])
+    }
+
+    func testAnImmediateProgressChangeFoldsTheWaitingOnes() async {
+        UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
+        let (model, root) = makeModel()
+        defer { try? FileManager.default.removeItem(at: root) }
+        await model.load()
+
+        model.apply(.open(itemID: "article:two"))
+        model.apply(.setRead(true, itemID: "article:two"))
+
+        XCTAssertNotNil(model.progress.readings["article:two"]?.openedAt)
+        XCTAssertTrue(model.progress.readings["article:two"]?.isRead == true)
+    }
+
     func testDeletingAMaterialTakesItsDeliveryOutOfTheFolder() async throws {        UserDefaults.standard.removeObject(forKey: "cloudFolderBookmark")
         let (model, root) = makeModel()
         defer {

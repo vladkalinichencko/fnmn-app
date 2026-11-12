@@ -4,6 +4,9 @@ public struct LibraryQueries: Sendable {
     public let allItems: [LibraryItem]
     public let items: [LibraryItem]
     public let archivedItems: [LibraryItem]
+    public let unsortedItems: [LibraryItem]
+    public let albumSummaries: [AlbumSummary]
+    public let annotationGroups: [AnnotationGroup]
     private let snapshot: LibrarySnapshot
 
     public init(_ snapshot: LibrarySnapshot) {
@@ -11,6 +14,9 @@ public struct LibraryQueries: Sendable {
         allItems = Self.collect(snapshot)
         items = allItems.filter { !snapshot.isArchived($0.id) }
         archivedItems = allItems.filter { snapshot.isArchived($0.id) }
+        unsortedItems = items.filter { snapshot.albums(of: $0.id).isEmpty }
+        albumSummaries = Self.albumSummaries(items: items, snapshot: snapshot)
+        annotationGroups = Self.annotationGroups(snapshot: snapshot, items: allItems)
     }
 
     public func item(_ id: String) -> LibraryItem? {
@@ -27,11 +33,7 @@ public struct LibraryQueries: Sendable {
         return opened.sorted { $0.1 > $1.1 }.map(\.0)
     }
 
-    public var unsortedItems: [LibraryItem] {
-        items.filter { snapshot.albums(of: $0.id).isEmpty }
-    }
-
-    public var albumSummaries: [AlbumSummary] {
+    private static func albumSummaries(items: [LibraryItem], snapshot: LibrarySnapshot) -> [AlbumSummary] {
         var byAlbum: [String: [LibraryItem]] = [:]
         for item in items {
             for name in snapshot.albums(of: item.id) {
@@ -152,9 +154,9 @@ public struct LibraryQueries: Sendable {
         }
     }
 
-    public var annotationGroups: [AnnotationGroup] {
+    private static func annotationGroups(snapshot: LibrarySnapshot, items: [LibraryItem]) -> [AnnotationGroup] {
         let byItem = Dictionary(grouping: snapshot.annotations, by: \.materialID)
-        let known = Dictionary(allItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let known = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let groups = byItem.compactMap { itemID, annotations -> AnnotationGroup? in
             guard let item = known[itemID] else {
                 return nil

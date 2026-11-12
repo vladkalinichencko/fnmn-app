@@ -110,18 +110,26 @@ final class LibraryModel {
     }
 
     func apply(_ change: ProgressChange) {
-        if case .savePosition = change {
+        switch change {
+        case .savePosition, .open, .openGroup:
             places.append(change)
-        } else {
-            let next = (places + [change]).reduce(progress) { $0.applying($1) }
+        default:
+            let folded = places
             places = []
+            let next = (folded + [change]).reduce(progress) { $0.applying($1) }
             if next != progress {
                 progress = next
             }
+            for deferred in folded {
+                if case .savePosition = deferred {
+                    continue
+                }
+                journal.record(.progress(deferred))
+            }
         }
         switch change {
-        case .open, .openGroup, .setRead, .readThrough, .line, .fold, .reset: journal.record(.progress(change))
-        case .savePosition, .restart, .forget: break
+        case .setRead, .readThrough, .line, .fold, .reset: journal.record(.progress(change))
+        case .savePosition, .open, .openGroup, .restart, .forget: break
         }
         scheduleSave()
     }
@@ -145,10 +153,15 @@ final class LibraryModel {
         for change in places {
             if case let .savePosition(_, itemID, _) = change {
                 latest[itemID] = change
+            } else {
+                journal.record(.progress(change))
             }
         }
-        progress = places.reduce(progress) { $0.applying($1) }
+        let next = places.reduce(progress) { $0.applying($1) }
         places = []
+        if next != progress {
+            progress = next
+        }
         for change in latest.values {
             journal.record(.progress(change))
         }
