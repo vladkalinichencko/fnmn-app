@@ -70,12 +70,15 @@ private struct LibraryDialogsModifier: ViewModifier {
     @Environment(LibraryDialogs.self) private var dialogs
     @Environment(LibraryModel.self) private var library
     @Environment(ImportJobs.self) private var imports
+    @Environment(ServerLink.self) private var server
+    @Environment(DigestModel.self) private var digests
+    @Environment(WindowNavigation.self) private var navigation
 
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: dialogs.isShowing { if case .addingLink = $0 { true } else { false } }) {
                 if case let .addingLink(draft) = dialogs.dialog {
-                    LinkSheet(initial: draft)
+                    sheetContent { LinkSheet(initial: draft) }
                 }
             }
             .fileImporter(
@@ -87,11 +90,11 @@ private struct LibraryDialogsModifier: ViewModifier {
             }
             .sheet(isPresented: dialogs.isShowing { if case .pickingAlbum = $0 { true } else { false } }) {
                 if case let .pickingAlbum(itemID) = dialogs.dialog {
-                    AlbumPicker(itemID: itemID)
+                    sheetContent { AlbumPicker(itemID: itemID) }
                 }
             }
             .sheet(isPresented: dialogs.isShowing { $0 == .settings }) {
-                SettingsScreen()
+                sheetContent { SettingsScreen() }
                     .presentationDetents([.medium, .large])
             }
             .alert("New Collection", isPresented: dialogs.isShowing { if case .namingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.albumTarget) { itemID in
@@ -127,6 +130,16 @@ private struct LibraryDialogsModifier: ViewModifier {
             } message: { _ in
                 Text("Items stay in the library.")
             }
+    }
+
+    private func sheetContent<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .environment(library)
+            .environment(server)
+            .environment(imports)
+            .environment(digests)
+            .environment(navigation)
+            .environment(dialogs)
     }
 
     private var draftBinding: Binding<String> {
