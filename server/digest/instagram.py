@@ -22,20 +22,24 @@ MAX_POSTS = 8
 def collect(source: dict, web: Web, store, folders: list[str], report: Report, page=None) -> SourceResult:
     if page is None:
         raise SourceFailure("Instagram needs the logged-in profile")
-    handle = source["handle"]
-    report(f"reading instagram.com/{handle}")
-    links = _grid(page, handle)
+    if source.get("scope") == "recommendations":
+        report("reading the home feed")
+        links = _feed(page)
+    else:
+        handle = source["handle"]
+        report(f"reading instagram.com/{handle}")
+        links = [(shortcode, handle) for shortcode in _grid(page, handle)]
     known = store.ids()
     posts: list[Post] = []
     name = None
     skipped = 0
-    for shortcode in links:
-        post_id = f"instagram/{handle}/{shortcode}"
+    for shortcode, author in links:
+        post_id = f"instagram/{author}/{shortcode}"
         if post_id in known:
             continue
         if len(posts) >= MAX_POSTS:
             break
-        post = _post(page, handle, shortcode, source, web, store, folders)
+        post = _post(page, author, shortcode, source, web, store, folders)
         if post is not None:
             posts.append(post)
             name = name or post.author["name"]
@@ -74,6 +78,54 @@ def _grid(tab, handle: str) -> list[str]:
         tab.wheel(1200)
         tab.wait_for_timeout(900)
     return found
+
+
+def _feed(tab) -> list[tuple[str, str]]:
+    """(shortcode, author handle) pairs from the home feed; a post whose author the page does not name
+    is dropped, since its id and its card both need one."""
+    try:
+        tab.goto(f"{HOME}/")
+        if "/accounts/login" in tab.url:
+            raise SourceFailure("the login expired; run python -m digest.login instagram")
+        tab.wait_for_selector('a[href*="/p/"], a[href*="/reel/"]', timeout=20)
+    except SourceFailure:
+        raise
+    except Exception as error:
+        raise SourceFailure(f"the home feed did not load: {error}") from error
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for _ in range(2):
+        rows = tab.eval_on_selector_all('a[href*="/p/"], a[href*="/reel/"]', FEED_AUTHOR) or []
+        for code, user in _pairs(rows):
+            if code not in seen:
+                seen.add(code)
+                pairs.append((code, user))
+        tab.wheel(1200)
+        tab.wait_for_timeout(900)
+    return pairs
+
+
+def _pairs(rows) -> list[tuple[str, str]]:
+    """The feed rows the page script returned, as (shortcode, author) pairs without the noise."""
+    found = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        match = SHORTCODE.search(row.get("href") or "")
+        user = (row.get("user") or "").strip("/")
+        if match and user and user.lower() not in RESERVED:
+            found.append((match.group(2), user))
+    return found
+
+
+FEED_AUTHOR = """e => {
+  const article = e.closest('article');
+  const link = article ? [...article.querySelectorAll('a[href^="/"]')]
+    .find(l => /^\\/[A-Za-z0-9._]+\\/?$/.test(l.getAttribute('href') || '')) : null;
+  return {href: e.getAttribute('href'), user: link ? link.getAttribute('href') : null};
+}"""
+
+RESERVED = {"", "explore", "reels", "stories", "direct", "accounts", "p", "reel"}
 
 
 def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:

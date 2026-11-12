@@ -19,6 +19,8 @@ MAX_PAGES = 3
 
 
 def collect(source: dict, web: Web, store, folders: list[str], report: Report, page=None) -> SourceResult:
+    if source.get("scope") == "recommendations":
+        raise SourceFailure("Telegram has no recommendation feed the reader can open")
     channel = source["channel"]
     known = store.ids()
     collected: dict[str, Post] = {}

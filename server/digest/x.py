@@ -22,14 +22,21 @@ SYNDICATION = "https://cdn.syndication.twimg.com/tweet-result"
 STATUS = re.compile(r"/status/(\d+)")
 REQUEST_PAUSE = 0.4
 TOP_DISCUSSED = 3
+FEED = f"{HOME}/home"
+FEED_LIMIT = 40
 
 
 def collect(source: dict, web: Web, store, folders: list[str], report: Report, page=None) -> SourceResult:
     if page is None:
         raise SourceFailure("X needs the logged-in profile")
-    handle = source["handle"]
-    report(f"reading x.com/{handle}")
-    ids = _timeline(page, handle)
+    if source.get("scope") == "recommendations":
+        report("reading the For you feed")
+        ids = _feed(page)
+        handle = ""
+    else:
+        handle = source["handle"]
+        report(f"reading x.com/{handle}")
+        ids = _timeline(page, handle)
     posts: list[Post] = []
     note = None
     fetch = page_fetch(page)
@@ -82,6 +89,31 @@ def _timeline(tab, handle: str) -> list[str]:
         tab.wheel(1400)
         tab.wait_for_timeout(900)
     return seen
+
+
+def _feed(tab) -> list[str]:
+    """The For you timeline's status ids, whatever author posted them; capped, since every id costs a request."""
+    try:
+        tab.goto(FEED)
+        if "/login" in tab.url:
+            raise SourceFailure("the login expired; run python -m digest.login x")
+        tab.wait_for_selector('[data-testid="tweet"]', timeout=20)
+    except SourceFailure:
+        raise
+    except Exception as error:
+        raise SourceFailure(f"the For you feed did not load: {error}") from error
+    seen: list[str] = []
+    for _ in range(4):
+        hrefs = tab.eval_on_selector_all('a[href*="/status/"]', "e => e.getAttribute('href')") or []
+        for href in hrefs:
+            match = STATUS.search(href or "")
+            if match and match.group(1) not in seen:
+                seen.append(match.group(1))
+        if len(seen) >= FEED_LIMIT:
+            break
+        tab.wheel(1400)
+        tab.wait_for_timeout(900)
+    return seen[:FEED_LIMIT]
 
 
 def _tweet(web: Web, status_id: str) -> dict | None:

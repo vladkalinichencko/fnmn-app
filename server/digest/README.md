@@ -12,6 +12,7 @@ server/digest/fnmn-digest.sh status   # агенты и три последни�
 server/digest/fnmn-digest.sh monitor  # прочитать все источники один раз, сейчас
 server/digest/fnmn-digest.sh build    # собрать дайджест, если время пришло
 server/digest/fnmn-digest.sh train    # обучить классификатор на журнале реакций
+server/digest/fnmn-digest.sh scan     # добавить в subscriptions.json аккаунты, на которые подписан профиль
 ```
 
 Вручную, из `server/`:
@@ -46,9 +47,21 @@ Telegram публичные каналы открываются и без вхо
 ```json
 {"folders": ["ml", "design"], "sources": [
   {"id": "x/karpathy", "network": "x", "handle": "karpathy", "name": "Andrej Karpathy", "folders": ["ml"]},
-  {"id": "telegram/durov", "network": "telegram", "channel": "durov", "name": "Pavel Durov", "folders": ["tech"]}
+  {"id": "telegram/durov", "network": "telegram", "channel": "durov", "name": "Pavel Durov", "folders": ["tech"]},
+  {"id": "x/feed", "network": "x", "scope": "recommendations", "folders": ["ml"]}
 ]}
 ```
+
+`fnmn-digest.sh scan` проходит по профилям всех трёх сетей и дописывает в `sources` аккаунты, на
+которые подписан владелец: X — страницу Following, Instagram — диалог Following, Telegram — ссылки
+`t.me`, которые встречаются в чатах (публичные каналы без имени прочитать нельзя). Скан только
+добавляет: поля существующего источника — папки, имя, scope — не трогаются.
+
+`scope` выбирает, что читает источник. По умолчанию (`"subscriptions"` или без поля) — посты
+конкретного аккаунта. `"recommendations"` читает ленту рекомендаций самой сети: для X это вкладка
+For you (`x.com/home`, автор берётся из каждого поста), для Instagram — домашняя лента, для
+Telegram такого режима нет, и источник падает с объяснением. Лента задаётся источником без
+`handle`/`channel`, например `x/feed`; папки у него работают как у обычного.
 
 ## Классификатор
 

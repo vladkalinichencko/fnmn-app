@@ -6,6 +6,8 @@
 #   server/digest/fnmn-digest.sh status   show the agents and the newest delivery
 #   server/digest/fnmn-digest.sh monitor  read every source once, now
 #   server/digest/fnmn-digest.sh build    build a digest if the schedule is due, now
+#   server/digest/fnmn-digest.sh train    train the classifier on the engagement journal
+#   server/digest/fnmn-digest.sh scan     add the followed accounts of each network to subscriptions.json
 #   server/digest/fnmn-digest.sh login x|instagram|telegram   log the reader in once
 set -euo pipefail
 
@@ -92,11 +94,15 @@ case "${1:-}" in
   train)
     cd "$SERVER" && "$PYTHON" -m digest.train
     ;;
+  scan)
+    shift
+    cd "$SERVER" && "$PYTHON" -m digest.scan "$@"
+    ;;
   login)
     cd "$SERVER" && "$PYTHON" -m digest.login "${2:?usage: fnmn-digest.sh login x|instagram|telegram}"
     ;;
   *)
-    echo "usage: fnmn-digest.sh on|off|status|monitor|build|train|login x|instagram|telegram"
+    echo "usage: fnmn-digest.sh on|off|status|monitor|build|train|scan|login x|instagram|telegram"
     exit 2
     ;;
 esac
