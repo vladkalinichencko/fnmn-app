@@ -4,19 +4,16 @@ import Textual
 
 struct PostText: View {
     let text: String
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        if Self.isPlain(text) {
-            Text(text)
-                .textSelection(.enabled)
-        } else {
-            StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
-                .textual.textSelection(.enabled)
-        }
-    }
-
-    static func isPlain(_ text: String) -> Bool {
-        !text.contains { "`*_[]<>#~|".contains($0) } && !text.contains("http")
+        StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
+            .textual.overflowMode(.wrap)
+            .plateMarkdownStyles()
+            .textual.textSelection(.enabled)
+            .onChange(of: typeSize) { _, value in
+                print("PostText typeSize → \(value)")
+            }
     }
 }
 

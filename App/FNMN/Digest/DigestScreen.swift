@@ -106,8 +106,8 @@ struct DigestScreen: View {
     private func digestHeader(_ digest: Digest) -> some View {
         let end = digest.package.window.to
         let period = Calendar.current.component(.hour, from: end) < 16 ? "Morning" : "Evening"
-        return Text("\(period) digest — \(end.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))")
-            .font(.title2.weight(.bold))
+        return Text("\(period), \(end.formatted(.dateTime.month(.abbreviated).day()))")
+            .font(.largeTitle.weight(.bold))
             .padding(.horizontal, Tokens.gutter)
             .padding(.top, Tokens.sectionGap)
     }
@@ -117,7 +117,7 @@ struct DigestScreen: View {
             ForEach(digest.package.sections(hidden: digests.hidden)) { network in
                 VStack(alignment: .leading, spacing: Tokens.gap) {
                     Text(network.network.name)
-                        .font(.largeTitle.weight(.bold))
+                        .font(.title2.weight(.bold))
                     ForEach(network.topics) { topic in
                         VStack(alignment: .leading, spacing: Tokens.gap) {
                             Text(topic.folder.uppercased())

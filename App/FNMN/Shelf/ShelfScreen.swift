@@ -10,10 +10,22 @@ struct ShelfScreen: View {
     var body: some View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.shelf) {
-            let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let annotations = AnnotationEntry.all(in: library.queries.annotationGroups(matching: query))
-                .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }
-            let archived = library.queries.search(query, in: library.queries.archivedItems)
+            shelfContent
+                .screenSearch($query)
+                .navigationTitle("Shelf")
+                .appRefresh(title: "Shelf")
+        } destination: { route in
+            RouteScreen(route: route)
+        }
+    }
+
+    @ViewBuilder private var shelfContent: some View {
+        let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let annotations = AnnotationEntry.all(in: library.queries.annotationGroups(matching: query))
+            .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }
+        let archived = library.queries.search(query, in: library.queries.archivedItems)
+        switch Self.phase(hasContent: !annotations.isEmpty || !archived.isEmpty || searching, settling: settling) {
+        case .content:
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
                     if !annotations.isEmpty {
@@ -39,17 +51,11 @@ struct ShelfScreen: View {
                 .padding(.bottom, Tokens.sectionGap)
             }
             .background(Tokens.canvas)
-            .overlay {
-                if !searching, Self.claimsEmpty(settling: settling, empty: annotations.isEmpty && archived.isEmpty) {
-                    ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
-                }
-            }
             .noResults(for: query, when: annotations.isEmpty && archived.isEmpty)
-            .screenSearch($query)
-            .navigationTitle("Shelf")
-            .appRefresh(title: "Shelf")
-        } destination: { route in
-            RouteScreen(route: route)
+        case .settling:
+            Color.clear
+        case .empty:
+            ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
         }
     }
 
@@ -57,8 +63,18 @@ struct ShelfScreen: View {
         library.syncState == .syncing || imports.jobs.contains { $0.isPreparing }
     }
 
-    static func claimsEmpty(settling: Bool, empty: Bool) -> Bool {
-        !settling && empty
+    enum Phase {
+        case content, settling, empty
+    }
+
+    static func phase(hasContent: Bool, settling: Bool) -> Phase {
+        if hasContent {
+            return .content
+        }
+        if settling {
+            return .settling
+        }
+        return .empty
     }
 }
 

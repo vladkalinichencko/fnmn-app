@@ -17,3 +17,5 @@ App/FNMN.xcodeproj/project.xcworkspace/
 
 server/digest/out/
 server/digest/profiles/
+
+App/FNMN/Connection.json

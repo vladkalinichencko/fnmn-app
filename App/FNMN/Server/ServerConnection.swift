@@ -47,8 +47,18 @@ struct KeychainServerConnectionStore: ServerConnectionStorage {
     private let account = "macServiceToken"
 
     func load() -> ServerConnection? {
-        guard let address = UserDefaults.standard.string(forKey: addressKey),
-              let token = readToken() else { return nil }
+        if let address = UserDefaults.standard.string(forKey: addressKey),
+           let token = readToken() {
+            return try? ServerConnection(address: address, token: token)
+        }
+        return bundled()
+    }
+
+    private func bundled() -> ServerConnection? {
+        guard let url = Bundle.main.url(forResource: "Connection", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let fields = try? JSONDecoder().decode([String: String].self, from: data),
+              let address = fields["address"], let token = fields["token"] else { return nil }
         return try? ServerConnection(address: address, token: token)
     }
 

@@ -178,7 +178,7 @@ struct RouteStack<Path: Hashable, Root: View, Destination: View>: View {
                 .navigationDestination(for: Path.self) { destination($0) }
         }
         .environment(\.stackTop, path.last.map { AnyHashable($0) })
-        .toolbarVisibility(path.isEmpty ? .visible : .hidden, for: .tabBar)
+        .toolbarVisibility(path.isEmpty ? .automatic : .hidden, for: .tabBar)
         .allowsHitTesting(!locked)
         .onChange(of: path) {
             locked = true

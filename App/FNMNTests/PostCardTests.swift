@@ -42,11 +42,4 @@ final class PostCardTests: XCTestCase {
         XCTAssertEqual(comment.handle, "h")
         XCTAssertEqual(comment.avatar?.path, "media/a.jpg")
     }
-
-    func testPlainPostTextSkipsTheMarkdownParser() {
-        XCTAssertTrue(PostText.isPlain("Just words and a sentence."))
-        XCTAssertFalse(PostText.isPlain("Words with *emphasis*"))
-        XCTAssertFalse(PostText.isPlain("A link https://x.com/a"))
-        XCTAssertFalse(PostText.isPlain("A [markdown](link)"))
-    }
 }
