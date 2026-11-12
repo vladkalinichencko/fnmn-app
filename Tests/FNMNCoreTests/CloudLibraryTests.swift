@@ -177,7 +177,7 @@ private func writeLateIDDelivery(materialID: String, bodyBytes: Int, to url: URL
     _ = try await phone.storeArticle(archive: source, into: LibrarySnapshot())
     let folder = cloud.appending(path: "deliveries")
     let deliveries = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-    var library = try await pad.addCloudDelivery(deliveries[0], into: LibrarySnapshot())
+    let library = try await pad.addCloudDelivery(deliveries[0], into: LibrarySnapshot())
     let duplicate = folder.appending(path: "duplicate.tar")
     try FileManager.default.copyItem(at: deliveries[0], to: duplicate)
     try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-86_400)], ofItemAtPath: duplicate.path)

@@ -122,7 +122,7 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
 @Test func anUnsafePathIsRefused() async throws {
     let root = try temporaryFolder()
     let file = DigestFile(url: root, cache: root)
-    let tar = try FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).tar")
+    let tar = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).tar")
     try writeTar(package: encoder().encode(package()), files: [("../evil.jpg", Data("x".utf8))], to: tar)
     await #expect(throws: DigestFileError.unsafePath("../evil.jpg")) {
         _ = try await file.add(tar: tar)

@@ -30,7 +30,7 @@ import Testing
     @Test func anUndatedMaterialFallsIntoEarlierAndSortsLast() throws {
         var library = LibrarySnapshot()
         try library.importPackage(package("dated", source: "alpha", title: "Dated"), at: Date(timeIntervalSince1970: 1_000_000_000))
-        var undated = ArticleEntry(package("undated", source: "alpha", title: "Undated"))
+        let undated = ArticleEntry(package("undated", source: "alpha", title: "Undated"))
         library.articles.append(undated)
         let queries = LibraryQueries(library)
         let months = queries.groups(by: .months, sortedBy: .standard)
