@@ -268,6 +268,7 @@ struct SpeedReader: View {
     @AppStorage private var restModeRaw: String
     @AppStorage private var restSeconds: Double
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
+    @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
     @State private var press = Press()
     @State private var holdTimer: Task<Void, Never>?
     @Namespace private var mediaZoom
@@ -294,11 +295,12 @@ struct SpeedReader: View {
             stage
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.smooth(duration: 0.25), value: player.resting)
+                .modifier(ReaderAppearanceModifier())
             controls
                 .padding(.bottom, 8)
         }
         .padding(.horizontal, Tokens.gutter)
-        .modifier(ReaderAppearanceModifier())
+        .background(background.canvas)
         .environment(reader)
         .environment(\.mediaZoom, mediaZoom)
         .environment(\.mediaPresenter, mediaPresenter)
@@ -350,15 +352,18 @@ struct SpeedReader: View {
                 Menu("Speed Reading Options", systemImage: "slider.horizontal.3") {
                     Menu("Pauses", systemImage: "pause.circle") {
                         ForEach(SpeedPauseKind.allCases, id: \.self) { kind in
-                            Picker("\(kind.name) — \(kind.detail)", selection: Binding(
-                                get: { pauseProfile[kind] },
-                                set: { set($0, for: kind) }
-                            )) {
-                                ForEach(SpeedPauseLevel.allCases, id: \.self) { level in
-                                    Text(level.name).tag(level)
+                            Menu(kind.name) {
+                                Text(kind.detail)
+                                Picker("Level", selection: Binding(
+                                    get: { pauseProfile[kind] },
+                                    set: { set($0, for: kind) }
+                                )) {
+                                    ForEach(SpeedPauseLevel.allCases, id: \.self) { level in
+                                        Text(level.name).tag(level)
+                                    }
                                 }
+                                .pickerStyle(.inline)
                             }
-                            .pickerStyle(.inline)
                         }
                     }
                     Menu("Paragraph Preview", systemImage: "timer") {
@@ -408,14 +413,7 @@ struct SpeedReader: View {
                 .font(.headline)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.secondary.opacity(0.25))
-                    Capsule().fill(Color.accentColor)
-                        .frame(width: geometry.size.width * min(max(share, 0), 1))
-                }
-            }
-            .frame(height: 3)
+            ReaderProgressBar(share: share)
         }
     }
 
@@ -596,6 +594,21 @@ struct SpeedReader: View {
     }
 }
 
+struct ReaderProgressBar: View {
+    let share: Double
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.secondary.opacity(0.25))
+                Capsule().fill(Color.accentColor)
+                    .frame(width: geometry.size.width * min(max(share, 0), 1))
+            }
+        }
+        .frame(height: 3)
+    }
+}
+
 private struct ReaderBackgroundColor: View {
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
 
@@ -610,32 +623,100 @@ private struct PivotWord: View {
     let after: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text(before.isEmpty ? "" : before + " ")
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-            word
+        PivotLayout {
+            Text(Self.attributed(before: before, word: wordPrefix))
                 .lineLimit(1)
                 .minimumScaleFactor(0.15)
-                .frame(maxWidth: .infinity)
-            Text(after.isEmpty ? "" : " " + after)
-                .foregroundStyle(.tertiary)
+            Text(wordPivot)
                 .lineLimit(1)
+                .minimumScaleFactor(0.15)
+                .fontWeight(.bold)
+                .foregroundStyle(Color.accentColor)
+            Text(Self.attributed(suffix: wordSuffix, after: after))
+                .lineLimit(1)
+                .minimumScaleFactor(0.15)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var characters: [Character] {
+        Array(text)
+    }
+
+    private var pivot: Int {
+        SpeedText.pivot(of: text)
+    }
+
+    private var wordPrefix: String {
+        String(characters.prefix(pivot))
+    }
+
+    private var wordPivot: String {
+        characters.indices.contains(pivot) ? String(characters[pivot]) : ""
+    }
+
+    private var wordSuffix: String {
+        characters.indices.contains(pivot) ? String(characters.dropFirst(pivot + 1)) : ""
+    }
+
+    private static func attributed(before: String, word: String) -> AttributedString {
+        var result = AttributedString()
+        if !before.isEmpty {
+            var dim = AttributedString(before + " ")
+            dim.foregroundColor = Color(uiColor: .tertiaryLabel)
+            result.append(dim)
+        }
+        result.append(AttributedString(word))
+        return result
+    }
+
+    private static func attributed(suffix: String, after: String) -> AttributedString {
+        var result = AttributedString(suffix)
+        if !after.isEmpty {
+            var dim = AttributedString(" " + after)
+            dim.foregroundColor = Color(uiColor: .tertiaryLabel)
+            result.append(dim)
+        }
+        return result
+    }
+}
+
+private struct PivotLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = idealSize(of: subviews)
+        return CGSize(width: proposal.width ?? ideal.width, height: proposal.height ?? ideal.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3 else {
+            return
+        }
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let total = max(sizes.reduce(0) { $0 + $1.width }, 1)
+        let scale = max(min(bounds.width / total, 1), 0.15)
+        let scaled = sizes.map { CGSize(width: $0.width * scale, height: $0.height * scale) }
+        let width = scaled.reduce(0) { $0 + $1.width }
+        let lowest = bounds.minX
+        let highest = bounds.maxX - width
+        var x = min(max(bounds.midX - scaled[1].width / 2 - scaled[0].width, lowest), max(highest, lowest))
+        for (index, subview) in subviews.enumerated() {
+            let size = scaled[index]
+            subview.place(
+                at: CGPoint(x: x, y: bounds.midY - size.height / 2),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            x += size.width
         }
     }
 
-    private var word: Text {
-        let characters = Array(text)
-        guard !characters.isEmpty else {
-            return Text("")
+    private func idealSize(of subviews: Subviews) -> CGSize {
+        var size = CGSize.zero
+        for subview in subviews {
+            let ideal = subview.sizeThatFits(.unspecified)
+            size.width += ideal.width
+            size.height = max(size.height, ideal.height)
         }
-        let pivot = SpeedText.pivot(of: text)
-        var letter = AttributedString(String(characters[pivot]))
-        letter.inlinePresentationIntent = .stronglyEmphasized
-        letter.foregroundColor = Color.accentColor
-        var word = AttributedString(String(characters.prefix(pivot)))
-        word.append(letter)
-        word.append(AttributedString(String(characters.dropFirst(pivot + 1))))
-        return Text(word)
+        return size
     }
 }

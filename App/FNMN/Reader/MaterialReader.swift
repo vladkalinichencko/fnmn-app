@@ -19,7 +19,9 @@ struct MaterialReader: View {
             .modifier(ReaderAppearanceModifier())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) { SectionTitle(heading: reader.passedHeading) }
+                if reader.state.shownPlate == nil {
+                    ToolbarItem(placement: .principal) { SectionTitle(heading: reader.passedHeading) }
+                }
                 ToolbarItem(placement: .primaryAction) { ReaderMenu(reader: reader, page: sourceURL) }
             }
             .fullScreenCover(isPresented: Binding(

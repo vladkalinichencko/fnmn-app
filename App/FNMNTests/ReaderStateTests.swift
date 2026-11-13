@@ -44,6 +44,25 @@ final class ReaderStateTests: XCTestCase {
         XCTAssertEqual(next.column, .jumping(to: 3, hiding: false))
     }
 
+    func testPlatesTurnBothWaysAndStopAtTheEdges() {
+        var state = readerReduce(ReaderState(place: 1), .onePlate(true), document: document)
+        XCTAssertEqual(state.shownPlate, 1)
+
+        state = readerReduce(state, .turnPlate(forward: true), document: document)
+        XCTAssertEqual(state.shownPlate, 3)
+        state = readerReduce(state, .turnPlate(forward: true), document: document)
+        XCTAssertEqual(state.shownPlate, 5)
+        state = readerReduce(state, .turnPlate(forward: true), document: document)
+        XCTAssertEqual(state.shownPlate, 5)
+
+        state = readerReduce(state, .turnPlate(forward: false), document: document)
+        XCTAssertEqual(state.shownPlate, 3)
+        state = readerReduce(state, .turnPlate(forward: false), document: document)
+        XCTAssertEqual(state.shownPlate, 1)
+        state = readerReduce(state, .turnPlate(forward: false), document: document)
+        XCTAssertEqual(state.shownPlate, 1)
+    }
+
     func testAFindThatArrivesAfterAnotherQueryIsDropped() {
         var state = readerReduce(ReaderState(place: nil), .find(true), document: document)
         state = readerReduce(state, .findQuery("one"), document: document)

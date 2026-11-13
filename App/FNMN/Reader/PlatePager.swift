@@ -16,7 +16,7 @@ struct PlatePager: View {
     @State private var footerFrame: CGRect = .zero
     @State private var pagerWidth: CGFloat = 0
     private static let turn: CGFloat = 36
-    private static let slide = Animation.spring(duration: 0.3)
+    private static let slide = Animation.spring(duration: 0.3, bounce: 0)
 
     var body: some View {
         ZStack {
@@ -28,18 +28,7 @@ struct PlatePager: View {
                 ))
         }
         .animation(Self.slide, value: plate)
-        .clipped()
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { pageFrame = $0 }
-        .safeAreaBar(edge: .top) {
-            PlateContents(document: reader.document, plate: plate)
-                .padding(.horizontal, Tokens.gutter)
-                .frame(maxWidth: width ?? .infinity)
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { headerFrame = $0 }
-        }
-        .safeAreaBar(edge: .bottom) {
-            controls
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { footerFrame = $0 }
-        }
         .coordinateSpace(.named(platePagerSpace))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pagerWidth = $0 }
         .gesture(turnPan)
@@ -121,6 +110,16 @@ struct PlatePager: View {
         }
         .scrollBounceBehavior(.always, axes: .vertical)
         .scrollEdgeEffectStyle(.soft, for: .all)
+        .safeAreaInset(edge: .top) {
+            PlateContents(document: reader.document, plate: plate)
+                .padding(.horizontal, Tokens.gutter)
+                .frame(maxWidth: width ?? .infinity)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { headerFrame = $0 }
+        }
+        .safeAreaInset(edge: .bottom) {
+            controls
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { footerFrame = $0 }
+        }
         .defaultScrollAnchor(forward ? .top : .bottom, for: .initialOffset)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.containerSize.height - geometry.contentInsets.top - geometry.contentInsets.bottom
@@ -180,16 +179,12 @@ private struct PlateContents: View {
     let plate: Int
 
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(document.headingPath(of: plate).dropLast().map(title).joined(separator: " › "))
                 .lineLimit(1)
                 .truncationMode(.head)
-                .frame(maxWidth: .infinity, alignment: .leading)
             if let number = document.plateNumber(of: plate) {
-                ProgressView(value: Double(number), total: Double(max(document.plates.count, 1)))
-                    .progressViewStyle(.linear)
-                    .tint(Color.accentColor)
-                    .frame(width: 72)
+                ReaderProgressBar(share: Double(number) / Double(max(document.plates.count, 1)))
             }
         }
         .font(.footnote)
