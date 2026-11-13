@@ -63,6 +63,34 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(safe("x/1587-0"), "x-1587-0")
         self.assertNotIn("/", safe("../x/1"))
 
+    def test_an_instagram_author_name_drops_the_og_title_noise(self):
+        from digest.store import Post
+
+        cases = [
+            ('Artemy Lebedev on Instagram: "podcast #art"', "temalebedev", "Artemy Lebedev"),
+            ("максимка on Instagram", "makkkkkksimka", "максимка"),
+            ('@getfishh on Instagram: "😉"', "getfishh", "getfishh"),
+            ("диди on Instagram", "itssayfetik", "диди"),
+        ]
+        for raw, handle, expected in cases:
+            item = Post(
+                id=f"instagram/{handle}/abc", network="instagram", source="instagram/recommendations",
+                author={"handle": handle, "name": raw}, permalink="https://www.instagram.com/p/abc/",
+                posted_at="2026-11-13T00:00:00Z",
+            )
+            self.assertEqual(item.author["name"], expected)
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            store.posts_file.write_text(
+                json.dumps({
+                    "id": "instagram/someone/abc", "network": "instagram", "source": "instagram/recommendations",
+                    "author": {"handle": "someone", "name": 'Имя on Instagram: "длинная подпись"'},
+                    "permalink": "https://www.instagram.com/p/abc/", "posted_at": "2026-11-13T00:00:00Z",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(store.posts()[0].author["name"], "Имя")
+
 
 class FuzzTests(unittest.TestCase):
     def test_image_size_survives_random_bytes(self):

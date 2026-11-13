@@ -39,6 +39,18 @@ class Post:
     folders: list[str] = field(default_factory=list)
     media_errors: int = 0
 
+    def __post_init__(self) -> None:
+        """Instagram's `og:title` is `Name on Instagram: "caption"`; the card wants only the name, and
+        `@handle` stands in for a missing display name. Rows written before the fix carry the raw title."""
+        if self.network != "instagram":
+            return
+        raw = self.author.get("name") or ""
+        match = re.match(r"^(.*?) on Instagram\b", raw)
+        name = (match.group(1) if match else raw).strip()
+        if not name or name.startswith("@"):
+            name = self.author.get("handle") or name
+        self.author = {**self.author, "name": name}
+
 
 def wire(post: Post) -> dict:
     """A post as the phone's `DigestPackage.Post` decodes it: camelCase keys, one level of context."""
