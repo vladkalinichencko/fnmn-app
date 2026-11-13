@@ -109,6 +109,15 @@ struct SearchIndexTests {
         #expect(hits.isEmpty)
     }
 
+    @Test func theIndexBuildsOffTheMainThread() async {
+        let bodies = ["article:one": searchBody(["An entropy of ideas."], id: "article:one")]
+        let index = await SearchIndex.load(bodies: bodies) { text in
+            Thread.isMainThread ? "main" : text
+        }
+        let hits = await index.hits(query: "entropy", articles: [], annotations: [], addedAt: [:])
+        #expect(hits.count == 1)
+    }
+
     @Test func theComputationRunsOffTheMainThread() async {
         let bodies = ["article:one": searchBody(["An entropy of ideas."], id: "article:one")]
         let index = await SearchIndex.load(bodies: bodies) { text in

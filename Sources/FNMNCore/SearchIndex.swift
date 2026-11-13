@@ -5,24 +5,36 @@ public struct SearchIndex: Sendable {
     private let foldedParagraphs: [String: [Int: String]]
     private let foldedCues: [String: [Int: String]]
 
-    private init(bodies: [String: SearchBody], plainText: @Sendable (String) -> String) {
-        self.bodies = bodies.mapValues { body in
-            SearchBody(
-                materialID: body.materialID,
-                paragraphs: body.paragraphs.map { SearchParagraph(piece: $0.piece, markdown: plainText($0.markdown)) },
-                cues: body.cues.map { SearchCue(seconds: $0.seconds, text: plainText($0.text)) }
-            )
-        }
-        foldedParagraphs = self.bodies.mapValues { body in
+    private init(bodies: [String: SearchBody]) {
+        self.bodies = bodies
+        foldedParagraphs = bodies.mapValues { body in
             Dictionary(uniqueKeysWithValues: body.paragraphs.map { ($0.piece, TextFold.folded($0.markdown)) })
         }
-        foldedCues = self.bodies.mapValues { body in
+        foldedCues = bodies.mapValues { body in
             Dictionary(uniqueKeysWithValues: body.cues.enumerated().map { ($0.offset, TextFold.folded($0.element.text)) })
         }
     }
 
     public static func load(bodies: [String: SearchBody], plainText: @escaping @Sendable (String) -> String) async -> SearchIndex {
-        SearchIndex(bodies: bodies, plainText: plainText)
+        await Task.detached(priority: .userInitiated) {
+            var plain: [String: SearchBody] = [:]
+            plain.reserveCapacity(bodies.count)
+            await withTaskGroup(of: (String, SearchBody).self) { group in
+                for (id, body) in bodies {
+                    group.addTask {
+                        (id, SearchBody(
+                            materialID: id,
+                            paragraphs: body.paragraphs.map { SearchParagraph(piece: $0.piece, markdown: plainText($0.markdown)) },
+                            cues: body.cues.map { SearchCue(seconds: $0.seconds, text: plainText($0.text)) }
+                        ))
+                    }
+                }
+                for await (id, body) in group {
+                    plain[id] = body
+                }
+            }
+            return SearchIndex(bodies: plain)
+        }.value
     }
 
     public func hits(

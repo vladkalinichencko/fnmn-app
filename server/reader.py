@@ -30,7 +30,7 @@ import httpx
 import websocket
 
 PROFILES = Path(__file__).resolve().parent / "digest" / "profiles"
-CHROME = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+CHROME = Path.home() / "Library/Application Support/FNMN/FNMN Chrome.app/Contents/MacOS/Google Chrome"
 HEADLESS = [
     "--headless=new",
     "--remote-debugging-port=0",
@@ -43,6 +43,8 @@ WINDOWED = [
     "--disable-blink-features=AutomationControlled",
     "--no-first-run",
     "--no-default-browser-check",
+    "--hide-crash-restore-bubble",
+    "--disable-session-crashed-bubble",
     "--window-position=40,60",
     "--window-size=1280,1600",
 ]
@@ -118,9 +120,9 @@ class Connection:
 class Tab:
     """A page of the reader browser. The methods keep the names the digest parsers already use."""
 
-    def __init__(self, connection: Connection):
+    def __init__(self, connection: Connection, background: bool = False):
         self.connection = connection
-        target = connection.call("Target.createTarget", {"url": "about:blank"})
+        target = connection.call("Target.createTarget", {"url": "about:blank", "background": background})
         self.target_id = target["targetId"]
         session = connection.call("Target.attachToTarget", {"targetId": self.target_id, "flatten": True})
         self.session = session["sessionId"]
@@ -255,8 +257,8 @@ class Reader:
         self.process = process
         self.connection = connection
 
-    def tab(self) -> Tab:
-        return Tab(self.connection)
+    def tab(self, background: bool = False) -> Tab:
+        return Tab(self.connection, background=background)
 
     def close(self) -> None:
         """A browser this job started closes with the job; one it attached to keeps running."""

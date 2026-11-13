@@ -111,12 +111,12 @@ def _warm_x(source: dict, verbose: bool) -> bool:
         return False
     warmed = False
     try:
-        tab = session.tab()
+        tab = session.tab(background=True)
         try:
             tab.goto("https://x.com", timeout=45)
             tab.settle()
             tab.wait_for_timeout(2000)
-            warmed = True
+            warmed = "x.com" in tab.url
         finally:
             tab.close()
     except Exception:
