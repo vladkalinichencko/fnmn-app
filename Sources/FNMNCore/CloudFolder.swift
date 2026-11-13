@@ -3,12 +3,7 @@ import Foundation
 public enum CloudFolder {
     @concurrent
     public static func download(_ item: URL, timeout: Duration = .seconds(600)) async throws {
-        var isDirectory: ObjCBool = false
-        let directory = FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory) && isDirectory.boolValue
         var pending = missing(in: item)
-        if !directory, !pending.contains(item), !ready(item) {
-            pending.append(item)
-        }
         for file in pending {
             try? FileManager.default.startDownloadingUbiquitousItem(at: file)
             try? FileManager.default.startDownloadingUbiquitousItem(at: placeholder(of: file))
@@ -18,7 +13,7 @@ public enum CloudFolder {
         while !pending.isEmpty {
             guard ContinuousClock.now < deadline else { throw CloudFolderError.notDownloaded(count: pending.count) }
             try await Task.sleep(for: pause)
-            let still = pending.filter { !ready($0) }
+            let still = pending.filter { !isLocal($0) }
             pause = still.count == pending.count ? min(pause * 2, .seconds(5)) : .milliseconds(500)
             pending = still
         }
@@ -68,7 +63,7 @@ public enum CloudFolder {
         return url.deletingLastPathComponent().appending(path: String(name.dropFirst().dropLast(".icloud".count)))
     }
 
-    public static func placeholder(of file: URL) -> URL {
+    private static func placeholder(of file: URL) -> URL {
         file.deletingLastPathComponent().appending(path: ".\(file.lastPathComponent).icloud")
     }
 
@@ -78,25 +73,6 @@ public enum CloudFolder {
         let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
         guard values?.isUbiquitousItem == true else { return FileManager.default.fileExists(atPath: url.path) }
         return values?.ubiquitousItemDownloadingStatus == .current
-    }
-
-    /// iCloud can call a file `.current` while its bytes are not on the device; only an open proves it.
-    private static func ready(_ url: URL) -> Bool {
-        guard isLocal(url) else {
-            return false
-        }
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
-            return false
-        }
-        if isDirectory.boolValue {
-            return true
-        }
-        guard let handle = try? FileHandle(forReadingFrom: url) else {
-            return false
-        }
-        try? handle.close()
-        return true
     }
 }
 

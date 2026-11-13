@@ -48,7 +48,7 @@ struct CloudStatusIcon: View {
 
     var body: some View {
         Image(systemName: failed ? "exclamationmark.icloud" : "icloud.and.arrow.down")
-            .font(.title)
+            .font(.title3)
             .foregroundStyle(.orange)
             .accessibilityLabel(label)
     }

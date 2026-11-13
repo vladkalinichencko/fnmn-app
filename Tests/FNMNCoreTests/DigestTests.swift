@@ -96,6 +96,25 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(post.stats?.likes == 100)
 }
 
+@Test func aSourceWithANullNameFallsBackToItsID() throws {
+    let json = """
+    {
+      "schema": 1,
+      "id": "digest-2026-11-13T07:00:04Z",
+      "window": {"from": "2026-11-12T20:00:00Z", "to": "2026-11-13T07:00:00Z"},
+      "folders": [],
+      "sources": [
+        {"id": "instagram/makkkkkksimka", "network": "instagram", "name": null, "folders": [], "status": "ok"}
+      ],
+      "posts": []
+    }
+    """
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let decoded = try decoder.decode(DigestPackage.self, from: Data(json.utf8))
+    #expect(decoded.sources.first?.name == "instagram/makkkkkksimka")
+}
+
 @Test func aDigestTarUnpacksItsFilesIntoTheCache() async throws {
     let root = try temporaryFolder()
     let file = DigestFile(url: root, cache: root)

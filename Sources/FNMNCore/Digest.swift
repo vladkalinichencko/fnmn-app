@@ -65,6 +65,16 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             self.detail = detail
         }
 
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            network = try container.decode(Network.self, forKey: .network)
+            name = try container.decodeIfPresent(String.self, forKey: .name) ?? id
+            folders = try container.decodeIfPresent([String].self, forKey: .folders) ?? []
+            status = try container.decode(Status.self, forKey: .status)
+            detail = try container.decodeIfPresent(String.self, forKey: .detail)
+        }
+
         public enum Status: String, Codable, CaseIterable, Sendable {
             case ok, stale, failed
         }

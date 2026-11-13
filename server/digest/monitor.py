@@ -52,9 +52,9 @@ def main(argv: list[str] | None = None) -> int:
         statuses[source["id"]] = {
             "id": source["id"],
             "network": source["network"],
-            "name": source.get("name") or status.get("name") or source["id"],
             "folders": source.get("folders", []),
             **status,
+            "name": source.get("name") or status.get("name") or source["id"],
         }
     ordered = [statuses[source["id"]] for source in sources if source["id"] in statuses]
     store.save_source_statuses(ordered)

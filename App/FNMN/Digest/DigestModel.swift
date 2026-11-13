@@ -179,22 +179,11 @@ private final class DigestDeliveries: DeliveryTarget {
     }
 
     func add(_ archive: URL, index: Int, total: Int) async throws {
-        do {
-            let digest = try await file.add(tar: archive)
-            took = true
-            unpacked.insert(digest.id)
-            if imported.updateValue(digest.id, forKey: archive.lastPathComponent) == nil {
-                self.index.imported.append(.init(file: archive.lastPathComponent, id: digest.id, at: .now))
-            }
-        } catch {
-            SyncLog.library.error("""
-                Digest archive failed: \(archive.lastPathComponent, privacy: .public) \
-                exists=\(FileManager.default.fileExists(atPath: archive.path), privacy: .public) \
-                placeholder=\(FileManager.default.fileExists(atPath: CloudFolder.placeholder(of: archive).path), privacy: .public) \
-                local=\(CloudFolder.isLocal(archive), privacy: .public) \
-                error=\(error.localizedDescription, privacy: .public)
-                """)
-            throw error
+        let digest = try await file.add(tar: archive)
+        took = true
+        unpacked.insert(digest.id)
+        if imported.updateValue(digest.id, forKey: archive.lastPathComponent) == nil {
+            self.index.imported.append(.init(file: archive.lastPathComponent, id: digest.id, at: .now))
         }
     }
 
