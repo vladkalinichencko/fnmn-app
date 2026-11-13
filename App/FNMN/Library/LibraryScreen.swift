@@ -25,7 +25,7 @@ struct LibraryScreen: View {
             .appRefresh(title: "Library")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Settings", systemImage: "gearshape") { dialogs.send(.openSettings) }
+                    Button("Settings", systemImage: "gearshape") { dialogs.send(.openSettings(.library)) }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Add", systemImage: "plus") {

@@ -22,7 +22,7 @@ struct DigestScreen: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Settings", systemImage: "gearshape") {
-                            dialogs.send(.openSettings)
+                            dialogs.send(.openSettings(.digest))
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {

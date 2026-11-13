@@ -2,6 +2,11 @@ import FNMNCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum SettingsPane: Equatable {
+    case library
+    case digest
+}
+
 enum LibraryDialog: Equatable {
     case none
     case addingLink(String)
@@ -11,7 +16,7 @@ enum LibraryDialog: Equatable {
     case pickingAlbum(itemID: String)
     case confirmingDelete(itemID: String)
     case confirmingAlbumDelete(String)
-    case settings
+    case settings(SettingsPane)
 }
 
 enum DialogAction {
@@ -23,7 +28,7 @@ enum DialogAction {
     case pickAlbum(itemID: String)
     case confirmDelete(itemID: String)
     case confirmAlbumDelete(String)
-    case openSettings
+    case openSettings(SettingsPane)
     case dismiss
 }
 
@@ -42,7 +47,7 @@ func dialogReduce(_ dialog: LibraryDialog, _ action: DialogAction) -> LibraryDia
     case let .pickAlbum(itemID): .pickingAlbum(itemID: itemID)
     case let .confirmDelete(itemID): .confirmingDelete(itemID: itemID)
     case let .confirmAlbumDelete(name): .confirmingAlbumDelete(name)
-    case .openSettings: .settings
+    case let .openSettings(pane): .settings(pane)
     case .dismiss: .none
     }
 }
@@ -100,9 +105,11 @@ private struct LibraryDialogsModifier: ViewModifier {
                     sheetContent { AlbumPicker(itemID: itemID) }
                 }
             }
-            .sheet(isPresented: dialogs.isShowing { $0 == .settings }) {
-                sheetContent { SettingsScreen() }
-                    .presentationDetents([.medium, .large])
+            .sheet(isPresented: dialogs.isShowing { if case .settings = $0 { true } else { false } }) {
+                if case let .settings(pane) = dialogs.dialog {
+                    sheetContent { SettingsScreen(pane: pane) }
+                        .presentationDetents([.medium, .large])
+                }
             }
             .alert("New Collection", isPresented: dialogs.isShowing { if case .namingAlbum = $0 { true } else { false } }, presenting: dialogs.dialog.albumTarget) { itemID in
                 TextField("Name", text: draftBinding)
