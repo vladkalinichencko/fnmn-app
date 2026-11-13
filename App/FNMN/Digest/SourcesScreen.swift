@@ -7,15 +7,21 @@ struct SourcesScreen: View {
     @State private var settings = DigestSettings()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.sectionGap) {
-                settingsSections
-                sourceSections
+        Form {
+            Section("Build Times") {
+                hourPicker("Morning", index: 0, fallback: 8)
+                hourPicker("Evening", index: 1, fallback: 20)
             }
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.bottom, Tokens.sectionGap)
+            ForEach(DigestPackage.Network.allCases, id: \.self) { network in
+                Section(network.name) {
+                    if network != .telegram {
+                        Toggle("Include recommendations", isOn: recommendationsBinding(network))
+                    }
+                    TopicEditor(topics: networkTopicsBinding(network))
+                }
+            }
+            sourcesSections
         }
-        .modifier(ReaderAppearanceModifier())
         .navigationTitle("Digest Settings")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -31,63 +37,30 @@ struct SourcesScreen: View {
         }
     }
 
-    private var settingsSections: some View {
-        VStack(alignment: .leading, spacing: Tokens.sectionGap) {
-            LibrarySection("BUILD TIMES") {
-                VStack(spacing: 8) {
-                    hourRow("Morning", index: 0, fallback: 8)
-                    hourRow("Evening", index: 1, fallback: 20)
+    @ViewBuilder private var sourcesSections: some View {
+        if let digest = digests.current {
+            ForEach(folders(of: digest.package), id: \.folder) { group in
+                Section(group.folder.uppercased()) {
+                    ForEach(group.sources) { source in
+                        row(source)
+                    }
                 }
             }
-            ForEach(DigestPackage.Network.allCases, id: \.self) { network in
-                LibrarySection(network.name.uppercased()) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if network != .telegram {
-                            Toggle("Include recommendations", isOn: recommendationsBinding(network))
-                                .font(.subheadline)
-                        }
-                        TopicEditor(topics: networkTopicsBinding(network))
-                    }
-                    .padding(Tokens.tilePadding)
-                }
+        } else {
+            Section("Sources") {
+                Text("No digest yet")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private var sourceSections: some View {
-        Group {
-            if let digest = digests.current {
-                VStack(alignment: .leading, spacing: Tokens.sectionGap) {
-                    ForEach(folders(of: digest.package), id: \.folder) { group in
-                        LibrarySection(group.folder.uppercased()) {
-                            VStack(spacing: 8) {
-                                ForEach(group.sources) { source in
-                                    row(source)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                ContentUnavailableView("No digest yet", systemImage: "newspaper")
+    private func hourPicker(_ title: String, index: Int, fallback: Int) -> some View {
+        Picker(title, selection: hourBinding(index, fallback: fallback)) {
+            ForEach(0..<24, id: \.self) { hour in
+                Text("\(hour):00").tag(hour)
             }
         }
-    }
-
-    private func hourRow(_ title: String, index: Int, fallback: Int) -> some View {
-        HStack {
-            Text(title)
-                .font(.subheadline)
-            Spacer(minLength: 8)
-            Picker(title, selection: hourBinding(index, fallback: fallback)) {
-                ForEach(0..<24, id: \.self) { hour in
-                    Text("\(hour):00").tag(hour)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-        }
-        .padding(Tokens.tilePadding)
+        .pickerStyle(.menu)
     }
 
     private func row(_ source: DigestPackage.Source) -> some View {
@@ -98,7 +71,6 @@ struct SourcesScreen: View {
                 .padding(.top, 5)
             VStack(alignment: .leading, spacing: 2) {
                 Text(source.name)
-                    .font(.subheadline)
                 Text(detail(of: source))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -108,9 +80,6 @@ struct SourcesScreen: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
-        .padding(Tokens.tilePadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .plate(cornerRadius: Tokens.plateRadius)
     }
 
     private func detail(of source: DigestPackage.Source) -> String {

@@ -26,6 +26,26 @@ struct PostCard: View {
     }
 
     private var card: some View {
+        cardContent
+            .background {
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(.rect)
+                    .onTapGesture {
+                        openThread()
+                    }
+                    .contextMenu {
+                        menu
+                    } preview: {
+                        cardContent
+                    }
+            }
+            .accessibilityAction(named: "Open the thread") {
+                openThread()
+            }
+    }
+
+    private var cardContent: some View {
         let media = digests.media(for: post)
         return HStack(alignment: .top, spacing: 12) {
             if opensThread {
@@ -53,16 +73,6 @@ struct PostCard: View {
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(.rect)
-        .onTapGesture {
-            openThread()
-        }
-        .contextMenu {
-            menu
-        }
-        .accessibilityAction(named: "Open the thread") {
-            openThread()
-        }
     }
 
     private func openThread() {

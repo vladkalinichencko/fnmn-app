@@ -108,6 +108,7 @@ struct DigestScreen: View {
         let period = Calendar.current.component(.hour, from: end) < 16 ? "Morning" : "Evening"
         return Text("\(period), \(end.formatted(.dateTime.month(.abbreviated).day()))")
             .font(.largeTitle.weight(.bold))
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Tokens.gutter)
             .padding(.top, Tokens.sectionGap)
     }
