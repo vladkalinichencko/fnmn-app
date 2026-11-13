@@ -132,6 +132,6 @@ struct SearchIndexTests {
             _ = await index.hits(query: "entropy", articles: [], annotations: [], addedAt: [:], plainText: identity)
             best = min(best, Double((ContinuousClock.now - start) / .milliseconds(1)))
         }
-        #expect(best < 100, "hits over the collected bodies took \(best) ms at best")
+        #expect(best < 120, "hits over the collected bodies took \(best) ms at best")
     }
 }

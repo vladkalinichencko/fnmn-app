@@ -46,7 +46,10 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
         let hasBody = !(package.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasBody || !package.blocks.isEmpty || package.material.kind == .link else { throw LibraryError.emptyDocument }
         let id = package.material.id
-        if try !replaceLinks(to: package.material) { return }
+        if try !replaceLinks(to: package.material) {
+            deletedAt[id] = deliveredAt ?? date
+            return
+        }
         deletedAt[id] = nil
         let entry = ArticleEntry(package, delivery: delivery, deliveredAt: deliveredAt)
         if let index = articles.firstIndex(where: { $0.material.id == id }) {

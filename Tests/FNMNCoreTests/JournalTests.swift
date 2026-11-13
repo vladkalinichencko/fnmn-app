@@ -174,6 +174,62 @@ private func stamp(_ seconds: TimeInterval) -> Date { Date(timeIntervalSinceRefe
     #expect(merged.catalog.annotations.isEmpty)
 }
 
+@Test func aJournalStillInICloudIsAwaitedInsteadOfSkipped() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    let phone = LibraryFile(url: root.appending(path: "phone"))
+    let tablet = LibraryFile(url: root.appending(path: "tablet"))
+    await phone.useCloudFolder(cloud)
+    await tablet.useCloudFolder(cloud)
+    let event = JournalEvent(time: stamp(1), change: .progress(.open(itemID: paper.material.id)))
+    try await phone.appendJournal([event], device: "mac")
+
+    let state = cloud.appending(path: "state")
+    try FileManager.default.moveItem(at: state.appending(path: "mac.jsonl"), to: state.appending(path: ".mac.jsonl.icloud"))
+
+    let unread = try await tablet.unreadJournalEvents(except: "tablet", sync: JournalKnowledge(), timeout: .milliseconds(300))
+    #expect(unread.events.isEmpty)
+    #expect(unread.waiting == ["mac.jsonl"])
+}
+
+@Test func aJournalFileCarryingReadingModesStillYieldsItsEvents() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    let tablet = LibraryFile(url: root.appending(path: "tablet"))
+    await tablet.useCloudFolder(cloud)
+    let state = cloud.appending(path: "state")
+    try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+    let encoder = JSONEncoder()
+    let mode = ReadingModeEvent(itemID: paper.material.id, mode: .rsvp, wordsPerMinute: 300, pauses: "", words: 5, backs: 0, startedAt: stamp(0), endedAt: stamp(1))
+    let event = JournalEvent(time: stamp(2), change: .progress(.open(itemID: paper.material.id)))
+    var data = try JSONLines.line(mode, encoder: encoder)
+    data.append(try JSONLines.line(event, encoder: encoder))
+    try data.write(to: state.appending(path: "mac.reading.jsonl"))
+
+    let unread = try await tablet.unreadJournalEvents(except: "tablet", sync: JournalKnowledge())
+    #expect(unread.events == [event])
+    var sync = JournalKnowledge()
+    sync.applied = unread.applied
+    #expect(try await tablet.unreadJournalEvents(except: "tablet", sync: sync).events.isEmpty)
+}
+
+@Test func journalEventsDoNotLandInTheReadingModesFile() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    let phone = LibraryFile(url: root.appending(path: "phone"))
+    await phone.useCloudFolder(cloud)
+    let mode = ReadingModeEvent(itemID: paper.material.id, mode: .rsvp, wordsPerMinute: 300, pauses: "", words: 5, backs: 0, startedAt: stamp(0), endedAt: stamp(1))
+    try await phone.appendReadingMode(mode, device: "phone")
+    let event = JournalEvent(time: stamp(2), change: .progress(.open(itemID: paper.material.id)))
+    try await phone.appendJournal([event], device: "phone")
+
+    let state = cloud.appending(path: "state")
+    let reading = try String(contentsOf: state.appending(path: "phone.reading.jsonl"), encoding: .utf8)
+    #expect(!reading.contains("\"open\""))
+    let journal = try String(contentsOf: state.appending(path: "phone.jsonl"), encoding: .utf8)
+    #expect(journal.contains("\"open\""))
+}
+
 @Test func aMarkThatArrivesLateDoesNotBringBackAnAnnotationDeletedHere() throws {
     let target = AnnotationTarget(materialID: paper.material.id, piece: 0, text: "First paragraph.")
     let marked = JournalEvent(time: stamp(1), change: .library(.mark(.highlight, target)))

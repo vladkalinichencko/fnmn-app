@@ -52,7 +52,7 @@ final class JournalSync {
         guard let folder = await file.journalFolder() else {
             return nil
         }
-        return FileManager.default.fileExists(atPath: folder.path) ? folder : nil
+        return CloudFolder.contains(folder) ? folder : nil
     }
 
     func pendingRead() async throws -> JournalRead {

@@ -254,6 +254,49 @@ private func writeLateIDDelivery(materialID: String, bodyBytes: Int, to url: URL
     #expect(FileManager.default.fileExists(atPath: articleArchive.path))
 }
 
+@Test func aLinkDeliveryShadowedByItsArticleIsNotReadAgain() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let pageURL = URL(string: "https://example.com/page")!
+    let linkArchive = cloud.appending(path: "deliveries/link.tar")
+    try writeDelivery(ImportPackage.link(pageURL), to: linkArchive)
+    let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
+    await file.useCloudFolder(cloud)
+
+    var library = LibrarySnapshot()
+    try library.importPackage(ImportPackage(
+        material: Material(id: "article:page", kind: .article, title: "Page", sourceURL: pageURL),
+        sections: [], blocks: [], body: "A long enough body so the article has an excerpt."
+    ), at: .now)
+
+    let found = try await file.changedDeliveries([linkArchive], in: library)
+    #expect(found.deliveries == [linkArchive])
+    library = try await file.addCloudDelivery(linkArchive, into: found.snapshot)
+    #expect(library.articles.map(\.material.id) == ["article:page"])
+    #expect(try await file.changedDeliveries([linkArchive], in: library).deliveries.isEmpty)
+}
+
+@Test func aDeliveryForADeletedPagesTwinStaysOut() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let cloud = root.appending(path: "FNMN")
+    try FileManager.default.createDirectory(at: cloud.appending(path: "deliveries"), withIntermediateDirectories: true)
+    let pageURL = URL(string: "https://example.com/page")!
+    let linkArchive = cloud.appending(path: "deliveries/link.tar")
+    try writeDelivery(ImportPackage.link(pageURL), to: linkArchive)
+    let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
+    await file.useCloudFolder(cloud)
+
+    var library = LibrarySnapshot()
+    try library.importPackage(ImportPackage(
+        material: Material(id: "article:page", kind: .article, title: "Page", sourceURL: pageURL),
+        sections: [], blocks: [], body: "A long enough body so the article has an excerpt."
+    ), at: .now)
+    library = try library.applying(.delete(itemID: "article:page"))
+
+    #expect(try await file.changedDeliveries([linkArchive], in: library).deliveries.isEmpty)
+}
+
 @Test func aDeletedMaterialTakesItsArchiveOutOfTheFolderSoNothingReadsItBackIn() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let cloud = root.appending(path: "FNMN")

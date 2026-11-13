@@ -6,6 +6,7 @@ public enum CloudFolder {
         var pending = missing(in: item)
         for file in pending {
             try? FileManager.default.startDownloadingUbiquitousItem(at: file)
+            try? FileManager.default.startDownloadingUbiquitousItem(at: placeholder(of: file))
         }
         let deadline = ContinuousClock.now + timeout
         var pause = Duration.milliseconds(500)

@@ -47,6 +47,7 @@ extension LibrarySnapshot {
         case let .removeAnnotation(id):
             next.annotations.removeAll { $0.id == id }
         case let .delete(itemID):
+            let page = articles.first { $0.material.id == itemID }?.material.sourceURL.map(SourceIndex.key)
             next.articles.removeAll { $0.material.id == itemID }
             next.forgetMarks(of: itemID)
             next.placements[itemID] = nil
@@ -54,6 +55,9 @@ extension LibrarySnapshot {
             next.addedAt[itemID] = nil
             next.articleRevisions[itemID] = nil
             next.deletedAt[itemID] = date
+            if let page {
+                next.deletedAt["page:\(page)"] = date
+            }
         }
         return next
     }

@@ -330,19 +330,22 @@ public actor LibraryFile {
     }
 
     private static func isNewDelivery(_ file: URL, changedAt: Date?, deliveredAt: [String: Date], deletedAt: [String: Date]) -> Bool {
-        guard let id = materialID(in: file) else {
+        guard let head = materialHead(in: file) else {
             return true
         }
-        if let removedAt = deletedAt[id] {
+        if let removedAt = deletedAt[head.id] {
             return changedAt.map { $0 > removedAt } ?? false
         }
-        guard let changedAt, let recorded = deliveredAt[id] else {
+        if let page = head.page, let removedAt = deletedAt["page:\(page)"] {
+            return changedAt.map { $0 > removedAt } ?? false
+        }
+        guard let changedAt, let recorded = deliveredAt[head.id] else {
             return true
         }
         return changedAt > recorded
     }
 
-    private static func materialID(in archive: URL) -> String? {
+    private static func materialHead(in archive: URL) -> (id: String, page: String?)? {
         guard let handle = try? FileHandle(forReadingFrom: archive),
               let header = try? handle.read(upToCount: 512), header.count == 512 else { return nil }
         defer { try? handle.close() }
@@ -358,7 +361,12 @@ public actor LibraryFile {
               let text = String(data: data, encoding: .utf8),
               let match = text.firstMatch(of: /"id"\s*:\s*("(?:[^"\\]|\\.)*")/),
               let id = try? JSONDecoder().decode(String.self, from: Data(match.1.utf8)) else { return nil }
-        return id
+        var page: String? = nil
+        if let url = text[match.range.upperBound...].firstMatch(of: /"sourceURL"\s*:\s*("(?:[^"\\]|\\.)*")/),
+           let raw = try? JSONDecoder().decode(String.self, from: Data(url.1.utf8)) {
+            page = SourceIndex.key(raw)
+        }
+        return (id, page)
     }
 
     private static func changeDate(of file: URL) -> Date? {
@@ -525,10 +533,10 @@ public actor LibraryFile {
         try encoder.encode(sync).write(to: root.appending(path: "sync.json"), options: .atomic)
     }
 
-    public func appendJournal(_ events: [JournalEvent], device: String, compactingAfter limit: Int = 2000) throws {
+    public func appendJournal(_ events: [JournalEvent], device: String, compactingAfter limit: Int = 2000) async throws {
         guard let folder = journalFolder(), !events.isEmpty else { return }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let journal = ownJournal(of: device, in: folder)
+        let journal = await ownJournal(of: device, in: folder)
         try coordinatedWrite(at: journal, options: .forMerging) { url in
             try JSONLines.append(Data(try self.lines(of: events).utf8), to: url)
         }
@@ -540,10 +548,21 @@ public actor LibraryFile {
         try coordinatedWrite(at: journal, options: .forDeleting) { url in try FileManager.default.removeItem(at: url) }
     }
 
-    private func ownJournal(of device: String, in folder: URL) -> URL {
-        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        return files.filter { Self.isJournal($0, of: device) }.max { $0.lastPathComponent < $1.lastPathComponent }
+    private func ownJournal(of device: String, in folder: URL) async -> URL {
+        let files = (try? await CloudFolder.files(in: folder, withExtension: "jsonl")) ?? []
+        return files.filter { Self.isAppendJournal($0, of: device) }.max { $0.lastPathComponent < $1.lastPathComponent }
             ?? folder.appending(path: "\(device).jsonl")
+    }
+
+    private static func isAppendJournal(_ file: URL, of device: String) -> Bool {
+        let name = file.lastPathComponent
+        guard file.pathExtension == "jsonl", name.hasPrefix("\(device).") else {
+            return false
+        }
+        if name == "\(device).jsonl" {
+            return true
+        }
+        return name.dropFirst(device.count + 1).dropLast(".jsonl".count).allSatisfy(\.isNumber)
     }
 
     private static func isJournal(_ file: URL, of device: String) -> Bool {
@@ -576,19 +595,19 @@ public actor LibraryFile {
         if let coordination { throw coordination }
     }
 
-    public func unreadJournalEvents(except device: String, sync: JournalKnowledge) async throws -> (events: [JournalEvent], applied: [String: Int], waiting: [String]) {
+    public func unreadJournalEvents(except device: String, sync: JournalKnowledge, timeout: Duration = .seconds(60)) async throws -> (events: [JournalEvent], applied: [String: Int], waiting: [String]) {
         guard let folder = journalFolder(),
-              let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
+              let files = try? await CloudFolder.files(in: folder, withExtension: "jsonl") else {
             return ([], sync.applied, [])
         }
-        let others = files.filter { $0.pathExtension == "jsonl" && !Self.isJournal($0, of: device) }
+        let others = files.filter { !Self.isJournal($0, of: device) }
         var applied = sync.applied.filter { name, _ in others.contains { $0.lastPathComponent == name } }
         var events: [JournalEvent] = []
         var waiting: [String] = []
         for file in others {
             let name = file.lastPathComponent
             do {
-                try await CloudFolder.download(file, timeout: .seconds(60))
+                try await CloudFolder.download(file, timeout: timeout)
             } catch CloudFolderError.notDownloaded(_, _) {
                 waiting.append(name)
                 continue
@@ -601,10 +620,12 @@ public actor LibraryFile {
                 continue
             }
             let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+            let complete = text.hasSuffix("\n") ? lines.count : max(lines.count - 1, 0)
             var read = applied[name] ?? 0
-            for line in lines.dropFirst(read) {
-                guard let event = try? decoder.decode(JournalEvent.self, from: Data(line.utf8)) else { break }
-                events.append(event)
+            for line in lines.dropFirst(read).prefix(max(complete - read, 0)) {
+                if let event = try? decoder.decode(JournalEvent.self, from: Data(line.utf8)) {
+                    events.append(event)
+                }
                 read += 1
             }
             applied[name] = read
