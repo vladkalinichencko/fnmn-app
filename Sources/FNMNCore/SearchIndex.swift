@@ -1,40 +1,49 @@
 import Foundation
+import os
 
 public struct SearchIndex: Sendable {
-    private let bodies: [String: SearchBody]
-    private let foldedParagraphs: [String: [Int: String]]
-    private let foldedCues: [String: [Int: String]]
+    private struct Entry: Sendable {
+        let body: SearchBody
+        let foldedParagraphs: [Int: String]
+        let foldedCues: [Int: String]
+    }
 
-    private init(bodies: [String: SearchBody]) {
+    private let bodies: [String: SearchBody]
+    private let plainText: @Sendable (String) -> String
+    private let cache = OSAllocatedUnfairLock(initialState: [String: Entry]())
+
+    private init(bodies: [String: SearchBody], plainText: @escaping @Sendable (String) -> String) {
         self.bodies = bodies
-        foldedParagraphs = bodies.mapValues { body in
-            Dictionary(uniqueKeysWithValues: body.paragraphs.map { ($0.piece, TextFold.folded($0.markdown)) })
-        }
-        foldedCues = bodies.mapValues { body in
-            Dictionary(uniqueKeysWithValues: body.cues.enumerated().map { ($0.offset, TextFold.folded($0.element.text)) })
-        }
+        self.plainText = plainText
     }
 
     public static func load(bodies: [String: SearchBody], plainText: @escaping @Sendable (String) -> String) async -> SearchIndex {
-        await Task.detached(priority: .userInitiated) {
-            var plain: [String: SearchBody] = [:]
-            plain.reserveCapacity(bodies.count)
-            await withTaskGroup(of: (String, SearchBody).self) { group in
-                for (id, body) in bodies {
-                    group.addTask {
-                        (id, SearchBody(
-                            materialID: id,
-                            paragraphs: body.paragraphs.map { SearchParagraph(piece: $0.piece, markdown: plainText($0.markdown)) },
-                            cues: body.cues.map { SearchCue(seconds: $0.seconds, text: plainText($0.text)) }
-                        ))
-                    }
-                }
-                for await (id, body) in group {
-                    plain[id] = body
-                }
-            }
-            return SearchIndex(bodies: plain)
-        }.value
+        SearchIndex(bodies: bodies, plainText: plainText)
+    }
+
+    private func makeEntry(_ raw: SearchBody) -> Entry {
+        let body = SearchBody(
+            materialID: raw.materialID,
+            paragraphs: raw.paragraphs.map { SearchParagraph(piece: $0.piece, markdown: plainText($0.markdown)) },
+            cues: raw.cues.map { SearchCue(seconds: $0.seconds, text: plainText($0.text)) }
+        )
+        return Entry(
+            body: body,
+            foldedParagraphs: Dictionary(uniqueKeysWithValues: body.paragraphs.map { ($0.piece, TextFold.folded($0.markdown)) }),
+            foldedCues: Dictionary(uniqueKeysWithValues: body.cues.enumerated().map { ($0.offset, TextFold.folded($0.element.text)) })
+        )
+    }
+
+    private func entry(for materialID: String) -> Entry? {
+        if let cached = cache.withLock({ $0[materialID] }) {
+            return cached
+        }
+        guard !Task.isCancelled, let raw = bodies[materialID] else {
+            return nil
+        }
+        let made = makeEntry(raw)
+        cache.withLock { $0[materialID] = made }
+        return made
     }
 
     public func hits(
@@ -68,24 +77,37 @@ public struct SearchIndex: Sendable {
             lastFlush = .now
         }
         await flush()
-        for (materialID, body) in bodies {
-            guard !Task.isCancelled else {
-                return []
+        var cancelled = false
+        await withTaskGroup(of: Entry?.self, returning: Void.self) { group in
+            for materialID in bodies.keys {
+                group.addTask { self.entry(for: materialID) }
             }
-            var found: [SearchHit] = []
-            for paragraph in body.paragraphs where foldedParagraphs[materialID]?[paragraph.piece]?.contains(folded) == true {
-                found += Self.matches(in: paragraph.markdown, of: needle, itemID: materialID, source: .text, piece: paragraph.piece)
-            }
-            for (index, cue) in body.cues.enumerated() where foldedCues[materialID]?[index]?.contains(folded) == true {
-                found += Self.matches(in: cue.text, of: needle, itemID: materialID, source: .transcript, seconds: cue.seconds)
-            }
-            if !found.isEmpty {
-                hits += found
-                pending += found
-                if pending.count >= 150 || ContinuousClock.now - lastFlush >= .milliseconds(120) {
-                    await flush()
+            for await entry in group {
+                if Task.isCancelled {
+                    cancelled = true
+                    break
+                }
+                guard let entry else {
+                    continue
+                }
+                var found: [SearchHit] = []
+                for paragraph in entry.body.paragraphs where entry.foldedParagraphs[paragraph.piece]?.contains(folded) == true {
+                    found += Self.matches(in: paragraph.markdown, of: needle, itemID: entry.body.materialID, source: .text, piece: paragraph.piece)
+                }
+                for (index, cue) in entry.body.cues.enumerated() where entry.foldedCues[index]?.contains(folded) == true {
+                    found += Self.matches(in: cue.text, of: needle, itemID: entry.body.materialID, source: .transcript, seconds: cue.seconds)
+                }
+                if !found.isEmpty {
+                    hits += found
+                    pending += found
+                    if pending.count >= 150 || ContinuousClock.now - lastFlush >= .milliseconds(120) {
+                        await flush()
+                    }
                 }
             }
+        }
+        if cancelled {
+            return []
         }
         var noted: [SearchHit] = []
         for annotation in annotations {
