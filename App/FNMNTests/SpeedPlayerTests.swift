@@ -170,4 +170,47 @@ final class SpeedPlayerTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(300))
         XCTAssertEqual(player.frame, frame)
     }
+
+    func testTheParagraphPlateCanWaitForATap() async {
+        let player = await loaded()
+        player.restMode = .manual
+        player.play()
+        for _ in 0..<40 where player.resting == nil {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.resting, 0)
+        try? await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(player.resting, 0)
+
+        player.toggle()
+        XCTAssertEqual(player.mode, .playing)
+        player.pause()
+    }
+
+    func testTheParagraphPlateCanBeSkipped() async {
+        let player = await loaded()
+        player.restSeconds = 30
+        player.play()
+        for _ in 0..<40 where player.resting == nil {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.resting, 0)
+
+        player.toggle()
+        XCTAssertEqual(player.mode, .playing)
+        player.pause()
+    }
+
+    func testTheParagraphPlateCanBeOff() async {
+        let player = await loaded()
+        player.restMode = .off
+        player.play()
+        var rested = false
+        for _ in 0..<100 where player.mode == .playing {
+            rested = rested || player.resting != nil
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertFalse(rested)
+        XCTAssertEqual(player.mode, .ended)
+    }
 }

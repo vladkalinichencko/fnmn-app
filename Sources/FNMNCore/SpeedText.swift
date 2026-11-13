@@ -57,7 +57,6 @@ public struct SpeedToken: Equatable, Sendable {
 
 public struct SpeedText: Sendable {
     public let tokens: [SpeedToken]
-    private let wordsAfter: [Double]
 
     public init(document: ReaderDocument, from start: ReadingLine) {
         var tokens: [SpeedToken] = []
@@ -70,11 +69,6 @@ public struct SpeedText: Sendable {
 
     public init(tokens: [SpeedToken]) {
         self.tokens = tokens
-        var words = [Double](repeating: 0, count: tokens.count + 1)
-        for index in tokens.indices.reversed() {
-            words[index] = words[index + 1] + (tokens[index].isStop ? 0 : 1)
-        }
-        wordsAfter = words
     }
 
     public func frame(at index: Int, words: Int) -> Range<Int> {
@@ -91,12 +85,6 @@ public struct SpeedText: Sendable {
     public func duration(of frame: Range<Int>, wordsPerMinute: Int, pauses: SpeedPauseProfile) -> Double {
         let beats = tokens[frame].reduce(0) { $0 + 1 + $1.extraBeats(pauses) }
         return beats * 60 / Double(max(wordsPerMinute, 1))
-    }
-
-    public func minutesLeft(from index: Int, wordsPerMinute: Int, pauses: SpeedPauseProfile) -> Double {
-        let index = min(max(index, 0), tokens.count)
-        let extra = tokens[index...].reduce(0.0) { $0 + $1.extraBeats(pauses) }
-        return (wordsAfter[index] + extra) / Double(max(wordsPerMinute, 1))
     }
 
     public func sentenceStart(before index: Int) -> Int {
@@ -149,10 +137,13 @@ public struct SpeedText: Sendable {
                 items += words(of: paragraph).map(Optional.some)
             }
         }
+        let total = items.reduce(0.0) { $0 + Double($1?.text.count ?? 0) }
+        var consumed = 0.0
         var tokens: [SpeedToken] = []
         var startsSentence = true
-        for (position, item) in items.enumerated() {
-            let share = Double(position + 1) / Double(items.count)
+        for item in items {
+            consumed += Double(item?.text.count ?? 0)
+            let share = total > 0 ? consumed / total : 1
             guard let item else {
                 tokens.append(SpeedToken(block: index, text: "", share: share, pause: .paragraph, startsSentence: true))
                 startsSentence = true

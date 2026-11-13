@@ -222,6 +222,8 @@ enum ReaderAppearance {
         case wordsPerMinute = "readerSpeedWordsPerMinute"
         case wordsPerFrame = "readerSpeedWordsPerFrame"
         case pauses = "readerSpeedPauses"
+        case restMode = "readerSpeedRestMode"
+        case restSeconds = "readerSpeedRestSeconds"
 
         func key(_ kind: FNMNCore.Material.Kind) -> String {
             "\(rawValue).\(kind == .book ? "book" : "article")"
@@ -327,30 +329,30 @@ struct ReaderMenu: View {
     }
 
     var body: some View {
-        Menu("Reading Options", systemImage: "ellipsis") {
+        let column = reader.state.shownPlate == nil && reader.state.speedStart == nil
+        return Menu("Reading Options", systemImage: "ellipsis") {
             Picker("Reading Mode", selection: mode) {
                 Text("Reader").tag(ReadingMode.column)
                 Text("Posts").tag(ReadingMode.posts)
                 Text("Fast").tag(ReadingMode.fast)
             }
-            .pickerStyle(.inline)
+            .pickerStyle(.segmented)
             ReaderAppearanceControls()
-            Toggle("Reading Line", systemImage: "ruler",isOn: $showsLine)
+            if column {
+                Toggle("Reading Line", systemImage: "ruler", isOn: $showsLine)
+                Button("Find in Text", systemImage: "magnifyingglass") {
+                    reader.send(.find(true))
+                }
+                let lowest = reader.document.lowestHeadings
+                if !lowest.isEmpty {
+                    if lowest.isSubset(of: reader.state.folded) {
+                        Button("Expand All", systemImage: "arrow.up.left.and.arrow.down.right") { reader.send(.foldAll(false)) }
+                    } else {
+                        Button("Collapse All", systemImage: "arrow.down.right.and.arrow.up.left") { reader.send(.foldAll(true)) }
+                    }
+                }
+            }
             Toggle("Bold Word Starts", systemImage: "bold", isOn: $boldsWordStarts)
-            Button("Find in Text", systemImage: "magnifyingglass") {
-                if reader.state.shownPlate != nil {
-                    reader.send(.onePlate(false))
-                }
-                reader.send(.find(true))
-            }
-            let lowest = reader.document.lowestHeadings
-            if !lowest.isEmpty {
-                if lowest.isSubset(of: reader.state.folded) {
-                    Button("Expand All", systemImage: "arrow.up.left.and.arrow.down.right") { reader.send(.foldAll(false)) }
-                } else {
-                    Button("Collapse All", systemImage: "arrow.down.right.and.arrow.up.left") { reader.send(.foldAll(true)) }
-                }
-            }
             OpenOriginalButton(itemID: reader.materialID, page: page)
         }
     }

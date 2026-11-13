@@ -10,6 +10,10 @@ enum SpeedPlayback: Equatable {
     case ended
 }
 
+enum SpeedRestMode: String, CaseIterable {
+    case off, timed, manual
+}
+
 @MainActor @Observable
 final class SpeedPlayer {
     private(set) var text: SpeedText?
@@ -18,6 +22,8 @@ final class SpeedPlayer {
     private(set) var furthest: Int?
     var wordsPerMinute = 250
     var pauseProfile = SpeedPauseProfile()
+    var restMode = SpeedRestMode.timed
+    var restSeconds = 1.6
     var wordsPerFrame = 1 {
         didSet {
             if mode != .playing, let text {
@@ -67,7 +73,8 @@ final class SpeedPlayer {
     }
 
     func toggle() {
-        guard resting == nil else {
+        if resting != nil {
+            continueResting()
             return
         }
         if isPlaying {
@@ -134,6 +141,11 @@ final class SpeedPlayer {
         play()
     }
 
+    func continueResting() {
+        guard resting != nil else { return }
+        enter(.playing)
+    }
+
     private func enter(_ next: SpeedPlayback) {
         clock?.cancel()
         clock = nil
@@ -188,16 +200,22 @@ final class SpeedPlayer {
             guard let block = text.endedBlock(at: finished) else {
                 continue
             }
-            mode = .resting(block)
-            try? await Task.sleep(for: .seconds(Self.restSeconds))
-            guard !Task.isCancelled, case .resting = mode else {
+            switch restMode {
+            case .off:
+                continue
+            case .timed:
+                mode = .resting(block)
+                try? await Task.sleep(for: .seconds(restSeconds))
+                guard !Task.isCancelled, case .resting = mode else {
+                    return
+                }
+                mode = .playing
+            case .manual:
+                mode = .resting(block)
                 return
             }
-            mode = .playing
         }
     }
-
-    private static let restSeconds: Double = 1.6
 }
 
 struct Press: Equatable {
@@ -247,6 +265,8 @@ struct SpeedReader: View {
     @AppStorage private var wordsPerMinute: Int
     @AppStorage private var wordsPerFrame: Int
     @AppStorage private var pauseProfileJSON: String
+    @AppStorage private var restModeRaw: String
+    @AppStorage private var restSeconds: Double
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
     @State private var press = Press()
     @State private var holdTimer: Task<Void, Never>?
@@ -260,6 +280,8 @@ struct SpeedReader: View {
         _wordsPerMinute = AppStorage(wrappedValue: 250, ReaderAppearance.SpeedSetting.wordsPerMinute.key(kind))
         _wordsPerFrame = AppStorage(wrappedValue: 1, ReaderAppearance.SpeedSetting.wordsPerFrame.key(kind))
         _pauseProfileJSON = AppStorage(wrappedValue: "", ReaderAppearance.SpeedSetting.pauses.key(kind))
+        _restModeRaw = AppStorage(wrappedValue: SpeedRestMode.timed.rawValue, ReaderAppearance.SpeedSetting.restMode.key(kind))
+        _restSeconds = AppStorage(wrappedValue: 1.6, ReaderAppearance.SpeedSetting.restSeconds.key(kind))
     }
 
     private static let speeds = 150...600
@@ -292,11 +314,15 @@ struct SpeedReader: View {
             player.wordsPerMinute = wordsPerMinute
             player.wordsPerFrame = wordsPerFrame
             player.pauseProfile = pauseProfile
+            player.restMode = restMode
+            player.restSeconds = restSeconds
             await player.load(reader.document, from: start)
         }
         .onChange(of: wordsPerMinute) { player.wordsPerMinute = wordsPerMinute }
         .onChange(of: wordsPerFrame) { player.wordsPerFrame = wordsPerFrame }
         .onChange(of: pauseProfileJSON) { player.pauseProfile = pauseProfile }
+        .onChange(of: restModeRaw) { player.restMode = restMode }
+        .onChange(of: restSeconds) { player.restSeconds = restSeconds }
         .onChange(of: scenePhase) {
             guard scenePhase != .active else { return }
             player.pause()
@@ -324,7 +350,7 @@ struct SpeedReader: View {
                 Menu("Speed Reading Options", systemImage: "slider.horizontal.3") {
                     Menu("Pauses", systemImage: "pause.circle") {
                         ForEach(SpeedPauseKind.allCases, id: \.self) { kind in
-                            Picker(kind.name, selection: Binding(
+                            Picker("\(kind.name) — \(kind.detail)", selection: Binding(
                                 get: { pauseProfile[kind] },
                                 set: { set($0, for: kind) }
                             )) {
@@ -335,17 +361,36 @@ struct SpeedReader: View {
                             .pickerStyle(.inline)
                         }
                     }
+                    Menu("Paragraph Preview", systemImage: "timer") {
+                        Picker("After a Paragraph", selection: Binding(
+                            get: { restMode },
+                            set: { restModeRaw = $0.rawValue }
+                        )) {
+                            Text("Off").tag(SpeedRestMode.off)
+                            Text("Timed").tag(SpeedRestMode.timed)
+                            Text("Wait for Tap").tag(SpeedRestMode.manual)
+                        }
+                        .pickerStyle(.inline)
+                        if restMode == .timed {
+                            Stepper("Seconds: \(restSeconds, specifier: "%.1f")", value: $restSeconds, in: 1...10, step: 0.5)
+                        }
+                    }
                     ReaderAppearanceControls(showsColumn: false)
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.glass)
             }
+            .controlSize(.large)
         }
         .padding(.top, 8)
     }
 
     private var pauseProfile: SpeedPauseProfile {
         SpeedPauseProfile(json: pauseProfileJSON)
+    }
+
+    private var restMode: SpeedRestMode {
+        SpeedRestMode(rawValue: restModeRaw) ?? .timed
     }
 
     private func set(_ level: SpeedPauseLevel, for kind: SpeedPauseKind) {
@@ -358,7 +403,6 @@ struct SpeedReader: View {
         let token = player.token
         let blocks = max(reader.document.blocks.count, 1)
         let share = token.map { (Double($0.block) + $0.share) / Double(blocks) } ?? 0
-        let minutes = player.text?.minutesLeft(from: player.frame.lowerBound, wordsPerMinute: wordsPerMinute, pauses: pauseProfile) ?? 0
         return VStack(alignment: .leading, spacing: 8) {
             Text(sectionTitle(of: token?.block ?? start.piece))
                 .font(.headline)
@@ -372,10 +416,6 @@ struct SpeedReader: View {
                 }
             }
             .frame(height: 3)
-            Text("\(Int((share * 100).rounded()))% · \(Int(minutes.rounded(.up))) min left")
-                .font(.footnote)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -486,17 +526,15 @@ struct SpeedReader: View {
 
     private var controls: some View {
         VStack(spacing: 14) {
-            HStack(spacing: 36) {
-                Button("Previous Sentence", systemImage: "backward.fill") { player.sentenceBack() }
-                    .font(.title2)
+            HStack {
+                transport("backward.fill", "Previous Sentence") { player.sentenceBack() }
                 Button(centerTitle, systemImage: player.isPlaying ? "pause.fill" : "play.fill") { player.toggle() }
                     .font(.largeTitle)
                     .frame(width: 84, height: 84)
                     .contentTransition(.symbolEffect(.replace))
                     .glassEffect(.regular.interactive(), in: Circle())
                     .disabled(player.token == nil || (player.token?.isStop == true && player.isAtEnd))
-                Button("Next Sentence", systemImage: "forward.fill") { player.sentenceForward() }
-                    .font(.title2)
+                transport("forward.fill", "Next Sentence") { player.sentenceForward() }
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.plain)
@@ -519,8 +557,16 @@ struct SpeedReader: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.glass)
+            .controlSize(.large)
             .animation(.snappy, value: wordsPerMinute)
         }
+    }
+
+    private func transport(_ systemImage: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, systemImage: systemImage, action: action)
+            .font(.title2)
+            .frame(width: 72, height: 72)
+            .glassEffect(.regular.interactive(), in: Circle())
     }
 
     private var centerTitle: String {
@@ -562,63 +608,34 @@ private struct PivotWord: View {
     let text: String
     let before: String
     let after: String
-    @State private var ideal: CGFloat = 0
-    @State private var offered: CGFloat = 0
 
     var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(before.isEmpty ? "" : before + " ")
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+            word
+                .lineLimit(1)
+                .minimumScaleFactor(0.15)
+                .frame(maxWidth: .infinity)
+            Text(after.isEmpty ? "" : " " + after)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+        }
+    }
+
+    private var word: Text {
         let characters = Array(text)
+        guard !characters.isEmpty else {
+            return Text("")
+        }
         let pivot = SpeedText.pivot(of: text)
-        let head = String(characters.prefix(pivot))
-        let letter = characters.indices.contains(pivot) ? String(characters[pivot]) : ""
-        let tail = String(characters.dropFirst(pivot + 1))
-        VStack(alignment: .pivot, spacing: 6) {
-            Self.mark
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(before.isEmpty ? "" : before + " ").foregroundStyle(.tertiary)
-                    Text(head)
-                }
-                .scaleEffect(shrink, anchor: UnitPoint(x: 1, y: 0.5))
-                Text(letter)
-                    .bold()
-                    .foregroundStyle(Color.accentColor)
-                    .alignmentGuide(.pivot) { $0[HorizontalAlignment.center] }
-                    .scaleEffect(shrink, anchor: UnitPoint(x: 0.5, y: 0.5))
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(tail)
-                    Text(after.isEmpty ? "" : " " + after).foregroundStyle(.tertiary)
-                }
-                .scaleEffect(shrink, anchor: UnitPoint(x: 0, y: 0.5))
-            }
-            .lineLimit(1)
-            .fixedSize()
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { ideal = $0 }
-            Self.mark
-        }
-        .frame(maxWidth: .infinity, alignment: Alignment(horizontal: .pivot, vertical: .center))
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { offered = $0 }
-        .clipped()
+        var letter = AttributedString(String(characters[pivot]))
+        letter.inlinePresentationIntent = .stronglyEmphasized
+        letter.foregroundColor = Color.accentColor
+        var word = AttributedString(String(characters.prefix(pivot)))
+        word.append(letter)
+        word.append(AttributedString(String(characters.dropFirst(pivot + 1))))
+        return Text(word)
     }
-
-    private var shrink: CGFloat {
-        guard offered > 0, ideal > 0 else {
-            return 1
-        }
-        return min(1, offered / ideal)
-    }
-
-    private static var mark: some View {
-        Capsule()
-            .fill(Color.accentColor)
-            .frame(width: 2, height: 12)
-            .alignmentGuide(.pivot) { $0[HorizontalAlignment.center] }
-    }
-}
-
-extension HorizontalAlignment {
-    private enum Pivot: AlignmentID {
-        static func defaultValue(in context: ViewDimensions) -> CGFloat { context.width * 0.42 }
-    }
-
-    fileprivate static let pivot = HorizontalAlignment(Pivot.self)
 }

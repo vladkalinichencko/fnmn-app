@@ -11,7 +11,12 @@ private func words(_ tokens: [SpeedToken]) -> [String] {
     #expect(words(tokens) == ["A", "bold", "link", "and", "code,", "marked", "too."])
     #expect(tokens.allSatisfy { $0.block == 4 })
     #expect(tokens.last?.share == 1)
-    #expect(tokens.first?.share == 1.0 / 7)
+    #expect(tokens.first?.share == 1.0 / 27)
+}
+
+@Test func shareIsTheShareOfCharactersInTheBlock() {
+    let tokens = SpeedText.tokens(in: .text("a bb ccc"), at: 0)
+    #expect(tokens.map(\.share) == [1.0 / 6, 3.0 / 6, 1])
 }
 
 @Test func punctuationSetsThePauseAndStartsTheNextSentence() {
@@ -70,16 +75,6 @@ private func words(_ tokens: [SpeedToken]) -> [String] {
     #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: off) == 0.25)
     #expect(text.duration(of: 1..<2, wordsPerMinute: 240, pauses: regular) > 0.25 * 2)
     #expect(text.duration(of: 2..<3, wordsPerMinute: 240, pauses: regular) > text.duration(of: 0..<1, wordsPerMinute: 240, pauses: regular))
-}
-
-@Test func minutesLeftCountWordsAndPausesToTheEnd() {
-    let text = SpeedText(tokens: SpeedText.tokens(in: .text("a b c d"), at: 0))
-    let regular = SpeedPauseProfile(.regular)
-    let off = SpeedPauseProfile(.off)
-    #expect(text.minutesLeft(from: 0, wordsPerMinute: 2, pauses: off) == 2)
-    #expect(text.minutesLeft(from: 2, wordsPerMinute: 2, pauses: off) == 1)
-    #expect(text.minutesLeft(from: 4, wordsPerMinute: 2, pauses: regular) == 0)
-    #expect(text.minutesLeft(from: 0, wordsPerMinute: 2, pauses: regular) > 2)
 }
 
 @Test func eachPauseSettingHoldsBackOnlyItsOwnKind() {

@@ -1,15 +1,20 @@
 import FNMNCore
 import SwiftUI
 
+private let platePagerSpace = "platePager"
+
 struct PlatePager: View {
     @Environment(LibraryModel.self) private var library
     let reader: ReaderCoordinator
     let plate: Int
     let width: CGFloat?
     @State private var forward = true
+    @State private var horizontal = false
     @State private var viewport: CGFloat = 0
+    @State private var pageFrame: CGRect = .zero
+    @State private var pagerWidth: CGFloat = 0
     private static let turn: CGFloat = 36
-    private static let slide = Animation.spring(duration: 0.3, bounce: 0.08)
+    private static let slide = Animation.spring(duration: 0.3)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,13 +25,83 @@ struct PlatePager: View {
                 page
                     .id(plate)
                     .transition(.asymmetric(
-                        insertion: .move(edge: forward ? .bottom : .top).combined(with: .opacity),
-                        removal: .move(edge: forward ? .top : .bottom).combined(with: .opacity)
+                        insertion: .move(edge: insertionEdge).combined(with: .opacity),
+                        removal: .move(edge: removalEdge).combined(with: .opacity)
                     ))
             }
             .animation(Self.slide, value: plate)
             .clipped()
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { pageFrame = $0 }
+            controls
         }
+        .coordinateSpace(.named(platePagerSpace))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pagerWidth = $0 }
+        .gesture(turnPan)
+    }
+
+    private var insertionEdge: Edge {
+        if horizontal { return forward ? .trailing : .leading }
+        return forward ? .bottom : .top
+    }
+
+    private var removalEdge: Edge {
+        if horizontal { return forward ? .leading : .trailing }
+        return forward ? .top : .bottom
+    }
+
+    private var controls: some View {
+        HStack {
+            navButton("chevron.up", title: "Previous Plate", enabled: reader.document.plate(before: plate) != nil) {
+                turn(false)
+            }
+            Spacer()
+            navButton("chevron.down", title: "Next Plate", enabled: reader.document.plate(after: plate) != nil) {
+                turn(true)
+            }
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.plain)
+        .padding(.horizontal, Tokens.gutter)
+        .padding(.vertical, 8)
+    }
+
+    private func navButton(_ systemImage: String, title: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, systemImage: systemImage, action: action)
+            .font(.title3)
+            .frame(width: 56, height: 56)
+            .glassEffect(.regular.interactive(), in: Circle())
+            .disabled(!enabled)
+    }
+
+    private func turn(_ next: Bool) {
+        forward = next
+        horizontal = false
+        reader.send(.turnPlate(forward: next))
+    }
+
+    private func inCard(_ point: CGPoint) -> Bool {
+        guard pageFrame.contains(point) else { return false }
+        let cardWidth = min(width ?? pagerWidth, pagerWidth)
+        return abs(point.x - pagerWidth / 2) <= cardWidth / 2
+    }
+
+    private var turnPan: HorizontalPan {
+        HorizontalPan(
+            starts: { _ in true },
+            allowed: { point in !inCard(point) },
+            changed: { translation in
+                if abs(translation) > 4 {
+                    forward = translation < 0
+                }
+            },
+            ended: { translation, velocity in
+                let needed = max(72 - abs(velocity) / 8, 36)
+                guard abs(translation) >= needed else { return }
+                forward = translation < 0
+                horizontal = true
+                reader.send(.turnPlate(forward: forward))
+            }
+        )
     }
 
     private var page: some View {
@@ -46,7 +121,10 @@ struct PlatePager: View {
             viewport = max(height, 0)
         }
         .onScrollGeometryChange(for: CGFloat.self, of: Self.pull) { _, pull in
-            if pull > 4 { forward = true } else if pull < -4 { forward = false }
+            if abs(pull) > 4 {
+                forward = pull > 0
+                horizontal = false
+            }
         }
         .onScrollPhaseChange { (old: ScrollPhase, new: ScrollPhase, context: ScrollPhaseChangeContext) in
             guard old == .interacting, new != .interacting else { return }
@@ -95,15 +173,16 @@ private struct PlateContents: View {
     let plate: Int
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(spacing: 12) {
             Text(document.headingPath(of: plate).dropLast().map(title).joined(separator: " › "))
                 .lineLimit(1)
                 .truncationMode(.head)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let number = document.plateNumber(of: plate) {
-                Text("\(number) / \(document.plates.count)")
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
+                ProgressView(value: Double(number), total: Double(max(document.plates.count, 1)))
+                    .progressViewStyle(.linear)
+                    .tint(Color.accentColor)
+                    .frame(width: 72)
             }
         }
         .font(.footnote)

@@ -3,6 +3,7 @@ import UIKit
 
 struct HorizontalPan: UIGestureRecognizerRepresentable {
     var starts: (_ translation: CGFloat) -> Bool = { _ in true }
+    var allowed: (_ point: CGPoint) -> Bool = { _ in true }
     var changed: (CGFloat) -> Void
     var ended: (_ translation: CGFloat, _ velocity: CGFloat) -> Void
 
@@ -18,6 +19,7 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         context.coordinator.starts = starts
+        context.coordinator.allowed = allowed
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
@@ -36,12 +38,13 @@ struct HorizontalPan: UIGestureRecognizerRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var starts: (CGFloat) -> Bool = { _ in true }
+        var allowed: (CGPoint) -> Bool = { _ in true }
         private static let backEdge: CGFloat = 24
 
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer, let view = pan.view else { return false }
             let moved = pan.translation(in: view)
-            guard abs(moved.x) > abs(moved.y), starts(moved.x) else { return false }
+            guard abs(moved.x) > abs(moved.y), starts(moved.x), allowed(pan.location(in: view)) else { return false }
             if moved.x > 0, pan.location(in: view.window).x - moved.x < Self.backEdge { return false }
             var touched = view.hitTest(pan.location(in: view), with: nil)
             while let current = touched, current !== view {

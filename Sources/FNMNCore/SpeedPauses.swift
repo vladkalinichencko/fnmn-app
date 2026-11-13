@@ -13,6 +13,17 @@ public enum SpeedPauseKind: String, Codable, CaseIterable, Sendable {
         case .longWords: "Long Words"
         }
     }
+
+    public var detail: String {
+        switch self {
+        case .comma: "Holds a beat after commas"
+        case .clause: "Holds a beat after colons and dashes"
+        case .sentence: "Holds a beat after full stops"
+        case .paragraph: "Holds a beat at paragraph breaks"
+        case .numbers: "Holds a beat on numbers"
+        case .longWords: "Holds a beat on long words"
+        }
+    }
 }
 
 public enum SpeedPauseLevel: String, Codable, CaseIterable, Sendable {

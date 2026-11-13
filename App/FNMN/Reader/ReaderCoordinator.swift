@@ -153,7 +153,6 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
     case .speedReading(false):
         state.speedStart = nil
     case let .speedRead(shown):
-        guard state.speedStart != nil else { return state }
         let next = shown.fraction >= 1 ? document.plate(after: shown.piece) : nil
         let line = next.map { ReadingLine(piece: $0, fraction: 0) } ?? shown
         state.keepsPlace = false

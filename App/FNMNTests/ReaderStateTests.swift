@@ -82,6 +82,18 @@ final class ReaderStateTests: XCTestCase {
         XCTAssertEqual(state.find?.matches.count, 3)
     }
 
+    func testASpeedReadThatArrivesAfterSpeedReadingEndedStillLands() {
+        var state = readerReduce(ReaderState(place: 2), .speedReading(true), document: document)
+        state.showsLine = true
+        state = readerReduce(state, .speedReading(false), document: document)
+
+        let shown = ReadingLine(piece: 5, fraction: 0.5)
+        let next = readerReduce(state, .speedRead(shown), document: document)
+        XCTAssertEqual(next.place, 5)
+        XCTAssertEqual(next.line, shown)
+        XCTAssertEqual(next.column, .jumping(to: 5, hiding: false))
+    }
+
     func testTheFieldClosesAndTakesItsMatchesWithIt() {
         var state = readerReduce(ReaderState(place: nil), .find(true), document: document)
         state = readerReduce(state, .findQuery("text"), document: document)
