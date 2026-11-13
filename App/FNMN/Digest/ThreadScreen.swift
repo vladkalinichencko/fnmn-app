@@ -12,10 +12,15 @@ struct ThreadScreen: View {
                 let own = post.comments.filter { isAuthor($0, of: post) }
                 let others = post.comments.filter { !isAuthor($0, of: post) }
                 VStack(alignment: .leading, spacing: Tokens.gap) {
-                    if let context = post.context, let parent = context.post {
+                    if let context = post.context, let parent = context.post, context.kind == .reply {
                         parentCard(parent, kind: context.kind)
+                        PostCard(post: post, digest: digest, showsContext: false)
+                    } else {
+                        PostCard(post: post, digest: digest, showsContext: false)
+                        if let context = post.context, let parent = context.post {
+                            parentCard(parent, kind: context.kind)
+                        }
                     }
-                    PostCard(post: post, digest: digest, showsContext: false)
                     ForEach(Array(own.enumerated()), id: \.offset) { _, comment in
                         commentCard(comment)
                     }
@@ -54,12 +59,7 @@ struct ThreadScreen: View {
     private func parentCard(_ post: DigestPackage.Post.ContextPost, kind: DigestPackage.Post.Context.Kind) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(kind.action)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(post.author.name)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
+                PostContextLabel(kind: kind, text: "\(kind.action) \(post.author.name)")
                 Spacer(minLength: 8)
                 PostOpenButton(url: post.permalink, label: "Open the post that is quoted")
             }
@@ -77,10 +77,10 @@ struct ThreadScreen: View {
                 Text(comment.author)
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
-                Spacer(minLength: 8)
                 if let link = comment.permalink {
                     PostOpenButton(url: link, label: "Open the reply")
                 }
+                Spacer(minLength: 8)
             }
             PostText(text: comment.text)
         }

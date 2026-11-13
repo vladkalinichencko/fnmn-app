@@ -200,20 +200,43 @@ struct PostCard: View {
                 .frame(width: 2)
                 .frame(maxHeight: .infinity)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: Self.icon(context.kind))
-                        .font(.caption2)
-                    Text(Self.contextLabel(context))
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                }
-                .foregroundStyle(.secondary)
+                PostContextLabel(kind: context.kind, text: Self.contextLabel(context))
                 if let text = context.post?.text {
-                    PostText(text: text)
+                    Text(Self.peekText(text))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
                 }
             }
         }
         .padding(.leading, 8)
+        .modifier(ContextTap(context: context))
+    }
+
+    private struct ContextTap: ViewModifier {
+        let context: DigestPackage.Post.Context
+        @Environment(DigestModel.self) private var digests
+        @Environment(WindowNavigation.self) private var navigation
+        @Environment(\.openURL) private var openURL
+
+        func body(content: Content) -> some View {
+            if context.post != nil {
+                content.contentShape(.rect).onTapGesture { open() }
+            } else {
+                content
+            }
+        }
+
+        private func open() {
+            guard let quoted = context.post else {
+                return
+            }
+            if digests.post(quoted.id) != nil {
+                navigation.open(.thread(quoted.id))
+            } else {
+                openURL(quoted.permalink)
+            }
+        }
     }
 
     @ViewBuilder private var menu: some View {
