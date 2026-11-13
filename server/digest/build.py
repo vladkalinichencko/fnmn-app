@@ -25,7 +25,7 @@ from package import write_delivery_from
 HERE = Path(__file__).resolve().parent
 FNMN = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/FNMN"
 BUILD_HOURS = (8, 20)
-KEEP = 14
+KEEP = 4
 FEED_LIMIT = 40
 
 
