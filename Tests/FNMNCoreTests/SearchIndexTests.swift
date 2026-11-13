@@ -83,14 +83,15 @@ struct SearchIndexTests {
         #expect(hits.map(\.itemID) == ["article:new", "article:old"])
     }
 
-    @Test func matchingIgnoresWhitespaceRuns() async {
+    @Test func matchingKeepsWhitespaceExactly() async {
         let bodies = ["article:one": searchBody(["A quick  brown\nfox."], id: "article:one")]
         let index = await SearchIndex.load(bodies: bodies, plainText: identity)
-        for query in ["quick brown fox", "quick  brown   fox", "quick\nbrown fox"] {
-            let hits = await index.hits(query: query, articles: [], annotations: [], addedAt: [:])
-            #expect(hits.count == 1, "query \(query.debugDescription) found \(hits.count)")
-            #expect(hits.first?.text.contains("fox") == true)
-        }
+        let exact = await index.hits(query: "quick  brown\nfox", articles: [], annotations: [], addedAt: [:])
+        #expect(exact.count == 1)
+        let collapsed = await index.hits(query: "quick brown fox", articles: [], annotations: [], addedAt: [:])
+        #expect(collapsed.isEmpty)
+        let trailing = await index.hits(query: "fox. ", articles: [], annotations: [], addedAt: [:])
+        #expect(trailing.isEmpty)
     }
 
     @Test func markupNeverReachesTheFoldedText() async {

@@ -14,10 +14,10 @@ public struct SearchIndex: Sendable {
             )
         }
         foldedParagraphs = self.bodies.mapValues { body in
-            Dictionary(uniqueKeysWithValues: body.paragraphs.map { ($0.piece, TextFold.searchable($0.markdown)) })
+            Dictionary(uniqueKeysWithValues: body.paragraphs.map { ($0.piece, TextFold.folded($0.markdown)) })
         }
         foldedCues = self.bodies.mapValues { body in
-            Dictionary(uniqueKeysWithValues: body.cues.enumerated().map { ($0.offset, TextFold.searchable($0.element.text)) })
+            Dictionary(uniqueKeysWithValues: body.cues.enumerated().map { ($0.offset, TextFold.folded($0.element.text)) })
         }
     }
 
@@ -32,13 +32,13 @@ public struct SearchIndex: Sendable {
         addedAt: [String: Date],
         yield: @MainActor ([SearchHit]) -> Void = { _ in }
     ) async -> [SearchHit] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else {
+        let needle = query
+        guard needle.contains(where: { !$0.isWhitespace }) else {
             return []
         }
-        let folded = TextFold.searchable(needle)
+        let folded = TextFold.folded(needle)
         var hits: [SearchHit] = articles.compactMap { article in
-            guard TextFold.collapsed(article.searchText).contains(folded) else {
+            guard article.searchText.contains(folded) else {
                 return nil
             }
             let text = article.excerpt ?? article.material.byline ?? article.material.sourceURL?.host() ?? ""
@@ -77,11 +77,11 @@ public struct SearchIndex: Sendable {
         }
         var noted: [SearchHit] = []
         for annotation in annotations {
-            if !annotation.note.isEmpty, TextFold.searchable(annotation.note).contains(folded) {
+            if !annotation.note.isEmpty, TextFold.folded(annotation.note).contains(folded) {
                 noted += Self.matches(in: annotation.note, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
-            } else if let mark = annotation.marks.first(where: { TextFold.searchable($0.quote).contains(folded) }) {
+            } else if let mark = annotation.marks.first(where: { TextFold.folded($0.quote).contains(folded) }) {
                 noted += Self.matches(in: mark.quote, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
-            } else if TextFold.searchable(annotation.text).contains(folded) {
+            } else if TextFold.folded(annotation.text).contains(folded) {
                 noted += Self.matches(in: annotation.text, of: needle, itemID: annotation.materialID, source: .annotation, piece: annotation.piece)
             }
         }

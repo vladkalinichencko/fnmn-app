@@ -32,8 +32,8 @@ struct SearchResults: View {
     }
 
     private func search() async {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else {
+        let needle = query
+        guard needle.contains(where: { !$0.isWhitespace }) else {
             state = .idle
             return
         }

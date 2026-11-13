@@ -345,8 +345,7 @@ final class LibraryModel {
     @ObservationIgnored private var searchIndex: SearchIndex?
 
     func search(_ query: String, yield: @MainActor @escaping ([SearchHit]) -> Void = { _ in }) async -> [SearchHit] {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else {
+        guard query.contains(where: { !$0.isWhitespace }) else {
             return []
         }
         if searchIndex == nil {
@@ -359,7 +358,7 @@ final class LibraryModel {
             return []
         }
         return await searchIndex.hits(
-            query: needle,
+            query: query,
             articles: snapshot.articles,
             annotations: snapshot.annotations,
             addedAt: snapshot.addedAt,

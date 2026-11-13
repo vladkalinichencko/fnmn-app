@@ -32,7 +32,7 @@ private struct SearchResultsOverlay<Results: View>: ViewModifier {
             content
             let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
             if active, !needle.isEmpty {
-                results(needle)
+                results(query)
                     .background { Rectangle().fill(.thickMaterial).ignoresSafeArea() }
             }
         }

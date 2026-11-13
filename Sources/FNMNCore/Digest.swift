@@ -288,16 +288,16 @@ extension DigestPackage {
     }
 
     public func posts(matching query: String, hidden: Set<String> = []) -> [Post] {
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
+        let query = query
+        guard query.contains(where: { !$0.isWhitespace }) else {
             return posts.filter { !hidden.contains($0.id) }
         }
-        let folded = TextFold.searchable(query)
+        let folded = TextFold.folded(query)
         return posts.filter { post in
             guard !hidden.contains(post.id) else {
                 return false
             }
-            return post.searchTexts.contains { TextFold.searchable($0).contains(folded) }
+            return post.searchTexts.contains { TextFold.folded($0).contains(folded) }
         }
     }
 }
@@ -313,12 +313,12 @@ extension DigestPackage.Post {
     }
 
     public func excerpt(matching query: String) -> SearchExcerpt? {
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else {
+        let needle = query
+        guard needle.contains(where: { !$0.isWhitespace }) else {
             return nil
         }
         for text in searchTexts where !text.isEmpty {
-            guard TextFold.searchable(text).contains(TextFold.searchable(needle)),
+            guard TextFold.folded(text).contains(TextFold.folded(needle)),
                   let span = ReadingSearch.spans(of: needle, in: text).first else {
                 continue
             }
