@@ -1,0 +1,17 @@
+[
+{"id":"t1_fashion_research","lang":"ru","text":"Новое исследование показало: красный цвет в дизайне упаковки повышает продажи на 12%. Дизайнеры брендов уже тестируют новые палитры."},
+{"id":"t2_kitchen_design","lang":"ru","text":"Сделала ремонт на кухне: выбрала спокойные тона, открытые полки и удобную планировку. Дизайн получился уютный, все в восторге."},
+{"id":"t3_personal_ai","lang":"ru","text":"Вчера переписывалась с подругой: она whole день сидела с ChatGPT и сделала себе план тренировок и меню на месяц. Говорит, это изменило её жизнь."},
+{"id":"t4_spacex","lang":"ru","text":"SpaceX запустила Starship Flight 15: первая попытка вернуть оба ускорителя на башню одновременно. Полёт длился 22 часа, на орбите развернули 26 спутников Starlink V3."},
+{"id":"t5_typography","lang":"ru","text":"Разбираю шрифт Гарамон: его история, proportions и почему он до сих пор стандарт для книжной вёрстки. Пара заметок о контрасте штрихов и интерлиньяже."},
+{"id":"t6_film","lang":"ru","text":"Вышел новый фильм Пола Томаса Андерсона — операция века в формате чёрно-белого нуара. Уже на следующей неделе покажут в кино."},
+{"id":"t7_ml_paper","lang":"ru","text":"Вышла статья про новый метод few-shot learning для мультимодальных моделей: бенчмарки на ImageNet и CC12M, абляции интересные."},
+{"id":"t8_kpop","lang":"ru","text":"Новые промо-фото BTS к предстоящему комебаку. Концепция — ретро-футуризм, визуал очень сильный."},
+{"id":"t9_openai_film","lang":"en","text":"OpenAI just released a short documentary about the history of neural networks, narrated by researchers. It's on their YouTube channel now."},
+{"id":"t10_personal_ml","lang":"ru","text":"Пробую на досуге fine-tune маленькую LLM на своих заметках — корпус всего 200 текстов, но любопытно, что получится."},
+{"id":"t11_startup_recipe","lang":"ru","text":"Мой маленький бизнес: пеку дома хлеб на закваске и продаю соседям по предзаказу. Начинала с 5 буханок, сейчас уже очередь."},
+{"id":"t12_research_design","lang":"ru","text":"Интересный ресёрч по типографике в интерфейсах: как выбор гарнитуры влияет на читаемость и доверие к продукту. Приложили данные юзабилити-тестов."},
+{"id":"t13_anthropic_claude","lang":"en","text":"Anthropic published benchmarks for Claude's new reasoning mode — it beats the previous model on math and code evals by a wide margin."},
+{"id":"t14_kpop_en","lang":"en","text":"New aespa comeback concept photos dropped. The styling is giving Y2K cybergrrrl and the fans are losing it."},
+{"id":"t15_personal_rocket","lang":"ru","text":"Сын в восторге от запуска ракеты SpaceX — смотрел трансляцию три часа подряд и теперь хочет стать космонавтом. Мы записали его реакцию на видео."}
+]
