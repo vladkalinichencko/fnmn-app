@@ -12,28 +12,34 @@ struct PlatePager: View {
     @State private var horizontal = false
     @State private var viewport: CGFloat = 0
     @State private var pageFrame: CGRect = .zero
+    @State private var headerFrame: CGRect = .zero
+    @State private var footerFrame: CGRect = .zero
     @State private var pagerWidth: CGFloat = 0
     private static let turn: CGFloat = 36
+    private static let headerClearance: CGFloat = 48
+    private static let footerClearance: CGFloat = 86
     private static let slide = Animation.spring(duration: 0.3)
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            page
+                .id(plate)
+                .transition(.asymmetric(
+                    insertion: .move(edge: insertionEdge).combined(with: .opacity),
+                    removal: .move(edge: removalEdge).combined(with: .opacity)
+                ))
+        }
+        .animation(Self.slide, value: plate)
+        .clipped()
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { pageFrame = $0 }
+        .overlay(alignment: .top) {
             PlateContents(document: reader.document, plate: plate)
                 .padding(.horizontal, Tokens.gutter)
                 .frame(maxWidth: width ?? .infinity)
-            ZStack {
-                page
-                    .id(plate)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: insertionEdge).combined(with: .opacity),
-                        removal: .move(edge: removalEdge).combined(with: .opacity)
-                    ))
-            }
-            .animation(Self.slide, value: plate)
-            .clipped()
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { pageFrame = $0 }
-            controls
+                .background(.bar)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { headerFrame = $0 }
         }
+        .overlay(alignment: .bottom) { controls }
         .coordinateSpace(.named(platePagerSpace))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pagerWidth = $0 }
         .gesture(turnPan)
@@ -63,6 +69,7 @@ struct PlatePager: View {
         .buttonStyle(.plain)
         .padding(.horizontal, Tokens.gutter)
         .padding(.vertical, 8)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { footerFrame = $0 }
     }
 
     private func navButton(_ systemImage: String, title: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -80,7 +87,7 @@ struct PlatePager: View {
     }
 
     private func inCard(_ point: CGPoint) -> Bool {
-        guard pageFrame.contains(point) else { return false }
+        guard pageFrame.contains(point), !headerFrame.contains(point), !footerFrame.contains(point) else { return false }
         let cardWidth = min(width ?? pagerWidth, pagerWidth)
         return abs(point.x - pagerWidth / 2) <= cardWidth / 2
     }
@@ -109,7 +116,8 @@ struct PlatePager: View {
             block
                 .equatable()
                 .padding(.horizontal, Tokens.gutter)
-                .padding(.vertical, Tokens.gap)
+                .padding(.top, Self.headerClearance)
+                .padding(.bottom, Self.footerClearance)
                 .frame(maxWidth: width ?? .infinity)
                 .frame(maxWidth: .infinity, minHeight: viewport)
         }
