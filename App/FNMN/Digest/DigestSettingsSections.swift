@@ -16,7 +16,11 @@ struct DigestSettingsSections: View {
                     if network != .telegram {
                         Toggle("Include recommendations", isOn: recommendationsBinding(network))
                     }
-                    TopicEditor(topics: networkTopicsBinding(network))
+                    NavigationLink {
+                        TopicListScreen(title: "Topics", topics: networkTopicsBinding(network))
+                    } label: {
+                        LabeledContent("Topics", value: topicSummary(networkTopicsBinding(network).wrappedValue))
+                    }
                 }
             }
             sourcesSections
@@ -28,7 +32,11 @@ struct DigestSettingsSections: View {
             ForEach(folders(of: digest.package), id: \.folder) { group in
                 Section(group.folder.uppercased()) {
                     ForEach(group.sources) { source in
-                        row(source)
+                        NavigationLink {
+                            TopicListScreen(title: source.name, detail: "\(source.id) — \(detail(of: source))", topics: sourceTopicsBinding(source.id))
+                        } label: {
+                            row(source)
+                        }
                     }
                 }
             }
@@ -90,7 +98,13 @@ struct DigestSettingsSections: View {
     }
 
     private func folders(of package: DigestPackage) -> [SourceGroup] {
-        package.folders.map { folder in
+        if package.folders.isEmpty {
+            return DigestPackage.networkOrder.compactMap { network in
+                let own = package.sources.filter { $0.network == network }
+                return own.isEmpty ? nil : SourceGroup(folder: network.name, sources: own)
+            }
+        }
+        return package.folders.map { folder in
             SourceGroup(folder: folder, sources: package.sources.filter { $0.folders.contains(folder) })
         }
         .filter { !$0.sources.isEmpty }
@@ -121,6 +135,21 @@ struct DigestSettingsSections: View {
         )
     }
 
+    private func topicSummary(_ topics: [String]) -> String {
+        topics.isEmpty ? "All posts" : topics.joined(separator: ", ")
+    }
+
+    private func sourceTopicsBinding(_ id: String) -> Binding<[String]> {
+        Binding(
+            get: { settings.sources[id]?.topics ?? [] },
+            set: { topics in
+                var entry = settings.sources[id] ?? DigestSettings.Source()
+                entry.topics = topics
+                settings.sources[id] = entry.topics.isEmpty ? nil : entry
+            }
+        )
+    }
+
     private func recommendationsBinding(_ network: DigestPackage.Network) -> Binding<Bool> {
         Binding(
             get: { settings.networks[network.rawValue]?.recommendations ?? false },
@@ -133,31 +162,34 @@ struct DigestSettingsSections: View {
     }
 }
 
-private struct TopicEditor: View {
+private struct TopicListScreen: View {
+    let title: String
+    var detail: String?
     @Binding var topics: [String]
     @State private var draft = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            TextField("Add a topic", text: $draft)
-                .font(.subheadline)
-                .onSubmit(commit)
-            ForEach(topics, id: \.self) { topic in
-                HStack {
-                    Text(topic)
-                        .font(.subheadline)
-                    Spacer(minLength: 8)
-                    Button {
-                        topics.removeAll { $0 == topic }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
+        List {
+            if let detail {
+                Section {
+                    Text(detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
             }
+            Section {
+                TextField("Add a topic", text: $draft)
+                    .onSubmit(commit)
+            }
+            Section("Topics") {
+                ForEach(topics, id: \.self) { topic in
+                    Text(topic)
+                }
+                .onDelete { topics.remove(atOffsets: $0) }
+            }
         }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func commit() {
