@@ -3,7 +3,6 @@ import SwiftUI
 
 struct DigestSettingsSections: View {
     @Binding var settings: DigestSettings
-    @Environment(DigestModel.self) private var digests
 
     var body: some View {
         Group {
@@ -23,28 +22,6 @@ struct DigestSettingsSections: View {
                     }
                 }
             }
-            sourcesSections
-        }
-    }
-
-    @ViewBuilder private var sourcesSections: some View {
-        if let digest = digests.current {
-            ForEach(folders(of: digest.package), id: \.folder) { group in
-                Section(group.folder.uppercased()) {
-                    ForEach(group.sources) { source in
-                        NavigationLink {
-                            TopicListScreen(title: source.name, detail: "\(source.id) — \(detail(of: source))", topics: sourceTopicsBinding(source.id))
-                        } label: {
-                            row(source)
-                        }
-                    }
-                }
-            }
-        } else {
-            Section("Sources") {
-                Text("No digest yet")
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -55,59 +32,6 @@ struct DigestSettingsSections: View {
             }
         }
         .pickerStyle(.menu)
-    }
-
-    private func row(_ source: DigestPackage.Source) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle()
-                .fill(color(of: source.status))
-                .frame(width: 8, height: 8)
-                .padding(.top, 5)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(source.name)
-                Text(detail(of: source))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            Text(source.network == .telegram ? "Channel" : "Account")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-    }
-
-    private func detail(of source: DigestPackage.Source) -> String {
-        switch source.status {
-        case .ok: source.id
-        case .stale: "Partially read: \(source.detail ?? "the network answered slowly")"
-        case .failed: "Not read: \(source.detail ?? "the source failed")"
-        }
-    }
-
-    private func color(of status: DigestPackage.Source.Status) -> Color {
-        switch status {
-        case .ok: .green
-        case .stale: .orange
-        case .failed: .red
-        }
-    }
-
-    private struct SourceGroup {
-        let folder: String
-        let sources: [DigestPackage.Source]
-    }
-
-    private func folders(of package: DigestPackage) -> [SourceGroup] {
-        if package.folders.isEmpty {
-            return DigestPackage.networkOrder.compactMap { network in
-                let own = package.sources.filter { $0.network == network }
-                return own.isEmpty ? nil : SourceGroup(folder: network.name, sources: own)
-            }
-        }
-        return package.folders.map { folder in
-            SourceGroup(folder: folder, sources: package.sources.filter { $0.folders.contains(folder) })
-        }
-        .filter { !$0.sources.isEmpty }
     }
 
     private func hourBinding(_ index: Int, fallback: Int) -> Binding<Int> {
@@ -137,17 +61,6 @@ struct DigestSettingsSections: View {
 
     private func topicSummary(_ topics: [String]) -> String {
         topics.isEmpty ? "All posts" : topics.joined(separator: ", ")
-    }
-
-    private func sourceTopicsBinding(_ id: String) -> Binding<[String]> {
-        Binding(
-            get: { settings.sources[id]?.topics ?? [] },
-            set: { topics in
-                var entry = settings.sources[id] ?? DigestSettings.Source()
-                entry.topics = topics
-                settings.sources[id] = entry.topics.isEmpty ? nil : entry
-            }
-        )
     }
 
     private func recommendationsBinding(_ network: DigestPackage.Network) -> Binding<Bool> {
