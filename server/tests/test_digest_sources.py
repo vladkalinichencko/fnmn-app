@@ -93,6 +93,40 @@ class TelegramTests(unittest.TestCase):
             )
             self.assertEqual(len(result.posts), 3)
 
+    def test_an_album_keeps_every_photo(self):
+        photos = "".join(
+            f'<a class="tgme_widget_message_photo_wrap" style="background-image:url(\'https://cdn.telesco.pe/file/{index}.jpg\')"></a>'
+            for index in range(12)
+        )
+        message = html.fromstring(
+            '<div class="tgme_widget_message_wrap">'
+            '<div class="tgme_widget_message" data-post="channel/7">'
+            '<div class="tgme_widget_message_text">album</div>'
+            f'{photos}'
+            '<time datetime="2026-11-13T10:00:00+00:00">x</time>'
+            '</div></div>'
+        )
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
+            self.assertEqual(len(post.media), 12)
+
+    def test_a_video_carries_its_file(self):
+        message = html.fromstring(
+            '<div class="tgme_widget_message_wrap">'
+            '<div class="tgme_widget_message" data-post="channel/8">'
+            '<i class="tgme_widget_message_video_thumb" style="background-image:url(\'https://cdn.telesco.pe/file/p.jpg\')"></i>'
+            '<video class="tgme_widget_message_video js-message_video" src="https://cdn.telesco.pe/file/v.mp4?token=t"></video>'
+            '<time datetime="2026-11-13T10:00:00+00:00">x</time>'
+            '</div></div>'
+        )
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
+            self.assertIsNotNone(post.video["file"])
+            self.assertTrue(post.video["file"]["path"].endswith(".mp4"))
+            self.assertIsNotNone(post.video["poster"])
+
 
 class XTests(unittest.TestCase):
     def test_a_plain_tweet_hydrates(self):
@@ -127,6 +161,22 @@ class XTests(unittest.TestCase):
 
     def test_a_tweet_that_is_gone_is_skipped(self):
         self.assertIsNone(x._tweet(fake_web(text=lambda url: json.dumps({"__typename": "TweetTombstone"})), "1"))
+
+    def test_an_album_keeps_every_photo(self):
+        payload = {
+            "id_str": "99",
+            "user": {"screen_name": "karpathy", "name": "Andrej Karpathy"},
+            "created_at": "2026-11-07T09:30:00.000Z",
+            "text": "album",
+            "mediaDetails": [
+                {"type": "photo", "media_url_https": f"https://pbs.twimg.com/media/{index}.jpg"}
+                for index in range(6)
+            ],
+        }
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = x._post(payload, "karpathy", source(), fake_web(), store, ["ml"])
+            self.assertEqual(len(post.media), 6)
 
     def test_the_syndication_request_names_the_status(self):
         seen = []

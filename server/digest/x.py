@@ -159,7 +159,7 @@ def _media(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[li
     media: list[dict] = []
     video = None
     errors = 0
-    for index, item in enumerate((payload.get("mediaDetails") or [])[:4]):
+    for index, item in enumerate(payload.get("mediaDetails") or []):
         kind = item.get("type")
         url = item.get("media_url_https")
         if not url:
@@ -174,7 +174,7 @@ def _media(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[li
             poster = save_photo(web, store, post_id, "poster", url, fetch)
             if poster is None:
                 errors += 1
-            video = {"poster": poster, "duration": _duration(payload), "file": _video_file(item, post_id, web, store, fetch)}
+            video = {"poster": poster, "file": _video_file(item, post_id, web, store, fetch)}
     return media, video, errors
 
 
@@ -188,11 +188,6 @@ def _video_file(item: dict, post_id: str, web: Web, store, fetch=None) -> dict |
         return None
     best = max(variants, key=lambda variant: variant.get("bitrate") or 0)
     return save_video(web, store, post_id, "video", best["url"], fetch)
-
-
-def _duration(payload: dict) -> float | None:
-    time_ms = (payload.get("video") or {}).get("durationMs")
-    return time_ms / 1000 if time_ms else None
 
 
 def _context(payload: dict) -> dict | None:

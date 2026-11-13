@@ -66,7 +66,7 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
         "postedAt": "2026-11-08T07:00:00Z",
         "text": "A small model that reads the whole catalog.",
         "media": [{"path": "assets/1587-0.jpg", "width": 1280, "height": 720}],
-        "video": {"poster": {"path": "assets/1587-poster.jpg", "width": 640, "height": 360}, "duration": 42.0},
+        "video": {"poster": {"path": "assets/1587-poster.jpg", "width": 640, "height": 360}},
         "context": {"kind": "quote", "post": {
           "id": "x/1000", "network": "x",
           "author": {"handle": "hardmaru", "name": "hardmaru"},
@@ -89,7 +89,7 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(decoded.sources[1].status == .stale)
     let post = try #require(decoded.posts.first)
     #expect(post.media.first?.width == 1280)
-    #expect(post.video?.duration == 42)
+    #expect(post.video?.poster?.path == "assets/1587-poster.jpg")
     #expect(post.context?.kind == .quote)
     #expect(post.context?.post?.author.handle == "hardmaru")
     #expect(post.comments.first?.text == "This explains it.")
@@ -162,11 +162,34 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     let file = DigestFile(url: root, cache: root)
     let index = DigestIndex(
         imported: [.init(file: "digest-1.tar", id: "digest-1", at: postedAt)],
-        hidden: ["x/2"]
+        hidden: ["x/2"],
+        folded: [.network(digest: "digest-1", network: .telegram)]
     )
     try await file.saveIndex(index)
     let loaded = try await file.loadIndex()
     #expect(loaded == index)
+}
+
+@Test func anIndexWithoutFoldsStillDecodes() throws {
+    let json = #"{"imported":[],"hidden":["x/1"]}"#
+    let decoder = JSONDecoder()
+    let index = try decoder.decode(DigestIndex.self, from: Data(json.utf8))
+    #expect(index.hidden == ["x/1"])
+    #expect(index.folded.isEmpty)
+}
+
+@Test func aFoldCollapsesItsChildren() {
+    let digest: DigestFold = .digest("d1")
+    let network: DigestFold = .network(digest: "d1", network: .telegram)
+    let topic: DigestFold = .topic(digest: "d1", network: .telegram, folder: "ml")
+    let otherDigest: DigestFold = .network(digest: "d2", network: .telegram)
+    #expect(topic.collapsed(in: [topic]))
+    #expect(topic.collapsed(in: [network]))
+    #expect(topic.collapsed(in: [digest]))
+    #expect(!topic.collapsed(in: [otherDigest]))
+    #expect(!network.collapsed(in: [topic]))
+    #expect(digest.collapsed(in: [digest]))
+    #expect(!digest.collapsed(in: [network, topic]))
 }
 
 @Test func aRefreshedPictureLandsInTheDigestAndAHostileNameIsRefused() async throws {

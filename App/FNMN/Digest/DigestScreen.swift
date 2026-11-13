@@ -84,8 +84,9 @@ struct DigestScreen: View {
         ScrollViewReader { proxy in
             ScrollView {
                 ForEach(digests.digests) { digest in
-                    digestHeader(digest)
-                    sections(of: digest)
+                    let networks = digest.package.sections(hidden: digests.hidden)
+                    digestHeader(digest, networks: networks)
+                    sections(of: digest, networks: networks)
                 }
             }
             .onAppear {
@@ -108,33 +109,28 @@ struct DigestScreen: View {
         proxy.scrollTo(id, anchor: .center)
     }
 
-    private func digestHeader(_ digest: Digest) -> some View {
+    private func digestHeader(_ digest: Digest, networks: [DigestPackage.NetworkSection]) -> some View {
         let end = digest.package.window.to
         let period = Calendar.current.component(.hour, from: end) < 16 ? "Morning" : "Evening"
-        return Text("\(period), \(end.formatted(.dateTime.month(.abbreviated).day()))")
-            .font(.largeTitle.weight(.bold))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Tokens.gutter)
-            .padding(.top, Tokens.sectionGap)
+        let fold: DigestFold = .digest(digest.id)
+        let hidden = networks.reduce(0) { $0 + $1.topics.reduce(0) { $0 + $1.posts.count } }
+        return FoldableHeader(
+            title: "\(period), \(end.formatted(.dateTime.month(.abbreviated).day()))",
+            font: .largeTitle.weight(.bold),
+            fold: fold,
+            hidden: hidden,
+            collapsed: fold.collapsed(in: digests.folded)
+        )
+        .padding(.horizontal, Tokens.gutter)
+        .padding(.top, Tokens.sectionGap)
     }
 
-    private func sections(of digest: Digest) -> some View {
-        LazyVStack(alignment: .leading, spacing: Tokens.sectionGap) {
-            ForEach(digest.package.sections(hidden: digests.hidden)) { network in
-                VStack(alignment: .leading, spacing: Tokens.gap) {
-                    Text(network.network.name)
-                        .font(.title2.weight(.bold))
-                    ForEach(network.topics) { topic in
-                        VStack(alignment: .leading, spacing: Tokens.gap) {
-                            Text(topic.folder.uppercased())
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            CardColumns(items: topic.posts, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
-                                PostCard(post: post, digest: digest, opensThread: post.hasThread)
-                                    .id(post.id)
-                            }
-                        }
-                    }
+    private func sections(of digest: Digest, networks: [DigestPackage.NetworkSection]) -> some View {
+        let digestFold: DigestFold = .digest(digest.id)
+        return LazyVStack(alignment: .leading, spacing: Tokens.sectionGap) {
+            if !digestFold.collapsed(in: digests.folded) {
+                ForEach(networks) { network in
+                    networkSection(of: network, in: digest)
                 }
             }
         }
@@ -142,6 +138,78 @@ struct DigestScreen: View {
         .padding(.bottom, Tokens.sectionGap)
     }
 
+    private func networkSection(of network: DigestPackage.NetworkSection, in digest: Digest) -> some View {
+        let fold: DigestFold = .network(digest: digest.id, network: network.network)
+        let collapsed = fold.collapsed(in: digests.folded)
+        let hidden = network.topics.reduce(0) { $0 + $1.posts.count }
+        return VStack(alignment: .leading, spacing: Tokens.gap) {
+            FoldableHeader(
+                title: network.network.name,
+                font: .title2.weight(.bold),
+                fold: fold,
+                hidden: hidden,
+                collapsed: collapsed
+            )
+            if !collapsed {
+                ForEach(network.topics) { topic in
+                    topicSection(of: topic, network: network.network, in: digest)
+                }
+            }
+        }
+    }
+
+    private func topicSection(of topic: DigestPackage.TopicSection, network: DigestPackage.Network, in digest: Digest) -> some View {
+        let fold: DigestFold = .topic(digest: digest.id, network: network, folder: topic.folder)
+        let collapsed = fold.collapsed(in: digests.folded)
+        return VStack(alignment: .leading, spacing: Tokens.gap) {
+            FoldableHeader(
+                title: topic.folder.uppercased(),
+                font: .caption.weight(.semibold),
+                secondary: true,
+                fold: fold,
+                hidden: topic.posts.count,
+                collapsed: collapsed
+            )
+            if !collapsed {
+                CardColumns(items: topic.posts, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
+                    PostCard(post: post, digest: digest, opensThread: post.hasThread)
+                        .id(post.id)
+                }
+            }
+        }
+    }
+
+}
+
+private struct FoldableHeader: View {
+    let title: String
+    var font: Font = .body
+    var secondary = false
+    let fold: DigestFold
+    let hidden: Int
+    let collapsed: Bool
+    @Environment(DigestModel.self) private var digests
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.gap) {
+            Text(title)
+                .font(font)
+            Spacer(minLength: Tokens.gap)
+            if collapsed, hidden > 0 {
+                Text(hidden, format: .number)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .transition(.blurReplace)
+            }
+            if hidden > 0 {
+                DisclosureChevron(open: !collapsed, width: 18)
+            }
+        }
+        .foregroundStyle(secondary ? .secondary : .primary)
+        .animation(.snappy(duration: 0.22), value: collapsed)
+        .contentShape(.rect)
+        .onTapGesture { digests.toggleFold(fold) }
+    }
 }
 
 private extension ReaderColumn {

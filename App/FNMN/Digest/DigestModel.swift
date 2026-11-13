@@ -36,6 +36,10 @@ final class DigestModel {
         index.hidden
     }
 
+    var folded: Set<DigestFold> {
+        index.folded
+    }
+
     func media(for post: DigestPackage.Post) -> [DigestPackage.Post.Media] {
         refreshed[post.id] ?? post.media
     }
@@ -113,6 +117,13 @@ final class DigestModel {
 
     func hide(_ post: DigestPackage.Post) {
         index.hidden.insert(post.id)
+        scheduleIndexSave()
+    }
+
+    func toggleFold(_ fold: DigestFold) {
+        if index.folded.remove(fold) == nil {
+            index.folded.insert(fold)
+        }
         scheduleIndexSave()
     }
 

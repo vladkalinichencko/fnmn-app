@@ -78,7 +78,7 @@ def _post(message, channel: str, source: dict, web: Web, store, folders: list[st
     text = _markdown(message.xpath('.//div[contains(@class,"tgme_widget_message_text")]'))
     media = []
     errors = 0
-    for index, style in enumerate(message.xpath('.//a[contains(@class,"tgme_widget_message_photo_wrap")]/@style')[:4]):
+    for index, style in enumerate(message.xpath('.//a[contains(@class,"tgme_widget_message_photo_wrap")]/@style')):
         url = _background(style)
         if url:
             saved = save_photo(web, store, post_id, index, url, fetch)
@@ -114,10 +114,9 @@ def _video(message, post_id: str, web: Web, store, fetch=None) -> tuple[dict | N
     url = _background(thumbs[0])
     poster = save_photo(web, store, post_id, "poster", url, fetch) if url else None
     errors = 1 if url and poster is None else 0
-    lengths = message.xpath('.//*[contains(@class,"tgme_widget_message_video_duration")]/text()')
     sources = message.xpath('.//video[contains(@class,"tgme_widget_message_video")]/@src')
     video_file = save_video(web, store, post_id, "video", sources[0], fetch) if sources else None
-    return {"poster": poster, "duration": _seconds(lengths[0]) if lengths else None, "file": video_file}, errors
+    return {"poster": poster, "file": video_file}, errors
 
 
 def _background(style: str) -> str | None:
@@ -143,13 +142,3 @@ def _markdown(elements) -> str | None:
     return text or None
 
 
-def _seconds(value: str) -> float | None:
-    parts = value.strip().lstrip(">").split(":")
-    try:
-        numbers = [int(part) for part in parts]
-    except ValueError:
-        return None
-    seconds = 0.0
-    for number in numbers:
-        seconds = seconds * 60 + number
-    return seconds

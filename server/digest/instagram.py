@@ -145,7 +145,7 @@ def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folde
     fetch = page_fetch(tab)
     dom = _dom_media(tab)
     images = dom["images"] or ([image] if image else [])
-    for index, url in enumerate(images[:8]):
+    for index, url in enumerate(images):
         saved = save_photo(web, store, post_id, index, url, fetch)
         if saved:
             media.append(saved)
@@ -158,7 +158,7 @@ def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folde
     if video_urls:
         video_file = save_video(web, store, post_id, "video", video_urls[0], fetch)
         poster = media[0] if media else (save_photo(web, store, post_id, "poster", image, fetch) if image else None)
-        video = {"poster": poster, "duration": None, "file": video_file}
+        video = {"poster": poster, "file": video_file}
         if video_file is None and poster is None:
             errors += 1
     times = document.xpath("//time/@datetime")
@@ -218,7 +218,7 @@ DOM_MEDIA = """(() => {
     const url = v.currentSrc || v.src || (source && source.src);
     if (typeof url === 'string' && url.startsWith('http')) videos.add(url);
   });
-  return {images: [...images].slice(0, 10), videos: [...videos].slice(0, 2)};
+  return {images: [...images], videos: [...videos]};
 })()"""
 
 

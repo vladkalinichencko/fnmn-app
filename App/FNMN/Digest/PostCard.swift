@@ -180,15 +180,6 @@ struct PostCard: View {
                     .frame(width: 54, height: 54)
                     .background(.black.opacity(0.35), in: Circle())
             }
-            if let duration = video.duration {
-                Text(Self.length(duration))
-                    .font(.caption2)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.45), in: Capsule())
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            }
         }
         .aspectRatio(CGFloat(video.poster?.width ?? 16) / CGFloat(max(video.poster?.height ?? 9, 1)), contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
@@ -276,12 +267,5 @@ struct PostCard: View {
     static func contextLabel(_ context: DigestPackage.Post.Context) -> String {
         let handle = context.post.map { "@\($0.author.handle)" } ?? "a post that is gone"
         return "\(context.kind.action) \(handle)"
-    }
-
-    static func length(_ seconds: Double) -> String {
-        let total = Int(seconds.rounded())
-        let minutes = total / 60
-        let rest = total % 60
-        return String(format: "%d:%02d", minutes, rest)
     }
 }

@@ -61,7 +61,6 @@ class BuildTests(unittest.TestCase):
             clip = post("x/1", text=None)
             clip.video = {
                 "poster": store.save_media("x/1", "poster", png(640, 480), "png"),
-                "duration": 12.5,
                 "file": store.save_file("x/1", "video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
             }
             store.append([clip])
@@ -108,7 +107,7 @@ class BuildTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
             video = post("x/1", text="")
-            video.video = {"poster": None, "duration": 42}
+            video.video = {"poster": None}
             Store(root).append([video])
             self.assertEqual(self.build(root, fnmn), 0)
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "a video with no poster"})

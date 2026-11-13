@@ -45,32 +45,23 @@ private struct MediaSource: ViewModifier {
 }
 
 private struct MediaPresenterCover: ViewModifier {
-    let presenter: MediaPresenter
-
-    func body(content: Content) -> some View {
-        content.background(MediaCover(presenter: presenter))
-    }
-}
-
-private struct MediaCover: View {
     @Bindable var presenter: MediaPresenter
     @Environment(\.mediaZoom) private var zoom
 
-    var body: some View {
-        Color.clear
-            .fullScreenCover(isPresented: Binding(
-                get: { presenter.media != nil },
-                set: { if !$0 { presenter.close() } }
-            )) {
-                if let media = presenter.media {
-                    if let zoom {
-                        MediaViewer(url: media)
-                            .navigationTransition(.zoom(sourceID: media, in: zoom))
-                    } else {
-                        MediaViewer(url: media)
-                    }
+    func body(content: Content) -> some View {
+        content.fullScreenCover(isPresented: Binding(
+            get: { presenter.media != nil },
+            set: { if !$0 { presenter.close() } }
+        )) {
+            if let media = presenter.media {
+                if let zoom {
+                    MediaViewer(url: media)
+                        .navigationTransition(.zoom(sourceID: media, in: zoom))
+                } else {
+                    MediaViewer(url: media)
                 }
             }
+        }
     }
 }
 

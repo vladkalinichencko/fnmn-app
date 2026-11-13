@@ -149,12 +149,10 @@ public struct DigestPackage: Codable, Equatable, Sendable {
 
         public struct Video: Codable, Equatable, Sendable {
             public let poster: Media?
-            public let duration: Double?
             public let file: File?
 
-            public init(poster: Media? = nil, duration: Double? = nil, file: File? = nil) {
+            public init(poster: Media? = nil, file: File? = nil) {
                 self.poster = poster
-                self.duration = duration
                 self.file = file
             }
 
@@ -369,10 +367,19 @@ public struct Digest: Identifiable, Equatable, Sendable {
 public struct DigestIndex: Codable, Equatable, Sendable {
     public var imported: [Imported]
     public var hidden: Set<String>
+    public var folded: Set<DigestFold>
 
-    public init(imported: [Imported] = [], hidden: Set<String> = []) {
+    public init(imported: [Imported] = [], hidden: Set<String> = [], folded: Set<DigestFold> = []) {
         self.imported = imported
         self.hidden = hidden
+        self.folded = folded
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        imported = try container.decodeIfPresent([Imported].self, forKey: .imported) ?? []
+        hidden = try container.decodeIfPresent(Set<String>.self, forKey: .hidden) ?? []
+        folded = try container.decodeIfPresent(Set<DigestFold>.self, forKey: .folded) ?? []
     }
 
     public struct Imported: Codable, Equatable, Sendable {

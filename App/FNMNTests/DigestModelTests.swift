@@ -134,6 +134,21 @@ final class DigestModelTests: XCTestCase {
         XCTAssertTrue(saved.hidden.contains("x/1"))
     }
 
+    func testFoldingASectionKeepsItOutOfTheIndex() async throws {
+        let folder = root.appending(path: "FNMN")
+        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
+        let digests = model()
+        await digests.sync(folder: folder)
+        let fold: DigestFold = .network(digest: "digest-2026-11-08T08-00-00Z", network: .x)
+        digests.toggleFold(fold)
+        XCTAssertTrue(digests.folded.contains(fold))
+        await digests.settle()
+        let saved = try await DigestFile(url: root, cache: root).loadIndex()
+        XCTAssertTrue(saved.folded.contains(fold))
+        digests.toggleFold(fold)
+        XCTAssertFalse(digests.folded.contains(fold))
+    }
+
     func testAHiddenPostLeavesItsSection() throws {
         let sections = package().sections(hidden: ["x/1"])
         XCTAssertEqual(sections.flatMap { $0.topics.flatMap(\.posts) }.map(\.id), ["x/2"])
@@ -204,14 +219,6 @@ final class DigestModelTests: XCTestCase {
         let package = try XCTUnwrap(digests.current?.package)
         let found = package.posts(matching: "karpathy", hidden: digests.hidden)
         XCTAssertEqual(found.map(\.id), ["x/2"])
-    }
-
-    func testAPosterLengthReadsAsMinutesAndSeconds() {
-        XCTAssertEqual(PostCard.length(0), "0:00")
-        XCTAssertEqual(PostCard.length(59), "0:59")
-        XCTAssertEqual(PostCard.length(59.6), "1:00")
-        XCTAssertEqual(PostCard.length(61), "1:01")
-        XCTAssertEqual(PostCard.length(3_600), "60:00")
     }
 
     func testEveryNetworkAndContextKindHasADisplay() {
