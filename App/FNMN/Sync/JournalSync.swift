@@ -56,7 +56,7 @@ final class JournalSync {
     }
 
     func pendingRead() async throws -> JournalRead {
-        let unread = try await file.unreadJournalEvents(except: device, sync: known)
+        let unread = try await file.unreadJournalEvents(except: "", sync: known)
         return JournalRead(events: unread.events, applied: unread.applied, waiting: unread.waiting)
     }
 

@@ -135,4 +135,23 @@ final class JournalSyncTests: XCTestCase {
         XCTAssertEqual(merged.catalog.annotations.count, 1)
         XCTAssertEqual(merged.catalog.annotations.first?.text, "First paragraph.")
     }
+
+    func testOwnJournalIsReadBackWhenSyncKnowledgeIsLost() async throws {
+        let fixture = try await makeFixture()
+        defer {
+            try? FileManager.default.removeItem(at: fixture.root)
+            UserDefaults.standard.removeObject(forKey: "deviceID")
+        }
+
+        device("phone")
+        let phone = JournalSync(file: fixture.file)
+        phone.record(.progress(.setRead(true, itemID: "article:one")))
+        try await phone.flush()
+
+        let recovered = JournalSync(file: fixture.file)
+        let read = try await recovered.pendingRead()
+        XCTAssertEqual(read.events.count, 1)
+        let merged = recovered.merging(read.events, into: LibrarySnapshot(), ReadingProgress())
+        XCTAssertEqual(merged.progress.readings["article:one"]?.isRead, true)
+    }
 }
