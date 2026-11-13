@@ -221,8 +221,6 @@ enum ReaderAppearance {
         case wordsPerMinute = "readerSpeedWordsPerMinute"
         case wordsPerFrame = "readerSpeedWordsPerFrame"
         case pauses = "readerSpeedPauses"
-        case restMode = "readerSpeedRestMode"
-        case restSeconds = "readerSpeedRestSeconds"
 
         func key(_ kind: FNMNCore.Material.Kind) -> String {
             "\(rawValue).\(kind == .book ? "book" : "article")"

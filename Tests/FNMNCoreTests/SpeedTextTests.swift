@@ -3,7 +3,7 @@ import Testing
 @testable import FNMNCore
 
 private func words(_ tokens: [SpeedToken]) -> [String] {
-    tokens.map { $0.isStop ? "■" : $0.text }
+    tokens.map(\.text)
 }
 
 @Test func proseReadsAsItsWordsWithoutMarkdown() {
@@ -38,13 +38,13 @@ private func words(_ tokens: [SpeedToken]) -> [String] {
     #expect(tokens[2].startsSentence)
 }
 
-@Test func codeFormulasTablesAndPicturesAreStops() {
+@Test func codeFormulasTablesAndPicturesLeaveNoTokens() {
     let block = DocumentBlock.text("Before it.\n\n```swift\nlet x = 1\n\nlet y = 2\n```\n\n$$x^2$$\n\nAfter $x_1$ here.\n\nPaid $5 and $10 today.")
     let tokens = SpeedText.tokens(in: block, at: 2)
-    #expect(words(tokens) == ["Before", "it.", "■", "Paid", "$5", "and", "$10", "today."])
-    #expect(tokens[3].startsSentence)
-    #expect(words(SpeedText.tokens(in: .text("| a | b |\n|---|---|\n| 1 | 2 |"), at: 0)) == ["■"])
-    #expect(words(SpeedText.tokens(in: .image(alt: "", path: "a.png"), at: 0)) == ["■"])
+    #expect(words(tokens) == ["Before", "it.", "Paid", "$5", "and", "$10", "today."])
+    #expect(tokens[2].startsSentence)
+    #expect(SpeedText.tokens(in: .text("| a | b |\n|---|---|\n| 1 | 2 |"), at: 0).isEmpty)
+    #expect(SpeedText.tokens(in: .image(alt: "", path: "a.png"), at: 0).isEmpty)
     #expect(SpeedText.tokens(in: .heading(level: 2, title: "Title"), at: 0).isEmpty)
     #expect(SpeedText.tokens(in: .interactive(url: URL(string: "https://x.org/a")!, selector: "main"), at: 0).isEmpty)
 }
@@ -134,23 +134,4 @@ private func words(_ tokens: [SpeedToken]) -> [String] {
     #expect(SpeedText.pivot(of: "") == 0)
 }
 
-@Test func theLastFrameOfABlockEndsIt() {
-    let tokens = SpeedText.tokens(in: .text("One two."), at: 0) + SpeedText.tokens(in: .text("Three four."), at: 1)
-    let text = SpeedText(tokens: tokens)
-    #expect(text.endedBlock(at: 0..<1) == nil)
-    #expect(text.endedBlock(at: 1..<2) == 0)
-    #expect(text.endedBlock(at: 2..<3) == nil)
-    #expect(text.endedBlock(at: 3..<4) == nil)
-    #expect(text.endedBlock(at: 4..<4) == nil)
-}
 
-@Test func aStopGivenWholeDoesNotEndItsBlock() {
-    let tokens = SpeedText.tokens(in: .text("One. $$x^2$$"), at: 0) + SpeedText.tokens(in: .text("Two."), at: 1)
-    let text = SpeedText(tokens: tokens)
-    #expect(text.endedBlock(at: 0..<2) == nil)
-}
-
-@Test func theEndOfTheLastBlockIsNotAStopToRest() {
-    let tokens = SpeedText.tokens(in: .text("Only this."), at: 0)
-    #expect(SpeedText(tokens: tokens).endedBlock(at: 0..<2) == nil)
-}

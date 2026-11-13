@@ -33,8 +33,6 @@ public struct SpeedToken: Equatable, Sendable {
     public let pause: SpeedPause
     public let startsSentence: Bool
 
-    public var isStop: Bool { text.isEmpty }
-
     public init(block: Int, text: String, share: Double, pause: SpeedPause, startsSentence: Bool) {
         self.block = block
         self.text = text
@@ -44,9 +42,6 @@ public struct SpeedToken: Equatable, Sendable {
     }
 
     public func extraBeats(_ profile: SpeedPauseProfile) -> Double {
-        guard !isStop else {
-            return 0
-        }
         let letters = text.filter { $0.isLetter || $0.isNumber }.count
         let long = min(Double(max(letters - 7, 0)) * 0.08, 0.6) * profile.share(.longWords)
         let number = (text.contains(where: \.isNumber) ? 0.3 : 0) * profile.share(.numbers)
@@ -73,10 +68,9 @@ public struct SpeedText: Sendable {
 
     public func frame(at index: Int, words: Int) -> Range<Int> {
         guard tokens.indices.contains(index) else { return index..<index }
-        guard !tokens[index].isStop else { return index..<index + 1 }
         var end = index + 1
         while end - index < words, end < tokens.count, tokens[end - 1].pause == .none,
-              !tokens[end].isStop, !tokens[end].startsSentence, tokens[end].block == tokens[index].block {
+              !tokens[end].startsSentence, tokens[end].block == tokens[index].block {
             end += 1
         }
         return index..<end
@@ -88,22 +82,11 @@ public struct SpeedText: Sendable {
     }
 
     public func sentenceStart(before index: Int) -> Int {
-        tokens.indices.prefix(min(max(index, 0), tokens.count)).last { tokens[$0].startsSentence || tokens[$0].isStop } ?? 0
+        tokens.indices.prefix(min(max(index, 0), tokens.count)).last { tokens[$0].startsSentence } ?? 0
     }
 
     public func sentenceStart(after index: Int) -> Int? {
-        tokens.indices.dropFirst(index + 1).first { tokens[$0].startsSentence || tokens[$0].isStop }
-    }
-
-    public func endedBlock(at frame: Range<Int>) -> Int? {
-        guard !frame.isEmpty, frame.upperBound < tokens.count else {
-            return nil
-        }
-        let last = tokens[frame.upperBound - 1]
-        guard !last.isStop, tokens[frame.upperBound].block != last.block else {
-            return nil
-        }
-        return last.block
+        tokens.indices.dropFirst(index + 1).first { tokens[$0].startsSentence }
     }
 
     public static func pivot(of text: String) -> Int {
@@ -142,13 +125,12 @@ public struct SpeedText: Sendable {
         var tokens: [SpeedToken] = []
         var startsSentence = true
         for item in items {
-            consumed += Double(item?.text.count ?? 0)
-            let share = total > 0 ? consumed / total : 1
             guard let item else {
-                tokens.append(SpeedToken(block: index, text: "", share: share, pause: .paragraph, startsSentence: true))
                 startsSentence = true
                 continue
             }
+            consumed += Double(item.text.count)
+            let share = total > 0 ? consumed / total : 1
             tokens.append(SpeedToken(block: index, text: item.text, share: share, pause: item.pause, startsSentence: startsSentence))
             startsSentence = item.pause >= .sentence
         }

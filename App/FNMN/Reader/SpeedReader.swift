@@ -5,14 +5,7 @@ enum SpeedPlayback: Equatable {
     case loading
     case paused
     case playing
-    case resting(Int)
-    case previewing(Int)
-    case stopped
     case ended
-}
-
-enum SpeedRestMode: String, CaseIterable {
-    case off, timed, manual
 }
 
 @MainActor @Observable
@@ -23,8 +16,6 @@ final class SpeedPlayer {
     private(set) var furthest: Int?
     var wordsPerMinute = 250
     var pauseProfile = SpeedPauseProfile()
-    var restMode = SpeedRestMode.timed
-    var restSeconds = 1.6
     var wordsPerFrame = 1 {
         didSet {
             if mode != .playing, let text {
@@ -33,7 +24,6 @@ final class SpeedPlayer {
         }
     }
     @ObservationIgnored private var clock: Task<Void, Never>?
-    @ObservationIgnored private var plates: [Int] = []
     private(set) var backs = 0
     @ObservationIgnored private var reportedWords = 0
     @ObservationIgnored private var reportedBacks = 0
@@ -43,24 +33,9 @@ final class SpeedPlayer {
         mode == .playing
     }
 
-    var resting: Int? {
-        if case let .resting(block) = mode {
-            return block
-        }
-        return nil
-    }
-
-    var previewed: Int? {
-        if case let .previewing(block) = mode {
-            return block
-        }
-        return nil
-    }
-
     func load(_ document: ReaderDocument, from start: ReadingLine) async {
         guard text == nil else { return }
         reportedAt = .now
-        plates = document.plates
         let text = await Task.detached(priority: .userInitiated) { SpeedText(document: document, from: start) }.value
         self.text = text
         frame = text.frame(at: 0, words: wordsPerFrame)
@@ -83,25 +58,15 @@ final class SpeedPlayer {
     }
 
     func toggle() {
-        if previewed != nil {
-            enter(isAtEnd ? .ended : .playing)
-            return
-        }
-        if resting != nil {
-            continueResting()
-            return
-        }
         if isPlaying {
             pause()
-        } else if token?.isStop == true {
-            continuePastStop()
         } else {
             play()
         }
     }
 
     func play() {
-        guard mode != .playing, previewed == nil, let token, !token.isStop else {
+        guard mode != .playing, let token else {
             return
         }
         markShown()
@@ -109,7 +74,7 @@ final class SpeedPlayer {
     }
 
     func pause() {
-        guard mode == .playing || resting != nil else {
+        guard mode == .playing else {
             return
         }
         enter(.paused)
@@ -149,41 +114,19 @@ final class SpeedPlayer {
         jump(to: next)
     }
 
-    func stepBack() {
-        guard let block = previewed ?? resting ?? shownStop else {
-            sentenceBack()
+    func wordBack() {
+        guard frame.lowerBound > 0 else {
             return
         }
-        guard let index = plates.firstIndex(of: block), index > plates.startIndex else {
+        backs += 1
+        jump(to: frame.lowerBound - 1)
+    }
+
+    func wordForward() {
+        guard let text, frame.lowerBound + 1 < text.tokens.count else {
             return
         }
-        enter(.previewing(plates[index - 1]))
-    }
-
-    func stepForward() {
-        guard let block = previewed ?? resting ?? shownStop else {
-            sentenceForward()
-            return
-        }
-        guard let index = plates.firstIndex(of: block), index + 1 < plates.endIndex else {
-            return
-        }
-        enter(.previewing(plates[index + 1]))
-    }
-
-    private var shownStop: Int? {
-        token?.isStop == true ? token?.block : nil
-    }
-
-    func continuePastStop() {
-        guard !isAtEnd else { return }
-        show(frame.upperBound)
-        play()
-    }
-
-    func continueResting() {
-        guard resting != nil else { return }
-        enter(.playing)
+        jump(to: frame.lowerBound + 1)
     }
 
     private func enter(_ next: SpeedPlayback) {
@@ -202,8 +145,6 @@ final class SpeedPlayer {
         show(index)
         if playing {
             play()
-        } else if mode == .stopped {
-            enter(.paused)
         }
     }
 
@@ -231,68 +172,8 @@ final class SpeedPlayer {
                 enter(.ended)
                 return
             }
-            let finished = frame
             show(frame.upperBound)
-            if token?.isStop == true {
-                enter(.stopped)
-                return
-            }
-            guard let block = text.endedBlock(at: finished) else {
-                continue
-            }
-            switch restMode {
-            case .off:
-                continue
-            case .timed:
-                mode = .resting(block)
-                try? await Task.sleep(for: .seconds(restSeconds))
-                guard !Task.isCancelled, case .resting = mode else {
-                    return
-                }
-                mode = .playing
-            case .manual:
-                mode = .resting(block)
-                return
-            }
         }
-    }
-}
-
-struct Press: Equatable {
-    enum Phase: Equatable {
-        case idle
-        case down
-        case holding
-    }
-
-    private(set) var phase = Phase.idle
-    private var resumes = false
-
-    var isHolding: Bool {
-        phase == .holding
-    }
-
-    mutating func land() {
-        guard phase == .idle else {
-            return
-        }
-        phase = .down
-    }
-
-    mutating func hold(playing: Bool) -> Bool {
-        guard phase == .down else {
-            return false
-        }
-        phase = .holding
-        resumes = playing
-        return true
-    }
-
-    mutating func lift() -> Bool {
-        let resume = phase == .holding && resumes
-        phase = .idle
-        resumes = false
-        return resume
     }
 }
 
@@ -305,14 +186,8 @@ struct SpeedReader: View {
     @AppStorage private var wordsPerMinute: Int
     @AppStorage private var wordsPerFrame: Int
     @AppStorage private var pauseProfileJSON: String
-    @AppStorage private var restModeRaw: String
-    @AppStorage private var restSeconds: Double
     @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
     @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
-    @State private var press = Press()
-    @State private var holdTimer: Task<Void, Never>?
-    @Namespace private var mediaZoom
-    @State private var mediaPresenter = MediaPresenter()
 
     init(reader: ReaderCoordinator, start: ReadingLine) {
         self.reader = reader
@@ -321,11 +196,10 @@ struct SpeedReader: View {
         _wordsPerMinute = AppStorage(wrappedValue: 250, ReaderAppearance.SpeedSetting.wordsPerMinute.key(kind))
         _wordsPerFrame = AppStorage(wrappedValue: 1, ReaderAppearance.SpeedSetting.wordsPerFrame.key(kind))
         _pauseProfileJSON = AppStorage(wrappedValue: "", ReaderAppearance.SpeedSetting.pauses.key(kind))
-        _restModeRaw = AppStorage(wrappedValue: SpeedRestMode.timed.rawValue, ReaderAppearance.SpeedSetting.restMode.key(kind))
-        _restSeconds = AppStorage(wrappedValue: 1.6, ReaderAppearance.SpeedSetting.restSeconds.key(kind))
     }
 
     private static let speeds = 150...600
+    private static let stepAnimation = Animation.easeOut(duration: 0.15)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -334,7 +208,6 @@ struct SpeedReader: View {
                 .padding(.top, 12)
             stage
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.smooth(duration: 0.25), value: player.resting)
                 .modifier(ReaderAppearanceModifier())
             controls
                 .padding(.bottom, 8)
@@ -342,29 +215,15 @@ struct SpeedReader: View {
         .padding(.horizontal, Tokens.gutter)
         .background(background.canvas)
         .environment(reader)
-        .presentsMedia(mediaPresenter)
-        .environment(\.mediaZoom, mediaZoom)
-        .environment(\.mediaPresenter, mediaPresenter)
-        .environment(\.openURL, OpenURLAction { url in
-            guard url.isFileURL, ImageFiles.headerSize(of: url) != nil else {
-                return .systemAction
-            }
-            mediaPresenter.open(url)
-            return .handled
-        })
         .task {
             player.wordsPerMinute = wordsPerMinute
             player.wordsPerFrame = wordsPerFrame
             player.pauseProfile = pauseProfile
-            player.restMode = restMode
-            player.restSeconds = restSeconds
             await player.load(reader.document, from: start)
         }
         .onChange(of: wordsPerMinute) { player.wordsPerMinute = wordsPerMinute }
         .onChange(of: wordsPerFrame) { player.wordsPerFrame = wordsPerFrame }
         .onChange(of: pauseProfileJSON) { player.pauseProfile = pauseProfile }
-        .onChange(of: restModeRaw) { player.restMode = restMode }
-        .onChange(of: restSeconds) { player.restSeconds = restSeconds }
         .onChange(of: scenePhase) {
             guard scenePhase != .active else { return }
             player.pause()
@@ -405,20 +264,6 @@ struct SpeedReader: View {
                             }
                         }
                     }
-                    Menu("Paragraph Preview", systemImage: "timer") {
-                        Picker("After a Paragraph", selection: Binding(
-                            get: { restMode },
-                            set: { restModeRaw = $0.rawValue }
-                        )) {
-                            Text("Off").tag(SpeedRestMode.off)
-                            Text("Timed").tag(SpeedRestMode.timed)
-                            Text("Wait for Tap").tag(SpeedRestMode.manual)
-                        }
-                        .pickerStyle(.inline)
-                        if restMode == .timed {
-                            Stepper("Seconds: \(restSeconds, specifier: "%.1f")", value: $restSeconds, in: 1...10, step: 0.5)
-                        }
-                    }
                     ReaderAppearanceControls(showsColumn: false)
                 }
                 .labelStyle(.iconOnly)
@@ -433,10 +278,6 @@ struct SpeedReader: View {
         SpeedPauseProfile(json: pauseProfileJSON)
     }
 
-    private var restMode: SpeedRestMode {
-        SpeedRestMode(rawValue: restModeRaw) ?? .timed
-    }
-
     private func set(_ level: SpeedPauseLevel, for kind: SpeedPauseKind) {
         var next = pauseProfile
         next.set(level, for: kind)
@@ -448,35 +289,19 @@ struct SpeedReader: View {
         let blocks = max(reader.document.blocks.count, 1)
         let share = token.map { (Double($0.block) + $0.share) / Double(blocks) } ?? 0
         return VStack(alignment: .leading, spacing: 8) {
-            Text(sectionTitle(of: player.resting ?? player.previewed ?? token?.block ?? start.piece))
+            ReaderProgressBar(share: share)
+            Text(sectionTitle(of: token?.block ?? start.piece))
                 .font(.headline)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            ReaderProgressBar(share: share)
         }
     }
 
     @ViewBuilder
     private var stage: some View {
         if let text = player.text {
-            if let shown = player.resting ?? player.previewed {
-                plate(shown)
-                    .transition(.opacity)
-            } else if let token = player.token {
-                if token.isStop {
-                    plate(token.block)
-                        .padding(.vertical, Tokens.gap)
-                } else {
-                    words(in: text, token: token)
-                        .overlay {
-                            if press.isHolding {
-                                plate(token.block)
-                                    .background(ReaderBackgroundColor())
-                                    .transition(.opacity)
-                            }
-                        }
-                        .animation(.smooth(duration: 0.2), value: press.isHolding)
-                }
+            if let token = player.token {
+                words(in: text, token: token)
             } else {
                 Text("Nothing left to read.")
                     .foregroundStyle(.secondary)
@@ -492,10 +317,12 @@ struct SpeedReader: View {
         let before = frame.lowerBound > 0 ? text.tokens[frame.lowerBound - 1] : nil
         let after = frame.upperBound < text.tokens.count ? text.tokens[frame.upperBound] : nil
         let neighbor = { (other: SpeedToken?) in
-            other.flatMap { $0.isStop || $0.block != token.block ? nil : $0.text } ?? ""
+            other.flatMap { $0.block != token.block ? nil : $0.text } ?? ""
         }
         return PivotWord(text: shown, before: neighbor(before), after: neighbor(after))
             .font(font.font(.largeTitle))
+            .id(frame.lowerBound)
+            .transition(.opacity)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .gesture(touch)
@@ -507,78 +334,33 @@ struct SpeedReader: View {
 
     private var touch: some Gesture {
         DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard press.phase == .idle else {
-                    if abs(value.translation.width) > 12 || abs(value.translation.height) > 12 {
-                        holdTimer?.cancel()
-                    }
-                    return
-                }
-                press.land()
-                holdTimer = Task {
-                    try? await Task.sleep(for: .seconds(0.4))
-                    guard !Task.isCancelled, press.hold(playing: player.isPlaying) else {
-                        return
-                    }
-                    player.pause()
-                }
-            }
             .onEnded { value in
-                holdTimer?.cancel()
-                let wasHolding = press.isHolding
-                let resume = press.lift()
-                if wasHolding {
-                    if resume {
-                        player.play()
-                    }
-                    return
-                }
                 let dx = value.translation.width, dy = value.translation.height
                 if abs(dx) > 50, abs(dx) > abs(dy) {
-                    dx > 0 ? player.sentenceBack() : player.sentenceForward()
+                    withAnimation(Self.stepAnimation) {
+                        dx > 0 ? player.sentenceBack() : player.sentenceForward()
+                    }
                 } else if abs(dx) < 12, abs(dy) < 12 {
                     player.toggle()
                 }
             }
     }
 
-    private func plate(_ block: Int) -> some View {
-        GeometryReader { geo in
-            ScrollView {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    BlockView(
-                        block: reader.document.blocks[block],
-                        index: block,
-                        baseURL: reader.baseURL,
-                        mode: .reading,
-                        readShare: 0,
-                        markedReadThrough: false,
-                        annotations: library.snapshot.annotations.filter { $0.materialID == reader.materialID && $0.piece == block },
-                        fold: .none,
-                        panGestures: false
-                    )
-                    .frame(maxWidth: Tokens.minReading)
-                    .frame(maxWidth: .infinity)
-                    Spacer(minLength: 0)
-                }
-                .frame(minHeight: geo.size.height)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-        }
-    }
-
     private var controls: some View {
         VStack(spacing: 14) {
             HStack {
-                transport("backward.fill", pagingPlates ? "Previous Plate" : "Previous Sentence") { player.stepBack() }
+                transport("backward.fill", "Previous Word") {
+                    withAnimation(Self.stepAnimation) { player.wordBack() }
+                }
                 Button(centerTitle, systemImage: player.isPlaying ? "pause.fill" : "play.fill") { player.toggle() }
                     .font(.largeTitle)
                     .frame(width: 84, height: 84)
                     .contentTransition(.symbolEffect(.replace))
                     .glassEffect(.regular.interactive(), in: Circle())
-                    .disabled(player.token == nil || (player.token?.isStop == true && player.isAtEnd))
-                transport("forward.fill", pagingPlates ? "Next Plate" : "Next Sentence") { player.stepForward() }
+                    .disabled(player.token == nil)
+                transport("forward.fill", "Next Word") {
+                    withAnimation(Self.stepAnimation) { player.wordForward() }
+                }
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.plain)
@@ -613,15 +395,8 @@ struct SpeedReader: View {
             .glassEffect(.regular.interactive(), in: Circle())
     }
 
-    private var pagingPlates: Bool {
-        player.previewed != nil || player.resting != nil || player.token?.isStop == true
-    }
-
     private var centerTitle: String {
-        if player.isPlaying {
-            return "Pause"
-        }
-        return player.token?.isStop == true ? "Continue" : "Play"
+        player.isPlaying ? "Pause" : "Play"
     }
 
     private func sectionTitle(of block: Int) -> String {
@@ -656,14 +431,6 @@ struct ReaderProgressBar: View {
             }
         }
         .frame(height: 3)
-    }
-}
-
-private struct ReaderBackgroundColor: View {
-    @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
-
-    var body: some View {
-        background.canvas
     }
 }
 

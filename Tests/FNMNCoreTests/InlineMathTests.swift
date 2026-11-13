@@ -20,11 +20,11 @@ import Testing
 
     @Test func theSpeedReaderReadsAPriceAsWords() {
         let tokens = SpeedText.tokens(in: .text("It costs $5 and $10 today."), at: 0)
-        #expect(!tokens.contains { $0.isStop })
+        #expect(tokens.map(\.text) == ["It", "costs", "$5", "and", "$10", "today."])
     }
 
-    @Test func theSpeedReaderStopsAtAFormula() {
+    @Test func theSpeedReaderSkipsAFormula() {
         let tokens = SpeedText.tokens(in: .text("The area is $x^2$ here."), at: 0)
-        #expect(tokens.contains { $0.isStop })
+        #expect(tokens.isEmpty)
     }
 }
