@@ -345,9 +345,14 @@ public actor LibraryFile {
         return changedAt > recorded
     }
 
+    private struct MaterialHead: Decodable {
+        let id: String
+        let sourceURL: String?
+    }
+
     private static func materialHead(in archive: URL) -> (id: String, page: String?)? {
         guard let handle = try? FileHandle(forReadingFrom: archive),
-              let header = try? handle.read(upToCount: 512), header.count == 512 else { return nil }
+              let header = read(handle, count: 512), header.count == 512 else { return nil }
         defer { try? handle.close() }
         var digits = ""
         for scalar in String(decoding: header[124..<136], as: UTF8.self).unicodeScalars {
@@ -357,16 +362,74 @@ public actor LibraryFile {
             digits.unicodeScalars.append(scalar)
         }
         guard let size = Int(digits, radix: 8), size > 0,
-              let data = try? handle.read(upToCount: min(size, 4 * 1024 * 1024)),
-              let text = String(data: data, encoding: .utf8),
-              let match = text.firstMatch(of: /"id"\s*:\s*("(?:[^"\\]|\\.)*")/),
-              let id = try? JSONDecoder().decode(String.self, from: Data(match.1.utf8)) else { return nil }
-        var page: String? = nil
-        if let url = text[match.range.upperBound...].firstMatch(of: /"sourceURL"\s*:\s*("(?:[^"\\]|\\.)*")/),
-           let raw = try? JSONDecoder().decode(String.self, from: Data(url.1.utf8)) {
-            page = SourceIndex.key(raw)
+              let data = read(handle, count: min(size, 4 * 1024 * 1024)),
+              let slice = materialSlice(data),
+              let head = try? JSONDecoder().decode(MaterialHead.self, from: slice) else { return nil }
+        return (head.id, head.sourceURL.map(SourceIndex.key))
+    }
+
+    private static func materialSlice(_ data: Data) -> Data? {
+        let key = Data("\"material\"".utf8)
+        var search = data.startIndex..<data.endIndex
+        while let found = data.range(of: key, in: search) {
+            var i = found.upperBound
+            func skipSpace() {
+                while i < data.endIndex, data[i] == 0x20 || data[i] == 0x09 || data[i] == 0x0A || data[i] == 0x0D {
+                    i = data.index(after: i)
+                }
+            }
+            skipSpace()
+            guard i < data.endIndex, data[i] == 0x3A else {
+                search = found.upperBound..<data.endIndex
+                continue
+            }
+            i = data.index(after: i)
+            skipSpace()
+            guard i < data.endIndex, data[i] == 0x7B else {
+                search = found.upperBound..<data.endIndex
+                continue
+            }
+            let open = i
+            var depth = 0
+            var inString = false
+            var escaped = false
+            while i < data.endIndex {
+                let byte = data[i]
+                if inString {
+                    if escaped {
+                        escaped = false
+                    } else if byte == 0x5C {
+                        escaped = true
+                    } else if byte == 0x22 {
+                        inString = false
+                    }
+                } else if byte == 0x22 {
+                    inString = true
+                } else if byte == 0x7B {
+                    depth += 1
+                } else if byte == 0x7D {
+                    depth -= 1
+                    if depth == 0 {
+                        return data[open...i]
+                    }
+                }
+                i = data.index(after: i)
+            }
+            return nil
         }
-        return (id, page)
+        return nil
+    }
+
+    private static func read(_ handle: FileHandle, count: Int) -> Data? {
+        var data = Data()
+        data.reserveCapacity(count)
+        while data.count < count {
+            guard let chunk = try? handle.read(upToCount: count - data.count), !chunk.isEmpty else {
+                break
+            }
+            data.append(chunk)
+        }
+        return data.isEmpty ? nil : data
     }
 
     private static func changeDate(of file: URL) -> Date? {

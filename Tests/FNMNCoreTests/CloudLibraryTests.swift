@@ -284,6 +284,8 @@ private func writeLateIDDelivery(materialID: String, bodyBytes: Int, to url: URL
     let pageURL = URL(string: "https://example.com/page")!
     let linkArchive = cloud.appending(path: "deliveries/link.tar")
     try writeDelivery(ImportPackage.link(pageURL), to: linkArchive)
+    try FileManager.default.setAttributes(
+        [.modificationDate: Date().addingTimeInterval(-60)], ofItemAtPath: linkArchive.path)
     let file = LibraryFile(url: root.appending(path: "library"), cache: root.appending(path: "cache"))
     await file.useCloudFolder(cloud)
 
