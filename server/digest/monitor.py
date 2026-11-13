@@ -14,9 +14,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from digest import instagram, settings as digest_settings, telegram, x
-from digest.reading import SourceFailure, browser, needs_browser
+from digest.reading import SourceFailure, SourceResult, browser, needs_browser
 from digest.store import Store, iso
 from web import LIVE
+import reader
 
 HERE = Path(__file__).resolve().parent
 SOURCES = {"x": x, "telegram": telegram, "instagram": instagram}
@@ -69,14 +70,19 @@ def _run(source: dict, folders: list[str], store: Store, verbose: bool) -> dict:
             print(f"{source['id']}: {stage}")
 
     try:
-        if needs_browser(source["network"]):
-            with browser(source["network"]) as page:
-                result = module.collect(source, LIVE, store, source.get("folders", []), report, page=page)
-        else:
-            result = module.collect(source, LIVE, store, source.get("folders", []), report)
+        result = _collect(source, module, store, report)
     except SourceFailure as failure:
-        print(f"{source['id']}: failed: {failure.reason}")
-        return {"status": "failed", "detail": failure.reason}
+        if source["network"] != "x" or not _warm_x(source, verbose):
+            print(f"{source['id']}: failed: {failure.reason}")
+            return {"status": "failed", "detail": failure.reason}
+        try:
+            result = _collect(source, module, store, report)
+        except SourceFailure as retry:
+            print(f"{source['id']}: failed: {retry.reason}")
+            return {"status": "failed", "detail": retry.reason}
+        except Exception as error:
+            traceback.print_exc()
+            return {"status": "failed", "detail": str(error)}
     except Exception as error:
         traceback.print_exc()
         return {"status": "failed", "detail": str(error)}
@@ -85,6 +91,39 @@ def _run(source: dict, folders: list[str], store: Store, verbose: bool) -> dict:
     if result.note:
         return {"status": "stale", "detail": result.note, "name": result.name}
     return {"status": "ok", "name": result.name}
+
+
+def _collect(source: dict, module, store: Store, report) -> SourceResult:
+    if needs_browser(source["network"]):
+        with browser(source["network"]) as page:
+            return module.collect(source, LIVE, store, source.get("folders", []), report, page=page)
+    return module.collect(source, LIVE, store, source.get("folders", []), report)
+
+
+def _warm_x(source: dict, verbose: bool) -> bool:
+    """One headed visit to x.com: Cloudflare issues the cf_clearance the headless profile then reuses."""
+    print(f"{source['id']}: x refused headless; warming the profile")
+    try:
+        session = reader.ensure("x", headed=True)
+    except Exception as error:
+        if verbose:
+            print(f"{source['id']}: the warmup browser did not open: {error}")
+        return False
+    warmed = False
+    try:
+        tab = session.tab()
+        try:
+            tab.goto("https://x.com", timeout=45)
+            tab.settle()
+            tab.wait_for_timeout(2000)
+            warmed = True
+        finally:
+            tab.close()
+    except Exception:
+        pass
+    finally:
+        session.close()
+    return warmed
 
 
 if __name__ == "__main__":

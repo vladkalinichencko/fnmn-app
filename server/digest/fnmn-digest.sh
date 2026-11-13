@@ -52,7 +52,7 @@ case "${1:-}" in
     agent $BUILDER "$PYTHON" -m digest.build
     /usr/libexec/PlistBuddy -c "Add :StartInterval integer 7200" "$AGENTS/$MONITOR.plist"
     /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval array" "$AGENTS/$BUILDER.plist"
-    hours=($(cd "$SERVER" && "$PYTHON" -c "from digest.build import BUILD_HOURS; print(*BUILD_HOURS)"))
+    hours=($(cd "$SERVER" && "$PYTHON" -c "from digest import settings; print(*settings.hours(settings.load()))"))
     slot=0
     for hour in "${hours[@]}"; do
       /usr/libexec/PlistBuddy -c "Add :StartCalendarInterval:$slot dict" "$AGENTS/$BUILDER.plist"
@@ -62,7 +62,7 @@ case "${1:-}" in
     done
     start $MONITOR
     start $BUILDER
-    echo "The digest monitor runs every two hours; the builder at 08:00 and 20:00."
+    echo "The digest monitor runs every two hours; the builder at ${${hours[@]/%/:00}[*]}."
     ;;
   off)
     launchctl bootout "gui/$UID/$MONITOR" 2>/dev/null || true

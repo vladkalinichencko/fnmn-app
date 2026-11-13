@@ -114,8 +114,9 @@ def browser_sandbox(root=ROOT):
 
 
 def digest_script_checks(root=ROOT):
-    """The digest's calendar agents must name their minute, and the builder's hours must come from the builder
-    itself. launchd treats a missing key as a wildcard, so an `Hour`-only entry fires every minute of that hour."""
+    """The digest's calendar agents must name their minute, and the builder's hours must come from the
+    settings the app writes, the same source `due()` reads. launchd treats a missing key as a wildcard,
+    so an `Hour`-only entry fires every minute of that hour."""
     path = root / "server" / "digest" / "fnmn-digest.sh"
     if not path.exists():
         return []
@@ -125,8 +126,8 @@ def digest_script_checks(root=ROOT):
         prefix = f"StartCalendarInterval:{match.group(1)}:Minute"
         if prefix not in source:
             problems.append(f"server/digest/fnmn-digest.sh sets {match.group(0)} without a Minute")
-    if "from digest.build import BUILD_HOURS" not in source:
-        problems.append("server/digest/fnmn-digest.sh writes fixed builder hours; read digest.build.BUILD_HOURS")
+    if "settings.hours(settings.load())" not in source:
+        problems.append("server/digest/fnmn-digest.sh writes fixed builder hours; read the app's digest settings")
     return problems
 
 
