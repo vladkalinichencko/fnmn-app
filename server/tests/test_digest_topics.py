@@ -14,7 +14,7 @@ class SettingsTests(unittest.TestCase):
         self.assertTrue(prefs["enabled"])
         self.assertEqual(prefs["hours"], [8, 20])
         self.assertEqual(prefs["threshold"], 0.5)
-        self.assertEqual(prefs["limit"], 100)
+        self.assertEqual(prefs["limit"], 40)
         self.assertFalse(settings.any_topics(prefs))
 
     def test_topics_join_the_network_words_and_the_source_words(self):

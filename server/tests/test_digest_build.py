@@ -1,6 +1,7 @@
 import json
 import tarfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -144,6 +145,32 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(len(package["posts"]), 1)
             self.assertEqual(package["posts"][0]["folders"], ["small model"])
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/2": "over the digest limit"})
+
+    def test_the_limit_caps_each_source_not_the_whole_delivery(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({"limit": 1}), encoding="utf-8")
+            other = replace(post("x/2"), source="x/elsewhere")
+            Store(root).append([post("x/1"), other])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertEqual(len(package["posts"]), 2)
+            self.assertEqual(Store(root).builds()[-1]["skipped"], {})
+
+    def test_without_topics_the_feed_is_capped_at_forty(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            Store(root).append([post(f"x/{index}") for index in range(45)])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertEqual(len(package["posts"]), build.FEED_LIMIT)
+            self.assertEqual(len(Store(root).builds()[-1]["skipped"]), 45 - build.FEED_LIMIT)
 
     def test_a_disabled_digest_builds_nothing(self):
         with TemporaryDirectory() as folder:

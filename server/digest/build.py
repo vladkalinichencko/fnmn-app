@@ -2,8 +2,10 @@
 
     python -m digest.build [--folder PATH] [--force] [--now ISO]
 
-The builder runs from the launchd agent twice a day, at 08:00 and 20:00 local time: a run that is not due, or
-that has nothing new, writes nothing. The delivery is the same uncompressed USTAR archive as an article's,
+The builder runs from the launchd agent at the hours in the settings: a run that is not due, or
+that has nothing new, writes nothing. `limit` caps each source's posts in one delivery; a settings
+file without topics collects the whole feed under the `FEED_LIMIT` ceiling. The delivery is the same
+uncompressed USTAR archive as an article's,
 `package.json` first, and lands under `digests/` in the FNMN folder, where the phone reads it the way it reads
 every other delivery.
 """
@@ -24,6 +26,7 @@ HERE = Path(__file__).resolve().parent
 FNMN = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/FNMN"
 BUILD_HOURS = (8, 20)
 KEEP = 14
+FEED_LIMIT = 40
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -55,7 +58,18 @@ def main(argv: list[str] | None = None) -> int:
             skipped[post.id] = reason
     buildable = [post for post in pending if post.id not in skipped]
     scores = topics.classify(buildable, prefs)
-    buildable, over = topics.cap(buildable, scores, prefs["limit"])
+    per_source: dict[str, list[Post]] = {}
+    for post in buildable:
+        per_source.setdefault(post.source, []).append(post)
+    kept, over = [], {}
+    for group in per_source.values():
+        group_kept, group_over = topics.cap(group, scores, prefs["limit"])
+        kept += group_kept
+        over.update(group_over)
+    buildable = kept
+    if not digest_settings.any_topics(prefs):
+        buildable, feed_over = topics.cap(buildable, scores, FEED_LIMIT)
+        over.update(feed_over)
     skipped.update(over)
     if not buildable:
         store.record_build({"at": iso(now), "post_ids": list(skipped), "skipped": skipped, "file": None})

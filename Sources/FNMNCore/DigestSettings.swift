@@ -51,7 +51,7 @@ public struct DigestSettings: Codable, Equatable, Sendable {
         enabled: Bool = true,
         hours: [Int] = [8, 20],
         threshold: Double = 0.5,
-        limit: Int = 100,
+        limit: Int = 40,
         networks: [String: Network] = [:],
         sources: [String: Source] = [:]
     ) {
@@ -72,7 +72,7 @@ public struct DigestSettings: Codable, Equatable, Sendable {
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         hours = try container.decodeIfPresent([Int].self, forKey: .hours) ?? [8, 20]
         threshold = try container.decodeIfPresent(Double.self, forKey: .threshold) ?? 0.5
-        limit = try container.decodeIfPresent(Int.self, forKey: .limit) ?? 100
+        limit = try container.decodeIfPresent(Int.self, forKey: .limit) ?? 40
         networks = try container.decodeIfPresent([String: Network].self, forKey: .networks) ?? [:]
         sources = try container.decodeIfPresent([String: Source].self, forKey: .sources) ?? [:]
     }

@@ -10,7 +10,7 @@ struct DigestSettingsTests {
         #expect(settings.enabled)
         #expect(settings.hours == [8, 20])
         #expect(settings.threshold == 0.5)
-        #expect(settings.limit == 100)
+        #expect(settings.limit == 40)
         #expect(settings.networks.isEmpty)
         #expect(settings.sources.isEmpty)
     }
@@ -37,7 +37,7 @@ struct DigestSettingsTests {
         #expect(json["enabled"] as? Bool == true)
         #expect(json["hours"] as? [Int] == [8, 20])
         #expect(json["threshold"] as? Double == 0.5)
-        #expect(json["limit"] as? Int == 100)
+        #expect(json["limit"] as? Int == 40)
         let networks = try #require(json["networks"] as? [String: Any])
         let telegram = try #require(networks["telegram"] as? [String: Any])
         #expect(telegram["topics"] as? [String] == ["crypto"])

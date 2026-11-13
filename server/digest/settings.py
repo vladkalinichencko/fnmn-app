@@ -14,7 +14,7 @@ FNMN = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/FNMN"
 NAME = "digest-settings.json"
 DEFAULT_HOURS = (8, 20)
 DEFAULT_THRESHOLD = 0.5
-DEFAULT_LIMIT = 100
+DEFAULT_LIMIT = 40
 RECOMMENDATION_NETWORKS = ("x", "instagram")
 
 
