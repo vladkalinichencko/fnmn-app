@@ -13,7 +13,7 @@ from datetime import datetime
 import httpx
 
 from package import Report
-from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo
+from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo, save_video
 from digest.store import Post, iso
 from web import Web
 
@@ -174,8 +174,20 @@ def _media(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[li
             poster = save_photo(web, store, post_id, "poster", url, fetch)
             if poster is None:
                 errors += 1
-            video = {"poster": poster, "duration": _duration(payload)}
+            video = {"poster": poster, "duration": _duration(payload), "file": _video_file(item, post_id, web, store, fetch)}
     return media, video, errors
+
+
+def _video_file(item: dict, post_id: str, web: Web, store, fetch=None) -> dict | None:
+    """The best mp4 variant of the tweet's video, as a file the digest carries."""
+    variants = [
+        variant for variant in (item.get("video_info") or {}).get("variants") or []
+        if variant.get("content_type") == "video/mp4" and variant.get("url")
+    ]
+    if not variants:
+        return None
+    best = max(variants, key=lambda variant: variant.get("bitrate") or 0)
+    return save_video(web, store, post_id, "video", best["url"], fetch)
 
 
 def _duration(payload: dict) -> float | None:

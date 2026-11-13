@@ -54,6 +54,26 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(package["posts"][0]["media"][0]["width"], 640)
             self.assertTrue(package["posts"][0]["postedAt"].endswith("Z"))
 
+    def test_a_video_file_rides_the_delivery_next_to_its_poster(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            store = Store(root)
+            clip = post("x/1", text=None)
+            clip.video = {
+                "poster": store.save_media("x/1", "poster", png(640, 480), "png"),
+                "duration": 12.5,
+                "file": store.save_file("x/1", "video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
+            }
+            store.append([clip])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                members = opened.getnames()
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertIn("media/x-1-video.mp4", members)
+            self.assertIn("media/x-1-poster.png", members)
+            self.assertEqual(package["posts"][0]["video"]["file"]["path"], "media/x-1-video.mp4")
+
     def test_the_digest_reads_through_the_article_delivery_reader(self):
         with TemporaryDirectory() as folder:
             root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"

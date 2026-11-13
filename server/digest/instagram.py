@@ -10,7 +10,7 @@ from datetime import datetime
 from lxml import html
 
 from package import Report
-from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo
+from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo, save_video
 from digest.store import Post, iso
 from web import Web
 
@@ -143,11 +143,23 @@ def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folde
     media = []
     errors = 0
     fetch = page_fetch(tab)
-    if image:
-        saved = save_photo(web, store, post_id, 0, image, fetch)
+    dom = _dom_media(tab)
+    images = dom["images"] or ([image] if image else [])
+    for index, url in enumerate(images[:8]):
+        saved = save_photo(web, store, post_id, index, url, fetch)
         if saved:
             media.append(saved)
         else:
+            errors += 1
+    video_urls = dom["videos"] or [
+        url for url in (_meta(document, "og:video:secure_url"), _meta(document, "og:video")) if url
+    ]
+    video = None
+    if video_urls:
+        video_file = save_video(web, store, post_id, "video", video_urls[0], fetch)
+        poster = media[0] if media else (save_photo(web, store, post_id, "poster", image, fetch) if image else None)
+        video = {"poster": poster, "duration": None, "file": video_file}
+        if video_file is None and poster is None:
             errors += 1
     times = document.xpath("//time/@datetime")
     if not times:
@@ -162,9 +174,52 @@ def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folde
         posted_at=posted,
         text=_caption(caption),
         media=media,
+        video=video,
         folders=folders,
         media_errors=errors,
     )
+
+
+def _dom_media(tab) -> dict:
+    """The post's own attachments from the rendered page: carousel frames at their largest srcset
+    size and any playable video URL. Empty lists mean the page kept them out of the DOM."""
+    try:
+        found = tab.eval(DOM_MEDIA) or {}
+    except Exception:
+        return {"images": [], "videos": []}
+    return {
+        "images": [url for url in found.get("images") or [] if isinstance(url, str)],
+        "videos": [url for url in found.get("videos") or [] if isinstance(url, str)],
+    }
+
+
+DOM_MEDIA = """(() => {
+  const images = new Set(), videos = new Set();
+  const big = url => {
+    const size = url.match(/s(\\d+)x(\\d+)/);
+    return !size || Math.max(+size[1], +size[2]) >= 480;
+  };
+  const isPostImage = url => typeof url === 'string' && url.includes('cdninstagram.com')
+    && !url.includes('s150x150') && big(url);
+  const best = img => {
+    let top = null, topW = 0;
+    for (const part of (img.getAttribute('srcset') || '').split(',')) {
+      const [url, width] = part.trim().split(/\\s+/);
+      if (url && (+width || 0) >= topW) { top = url; topW = +width || 0; }
+    }
+    return top || img.currentSrc || img.src;
+  };
+  document.querySelectorAll('main img, article img, [role="main"] img').forEach(img => {
+    const url = best(img);
+    if (isPostImage(url)) images.add(url);
+  });
+  document.querySelectorAll('video').forEach(v => {
+    const source = v.querySelector('source');
+    const url = v.currentSrc || v.src || (source && source.src);
+    if (typeof url === 'string' && url.startsWith('http')) videos.add(url);
+  });
+  return {images: [...images].slice(0, 10), videos: [...videos].slice(0, 2)};
+})()"""
 
 
 def _meta(document, property_name: str) -> str | None:

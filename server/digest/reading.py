@@ -83,3 +83,21 @@ def save_photo(web: Web, store, post_id: str, index: int | str, url: str, fetch:
         return None
     extension = "png" if url.split("?")[0].lower().endswith(".png") else "jpg"
     return store.save_media(post_id, index, data, extension)
+
+
+MAX_VIDEO_BYTES = 400 * 1024 * 1024
+"""A post's video travels inside the digest tar, so it stays under the size iCloud comfortably carries."""
+
+
+def save_video(web: Web, store, post_id: str, index: int | str, url: str, fetch: Callable[[str], bytes] | None = None) -> dict | None:
+    """One video file of a post. A refused or oversized file is left out like a refused picture."""
+    try:
+        data = fetch(url) if fetch is not None else web.bytes(url)
+    except (OSError, httpx.HTTPError):
+        return None
+    if not data or len(data) > MAX_VIDEO_BYTES:
+        return None
+    extension = url.split("?")[0].rsplit(".", 1)[-1].lower()
+    if extension not in {"mp4", "mov", "m4v", "webm"}:
+        extension = "mp4"
+    return store.save_file(post_id, index, data, extension)

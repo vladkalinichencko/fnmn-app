@@ -145,6 +145,9 @@ def _write(package: dict, posts: list[Post], store: Store, destination: Path) ->
         poster = (post.video or {}).get("poster")
         if poster:
             files.append((poster["path"], store.root / poster["path"]))
+        video_file = (post.video or {}).get("file")
+        if video_file:
+            files.append((video_file["path"], store.root / video_file["path"]))
         for comment in post.comments:
             avatar = comment.get("avatar")
             if avatar:
@@ -158,7 +161,7 @@ def _unshowable(post: Post) -> str | None:
         return "no permalink"
     if post.text or post.media or post.media_errors:
         return None
-    if post.video and post.video.get("poster"):
+    if post.video and (post.video.get("poster") or post.video.get("file")):
         return None
     if post.video:
         return "a video with no poster"
@@ -178,7 +181,11 @@ def _available(post: Post, store: Store) -> str | None:
     if poster and not (store.root / poster["path"]).exists():
         print(f"{post.id}: missing {poster['path']}")
         post.video["poster"] = None
-    if post.text or post.media or post.media_errors or (post.video and post.video.get("poster")):
+    video_file = (post.video or {}).get("file")
+    if video_file and not (store.root / video_file["path"]).exists():
+        print(f"{post.id}: missing {video_file['path']}")
+        post.video["file"] = None
+    if post.text or post.media or post.media_errors or (post.video and (post.video.get("poster") or post.video.get("file"))):
         return None
     return "missing media"
 

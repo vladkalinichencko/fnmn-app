@@ -192,7 +192,9 @@ struct PostCard: View {
         }
         .aspectRatio(CGFloat(video.poster?.width ?? 16) / CGFloat(max(video.poster?.height ?? 9, 1)), contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
-        if let media = video.poster {
+        if let file = video.file {
+            poster.opensMedia(digest.url(of: file.path))
+        } else if let media = video.poster {
             poster.opensMedia(digest.url(of: media.path))
         } else {
             poster

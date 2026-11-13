@@ -140,10 +140,20 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         public struct Video: Codable, Equatable, Sendable {
             public let poster: Media?
             public let duration: Double?
+            public let file: File?
 
-            public init(poster: Media? = nil, duration: Double? = nil) {
+            public init(poster: Media? = nil, duration: Double? = nil, file: File? = nil) {
                 self.poster = poster
                 self.duration = duration
+                self.file = file
+            }
+
+            public struct File: Codable, Equatable, Sendable {
+                public let path: String
+
+                public init(path: String) {
+                    self.path = path
+                }
             }
         }
 

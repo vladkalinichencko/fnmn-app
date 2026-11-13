@@ -9,7 +9,7 @@ from datetime import datetime
 from lxml import html
 
 from package import Report
-from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo
+from digest.reading import SourceFailure, SourceResult, page_fetch, save_photo, save_video
 from digest.store import Post, iso
 from web import Web
 
@@ -115,7 +115,9 @@ def _video(message, post_id: str, web: Web, store, fetch=None) -> tuple[dict | N
     poster = save_photo(web, store, post_id, "poster", url, fetch) if url else None
     errors = 1 if url and poster is None else 0
     lengths = message.xpath('.//*[contains(@class,"tgme_widget_message_video_duration")]/text()')
-    return {"poster": poster, "duration": _seconds(lengths[0]) if lengths else None}, errors
+    sources = message.xpath('.//video[contains(@class,"tgme_widget_message_video")]/@src')
+    video_file = save_video(web, store, post_id, "video", sources[0], fetch) if sources else None
+    return {"poster": poster, "duration": _seconds(lengths[0]) if lengths else None, "file": video_file}, errors
 
 
 def _background(style: str) -> str | None:
