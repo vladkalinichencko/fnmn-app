@@ -16,8 +16,6 @@ struct PlatePager: View {
     @State private var footerFrame: CGRect = .zero
     @State private var pagerWidth: CGFloat = 0
     private static let turn: CGFloat = 36
-    private static let headerClearance: CGFloat = 48
-    private static let footerClearance: CGFloat = 86
     private static let slide = Animation.spring(duration: 0.3)
 
     var body: some View {
@@ -32,14 +30,16 @@ struct PlatePager: View {
         .animation(Self.slide, value: plate)
         .clipped()
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { pageFrame = $0 }
-        .overlay(alignment: .top) {
+        .safeAreaBar(edge: .top) {
             PlateContents(document: reader.document, plate: plate)
                 .padding(.horizontal, Tokens.gutter)
                 .frame(maxWidth: width ?? .infinity)
-                .background(.bar)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { headerFrame = $0 }
         }
-        .overlay(alignment: .bottom) { controls }
+        .safeAreaBar(edge: .bottom) {
+            controls
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { footerFrame = $0 }
+        }
         .coordinateSpace(.named(platePagerSpace))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pagerWidth = $0 }
         .gesture(turnPan)
@@ -69,7 +69,6 @@ struct PlatePager: View {
         .buttonStyle(.plain)
         .padding(.horizontal, Tokens.gutter)
         .padding(.vertical, 8)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(platePagerSpace)) } action: { footerFrame = $0 }
     }
 
     private func navButton(_ systemImage: String, title: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -116,8 +115,7 @@ struct PlatePager: View {
             block
                 .equatable()
                 .padding(.horizontal, Tokens.gutter)
-                .padding(.top, Self.headerClearance)
-                .padding(.bottom, Self.footerClearance)
+                .padding(.vertical, Tokens.gap)
                 .frame(maxWidth: width ?? .infinity)
                 .frame(maxWidth: .infinity, minHeight: viewport)
         }
