@@ -25,12 +25,45 @@ public enum ReadingSearch {
 
     public static func spans(of needle: String, in text: String) -> [TextSpan] {
         let text = text as NSString
+        var spans = literalSpans(of: needle, in: text)
+        if spans.isEmpty, needle.contains(where: \.isWhitespace) {
+            spans = whitespaceSpans(of: needle, in: text)
+        }
+        return spans
+    }
+
+    private static func literalSpans(of needle: String, in text: NSString) -> [TextSpan] {
         var spans: [TextSpan] = []
         var start = 0
         while start < text.length {
             let found = text.range(
                 of: needle,
                 options: options,
+                range: NSRange(location: start, length: text.length - start)
+            )
+            guard found.location != NSNotFound, found.length > 0 else {
+                break
+            }
+            spans.append(TextSpan(start: found.location, length: found.length))
+            start = found.location + found.length
+        }
+        return spans
+    }
+
+    private static func whitespaceSpans(of needle: String, in text: NSString) -> [TextSpan] {
+        let pattern = needle
+            .split(whereSeparator: \.isWhitespace)
+            .map { NSRegularExpression.escapedPattern(for: String($0)) }
+            .joined(separator: #"\s+"#)
+        guard !pattern.isEmpty else {
+            return []
+        }
+        var spans: [TextSpan] = []
+        var start = 0
+        while start < text.length {
+            let found = text.range(
+                of: pattern,
+                options: options.union(.regularExpression),
                 range: NSRange(location: start, length: text.length - start)
             )
             guard found.location != NSNotFound, found.length > 0 else {

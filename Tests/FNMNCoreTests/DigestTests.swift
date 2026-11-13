@@ -12,11 +12,12 @@ private func post(
     date: Date = postedAt,
     text: String = "A small model that reads the whole catalog.",
     media: [DigestPackage.Post.Media] = [],
-    context: DigestPackage.Post.Context? = nil
+    context: DigestPackage.Post.Context? = nil,
+    comments: [DigestPackage.Post.Comment] = []
 ) -> DigestPackage.Post {
     DigestPackage.Post(
         id: id, network: .x, author: author, permalink: permalink, postedAt: date,
-        text: text, media: media, context: context, folders: [folder]
+        text: text, media: media, context: context, comments: comments, folders: [folder]
     )
 }
 
@@ -279,6 +280,34 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     )
     #expect(package.posts(matching: "cafe").map(\.id) == ["x/1"])
     #expect(package.posts(matching: "ZURICH").map(\.id) == ["x/1"])
+}
+
+@Test func searchReachesQuotedPostsAndComments() {
+    let quoted = DigestPackage.Post.ContextPost(
+        id: "x/9", network: .x,
+        author: .init(handle: "hardmaru", name: "hardmaru"),
+        permalink: URL(string: "https://x.com/hardmaru/status/9")!,
+        postedAt: postedAt,
+        text: "A benchmark nobody talks about."
+    )
+    let found = post(
+        "x/1",
+        text: "My own words.",
+        context: .init(kind: .quote, post: quoted),
+        comments: [.init(author: "reader", handle: "reader", text: "this benchmark convinced me")]
+    )
+    let package = package(posts: [post("x/2", text: "Unrelated."), found])
+    #expect(package.posts(matching: "benchmark").map(\.id) == ["x/1"])
+    #expect(package.posts(matching: "hardmaru").map(\.id) == ["x/1"])
+    #expect(package.posts(matching: "convinced").map(\.id) == ["x/1"])
+}
+
+@Test func anExcerptMarksTheMatch() {
+    let found = post("x/1", text: "The quick brown fox jumps over the lazy dog.")
+    let excerpt = found.excerpt(matching: "brown fox")
+    #expect(excerpt?.text == "The quick brown fox jumps over the lazy dog.")
+    #expect(excerpt.map { String(excerpt!.text.dropFirst($0.span.start).prefix($0.span.length)) } == "brown fox")
+    #expect(found.excerpt(matching: "nothing") == nil)
 }
 
 

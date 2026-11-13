@@ -15,6 +15,12 @@ struct DigestScreen: View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.digest) {
             content
+                .searchResults(query: $query, active: digests.state == .ready) { needle in
+                    DigestSearchResults(query: needle) { post in
+                        navigation.digestPost = post.id
+                        query = ""
+                    }
+                }
                 .modifier(ReaderAppearanceModifier())
                 .screenSearch($query)
                 .navigationTitle("Digest")
@@ -93,11 +99,7 @@ struct DigestScreen: View {
                 }
                 ForEach(digests.digests) { digest in
                     digestHeader(digest)
-                    if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        sections(of: digest)
-                    } else {
-                        results(of: digest)
-                    }
+                    sections(of: digest)
                 }
             }
             .onAppear {
@@ -154,16 +156,6 @@ struct DigestScreen: View {
         .padding(.bottom, Tokens.sectionGap)
     }
 
-    private func results(of digest: Digest) -> some View {
-        let found = digest.package.posts(matching: query, hidden: digests.hidden)
-        return CardColumns(items: found, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
-            PostCard(post: post, digest: digest, opensThread: post.hasThread)
-                .id(post.id)
-        }
-        .padding(.horizontal, Tokens.gutter)
-        .padding(.bottom, Tokens.sectionGap)
-        .noResults(for: query, when: found.isEmpty)
-    }
 }
 
 private extension ReaderColumn {

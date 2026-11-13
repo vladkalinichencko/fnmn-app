@@ -350,7 +350,10 @@ final class LibraryModel {
             return []
         }
         if searchIndex == nil {
-            searchIndex = await SearchIndex.load(bodies: (try? await file.searchBodies()) ?? [:])
+            searchIndex = await SearchIndex.load(
+                bodies: (try? await file.searchBodies()) ?? [:],
+                plainText: { MarkedMarkdown.plainText($0, baseURL: nil) }
+            )
         }
         guard let searchIndex else {
             return []
@@ -360,7 +363,6 @@ final class LibraryModel {
             articles: snapshot.articles,
             annotations: snapshot.annotations,
             addedAt: snapshot.addedAt,
-            plainText: { MarkedMarkdown.plainText($0, baseURL: nil) },
             yield: yield
         )
     }

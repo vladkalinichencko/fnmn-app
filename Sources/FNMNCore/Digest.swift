@@ -292,14 +292,39 @@ extension DigestPackage {
         guard !query.isEmpty else {
             return posts.filter { !hidden.contains($0.id) }
         }
-        let folded = TextFold.folded(query)
+        let folded = TextFold.searchable(query)
         return posts.filter { post in
             guard !hidden.contains(post.id) else {
                 return false
             }
-            let fields = [post.text ?? "", post.author.name, post.author.handle]
-            return fields.contains { TextFold.folded($0).contains(folded) }
+            return post.searchTexts.contains { TextFold.searchable($0).contains(folded) }
         }
+    }
+}
+
+extension DigestPackage.Post {
+    public var searchTexts: [String] {
+        var texts = [text ?? "", author.name, "@\(author.handle)"]
+        if let quoted = context?.post {
+            texts += [quoted.author.name, "@\(quoted.author.handle)", quoted.text ?? ""]
+        }
+        texts += comments.map { "\($0.author) \($0.handle ?? ""): \($0.text)" }
+        return texts
+    }
+
+    public func excerpt(matching query: String) -> SearchExcerpt? {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else {
+            return nil
+        }
+        for text in searchTexts where !text.isEmpty {
+            guard TextFold.searchable(text).contains(TextFold.searchable(needle)),
+                  let span = ReadingSearch.spans(of: needle, in: text).first else {
+                continue
+            }
+            return SearchExcerpt.around(text, span: span)
+        }
+        return nil
     }
 }
 

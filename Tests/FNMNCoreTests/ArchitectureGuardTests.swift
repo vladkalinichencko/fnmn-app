@@ -60,6 +60,20 @@ final class ArchitectureGuardTests: XCTestCase {
         XCTAssertTrue(try contents(of: "ThreadScreen.swift").contains("PostAuthorLine("), "ThreadScreen builds its own author line")
     }
 
+    func testTabSearchSharesOneOverlay() throws {
+        for file in ["LibraryScreen.swift", "DigestScreen.swift", "ShelfScreen.swift"] {
+            XCTAssertTrue(try contents(of: file).contains(".searchResults(query:"), "\(file) builds its own search overlay")
+        }
+        for file in ["SearchResults.swift", "DigestSearchResults.swift"] {
+            XCTAssertTrue(try contents(of: file).contains("SearchResultsList("), "\(file) draws its own results chrome")
+        }
+        for file in try AppSources.files() where file.lastPathComponent != "ScreenSearch.swift" {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            XCTAssertFalse(source.contains("ContentUnavailableView.search"), "\(file.lastPathComponent) draws its own empty-search view")
+            XCTAssertFalse(source.contains("scrollContentBackground(.hidden)"), "\(file.lastPathComponent) hides a list background outside the shared results chrome")
+        }
+    }
+
     func testWebViewsAppearOnlyInTheLiveCropAndThePlayer() throws {
         let allowed: Set<String> = ["LiveCropView.swift", "VideoReaderView.swift"]
         for file in try AppSources.files() {

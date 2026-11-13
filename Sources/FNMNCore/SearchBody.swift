@@ -25,6 +25,12 @@ public struct SearchBody: Codable, Equatable, Sendable {
     public let paragraphs: [SearchParagraph]
     public let cues: [SearchCue]
 
+    init(materialID: String, paragraphs: [SearchParagraph], cues: [SearchCue]) {
+        self.materialID = materialID
+        self.paragraphs = paragraphs
+        self.cues = cues
+    }
+
     public init(_ package: ImportPackage) {
         materialID = package.material.id
         let markdown = package.material.kind == .video ? "" : ArticleBody.readingMarkdown(body: package.body, blocks: package.blocks)

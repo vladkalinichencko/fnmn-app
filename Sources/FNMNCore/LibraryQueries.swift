@@ -128,11 +128,11 @@ public struct LibraryQueries: Sendable {
         guard !needle.isEmpty else {
             return candidates
         }
-        let folded = TextFold.folded(needle)
+        let folded = TextFold.searchable(needle)
         func hit(_ text: String) -> Bool {
-            TextFold.folded(text).contains(folded)
+            TextFold.searchable(text).contains(folded)
         }
-        let articleHits = Set(snapshot.articles.filter { $0.searchText.contains(folded) }.map(\.material.id))
+        let articleHits = Set(snapshot.articles.filter { TextFold.collapsed($0.searchText).contains(folded) }.map(\.material.id))
         let albumHits = Set(snapshot.albums.filter(hit))
         var sourceHits: [String: Bool] = [:]
         return candidates.filter { item in
@@ -175,14 +175,14 @@ public struct LibraryQueries: Sendable {
         guard !needle.isEmpty else {
             return groups
         }
-        let folded = TextFold.folded(needle)
+        let folded = TextFold.searchable(needle)
         let found = Set(search(needle, in: allItems).map(\.id))
         return groups.compactMap { group in
             if found.contains(group.id) {
                 return group
             }
             let hits = group.annotations.filter {
-                TextFold.folded($0.text).contains(folded) || TextFold.folded($0.note).contains(folded)
+                TextFold.searchable($0.text).contains(folded) || TextFold.searchable($0.note).contains(folded)
             }
             return hits.isEmpty ? nil : AnnotationGroup(item: group.item, annotations: hits)
         }

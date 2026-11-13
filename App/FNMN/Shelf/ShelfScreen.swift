@@ -11,6 +11,7 @@ struct ShelfScreen: View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.shelf) {
             shelfContent
+                .searchResults(query: $query) { SearchResults(query: $0, corpus: self.shelfIDs, groups: self.shelfGroups) }
                 .screenSearch($query)
                 .navigationTitle("Shelf")
                 .appRefresh(title: "Shelf")
@@ -20,11 +21,10 @@ struct ShelfScreen: View {
     }
 
     @ViewBuilder private var shelfContent: some View {
-        let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let annotations = AnnotationEntry.all(in: library.queries.annotationGroups(matching: query))
+        let annotations = AnnotationEntry.all(in: library.queries.annotationGroups(matching: ""))
             .sorted { ($0.annotation.updatedAt ?? .distantPast) > ($1.annotation.updatedAt ?? .distantPast) }
-        let archived = library.queries.search(query, in: library.queries.archivedItems)
-        switch Self.phase(hasContent: !annotations.isEmpty || !archived.isEmpty || searching, settling: settling) {
+        let archived = library.queries.archivedItems
+        switch Self.phase(hasContent: !annotations.isEmpty || !archived.isEmpty, settling: settling) {
         case .content:
             ScrollView {
                 VStack(alignment: .leading, spacing: Tokens.sectionGap * 1.4) {
@@ -35,7 +35,7 @@ struct ShelfScreen: View {
                                 idealWidth: 300,
                                 spacing: Tokens.sectionGap,
                                 height: { entry, _ in Double(entry.weight) },
-                                limit: searching ? nil : { $0 == 1 ? 3 : 2 * $0 }
+                                limit: { $0 == 1 ? 3 : 2 * $0 }
                             ) { entry in
                                 AnnotationCard(entry: entry)
                             }
@@ -43,7 +43,7 @@ struct ShelfScreen: View {
                     }
                     if !archived.isEmpty {
                         ShelfSection("Archive", route: .archive) {
-                            ItemGrid(items: searching ? archived : Array(archived.prefix(4)))
+                            ItemGrid(items: Array(archived.prefix(4)))
                         }
                     }
                 }
@@ -51,7 +51,6 @@ struct ShelfScreen: View {
                 .padding(.bottom, Tokens.sectionGap)
             }
             .background(Tokens.canvas)
-            .noResults(for: query, when: annotations.isEmpty && archived.isEmpty)
         case .settling:
             Color.clear
         case .empty:
@@ -61,6 +60,21 @@ struct ShelfScreen: View {
 
     private var settling: Bool {
         library.syncState == .syncing || imports.jobs.contains { $0.isPreparing }
+    }
+
+    private var shelfIDs: Set<String> {
+        Set(library.snapshot.annotations.map(\.materialID)).union(library.queries.archivedItems.map(\.id))
+    }
+
+    private var archivedIDs: Set<String> {
+        Set(library.queries.archivedItems.map(\.id))
+    }
+
+    private func shelfGroups(_ hits: [SearchHit]) -> [(title: String, hits: [SearchHit])] {
+        let filed = archivedIDs
+        let notes = hits.filter { !filed.contains($0.itemID) }
+        let archive = hits.filter { filed.contains($0.itemID) }
+        return [(title: "Annotations", hits: notes), (title: "Archive", hits: archive)].filter { !$0.hits.isEmpty }
     }
 
     enum Phase {

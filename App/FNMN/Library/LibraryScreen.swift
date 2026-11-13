@@ -12,15 +12,10 @@ struct LibraryScreen: View {
     var body: some View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.library) {
-            Group {
-                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ScrollView { sections }
-                } else {
-                    SearchResults(query: query)
-                }
-            }
-            .background(Tokens.canvas)
-            .screenSearch($query)
+            ScrollView { sections }
+                .background(Tokens.canvas)
+                .searchResults(query: $query) { SearchResults(query: $0) }
+                .screenSearch($query)
             .navigationTitle("Library")
             .appRefresh(title: "Library")
             .toolbar {
