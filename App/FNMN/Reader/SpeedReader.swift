@@ -352,8 +352,7 @@ struct SpeedReader: View {
                 Menu("Speed Reading Options", systemImage: "slider.horizontal.3") {
                     Menu("Pauses", systemImage: "pause.circle") {
                         ForEach(SpeedPauseKind.allCases, id: \.self) { kind in
-                            Menu(kind.name) {
-                                Text(kind.detail)
+                            Section(kind.name) {
                                 Picker("Level", selection: Binding(
                                     get: { pauseProfile[kind] },
                                     set: { set($0, for: kind) }
@@ -362,7 +361,7 @@ struct SpeedReader: View {
                                         Text(level.name).tag(level)
                                     }
                                 }
-                                .pickerStyle(.inline)
+                                Text(kind.detail)
                             }
                         }
                     }

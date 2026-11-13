@@ -136,9 +136,10 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         state.folded.subtract(document.headings(holding: plate))
         state.column = .jumping(to: plate, hiding: false)
     case let .turnPlate(forward):
-        guard state.mode == .reading, let plate = state.shownPlate,
+        guard let plate = state.shownPlate,
               let next = forward ? document.plate(after: plate) : document.plate(before: plate) else { return state }
         state.shownPlate = next
+        state.mode = .reading
         state.keepsPlace = false
         state.place = next
         if state.showsLine { state.line = ReadingLine(piece: next, fraction: 0) }
