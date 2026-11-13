@@ -66,7 +66,7 @@ final class SpeedPlayer {
     }
 
     func play() {
-        guard mode != .playing, let token else {
+        guard mode != .playing, token != nil else {
             return
         }
         markShown()
