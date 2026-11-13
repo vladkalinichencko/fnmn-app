@@ -57,7 +57,28 @@ final class ArchitectureGuardTests: XCTestCase {
             XCTAssertTrue(source.contains("PostText("), "\(file) builds its own post text")
             XCTAssertTrue(source.contains("PostOpenButton("), "\(file) builds its own open button")
         }
-        XCTAssertTrue(try contents(of: "ThreadScreen.swift").contains("PostAuthorLine("), "ThreadScreen builds its own author line")
+        for file in try AppSources.files() {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            XCTAssertFalse(source.contains("PostAuthorLine"), "\(file.lastPathComponent) still draws its own author line")
+        }
+    }
+
+    func testMediaCoverIsOfferedTheZoomNamespace() throws {
+        for file in try AppSources.files() {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            guard source.contains(".presentsMedia(") else {
+                continue
+            }
+            guard let cover = source.range(of: ".presentsMedia("),
+                  let zoom = source.range(of: ".environment(\\.mediaZoom") else {
+                continue
+            }
+            XCTAssertLessThan(
+                cover.lowerBound,
+                zoom.lowerBound,
+                "\(file.lastPathComponent) presents media above the mediaZoom injection, so the cover never sees the namespace and zoom falls back to a slide"
+            )
+        }
     }
 
     func testTabSearchSharesOneOverlay() throws {

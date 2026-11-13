@@ -6,6 +6,7 @@ enum SpeedPlayback: Equatable {
     case paused
     case playing
     case resting(Int)
+    case previewing(Int)
     case stopped
     case ended
 }
@@ -32,6 +33,7 @@ final class SpeedPlayer {
         }
     }
     @ObservationIgnored private var clock: Task<Void, Never>?
+    @ObservationIgnored private var plates: [Int] = []
     private(set) var backs = 0
     @ObservationIgnored private var reportedWords = 0
     @ObservationIgnored private var reportedBacks = 0
@@ -48,9 +50,17 @@ final class SpeedPlayer {
         return nil
     }
 
+    var previewed: Int? {
+        if case let .previewing(block) = mode {
+            return block
+        }
+        return nil
+    }
+
     func load(_ document: ReaderDocument, from start: ReadingLine) async {
         guard text == nil else { return }
         reportedAt = .now
+        plates = document.plates
         let text = await Task.detached(priority: .userInitiated) { SpeedText(document: document, from: start) }.value
         self.text = text
         frame = text.frame(at: 0, words: wordsPerFrame)
@@ -73,6 +83,10 @@ final class SpeedPlayer {
     }
 
     func toggle() {
+        if previewed != nil {
+            enter(isAtEnd ? .ended : .playing)
+            return
+        }
         if resting != nil {
             continueResting()
             return
@@ -87,7 +101,7 @@ final class SpeedPlayer {
     }
 
     func play() {
-        guard mode != .playing, let token, !token.isStop else {
+        guard mode != .playing, previewed == nil, let token, !token.isStop else {
             return
         }
         markShown()
@@ -133,6 +147,32 @@ final class SpeedPlayer {
     func sentenceForward() {
         guard let next = text?.sentenceStart(after: frame.lowerBound) else { return }
         jump(to: next)
+    }
+
+    func stepBack() {
+        guard let block = previewed ?? resting ?? shownStop else {
+            sentenceBack()
+            return
+        }
+        guard let index = plates.firstIndex(of: block), index > plates.startIndex else {
+            return
+        }
+        enter(.previewing(plates[index - 1]))
+    }
+
+    func stepForward() {
+        guard let block = previewed ?? resting ?? shownStop else {
+            sentenceForward()
+            return
+        }
+        guard let index = plates.firstIndex(of: block), index + 1 < plates.endIndex else {
+            return
+        }
+        enter(.previewing(plates[index + 1]))
+    }
+
+    private var shownStop: Int? {
+        token?.isStop == true ? token?.block : nil
     }
 
     func continuePastStop() {
@@ -302,6 +342,7 @@ struct SpeedReader: View {
         .padding(.horizontal, Tokens.gutter)
         .background(background.canvas)
         .environment(reader)
+        .presentsMedia(mediaPresenter)
         .environment(\.mediaZoom, mediaZoom)
         .environment(\.mediaPresenter, mediaPresenter)
         .environment(\.openURL, OpenURLAction { url in
@@ -311,7 +352,6 @@ struct SpeedReader: View {
             mediaPresenter.open(url)
             return .handled
         })
-        .presentsMedia(mediaPresenter)
         .task {
             player.wordsPerMinute = wordsPerMinute
             player.wordsPerFrame = wordsPerFrame
@@ -408,7 +448,7 @@ struct SpeedReader: View {
         let blocks = max(reader.document.blocks.count, 1)
         let share = token.map { (Double($0.block) + $0.share) / Double(blocks) } ?? 0
         return VStack(alignment: .leading, spacing: 8) {
-            Text(sectionTitle(of: token?.block ?? start.piece))
+            Text(sectionTitle(of: player.resting ?? player.previewed ?? token?.block ?? start.piece))
                 .font(.headline)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -419,8 +459,8 @@ struct SpeedReader: View {
     @ViewBuilder
     private var stage: some View {
         if let text = player.text {
-            if let resting = player.resting {
-                plate(resting)
+            if let shown = player.resting ?? player.previewed {
+                plate(shown)
                     .transition(.opacity)
             } else if let token = player.token {
                 if token.isStop {
@@ -503,35 +543,42 @@ struct SpeedReader: View {
     }
 
     private func plate(_ block: Int) -> some View {
-        ScrollView {
-            BlockView(
-                block: reader.document.blocks[block],
-                index: block,
-                baseURL: reader.baseURL,
-                mode: .reading,
-                readShare: 0,
-                markedReadThrough: false,
-                annotations: library.snapshot.annotations.filter { $0.materialID == reader.materialID && $0.piece == block },
-                fold: .none,
-                panGestures: false
-            )
-            .frame(maxWidth: Tokens.minReading)
-            .frame(maxWidth: .infinity)
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    BlockView(
+                        block: reader.document.blocks[block],
+                        index: block,
+                        baseURL: reader.baseURL,
+                        mode: .reading,
+                        readShare: 0,
+                        markedReadThrough: false,
+                        annotations: library.snapshot.annotations.filter { $0.materialID == reader.materialID && $0.piece == block },
+                        fold: .none,
+                        panGestures: false
+                    )
+                    .frame(maxWidth: Tokens.minReading)
+                    .frame(maxWidth: .infinity)
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .scrollBounceBehavior(.basedOnSize)
     }
 
     private var controls: some View {
         VStack(spacing: 14) {
             HStack {
-                transport("backward.fill", "Previous Sentence") { player.sentenceBack() }
+                transport("backward.fill", pagingPlates ? "Previous Plate" : "Previous Sentence") { player.stepBack() }
                 Button(centerTitle, systemImage: player.isPlaying ? "pause.fill" : "play.fill") { player.toggle() }
                     .font(.largeTitle)
                     .frame(width: 84, height: 84)
                     .contentTransition(.symbolEffect(.replace))
                     .glassEffect(.regular.interactive(), in: Circle())
                     .disabled(player.token == nil || (player.token?.isStop == true && player.isAtEnd))
-                transport("forward.fill", "Next Sentence") { player.sentenceForward() }
+                transport("forward.fill", pagingPlates ? "Next Plate" : "Next Sentence") { player.stepForward() }
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.plain)
@@ -564,6 +611,10 @@ struct SpeedReader: View {
             .font(.title2)
             .frame(width: 72, height: 72)
             .glassEffect(.regular.interactive(), in: Circle())
+    }
+
+    private var pagingPlates: Bool {
+        player.previewed != nil || player.resting != nil || player.token?.isStop == true
     }
 
     private var centerTitle: String {

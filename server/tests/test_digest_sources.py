@@ -7,7 +7,7 @@ import httpx
 from lxml import html
 
 from digest import instagram, telegram, x
-from digest.reading import save_photo
+from digest.reading import mark_threads, save_photo
 from digest.store import Store
 from tests import fakes
 from tests.test_digest_store import png
@@ -189,6 +189,90 @@ class XTests(unittest.TestCase):
         self.assertIn("id=12345", seen[0])
         self.assertIn("cdn.syndication.twimg.com/tweet-result", seen[0])
 
+    def test_a_long_post_reads_its_whole_body_from_the_page(self):
+        payload = json.loads(fixture("tweet-20.json"))
+        payload["note_tweet"] = {"id": "Tm90ZVR3ZWV0"}
+
+        class NoteTab:
+            def goto(self, url, **kwargs):
+                return None
+
+            def wait_for_selector(self, *args, **kwargs):
+                return None
+
+            def eval(self, script):
+                return "the whole long body, past the preview"
+
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = x._post(payload, "jack", source(), fake_web(), store, ["ml"], page=NoteTab())
+            self.assertEqual(post.text, "the whole long body, past the preview")
+
+    def test_a_long_post_without_a_page_keeps_the_preview(self):
+        payload = json.loads(fixture("tweet-20.json"))
+        payload["note_tweet"] = {"id": "Tm90ZVR3ZWV0"}
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = x._post(payload, "jack", source(), fake_web(), store, ["ml"])
+            self.assertEqual(post.text, "just setting up my twttr")
+
+
+class MarkThreadsTests(unittest.TestCase):
+    def collected(self, post_id: str, at: str, handle: str = "chan", source_id: str = "telegram/chan") -> object:
+        from digest.store import Post
+
+        return Post(
+            id=post_id, network="telegram", source=source_id,
+            author={"handle": handle, "name": handle},
+            permalink=f"https://t.me/{handle}/{post_id}", posted_at=at, text="t",
+        )
+
+    def test_a_run_inside_the_gap_shares_the_first_post_id(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            posts = [
+                self.collected("telegram/chan/1", "2026-11-13T10:00:00Z"),
+                self.collected("telegram/chan/2", "2026-11-13T10:05:00Z"),
+                self.collected("telegram/chan/3", "2026-11-13T10:30:00Z"),
+            ]
+            mark_threads(posts, store)
+            self.assertIsNone(posts[0].thread)
+            self.assertEqual(posts[1].thread, "telegram/chan/1")
+            self.assertEqual(posts[2].thread, "telegram/chan/1")
+
+    def test_a_gap_past_the_threshold_starts_a_new_thread(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            posts = [
+                self.collected("telegram/chan/1", "2026-11-13T10:00:00Z"),
+                self.collected("telegram/chan/2", "2026-11-13T10:45:00Z"),
+            ]
+            mark_threads(posts, store)
+            self.assertIsNone(posts[1].thread)
+
+    def test_different_authors_and_sources_never_share_a_thread(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            posts = [
+                self.collected("x/1", "2026-11-13T10:00:00Z", handle="a", source_id="x/recommendations"),
+                self.collected("x/2", "2026-11-13T10:01:00Z", handle="b", source_id="x/recommendations"),
+                self.collected("x/3", "2026-11-13T10:02:00Z", handle="a", source_id="x/other"),
+            ]
+            for post in posts:
+                post.network = "x"
+            mark_threads(posts, store)
+            self.assertTrue(all(post.thread is None for post in posts))
+
+    def test_a_run_chains_onto_the_thread_the_store_already_holds(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            earlier = self.collected("telegram/chan/1", "2026-11-13T10:00:00Z")
+            earlier.thread = "telegram/chan/1"
+            store.append([earlier])
+            fresh = self.collected("telegram/chan/2", "2026-11-13T10:10:00Z")
+            mark_threads([fresh], store)
+            self.assertEqual(fresh.thread, "telegram/chan/1")
+
 
 class TelegramTimeTests(unittest.TestCase):
     def test_a_message_without_a_time_is_skipped(self):
@@ -236,31 +320,20 @@ class RepliesTab:
 
 
 class RepliesTests(unittest.TestCase):
-    def test_a_reply_carries_its_author_handle_and_avatar(self):
+    def test_a_reply_carries_its_author_handle(self):
         replies = [{
             "author": "Grigory Sapunov",
             "handle": "gsapunov",
-            "avatar": "https://pbs.twimg.com/profile_images/1/abc_normal.jpg",
             "text": "agreed",
             "permalink": "https://x.com/gsapunov/status/2",
         }]
-        with TemporaryDirectory() as folder:
-            store = Store(Path(folder))
-            comments = x._replies(RepliesTab(replies), fakes.post(), fake_web(), store, lambda url: png())
-            comment = comments[0]
-            self.assertEqual(comment["author"], "Grigory Sapunov")
-            self.assertEqual(comment["handle"], "gsapunov")
-            avatar = comment["avatar"]
-            self.assertTrue(avatar["path"].startswith("media/x-1-reply-0"))
-            self.assertTrue((store.root / avatar["path"]).exists())
+        comments = x._replies(RepliesTab(replies), fakes.post())
+        self.assertEqual(comments, replies)
 
-    def test_a_reply_the_network_serves_no_avatar_for_keeps_the_rest(self):
-        replies = [{"author": "a", "handle": None, "avatar": None, "text": "hi", "permalink": None}]
-        with TemporaryDirectory() as folder:
-            store = Store(Path(folder))
-            comments = x._replies(RepliesTab(replies), fakes.post(), fake_web(), store, lambda url: png())
-            self.assertIsNone(comments[0]["avatar"])
-            self.assertEqual(comments[0]["text"], "hi")
+    def test_a_reply_without_a_handle_or_link_still_reads(self):
+        replies = [{"author": "a", "handle": None, "text": "hi", "permalink": None}]
+        comments = x._replies(RepliesTab(replies), fakes.post())
+        self.assertEqual(comments[0]["text"], "hi")
 
 
 class InstagramTests(unittest.TestCase):

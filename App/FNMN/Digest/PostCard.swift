@@ -12,6 +12,7 @@ struct PostCard: View {
     let post: DigestPackage.Post
     let digest: Digest
     var opensThread = false
+    var showsContext = true
     @Environment(WindowNavigation.self) private var navigation
     @Environment(DigestModel.self) private var digests
     @Environment(ImportJobs.self) private var imports
@@ -66,7 +67,7 @@ struct PostCard: View {
                     mediaPlaceholder
                 }
                 pictures(media)
-                if let context = post.context {
+                if showsContext, let context = post.context {
                     contextBlock(context)
                 }
             }
@@ -208,10 +209,7 @@ struct PostCard: View {
                 }
                 .foregroundStyle(.secondary)
                 if let text = context.post?.text {
-                    Text(text)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
+                    PostText(text: text)
                 }
             }
         }
@@ -265,7 +263,7 @@ struct PostCard: View {
     }
 
     static func contextLabel(_ context: DigestPackage.Post.Context) -> String {
-        let handle = context.post.map { "@\($0.author.handle)" } ?? "a post that is gone"
-        return "\(context.kind.action) \(handle)"
+        let name = context.post.map { $0.author.name } ?? "a post that is gone"
+        return "\(context.kind.action) \(name)"
     }
 }

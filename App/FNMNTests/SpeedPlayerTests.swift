@@ -201,6 +201,53 @@ final class SpeedPlayerTests: XCTestCase {
         player.pause()
     }
 
+    func testTheTransportTurnsPlatesWhileOneIsShown() async {
+        let player = await loaded("# Doc\n\n## One\n\nAlpha.\n\n## Two\n\nBeta.\n\n## Three\n\nGamma.")
+        player.restMode = .manual
+        player.play()
+        for _ in 0..<40 where player.resting == nil {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.resting, 2)
+
+        player.stepForward()
+        XCTAssertEqual(player.previewed, 4)
+        player.stepForward()
+        XCTAssertEqual(player.previewed, 6)
+        player.stepForward()
+        XCTAssertEqual(player.previewed, 6)
+        player.stepBack()
+        XCTAssertEqual(player.previewed, 4)
+        player.stepBack()
+        XCTAssertEqual(player.previewed, 2)
+        player.stepBack()
+        XCTAssertEqual(player.previewed, 2)
+
+        player.toggle()
+        XCTAssertEqual(player.mode, .playing)
+        player.pause()
+    }
+
+    func testTheTransportTurnsPlatesAroundAStop() async {
+        let player = await loaded("One.\n\n$$\nx^2\n$$\n\nTwo.")
+        player.play()
+        for _ in 0..<40 where player.mode != .stopped {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(player.token?.isStop, true)
+
+        player.stepBack()
+        XCTAssertEqual(player.previewed, 0)
+        player.stepForward()
+        XCTAssertEqual(player.previewed, 2)
+        player.stepForward()
+        XCTAssertEqual(player.previewed, 2)
+
+        player.toggle()
+        XCTAssertEqual(player.mode, .playing)
+        player.pause()
+    }
+
     func testTheParagraphPlateCanBeOff() async {
         let player = await loaded()
         player.restMode = .off

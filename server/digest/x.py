@@ -53,14 +53,14 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
             break
         if payload is None:
             continue
-        post = _post(payload, handle, source, web, store, folders, fetch)
+        post = _post(payload, handle, source, web, store, folders, fetch, page=page)
         if post is not None:
             posts.append(post)
         time.sleep(REQUEST_PAUSE)
     for post in sorted(posts, key=lambda post: (post.stats or {}).get("replies") or 0, reverse=True)[:TOP_DISCUSSED]:
         if (post.stats or {}).get("replies"):
             try:
-                post.comments = _replies(page, post, web, store, fetch)
+                post.comments = _replies(page, post)
             except (OSError, SourceFailure):
                 note = note or "the replies did not load"
     name = next((post.author["name"] for post in posts if post.author["name"]), None)
@@ -121,7 +121,7 @@ def _tweet(web: Web, status_id: str) -> dict | None:
     return payload if payload.get("__typename") == "Tweet" else None
 
 
-def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: list[str], fetch=None) -> Post | None:
+def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: list[str], fetch=None, page=None) -> Post | None:
     status_id = payload.get("id_str")
     if not status_id:
         return None
@@ -131,7 +131,10 @@ def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: li
         "name": user.get("name") or handle,
     }
     post_id = f"x/{status_id}"
+    permalink = f"{HOME}/{author['handle']}/status/{status_id}"
     text = (payload.get("text") or "").strip() or None
+    if payload.get("note_tweet") and page is not None:
+        text = _note_text(page, permalink) or text
     media, video, errors = _media(payload, post_id, web, store, fetch)
     stats = {
         "likes": payload.get("favorite_count"),
@@ -143,7 +146,7 @@ def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: li
         network="x",
         source=source["id"],
         author=author,
-        permalink=f"{HOME}/{author['handle']}/status/{status_id}",
+        permalink=permalink,
         posted_at=iso(datetime.fromisoformat(payload["created_at"])),
         text=text,
         media=media,
@@ -153,6 +156,20 @@ def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: li
         folders=folders,
         media_errors=errors,
     )
+
+
+NOTE_TEXT = """document.querySelector('[data-testid="tweetText"]')?.innerText"""
+
+
+def _note_text(tab, permalink: str) -> str | None:
+    """A long post's whole body: the syndication payload carries only a preview of it."""
+    try:
+        tab.goto(permalink)
+        tab.wait_for_selector('[data-testid="tweetText"]', timeout=20)
+        text = tab.eval(NOTE_TEXT)
+    except Exception:
+        return None
+    return text.strip() if isinstance(text, str) and text.strip() else None
 
 
 def _media(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[list[dict], dict | None, int]:
@@ -229,30 +246,20 @@ def _context_post(payload: dict) -> dict:
     }
 
 
-def _replies(tab, post: Post, web: Web, store, fetch) -> list[dict]:
-    """The first replies under a post, as the permalink page draws them; the post itself is the first article.
-    Each reply's avatar is downloaded into the store like the post's own pictures."""
+def _replies(tab, post: Post) -> list[dict]:
+    """The first replies under a post, as the permalink page draws them; the post itself is the first article."""
     try:
         tab.goto(post.permalink)
         tab.wait_for_selector('article[data-testid="tweet"]', timeout=20)
     except Exception as error:
         raise SourceFailure(f"the replies of {post.id} did not load: {error}") from error
-    replies = tab.eval(REPLIES) or []
-    for index, reply in enumerate(replies):
-        url = reply.pop("avatar", None)
-        reply["avatar"] = save_photo(web, store, post.id, f"reply-{index}", _avatar_url(url), fetch) if url else None
-    return replies
-
-
-def _avatar_url(url: str) -> str:
-    return f"{url.split('?')[0]}?format=jpg&name=400x400"
+    return tab.eval(REPLIES) or []
 
 
 REPLIES = """[...document.querySelectorAll('article[data-testid="tweet"]')].slice(1, 4).map(a => {
     const text = a.querySelector('[data-testid="tweetText"]');
     const link = a.querySelector('a[href*="/status/"]');
     const author = a.querySelector('[data-testid="User-Name"]');
-    const avatar = a.querySelector('img[src*="profile_images"]');
     let handle = null;
     if (author) {
         const profile = [...author.querySelectorAll('a[href]')].map(l => l.getAttribute('href') || '')
@@ -263,7 +270,6 @@ REPLIES = """[...document.querySelectorAll('article[data-testid="tweet"]')].slic
     return {
         author: author ? author.innerText.split("\\n")[0].trim() : "",
         handle: handle,
-        avatar: avatar ? avatar.getAttribute('src') : null,
         text: text ? text.innerText.trim() : null,
         permalink: link ? link.href : null,
     };

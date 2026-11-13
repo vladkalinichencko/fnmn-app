@@ -53,7 +53,6 @@ struct ReaderState: Equatable {
     }
     var showsLine = false
     var line: ReadingLine?
-    var shownPlate: Int?
     var speedStart: ReadingLine?
     var find: FindState?
 }
@@ -72,8 +71,6 @@ enum ReaderAction {
     case settleLine
     case ask(String)
     case copyPrompt(String)
-    case onePlate(Bool)
-    case turnPlate(forward: Bool)
     case speedReading(Bool)
     case speedRead(ReadingLine)
     case find(Bool)
@@ -96,7 +93,7 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
             return state
         }
         state.scrollID = index
-        if document.blocks.indices.contains(index), !state.keepsPlace, state.shownPlate == nil {
+        if document.blocks.indices.contains(index), !state.keepsPlace {
             state.place = index
         }
     case let .plate(action):
@@ -108,7 +105,7 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         state.folded = closed ? document.lowestHeadings : []
     case let .readThrough(piece):
         guard state.showsLine, let line = state.line else { return state }
-        let blocks = state.shownPlate == nil ? document.visibleBlocks(folded: state.folded) : document.plates
+        let blocks = document.visibleBlocks(folded: state.folded)
         let block = if let piece { blocks.first { $0 > piece } } else { blocks.last { $0 < line.piece } }
         if let block { state.line = ReadingLine(piece: block, fraction: 0) }
     case let .showLine(shows):
@@ -119,52 +116,24 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
         }
     case let .moveLine(line):
         state.line = line
-    case .onePlate(true):
-        guard state.shownPlate == nil else { return state }
-        let start: Int? = if state.showsLine, let line = state.line {
-            line.fraction >= 1 ? document.plate(after: line.piece) ?? line.piece : line.piece
-        } else {
-            state.scrollID ?? state.place
-        }
-        state.shownPlate = document.plate(holding: start ?? 0)
-        state.mode = .reading
-    case .onePlate(false):
-        guard let plate = state.shownPlate else { return state }
-        state.shownPlate = nil
-        state.mode = .reading
-        if !state.keepsPlace { state.place = plate }
-        state.folded.subtract(document.headings(holding: plate))
-        state.column = .jumping(to: plate, hiding: false)
-    case let .turnPlate(forward):
-        guard let plate = state.shownPlate,
-              let next = forward ? document.plate(after: plate) : document.plate(before: plate) else { return state }
-        state.shownPlate = next
-        state.mode = .reading
-        state.keepsPlace = false
-        state.place = next
-        if state.showsLine { state.line = ReadingLine(piece: next, fraction: 0) }
     case .speedReading(true):
         guard state.speedStart == nil else { return state }
         state.speedStart = if state.showsLine, let line = state.line {
             line
         } else {
-            ReadingLine(piece: state.shownPlate ?? state.scrollID ?? state.place ?? 0, fraction: 0)
+            ReadingLine(piece: state.scrollID ?? state.place ?? 0, fraction: 0)
         }
         state.mode = .reading
     case .speedReading(false):
         state.speedStart = nil
     case let .speedRead(shown):
-        let next = shown.fraction >= 1 ? document.plate(after: shown.piece) : nil
+        let next = shown.fraction >= 1 ? document.plates.first { $0 > shown.piece } : nil
         let line = next.map { ReadingLine(piece: $0, fraction: 0) } ?? shown
         state.keepsPlace = false
         state.place = line.piece
         if state.showsLine { state.line = line }
-        if state.shownPlate != nil {
-            state.shownPlate = document.plate(holding: line.piece)
-        } else {
-            state.folded.subtract(document.headings(holding: line.piece))
-            state.column = .jumping(to: line.piece, hiding: false)
-        }
+        state.folded.subtract(document.headings(holding: line.piece))
+        state.column = .jumping(to: line.piece, hiding: false)
     case .mark, .note, .settleLine, .ask, .copyPrompt:
         break
     case .find(true):
@@ -209,7 +178,7 @@ final class ReaderCoordinator {
     @ObservationIgnored private var texts: [Int: String]?
     @ObservationIgnored private let plainText: @Sendable (String) -> String
 
-    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, kind: FNMNCore.Material.Kind, place: Int?, note: Int?, showsLine: Bool, onePlate: Bool, library: LibraryModel, plainText: @escaping @Sendable (String) -> String) {
+    init(document: ReaderDocument, materialID: String, title: String, source: SourceRef?, baseURL: URL, kind: FNMNCore.Material.Kind, place: Int?, note: Int?, showsLine: Bool, library: LibraryModel, plainText: @escaping @Sendable (String) -> String) {
         self.document = document
         self.materialID = materialID
         self.title = title
@@ -229,10 +198,6 @@ final class ReaderCoordinator {
         state.line = library.progress.lines[materialID]
         if note == nil, place != nil, state.line?.piece != place { state.line = nil }
         state = readerReduce(state, .showLine(showsLine), document: document)
-        if onePlate {
-            state = readerReduce(state, .onePlate(true), document: document)
-            if let note { state.shownPlate = document.plate(holding: note) }
-        }
     }
 
     func send(_ action: ReaderAction) {
@@ -246,7 +211,7 @@ final class ReaderCoordinator {
     var visible: [Int] { document.visibleBlocks(folded: state.folded) }
 
     var passedHeading: (index: Int, title: String)? {
-        (state.shownPlate ?? state.scrollID).flatMap { document.heading(before: $0) }.flatMap { $0.index == document.repeatedTitle ? nil : $0 }
+        state.scrollID.flatMap { document.heading(before: $0) }.flatMap { $0.index == document.repeatedTitle ? nil : $0 }
     }
 
     func current(in visible: [Int]) -> Int? {
@@ -339,7 +304,7 @@ final class ReaderCoordinator {
     private func animation(for action: ReaderAction) -> Animation? {
         switch action {
         case .plate: .snappy
-        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .onePlate, .turnPlate, .speedReading, .speedRead, .find, .findQuery, .findStep, .found: nil
+        case .toggleSection, .foldAll, .opened, .scrolled, .mark, .note, .readThrough, .showLine, .moveLine, .settleLine, .ask, .copyPrompt, .speedReading, .speedRead, .find, .findQuery, .findStep, .found: nil
         }
     }
 
@@ -388,20 +353,6 @@ final class ReaderCoordinator {
             if let place = next.place, !visible.contains(place), let target = current(in: visible) {
                 scroll(target)
             }
-        case .onePlate:
-            ReaderAppearance.setReadsOnePlate(next.shownPlate != nil, materialID: materialID)
-            if next.folded != before.folded { library.apply(.fold(next.folded.sorted(), itemID: materialID)) }
-            if next.place != before.place { savePlace(next.place) }
-            if next.opening != nil, before.opening == nil {
-                Task {
-                    await Task.yield()
-                    self.send(.opened)
-                }
-            }
-        case .turnPlate:
-            guard next.shownPlate != before.shownPlate else { return }
-            if next.line != before.line { library.apply(.line(next.line, itemID: materialID)) }
-            savePlace(next.place)
         case .speedReading:
             break
         case let .findQuery(query):

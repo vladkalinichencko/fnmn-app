@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         if reason:
             skipped[post.id] = reason
     buildable = [post for post in pending if post.id not in skipped]
-    scores = topics.classify(buildable, prefs)
+    scores = topics.classify(_threads(buildable), prefs)
     filtered = []
     for post in buildable:
         if post.text and not post.folders and digest_settings.topics(prefs, post.network, post.source):
@@ -65,9 +65,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             filtered.append(post)
     buildable = filtered
-    per_source: dict[str, list[Post]] = {}
-    for post in buildable:
-        per_source.setdefault(post.source, []).append(post)
+    per_source: dict[str, list[list[Post]]] = {}
+    for thread in _threads(buildable):
+        per_source.setdefault(thread[0].source, []).append(thread)
     kept, over = [], {}
     for group in per_source.values():
         group_kept, group_over = topics.cap(group, scores, prefs["limit"])
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         over.update(group_over)
     buildable = kept
     if not digest_settings.any_topics(prefs):
-        buildable, feed_over = topics.cap(buildable, scores, FEED_LIMIT)
+        buildable, feed_over = topics.cap(_threads(buildable), scores, FEED_LIMIT)
         over.update(feed_over)
     skipped.update(over)
     if not buildable:
@@ -118,6 +118,19 @@ def next_build_time(after: datetime, hours: tuple[int, ...] = BUILD_HOURS) -> da
             return candidate
     tomorrow = local + timedelta(days=1)
     return tomorrow.replace(hour=hours[0], minute=0, second=0, microsecond=0)
+
+
+def _threads(posts: list[Post]) -> list[list[Post]]:
+    """The posts grouped by their collected thread; a post without one is a thread of one."""
+    groups: dict[str, list[Post]] = {}
+    order: list[str] = []
+    for post in posts:
+        key = post.thread or post.id
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(post)
+    return [groups[key] for key in order]
 
 
 def _subscriptions(path: Path) -> dict:

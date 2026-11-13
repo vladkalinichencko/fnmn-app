@@ -3,7 +3,6 @@ import SwiftUI
 
 struct DigestSettingsSections: View {
     @Binding var settings: DigestSettings
-    @Environment(DigestModel.self) private var digests
 
     var body: some View {
         Group {
@@ -23,42 +22,7 @@ struct DigestSettingsSections: View {
                     }
                 }
             }
-            sourcesSections
         }
-    }
-
-    @ViewBuilder private var sourcesSections: some View {
-        if let digest = digests.current {
-            ForEach(folders(of: digest.package), id: \.folder) { group in
-                Section(group.folder) {
-                    ForEach(group.sources) { source in
-                        NavigationLink {
-                            TopicListScreen(title: source.name, detail: source.id, topics: sourceTopicsBinding(source.id))
-                        } label: {
-                            Text(source.name)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private struct SourceGroup {
-        let folder: String
-        let sources: [DigestPackage.Source]
-    }
-
-    private func folders(of package: DigestPackage) -> [SourceGroup] {
-        if package.folders.isEmpty {
-            return DigestPackage.networkOrder.compactMap { network in
-                let own = package.sources.filter { $0.network == network }
-                return own.isEmpty ? nil : SourceGroup(folder: network.name, sources: own)
-            }
-        }
-        return package.folders.map { folder in
-            SourceGroup(folder: folder, sources: package.sources.filter { $0.folders.contains(folder) })
-        }
-        .filter { !$0.sources.isEmpty }
     }
 
     private func hourPicker(_ title: String, index: Int, fallback: Int) -> some View {
@@ -97,17 +61,6 @@ struct DigestSettingsSections: View {
 
     private func topicSummary(_ topics: [String]) -> String {
         topics.isEmpty ? "All posts" : topics.joined(separator: ", ")
-    }
-
-    private func sourceTopicsBinding(_ id: String) -> Binding<[String]> {
-        Binding(
-            get: { settings.sources[id]?.topics ?? [] },
-            set: { topics in
-                var entry = settings.sources[id] ?? DigestSettings.Source()
-                entry.topics = topics
-                settings.sources[id] = entry.topics.isEmpty ? nil : entry
-            }
-        )
     }
 
     private func recommendationsBinding(_ network: DigestPackage.Network) -> Binding<Bool> {

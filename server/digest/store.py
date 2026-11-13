@@ -37,6 +37,7 @@ class Post:
     comments: list[dict] = field(default_factory=list)
     stats: dict | None = None
     folders: list[str] = field(default_factory=list)
+    thread: str | None = None
     media_errors: int = 0
 
     def __post_init__(self) -> None:

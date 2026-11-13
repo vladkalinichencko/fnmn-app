@@ -157,13 +157,52 @@ class BuildTests(unittest.TestCase):
                 "limit": 1,
             }), encoding="utf-8")
             Store(root).append([post("x/1"), post("x/2")])
-            self.build(root, fnmn)
+            from unittest import mock
+
+            from digest.topics import lexical
+
+            with mock.patch("digest.topics.default_scorer", return_value=lexical):
+                self.build(root, fnmn)
             archive = next((fnmn / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual(len(package["posts"]), 1)
             self.assertEqual(package["posts"][0]["folders"], ["small model"])
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/2": "over the digest limit"})
+
+    def test_a_thread_shares_one_topic_and_the_limit_never_splits_it(self):
+        from unittest import mock
+
+        from digest.topics import lexical
+
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({
+                "networks": {"x": {"topics": ["small model"]}},
+                "limit": 2,
+            }), encoding="utf-8")
+            story = [
+                post("x/0", text="small model alpha briefing one"),
+                post("x/1", text="entirely different wording about the small model beta"),
+                post("x/2", text="third entry own vocabulary mentions small model gamma"),
+            ]
+            for item in story:
+                item.thread = "x/0"
+            solo = post("x/9", text="small model solo note zeta eta theta")
+            solo.posted_at = "2026-11-07T10:00:00Z"
+            for item in story:
+                item.posted_at = "2026-11-07T09:00:00Z"
+            Store(root).append([*story, solo])
+            with mock.patch("digest.topics.default_scorer", return_value=lexical):
+                self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertEqual([item["id"] for item in package["posts"]], ["x/9"])
+            skipped = Store(root).builds()[-1]["skipped"]
+            self.assertEqual(set(skipped), {"x/0", "x/1", "x/2"})
+            self.assertTrue(all(reason == "over the digest limit" for reason in skipped.values()))
 
     def test_the_limit_caps_each_source_not_the_whole_delivery(self):
         with TemporaryDirectory() as folder:

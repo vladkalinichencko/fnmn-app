@@ -18,12 +18,40 @@ from typing import Callable, Iterator
 
 import httpx
 
+from datetime import datetime, timedelta
+
 from digest.store import Post
 from web import Web
 import reader
 
 BROWSER = {"x", "instagram", "telegram"}
 """The networks read through a logged-in profile; Telegram also has a public page."""
+
+THREAD_GAP = timedelta(minutes=30)
+"""Posts of one author this close together read as one story; the build scores and caps them as one."""
+
+
+def mark_threads(posts: list[Post], store) -> None:
+    """Writes each post's `thread`: the id of the first post of its run. A run is one author's
+    consecutive posts inside `THREAD_GAP`; a run that reaches back into the store keeps the
+    thread it already had, so a story split across monitor passes still reads as one."""
+    latest: dict[tuple[str, str], Post] = {}
+    for old in store.posts():
+        key = (old.source, old.author.get("handle") or "")
+        if key not in latest or old.posted_at > latest[key].posted_at:
+            latest[key] = old
+    last = dict(latest)
+    for post in sorted(posts, key=lambda item: item.posted_at):
+        key = (post.source, post.author.get("handle") or "")
+        previous = last.get(key)
+        gap = None
+        if previous is not None:
+            gap = datetime.fromisoformat(post.posted_at) - datetime.fromisoformat(previous.posted_at)
+        if previous is not None and timedelta(0) <= gap <= THREAD_GAP:
+            post.thread = previous.thread or previous.id
+        else:
+            post.thread = None
+        last[key] = post
 
 
 @dataclass

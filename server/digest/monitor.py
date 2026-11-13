@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from digest import instagram, settings as digest_settings, telegram, x
-from digest.reading import SourceFailure, SourceResult, browser, needs_browser
+from digest.reading import SourceFailure, SourceResult, browser, mark_threads, needs_browser
 from digest.store import Store, iso
 from web import LIVE
 import reader
@@ -45,10 +45,12 @@ def main(argv: list[str] | None = None) -> int:
             })
     store = Store()
     statuses = {status["id"]: status for status in store.source_statuses()}
-    for source in sources:
-        if options.only and source["id"] != options.only:
-            continue
+
+    retryable: set[str] = set()
+
+    def run(source: dict) -> None:
         status = _run(source, subscriptions["folders"], store, options.verbose)
+        transient = status.pop("retryable", False)
         statuses[source["id"]] = {
             "id": source["id"],
             "network": source["network"],
@@ -56,6 +58,15 @@ def main(argv: list[str] | None = None) -> int:
             **status,
             "name": source.get("name") or status.get("name") or source["id"],
         }
+        if transient and statuses[source["id"]].get("status") == "failed":
+            retryable.add(source["id"])
+
+    wanted = [source for source in sources if not options.only or source["id"] == options.only]
+    for source in wanted:
+        run(source)
+    for source in wanted:
+        if source["id"] in retryable:
+            run(source)
     ordered = [statuses[source["id"]] for source in sources if source["id"] in statuses]
     store.save_source_statuses(ordered)
     print(f"{iso(datetime.now(timezone.utc))}: {len(ordered)} sources, statuses written")
@@ -82,10 +93,11 @@ def _run(source: dict, folders: list[str], store: Store, verbose: bool) -> dict:
             return {"status": "failed", "detail": retry.reason}
         except Exception as error:
             traceback.print_exc()
-            return {"status": "failed", "detail": str(error)}
+            return {"status": "failed", "detail": str(error), "retryable": True}
     except Exception as error:
         traceback.print_exc()
-        return {"status": "failed", "detail": str(error)}
+        return {"status": "failed", "detail": str(error), "retryable": True}
+    mark_threads(result.posts, store)
     added = store.append(result.posts)
     print(f"{source['id']}: {added} new of {len(result.posts)} read")
     if result.note:

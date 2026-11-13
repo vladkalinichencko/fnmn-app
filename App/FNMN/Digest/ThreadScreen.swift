@@ -9,13 +9,23 @@ struct ThreadScreen: View {
     var body: some View {
         ScrollView {
             if let digest = digests.digest(of: postID), let post = digest.package.posts.first(where: { $0.id == postID }) {
+                let own = post.comments.filter { isAuthor($0, of: post) }
+                let others = post.comments.filter { !isAuthor($0, of: post) }
                 VStack(alignment: .leading, spacing: Tokens.gap) {
                     if let context = post.context, let parent = context.post {
                         parentCard(parent, kind: context.kind)
                     }
-                    PostCard(post: post, digest: digest)
-                    if !post.comments.isEmpty {
-                        comments(post, digest: digest)
+                    PostCard(post: post, digest: digest, showsContext: false)
+                    ForEach(Array(own.enumerated()), id: \.offset) { _, comment in
+                        commentCard(comment)
+                    }
+                    if !others.isEmpty {
+                        Text("Replies")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        ForEach(Array(others.enumerated()), id: \.offset) { _, comment in
+                            commentCard(comment)
+                        }
                     }
                 }
                 .padding(.horizontal, Tokens.gutter)
@@ -31,74 +41,49 @@ struct ThreadScreen: View {
     }
 
     private var title: String {
-        digests.post(postID)?.author.handle ?? "Thread"
+        digests.post(postID)?.author.name ?? "Thread"
+    }
+
+    private func isAuthor(_ comment: DigestPackage.Post.Comment, of post: DigestPackage.Post) -> Bool {
+        if let handle = comment.handle {
+            return handle.caseInsensitiveCompare(post.author.handle) == .orderedSame
+        }
+        return comment.author == post.author.name
     }
 
     private func parentCard(_ post: DigestPackage.Post.ContextPost, kind: DigestPackage.Post.Context.Kind) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PostAuthorLine(name: post.author.name, handle: post.author.handle, size: .compact) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(kind.action)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(post.author.name)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                PostOpenButton(url: post.permalink, label: "Open the post that is quoted")
             }
             if let text = post.text {
                 PostText(text: text)
-                    .font(.footnote)
             }
-            HStack {
-                Spacer()
-                PostOpenButton(url: post.permalink, label: "Open the post that is quoted")
-            }
-            .foregroundStyle(.tertiary)
         }
-        .padding(Tokens.tilePadding)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .plate(cornerRadius: Tokens.plateRadius)
     }
 
-    private func comments(_ post: DigestPackage.Post, digest: Digest) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Replies")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-            ForEach(Array(post.comments.enumerated()), id: \.offset) { _, comment in
-                HStack(alignment: .top, spacing: 10) {
-                    avatar(comment, digest: digest)
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(comment.author)
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(1)
-                            if let handle = comment.handle {
-                                Text("@\(handle)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 8)
-                            if let link = comment.permalink {
-                                PostOpenButton(url: link, label: "Open the reply", font: .caption2)
-                            }
-                        }
-                        Text(comment.text)
-                            .font(.callout)
-                    }
+    private func commentCard(_ comment: DigestPackage.Post.Comment) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(comment.author)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if let link = comment.permalink {
+                    PostOpenButton(url: link, label: "Open the reply")
                 }
             }
+            PostText(text: comment.text)
         }
-    }
-
-    private func avatar(_ comment: DigestPackage.Post.Comment, digest: Digest) -> some View {
-        Group {
-            if let avatar = comment.avatar {
-                FileImage(url: digest.url(of: avatar.path), contentMode: .fill)
-            } else {
-                Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(width: 30, height: 30)
-        .clipShape(.circle)
+        .padding(.vertical, 8)
     }
 }

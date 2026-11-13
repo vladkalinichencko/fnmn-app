@@ -213,7 +213,6 @@ enum ReaderAppearance {
     static let lineKey = "readerLine"
     static let lineSideKey = "readerLineSide"
     static let wordStartsKey = "readerWordStarts"
-    static let onePlateKey = "readerOnePlate"
     static let speedKey = "readerSpeedWordsPerMinute"
     static let speedWordsKey = "readerSpeedWordsPerFrame"
     static let speedPausesKey = "readerSpeedPauses"
@@ -251,17 +250,6 @@ enum ReaderAppearance {
 
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
     static let defaultSize = 3
-
-    static func readsOnePlate(_ materialID: String) -> Bool {
-        UserDefaults.standard.stringArray(forKey: onePlateKey)?.contains(materialID) == true
-    }
-
-    static func setReadsOnePlate(_ reads: Bool, materialID: String) {
-        var materials = Set(UserDefaults.standard.stringArray(forKey: onePlateKey) ?? [])
-        guard materials.contains(materialID) != reads else { return }
-        if reads { materials.insert(materialID) } else { materials.remove(materialID) }
-        UserDefaults.standard.set(materials.sorted(), forKey: onePlateKey)
-    }
 }
 
 struct ReaderAppearanceControls: View {
@@ -325,15 +313,14 @@ struct ReaderMenu: View {
     @AppStorage(ReaderAppearance.wordStartsKey) private var boldsWordStarts = false
 
     private enum ReadingMode: Hashable {
-        case column, posts, fast
+        case column, fast
     }
 
     var body: some View {
-        let column = reader.state.shownPlate == nil && reader.state.speedStart == nil
+        let column = reader.state.speedStart == nil
         return Menu("Reading Options", systemImage: "ellipsis") {
             Picker("Reading Mode", selection: mode) {
                 Text("Reader").tag(ReadingMode.column)
-                Text("Posts").tag(ReadingMode.posts)
                 Text("Fast").tag(ReadingMode.fast)
             }
             .pickerStyle(.segmented)
@@ -360,29 +347,10 @@ struct ReaderMenu: View {
     private var mode: Binding<ReadingMode> {
         Binding(
             get: {
-                if reader.state.shownPlate != nil {
-                    return .posts
-                }
-                if reader.state.speedStart != nil {
-                    return .fast
-                }
-                return .column
+                reader.state.speedStart == nil ? .column : .fast
             },
             set: { mode in
-                switch mode {
-                case .column:
-                    if reader.state.shownPlate != nil {
-                        reader.send(.onePlate(false))
-                    }
-                    if reader.state.speedStart != nil {
-                        reader.send(.speedReading(false))
-                    }
-                case .posts:
-                    reader.send(.speedReading(false))
-                    reader.send(.onePlate(true))
-                case .fast:
-                    reader.send(.speedReading(true))
-                }
+                reader.send(.speedReading(mode == .fast))
             }
         )
     }

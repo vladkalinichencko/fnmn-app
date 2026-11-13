@@ -46,9 +46,9 @@ struct DigestScreen: View {
                     .interactiveOnlyAtStackTop(route)
             }
         }
+        .presentsMedia(mediaPresenter)
         .environment(\.mediaPresenter, mediaPresenter)
         .environment(\.mediaZoom, mediaZoom)
-        .presentsMedia(mediaPresenter)
     }
 
     @ViewBuilder private var content: some View {

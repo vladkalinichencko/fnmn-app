@@ -59,7 +59,6 @@ struct ReadingSession: View {
         } else {
             progress.readThrough[reader.materialID]
         }
-        let paging = reader.state.shownPlate != nil
         let found = reader.state.find?.matches ?? []
         let findsByBlock = Dictionary(grouping: found, by: \.piece)
         let activeFind = reader.state.find?.current.map { found[$0] }
@@ -114,29 +113,14 @@ struct ReadingSession: View {
             }
             .onChange(of: showsLine) { reader.send(.showLine(showsLine)) }
             .animation(.easeOut(duration: 0.3)) { $0.opacity(reader.state.hidesColumn ? 0 : 1) }
-            .animation(.smooth(duration: 0.35)) { $0.blur(radius: paging ? 16 : 0) }
-            .allowsHitTesting(!paging)
-            .accessibilityHidden(paging)
-            .environment(\.mediaZoom, paging ? nil : mediaZoom)
             .task(id: ObjectIdentifier(reader)) {
                 reader.scroll = { proxy.scrollTo($0, anchor: .top) }
                 await Task.yield()
                 reader.send(.opened)
             }
         }
-        .overlay {
-            ZStack {
-                if let plate = reader.state.shownPlate {
-                    Color.black.opacity(0.12)
-                        .ignoresSafeArea()
-                        .allowsHitTesting(false)
-                    PlatePager(reader: reader, plate: plate, width: width > 0 ? column.width(in: width) : nil)
-                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
-                }
-            }
-            .animation(.smooth(duration: 0.35), value: paging)
-        }
         .environment(reader)
+        .presentsMedia(mediaPresenter)
         .environment(\.mediaZoom, mediaZoom)
         .environment(\.mediaPresenter, mediaPresenter)
         .environment(\.plateTextWidth, columnWidth > 0 ? columnWidth - 2 * Tokens.tilePadding : nil)
@@ -147,7 +131,6 @@ struct ReadingSession: View {
             mediaPresenter.open(url)
             return .handled
         })
-        .presentsMedia(mediaPresenter)
         .toolbar {
             if reader.state.mode != .reading {
                 ToolbarItem(placement: .confirmationAction) {

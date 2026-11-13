@@ -325,20 +325,32 @@ def _wait_for_endpoint(network: str, timeout: float = 30) -> str:
     raise ReaderError(f"Chrome did not open its DevTools port for the {network} profile")
 
 
+def _release(network: str, session: Reader) -> None:
+    with _lock(network):
+        current = _SESSIONS.get(network)
+        if current is None or current[0] is not session:
+            return
+        if current[1] == 1:
+            session.close()
+            del _SESSIONS[network]
+        else:
+            _SESSIONS[network] = (current[0], current[1] - 1)
+
+
 @contextmanager
 def job(network: str) -> Iterator[Tab]:
     """One tab of the profile's headless browser. Concurrent jobs share one browser; the last job closes
-    the browser it started."""
+    the browser it started. A session whose browser died is dropped and the job retries once on a fresh
+    one, so one crash does not fail every source that follows it."""
     session = ensure(network)
-    tab = session.tab()
+    try:
+        tab = session.tab()
+    except (OSError, ReaderError):
+        _release(network, session)
+        session = ensure(network)
+        tab = session.tab()
     try:
         yield tab
     finally:
         tab.close()
-        with _lock(network):
-            current, count = _SESSIONS[network]
-            if count == 1:
-                current.close()
-                del _SESSIONS[network]
-            else:
-                _SESSIONS[network] = (current, count - 1)
+        _release(network, session)

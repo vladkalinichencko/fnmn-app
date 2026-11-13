@@ -242,7 +242,7 @@ final class DigestModelTests: XCTestCase {
         )
         for kind in DigestPackage.Post.Context.Kind.allCases {
             let label = PostCard.contextLabel(DigestPackage.Post.Context(kind: kind, post: parent))
-            XCTAssertEqual(label, "\(kind.action) @ada")
+            XCTAssertEqual(label, "\(kind.action) Ada")
         }
     }
 

@@ -77,7 +77,6 @@ private struct ArticleOpener: View {
             place: place,
             note: startPiece,
             showsLine: showsLine,
-            onePlate: ReaderAppearance.readsOnePlate(itemID),
             library: library,
             plainText: { MarkedMarkdown.plainText($0, baseURL: baseURL) }
         )

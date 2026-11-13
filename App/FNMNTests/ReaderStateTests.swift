@@ -35,44 +35,6 @@ final class ReaderStateTests: XCTestCase {
         XCTAssertEqual(readerReduce(state, .opened, document: document), state)
     }
 
-    func testClosingAPlateJumpsBackWithoutHidingTheColumn() {
-        var state = ReaderState(place: 2)
-        state.shownPlate = 3
-        let next = readerReduce(state, .onePlate(false), document: document)
-        XCTAssertEqual(next.opening, 3)
-        XCTAssertFalse(next.hidesColumn)
-        XCTAssertEqual(next.column, .jumping(to: 3, hiding: false))
-    }
-
-    func testPlatesTurnBothWaysAndStopAtTheEdges() {
-        var state = readerReduce(ReaderState(place: 1), .onePlate(true), document: document)
-        XCTAssertEqual(state.shownPlate, 1)
-
-        state = readerReduce(state, .turnPlate(forward: true), document: document)
-        XCTAssertEqual(state.shownPlate, 3)
-        state = readerReduce(state, .turnPlate(forward: true), document: document)
-        XCTAssertEqual(state.shownPlate, 5)
-        state = readerReduce(state, .turnPlate(forward: true), document: document)
-        XCTAssertEqual(state.shownPlate, 5)
-
-        state = readerReduce(state, .turnPlate(forward: false), document: document)
-        XCTAssertEqual(state.shownPlate, 3)
-        state = readerReduce(state, .turnPlate(forward: false), document: document)
-        XCTAssertEqual(state.shownPlate, 1)
-        state = readerReduce(state, .turnPlate(forward: false), document: document)
-        XCTAssertEqual(state.shownPlate, 1)
-    }
-
-    func testTurningAPlateLeavesNoteMode() {
-        var state = readerReduce(ReaderState(place: 1), .onePlate(true), document: document)
-        state = readerReduce(state, .plate(.note(3)), document: document)
-        XCTAssertEqual(state.mode, .noting(3))
-
-        state = readerReduce(state, .turnPlate(forward: true), document: document)
-        XCTAssertEqual(state.shownPlate, 3)
-        XCTAssertEqual(state.mode, .reading)
-    }
-
     func testAFindThatArrivesAfterAnotherQueryIsDropped() {
         var state = readerReduce(ReaderState(place: nil), .find(true), document: document)
         state = readerReduce(state, .findQuery("one"), document: document)

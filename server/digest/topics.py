@@ -1,8 +1,9 @@
 """Scores every collected post against the keyword topics from the app's digest settings.
 
-The scorer is a zero-shot NLI model when `transformers` and the model are on the Mac, and a
-token-overlap scorer when they are not, so a build never dies for want of a model. Tests
-inject their own scorer; the live one is never loaded there.
+The scorer is a multilingual embedding model when `sentence-transformers` and the model are
+on the Mac, then a zero-shot NLI model when `transformers` and its model are, and a
+token-overlap scorer when neither is, so a build never dies for want of a model. Tests
+inject their own scorer; the live ones are never loaded there.
 """
 
 from __future__ import annotations
@@ -13,54 +14,114 @@ from typing import Callable
 from digest import settings as digest_settings
 from digest.store import Post
 
+EMBED_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+EMBED_QUERY = "Instruct: Classify the topic of this social media post.\nQuery: "
+EMBED_PASSAGE = "passage: "
 MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+TEMPERATURE = 0.08
 Scorer = Callable[[str, list[str]], dict[str, float]]
 
 _WORDS = re.compile(r"\w+", re.UNICODE)
 
 
-def classify(posts: list[Post], settings: dict, scorer: Scorer | None = None) -> dict[str, float]:
+def classify(threads: list[list[Post]], settings: dict, scorer: Scorer | None = None) -> dict[str, float]:
     """Writes each post's topic folders and returns its best score, keyed by post id.
 
-    A post keeps the topics that cleared the threshold; below it the folders stay empty and
-    the magazine files the post under `Other`. With no topics configured at all the folders
-    are left as the collector wrote them and every score is 0.
+    A thread is scored once on its joined texts and every member keeps the verdict, so a
+    story never splits across topics. A post keeps its single best topic when that score
+    cleared the threshold; below it the folders stay empty and the magazine files the post
+    under `Other`. With no topics configured at all the folders are left as the collector
+    wrote them and every score is 0.
     """
     if not digest_settings.any_topics(settings):
         return {}
     score_of = scorer or default_scorer()
     threshold = settings.get("threshold", digest_settings.DEFAULT_THRESHOLD)
     best: dict[str, float] = {}
-    for post in posts:
-        topics = digest_settings.topics(settings, post.network, post.source)
-        text = (post.text or "").strip()
+    for thread in threads:
+        first = thread[0]
+        topics = digest_settings.topics(settings, first.network, first.source)
+        text = "\n\n".join((post.text or "").strip() for post in thread if (post.text or "").strip())
         if not topics or not text:
-            best[post.id] = 0.0
+            for post in thread:
+                best[post.id] = 0.0
             continue
         scores = score_of(text, topics)
-        matched = [topic for topic in topics if scores.get(topic, 0.0) >= threshold]
-        post.folders = matched
-        best[post.id] = max((scores.get(topic, 0.0) for topic in topics), default=0.0)
+        top = max(topics, key=lambda topic: scores.get(topic, 0.0))
+        best_score = scores.get(top, 0.0)
+        for post in thread:
+            post.folders = [top] if best_score >= threshold else []
+            best[post.id] = best_score
     return best
 
 
-def cap(posts: list[Post], scores: dict[str, float], limit: int) -> tuple[list[Post], dict[str, str]]:
-    """The delivery's post budget: the strongest posts by their best topic score, newest first
-    on a tie, the rest consumed but not shipped."""
-    if len(posts) <= limit:
-        return posts, {}
-    ranked = sorted(posts, key=lambda post: (scores.get(post.id, 0.0), post.posted_at), reverse=True)
-    kept = {post.id for post in ranked[:limit]}
-    return [post for post in posts if post.id in kept], {
-        post.id: "over the digest limit" for post in posts if post.id not in kept
-    }
+def cap(threads: list[list[Post]], scores: dict[str, float], limit: int) -> tuple[list[Post], dict[str, str]]:
+    """The delivery's post budget: the strongest threads by their best topic score, newest
+    first on a tie. A thread is kept or dropped whole; the rest is consumed but not shipped."""
+    if sum(len(thread) for thread in threads) <= limit:
+        return [post for thread in threads for post in thread], {}
+    ranked = sorted(
+        threads,
+        key=lambda thread: (
+            max(scores.get(post.id, 0.0) for post in thread),
+            max(post.posted_at for post in thread),
+        ),
+        reverse=True,
+    )
+    kept: set[str] = set()
+    over: dict[str, str] = {}
+    count = 0
+    for thread in ranked:
+        if count + len(thread) <= limit:
+            kept.update(post.id for post in thread)
+            count += len(thread)
+        else:
+            over.update({post.id: "over the digest limit" for post in thread})
+    return [post for thread in threads for post in thread if post.id in kept], over
 
 
 def default_scorer() -> Scorer:
-    try:
-        return ZeroShot()
-    except Exception:
-        return lexical
+    for scorer in (Embedder, ZeroShot):
+        try:
+            return scorer()
+        except Exception:
+            continue
+    return lexical
+
+
+class Embedder:
+    """Qwen3-Embedding: the post and each topic become vectors, and the scores are the
+    softmax over their cosines, so the winning topic carries a real 0–1 confidence.
+
+    Topic vectors are encoded once per topic set and reused, so a build pays one encoding
+    per post. Raw cosines all sit in a narrow band and say nothing about relevance; the
+    softmax spreads them by the gaps between topics, which is what the threshold reads.
+    The query carries an instruction and each topic a `passage:` prefix, the pair the
+    model was evaluated with.
+    """
+
+    def __init__(self, model: str = EMBED_MODEL, encoder=None):
+        if encoder is None:
+            from sentence_transformers import SentenceTransformer
+
+            encoder = SentenceTransformer(model)
+        import numpy as np
+
+        self._np = np
+        self._encoder = encoder
+        self._passages: dict[tuple[str, ...], object] = {}
+
+    def __call__(self, text: str, topics: list[str]) -> dict[str, float]:
+        key = tuple(topics)
+        if key not in self._passages:
+            self._passages[key] = self._np.asarray(
+                self._encoder.encode([f"{EMBED_PASSAGE}{topic}" for topic in topics], normalize_embeddings=True)
+            )
+        vector = self._np.asarray(self._encoder.encode(f"{EMBED_QUERY}{text}", normalize_embeddings=True))
+        sims = self._passages[key] @ vector
+        weights = self._np.exp((sims - sims.max()) / TEMPERATURE)
+        probs = weights / weights.sum()
+        return {topic: float(prob) for topic, prob in zip(topics, probs)}
 
 
 class ZeroShot:
