@@ -147,6 +147,10 @@ The server and the app model different things. To the server a page is `claude`,
 - Do not write `LibraryQueries(` in `App/FNMN` outside `LibraryModel.swift`.
 - `SearchIndex` (`Sources/FNMNCore/SearchIndex.swift`) is the full-text read side. Building it folds every search body, so only `LibraryModel` builds it, once per launch and after each reindex, off the main thread; screens call `library.search(_:)`, which awaits it.
 
+## Runtime state stays out of the repo
+
+The Xcode project references the repository root as a local package (`"path": ".."`), so Xcode watches every file in the tree. Any process that writes inside the repo — logs, caches, browser profiles, collected data — makes Xcode rebuild on every write. Runtime state lives in `~/Library/Application Support/FNMN/` and reaches the code through a symlink at its old path (`server/digest/out`, `server/digest/profiles`); never add a new runtime directory inside the repo. Build artifacts (`.build/`, DerivedData) are fine — they are toolchain-owned and gitignored.
+
 ## Pipeline
 
 Every change follows the same order. Each step leaves an artifact the next step and the owner can check.
