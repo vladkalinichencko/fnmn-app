@@ -5,6 +5,7 @@ struct DigestScreen: View {
     @Environment(DigestModel.self) private var digests
     @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
+    @Environment(LibraryDialogs.self) private var dialogs
     @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
     @State private var query = ""
     @State private var mediaPresenter = MediaPresenter()
@@ -20,8 +21,8 @@ struct DigestScreen: View {
                 .appRefresh(title: "Digest")
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Sources", systemImage: "antenna.radiowaves.left.and.right") {
-                            navigation.digest.append(.sources)
+                        Button("Settings", systemImage: "gearshape") {
+                            dialogs.send(.openSettings)
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -36,9 +37,6 @@ struct DigestScreen: View {
             case let .thread(id):
                 ThreadScreen(postID: id)
                     .zoomDestination(of: id)
-                    .interactiveOnlyAtStackTop(route)
-            case .sources:
-                SourcesScreen()
                     .interactiveOnlyAtStackTop(route)
             }
         }

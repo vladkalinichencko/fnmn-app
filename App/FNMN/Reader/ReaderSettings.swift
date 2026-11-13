@@ -248,6 +248,7 @@ enum ReaderAppearance {
     }
 
     static let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge]
+    static let sizeNames = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"]
     static let defaultSize = 3
 
     static func readsOnePlate(_ materialID: String) -> Bool {
@@ -310,6 +311,49 @@ struct ReaderAppearanceControls: View {
             } label: {
                 Label("Column Width", systemImage: "arrow.left.and.right.text.vertical")
                 Text(column.name)
+            }
+            .pickerStyle(.menu)
+        }
+    }
+}
+
+struct ReaderAppearanceSection: View {
+    @AppStorage(ReaderAppearance.typeSizeKey) private var size = ReaderAppearance.defaultSize
+    @AppStorage(ReaderAppearance.backgroundKey) private var background = ReaderBackground.plain
+    @AppStorage(ReaderAppearance.fontKey) private var font = ReaderFont.system
+    @AppStorage(ReaderAppearance.lineSpacingKey) private var spacing = ReaderLineSpacing.regular
+    @AppStorage(ReaderAppearance.columnKey) private var column = ReaderColumn.regular
+
+    var body: some View {
+        Section("Appearance") {
+            Picker("Text Size", selection: $size) {
+                ForEach(ReaderAppearance.sizes.indices, id: \.self) { index in
+                    Text(ReaderAppearance.sizeNames[index]).tag(index)
+                }
+            }
+            .pickerStyle(.menu)
+            Picker("Background", selection: $background) {
+                ForEach(ReaderBackground.allCases) { option in
+                    Text(option.name).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            Picker("Font", selection: $font) {
+                ForEach(ReaderFont.allCases) { option in
+                    Text(option.name).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            Picker("Line Spacing", selection: $spacing) {
+                ForEach(ReaderLineSpacing.allCases) { option in
+                    Text(option.name).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            Picker("Column Width", selection: $column) {
+                ForEach(ReaderColumn.allCases) { option in
+                    Text(option.name).tag(option)
+                }
             }
             .pickerStyle(.menu)
         }

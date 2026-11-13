@@ -1,3 +1,4 @@
+import FNMNCore
 import SwiftUI
 
 enum ConnectionCheck: Equatable {
@@ -34,6 +35,7 @@ struct SettingsScreen: View {
     @State private var address = ""
     @State private var token = ""
     @State private var check = ConnectionCheck.editing
+    @State private var digestSettings = DigestSettings()
     @AppStorage(ReaderAppearance.lineSideKey) private var lineSide = ReadingLineSide.left
 
     var body: some View {
@@ -70,6 +72,8 @@ struct SettingsScreen: View {
                     status
                 }
                 .disabled(check == .checking)
+                ReaderAppearanceSection()
+                DigestSettingsSections(settings: $digestSettings)
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -86,6 +90,15 @@ struct SettingsScreen: View {
             let connection = server.savedConnection()
             address = connection?.endpoint.absoluteString ?? ""
             token = connection?.token ?? ""
+            if let folder = library.cloudFolder {
+                digestSettings = DigestSettings.load(from: folder)
+            }
+        }
+        .onChange(of: digestSettings) {
+            guard let folder = library.cloudFolder else {
+                return
+            }
+            try? digestSettings.save(to: folder)
         }
         .onChange(of: address) {
             check = check.send(.edited)

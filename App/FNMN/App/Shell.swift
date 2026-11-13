@@ -18,7 +18,6 @@ enum Route: Hashable {
 
 enum DigestRoute: Hashable {
     case thread(String)
-    case sources
 }
 
 enum PendingRoute: Equatable {

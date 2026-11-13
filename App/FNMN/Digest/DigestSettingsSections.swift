@@ -1,13 +1,12 @@
 import FNMNCore
 import SwiftUI
 
-struct SourcesScreen: View {
+struct DigestSettingsSections: View {
+    @Binding var settings: DigestSettings
     @Environment(DigestModel.self) private var digests
-    @Environment(LibraryModel.self) private var library
-    @State private var settings = DigestSettings()
 
     var body: some View {
-        Form {
+        Group {
             Section("Build Times") {
                 hourPicker("Morning", index: 0, fallback: 8)
                 hourPicker("Evening", index: 1, fallback: 20)
@@ -21,19 +20,6 @@ struct SourcesScreen: View {
                 }
             }
             sourcesSections
-        }
-        .navigationTitle("Digest Settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if let folder = library.cloudFolder {
-                settings = DigestSettings.load(from: folder)
-            }
-        }
-        .onChange(of: settings) {
-            guard let folder = library.cloudFolder else {
-                return
-            }
-            try? settings.save(to: folder)
         }
     }
 
