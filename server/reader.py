@@ -30,7 +30,7 @@ import httpx
 import websocket
 
 PROFILES = Path(__file__).resolve().parent / "digest" / "profiles"
-CHROME = Path.home() / "Library/Application Support/FNMN/FNMN Chrome.app/Contents/MacOS/Google Chrome"
+CHROME = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 HEADLESS = [
     "--headless=new",
     "--remote-debugging-port=0",
