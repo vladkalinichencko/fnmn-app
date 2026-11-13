@@ -63,6 +63,20 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(safe("x/1587-0"), "x-1587-0")
         self.assertNotIn("/", safe("../x/1"))
 
+    def test_a_repost_and_a_duplicate_are_dropped_but_a_quote_with_a_comment_stays(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            body = "The quick brown fox jumps over the lazy dog near the riverbank this morning"
+            added = store.append([
+                post("x/1", text=body),
+                post("x/2", text=f"RT @someone: {body}"),
+                post("x/3", text=body.upper()),
+                post("x/4", text=f"{body} — and here is my own take on the whole thing"),
+            ])
+            self.assertEqual(added, 2)
+            self.assertEqual([item.id for item in store.posts()], ["x/1", "x/4"])
+            self.assertEqual(store.append([post("x/5", text=body)]), 0)
+
     def test_an_instagram_author_name_drops_the_og_title_noise(self):
         from digest.store import Post
 

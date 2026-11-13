@@ -1,3 +1,6 @@
+import random
+import zlib
+
 from web import Web
 from digest.store import Post
 
@@ -10,9 +13,13 @@ def web(text=lambda url: "", bytes=lambda url: b"", rendered=None) -> Web:
     return Web(text=text, bytes=bytes, page=text, rendered=rendered or no_browser)
 
 
-def post(post_id: str = "x/1", text: str | None = "A small model that reads the whole catalog.",
+def post(post_id: str = "x/1", text: str | None = None,
          folders: tuple[str, ...] = ("ml",)) -> Post:
-    """A collected X post for the digest's build, refresh and store tests."""
+    """A collected X post for the digest's build, refresh and store tests; the default text varies
+    enough per id that the store's text dedup keeps every fixture."""
+    if text is None:
+        tail = "".join(random.Random(zlib.crc32(post_id.encode())).choices("abcdefghijklmnopqrstuvwxyz", k=24))
+        text = f"small model notes {tail}"
     return Post(
         id=post_id,
         network="x",

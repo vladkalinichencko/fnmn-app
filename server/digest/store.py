@@ -98,6 +98,7 @@ class Store:
         self.builds_file = root / "builds.jsonl"
         self.sources_file = root / "sources.json"
         self.media_dir = root / "media"
+        self._sig_cache: dict[str, tuple[str, frozenset[str]]] = {}
 
     def posts(self) -> list[Post]:
         """Every collected post, oldest first. A run that died mid-line leaves a torn tail, which is skipped;
@@ -116,9 +117,31 @@ class Store:
         return {post.id for post in self.posts()}
 
     def append(self, posts: list[Post]) -> int:
-        """Adds the posts the store does not hold yet, by id; returns how many it added."""
-        known = self.ids()
-        fresh = [post for post in posts if post.id not in known]
+        """Adds the posts the store does not hold yet, by id or by text; returns how many it added.
+        A repost or a duplicate is dropped, a quote with a comment of its own stays."""
+        existing = self.posts()
+        known = {post.id for post in existing}
+        signatures = []
+        for post in existing:
+            if not post.text:
+                continue
+            cached = self._sig_cache.get(post.id)
+            if cached is None or cached[0] != post.network:
+                cached = (post.network, _signature(post.text))
+                self._sig_cache[post.id] = cached
+            signatures.append(cached)
+        fresh = []
+        for post in posts:
+            if post.id in known:
+                continue
+            signature = _signature(post.text)
+            if signature and any(
+                network == post.network and _similar(signature, other) for network, other in signatures
+            ):
+                continue
+            fresh.append(post)
+            if signature:
+                signatures.append((post.network, signature))
         if not fresh:
             return 0
         self.root.mkdir(parents=True, exist_ok=True)
@@ -127,16 +150,25 @@ class Store:
                 log.write(json.dumps(asdict(post), ensure_ascii=False) + "\n")
         return len(fresh)
 
-    def save_media(self, post_id: str, index: int, data: bytes, extension: str) -> dict | None:
+    def save_media(self, post_id: str, index: int | str, data: bytes, extension: str) -> dict | None:
         """Writes one picture under the post's name; a format whose size cannot be measured is refused, since
         the card lays itself out by that size before the file is decoded."""
         size = image_size(data)
         if size is None:
             return None
+        return self.save_file(post_id, index, data, extension, size=size)
+
+    def save_file(self, post_id: str, index: int | str, data: bytes, extension: str, size: tuple[int, int] | None = None) -> dict | None:
+        """Writes one attachment of a post — a picture with its measured size, a video without one."""
+        if not data:
+            return None
         self.media_dir.mkdir(parents=True, exist_ok=True)
         name = f"{safe(post_id)}-{index}.{extension}"
         (self.media_dir / name).write_bytes(data)
-        return {"path": f"media/{name}", "width": size[0], "height": size[1]}
+        entry = {"path": f"media/{name}"}
+        if size is not None:
+            entry["width"], entry["height"] = size
+        return entry
 
     def builds(self) -> list[dict]:
         if not self.builds_file.exists():
@@ -171,6 +203,26 @@ class Store:
 
 def safe(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", name)
+
+
+def _signature(text: str | None) -> frozenset[str]:
+    """A post's text as character 5-grams; links, case and the `RT @handle:` prefix are noise."""
+    if not text:
+        return frozenset()
+    flat = re.sub(r"\s+", " ", re.sub(r"https?://\S+", " ", text.lower())).strip()
+    flat = re.sub(r"^rt @\w+:\s*", "", flat)
+    if not flat:
+        return frozenset()
+    if len(flat) < 12:
+        return frozenset([flat])
+    return frozenset(flat[i:i + 5] for i in range(len(flat) - 4))
+
+
+def _similar(first: frozenset[str], second: frozenset[str]) -> bool:
+    """Near-identical texts share almost every gram; a quote with a comment of its own does not."""
+    if not first or not second:
+        return False
+    return len(first & second) / len(first | second) >= 0.85
 
 
 def image_size(data: bytes) -> tuple[int, int] | None:
