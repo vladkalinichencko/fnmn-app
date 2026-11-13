@@ -160,6 +160,33 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(len(package["posts"]), 2)
             self.assertEqual(Store(root).builds()[-1]["skipped"], {})
 
+    def test_a_post_below_the_topic_threshold_is_filtered_and_a_topicless_network_is_not(self):
+        from unittest import mock
+
+        from digest.topics import lexical
+
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({
+                "networks": {"x": {"topics": ["small model"]}},
+            }), encoding="utf-8")
+            off_topic = replace(post("x/1", text="I baked bread and fed the cat"), folders=[])
+            photos = replace(
+                post("instagram/a/1", text="a day at the sea"),
+                network="instagram", source="instagram/recommendations",
+                id="instagram/a/1", author={"handle": "a", "name": "A"},
+                permalink="https://www.instagram.com/p/1/", folders=[],
+            )
+            Store(root).append([off_topic, photos])
+            with mock.patch("digest.topics.default_scorer", return_value=lexical):
+                self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertEqual([item["id"] for item in package["posts"]], ["instagram/a/1"])
+            self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "below the topic threshold"})
+
     def test_without_topics_the_feed_is_capped_at_forty(self):
         with TemporaryDirectory() as folder:
             root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"

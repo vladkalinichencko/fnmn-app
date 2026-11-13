@@ -58,6 +58,13 @@ def main(argv: list[str] | None = None) -> int:
             skipped[post.id] = reason
     buildable = [post for post in pending if post.id not in skipped]
     scores = topics.classify(buildable, prefs)
+    filtered = []
+    for post in buildable:
+        if post.text and not post.folders and digest_settings.topics(prefs, post.network, post.source):
+            skipped[post.id] = "below the topic threshold"
+        else:
+            filtered.append(post)
+    buildable = filtered
     per_source: dict[str, list[Post]] = {}
     for post in buildable:
         per_source.setdefault(post.source, []).append(post)
