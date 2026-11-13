@@ -29,19 +29,27 @@ private struct AppRefresh: ViewModifier {
                                 .controlSize(.regular)
                                 .progressViewStyle(GraySpinner())
                         } else if case let .waiting(pending) = library.syncState {
-                            Image(systemName: "icloud.and.arrow.down")
-                                .font(.title)
-                                .foregroundStyle(.orange)
-                                .accessibilityLabel("Waiting for \(pending) iCloud files")
-                        } else if !digests.pendingDownloads.isEmpty || digests.deliveryFailed {
-                            Image(systemName: "icloud.and.arrow.down")
-                                .font(.title)
-                                .foregroundStyle(.orange)
-                                .accessibilityLabel(digests.pendingDownloads.isEmpty ? "Digest delivery failed" : "Waiting for \(digests.pendingDownloads.count) digest files in iCloud")
+                            CloudStatusIcon(label: "Waiting for \(pending) iCloud files")
+                        } else if !digests.pendingDownloads.isEmpty {
+                            CloudStatusIcon(label: "Waiting for \(digests.pendingDownloads.count) digest files in iCloud")
+                        } else if digests.deliveryFailed {
+                            CloudStatusIcon(label: "Digest delivery failed", failed: true)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+    }
+}
+
+struct CloudStatusIcon: View {
+    let label: String
+    var failed = false
+
+    var body: some View {
+        Image(systemName: failed ? "exclamationmark.icloud" : "icloud.and.arrow.down")
+            .font(.title)
+            .foregroundStyle(.orange)
+            .accessibilityLabel(label)
     }
 }

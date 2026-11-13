@@ -68,7 +68,7 @@ public enum CloudFolder {
         return url.deletingLastPathComponent().appending(path: String(name.dropFirst().dropLast(".icloud".count)))
     }
 
-    private static func placeholder(of file: URL) -> URL {
+    public static func placeholder(of file: URL) -> URL {
         file.deletingLastPathComponent().appending(path: ".\(file.lastPathComponent).icloud")
     }
 
