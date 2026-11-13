@@ -16,6 +16,8 @@ final class DigestModel {
     private(set) var refreshed: [String: [DigestPackage.Post.Media]] = [:]
     private(set) var refreshing: Set<String> = []
     private(set) var lastError: String?
+    private(set) var pendingDownloads: [URL] = []
+    private(set) var deliveryFailed = false
     private let file: DigestFile
     private let server: ServerLink?
     @ObservationIgnored private var loaded = false
@@ -84,9 +86,13 @@ final class DigestModel {
         do {
             try await load()
             digests = try await file.packages()
+            pendingDownloads = []
+            deliveryFailed = false
             if let folder {
                 let taken = await take(in: folder)
                 lastError = taken.failures.isEmpty ? nil : taken.failures.joined(separator: "; ")
+                pendingDownloads = taken.pending
+                deliveryFailed = !taken.failures.isEmpty
                 if taken.took {
                     digests = try await file.packages()
                 }
@@ -123,11 +129,11 @@ final class DigestModel {
         loaded = true
     }
 
-    private func take(in folder: URL) async -> (failures: [String], took: Bool) {
+    private func take(in folder: URL) async -> (failures: [String], pending: [URL], took: Bool) {
         let target = DigestDeliveries(file: file, index: index, unpacked: Set(digests.map(\.id)))
         let result = await DeliverySync.run(target, in: folder)
         index = target.index
-        return (result.failures, target.took)
+        return (result.failures, result.pending, target.took)
     }
 
     private func scheduleIndexSave() {

@@ -83,20 +83,6 @@ struct DigestScreen: View {
     private var magazine: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                if let error = digests.lastError {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 8)
-                        Button("Retry") {
-                            Task { await digests.sync(folder: library.cloudFolder) }
-                        }
-                        .font(.caption)
-                    }
-                    .padding(.horizontal, Tokens.gutter)
-                    .padding(.top, Tokens.gap)
-                }
                 ForEach(digests.digests) { digest in
                     digestHeader(digest)
                     sections(of: digest)

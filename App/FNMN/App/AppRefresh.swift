@@ -33,6 +33,11 @@ private struct AppRefresh: ViewModifier {
                                 .font(.title)
                                 .foregroundStyle(.orange)
                                 .accessibilityLabel("Waiting for \(pending) iCloud files")
+                        } else if !digests.pendingDownloads.isEmpty || digests.deliveryFailed {
+                            Image(systemName: "icloud.and.arrow.down")
+                                .font(.title)
+                                .foregroundStyle(.orange)
+                                .accessibilityLabel(digests.pendingDownloads.isEmpty ? "Digest delivery failed" : "Waiting for \(digests.pendingDownloads.count) digest files in iCloud")
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
