@@ -121,6 +121,16 @@ extension WidgetItem {
 }
 
 
+extension WidgetPost {
+    var deepLink: URL {
+        var components = URLComponents()
+        components.scheme = "fnmn"
+        components.host = "digest"
+        components.queryItems = [URLQueryItem(name: "post", value: id)]
+        return components.url ?? URL(string: "fnmn://digest")!
+    }
+}
+
 extension WidgetSnapshot {
     static var placeholder: WidgetSnapshot {
         WidgetSnapshot(

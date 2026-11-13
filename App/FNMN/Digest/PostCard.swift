@@ -37,7 +37,7 @@ struct PostCard: View {
                     .contextMenu {
                         menu
                     } preview: {
-                        cardContent
+                        cardPeek
                     }
             }
             .accessibilityAction(named: "Open the thread") {
@@ -73,6 +73,41 @@ struct PostCard: View {
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var cardPeek: some View {
+        let media = digests.media(for: post)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(post.author.name)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
+                Text(post.network.name)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+            }
+            if let text = post.text {
+                Text(Self.peekText(text))
+                    .font(.callout)
+                    .lineLimit(10)
+            }
+            if let thumb = media.first ?? post.video?.poster {
+                FileImage(url: digest.url(of: thumb.path), contentMode: .fill)
+                    .frame(height: 160)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
+            }
+        }
+        .padding(Tokens.tilePadding)
+        .frame(width: 300, alignment: .topLeading)
+        .plate(cornerRadius: Tokens.plateRadius)
+    }
+
+    private static func peekText(_ markdown: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
     }
 
     private func openThread() {

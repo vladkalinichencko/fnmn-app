@@ -120,6 +120,11 @@ private struct WindowRoot: View {
                 }
             } else if url.scheme == "fnmn", url.host == "digest" {
                 navigation.tab = .digest
+                if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                   let id = components.queryItems?.first(where: { $0.name == "post" })?.value,
+                   !id.isEmpty {
+                    navigation.digestPost = id
+                }
             } else if url.scheme == "fnmn", url.host == "item",
                       let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                       let id = components.queryItems?.first(where: { $0.name == "id" })?.value,

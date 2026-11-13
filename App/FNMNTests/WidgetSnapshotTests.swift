@@ -28,6 +28,15 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertEqual(item("video:one", piece: nil).deepLink.absoluteString, "fnmn://item?id=video:one")
     }
 
+    func testADigestPostOpensTheDigestAtThatPost() {
+        let post = WidgetPost(id: "x/123", text: "hi", author: "a", network: "X")
+        let link = post.deepLink
+        XCTAssertEqual(link.scheme, "fnmn")
+        XCTAssertEqual(link.host, "digest")
+        let components = URLComponents(url: link, resolvingAgainstBaseURL: false)
+        XCTAssertEqual(components?.queryItems?.first { $0.name == "post" }?.value, "x/123")
+    }
+
     func testASnapshotIsWrittenAndReadBack() throws {
         try XCTSkipIf(WidgetStore.container == nil, "no app group container here")
         let snapshot = WidgetSnapshot(items: [item("a", piece: 3)], spares: [], digest: nil, generatedAt: Date(timeIntervalSince1970: 100))

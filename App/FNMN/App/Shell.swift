@@ -40,6 +40,7 @@ final class WindowNavigation {
     var shelf: [Route] = []
     var pending = PendingRoute.none
     var pendingItem: Route?
+    var digestPost: String?
 
     func open(_ route: Route) {
         switch tab {

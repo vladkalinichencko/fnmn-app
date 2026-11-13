@@ -75,30 +75,49 @@ struct DigestScreen: View {
     }
 
     private var magazine: some View {
-        ScrollView {
-            if let error = digests.lastError {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(error)
+        ScrollViewReader { proxy in
+            ScrollView {
+                if let error = digests.lastError {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button("Retry") {
+                            Task { await digests.sync(folder: library.cloudFolder) }
+                        }
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
-                    Button("Retry") {
-                        Task { await digests.sync(folder: library.cloudFolder) }
                     }
-                    .font(.caption)
+                    .padding(.horizontal, Tokens.gutter)
+                    .padding(.top, Tokens.gap)
                 }
-                .padding(.horizontal, Tokens.gutter)
-                .padding(.top, Tokens.gap)
+                ForEach(digests.digests) { digest in
+                    digestHeader(digest)
+                    if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        sections(of: digest)
+                    } else {
+                        results(of: digest)
+                    }
+                }
             }
-            ForEach(digests.digests) { digest in
-                digestHeader(digest)
-                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    sections(of: digest)
-                } else {
-                    results(of: digest)
-                }
+            .onAppear {
+                revealPendingPost(using: proxy)
+            }
+            .onChange(of: navigation.digestPost) { _, _ in
+                revealPendingPost(using: proxy)
+            }
+            .onChange(of: digests.digests.map(\.id)) { _, _ in
+                revealPendingPost(using: proxy)
             }
         }
+    }
+
+    private func revealPendingPost(using proxy: ScrollViewProxy) {
+        guard let id = navigation.digestPost, digests.post(id) != nil else {
+            return
+        }
+        navigation.digestPost = nil
+        proxy.scrollTo(id, anchor: .center)
     }
 
     private func digestHeader(_ digest: Digest) -> some View {
@@ -124,6 +143,7 @@ struct DigestScreen: View {
                                 .foregroundStyle(.secondary)
                             CardColumns(items: topic.posts, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
                                 PostCard(post: post, digest: digest, opensThread: post.hasThread)
+                                    .id(post.id)
                             }
                         }
                     }
@@ -138,6 +158,7 @@ struct DigestScreen: View {
         let found = digest.package.posts(matching: query, hidden: digests.hidden)
         return CardColumns(items: found, idealWidth: column.cardWidth, height: PostCard.estimatedHeight, separates: true) { post in
             PostCard(post: post, digest: digest, opensThread: post.hasThread)
+                .id(post.id)
         }
         .padding(.horizontal, Tokens.gutter)
         .padding(.bottom, Tokens.sectionGap)

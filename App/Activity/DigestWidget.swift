@@ -95,7 +95,9 @@ private struct DigestGrid: View {
                     ForEach(rowPosts.indices, id: \.self) { index in
                         HStack(spacing: WidgetLayout.gap) {
                             ForEach(rowPosts[index]) { post in
-                                PostCell(post: post)
+                                Link(destination: post.deepLink) {
+                                    PostCell(post: post)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity)
