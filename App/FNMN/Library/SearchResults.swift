@@ -3,14 +3,14 @@ import SwiftUI
 
 struct SearchResults: View {
     let query: String
-    var corpus: Set<String>?
+    var include: (@MainActor (SearchHit) -> Bool)?
     var groups: @MainActor ([SearchHit]) -> [(title: String, hits: [SearchHit])] = SearchResults.bySource
     @Environment(LibraryModel.self) private var library
     @Environment(WindowNavigation.self) private var navigation
     @State private var state = SearchScreenState.idle
 
     var body: some View {
-        let found = state.all.filter { corpus?.contains($0.itemID) ?? true }
+        let found = state.all.filter { include?($0) ?? true }
         let sections = groups(found)
         SearchResultsList(query: query, searching: state.isSearching, empty: sections.allSatisfy(\.hits.isEmpty)) {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
@@ -22,6 +22,7 @@ struct SearchResults: View {
                             ResultRow(title: library.queries.item(hit.itemID)?.title ?? hit.itemID, excerpt: hit.text, spans: [hit.span].compactMap(\.self), seconds: hit.seconds)
                         }
                         .buttonStyle(.plain)
+                        .listRowBackground(Color.clear)
                     }
                 }
             }

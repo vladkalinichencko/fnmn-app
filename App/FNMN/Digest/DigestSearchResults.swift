@@ -42,6 +42,7 @@ struct DigestSearchResults: View {
             }
         }
         .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
         .contextMenu {
             Button("Open the post in \(post.network.name)", systemImage: "safari") {
                 openURL(post.permalink)

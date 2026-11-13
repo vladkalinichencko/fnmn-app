@@ -11,7 +11,7 @@ struct ShelfScreen: View {
         @Bindable var navigation = navigation
         RouteStack(path: $navigation.shelf) {
             shelfContent
-                .searchResults(query: $query) { SearchResults(query: $0, corpus: self.shelfIDs, groups: self.shelfGroups) }
+                .searchResults(query: $query) { SearchResults(query: $0, include: self.shelfHit, groups: self.shelfGroups) }
                 .screenSearch($query)
                 .navigationTitle("Shelf")
                 .appRefresh(title: "Shelf")
@@ -62,18 +62,28 @@ struct ShelfScreen: View {
         library.syncState == .syncing || imports.jobs.contains { $0.isPreparing }
     }
 
-    private var shelfIDs: Set<String> {
-        Set(library.snapshot.annotations.map(\.materialID)).union(library.queries.archivedItems.map(\.id))
+    private var annotatedIDs: Set<String> {
+        Set(library.snapshot.annotations.map(\.materialID))
     }
 
     private var archivedIDs: Set<String> {
         Set(library.queries.archivedItems.map(\.id))
     }
 
+    private func shelfHit(_ hit: SearchHit) -> Bool {
+        switch hit.source {
+        case .annotation:
+            annotatedIDs.contains(hit.itemID)
+        case .material:
+            archivedIDs.contains(hit.itemID)
+        case .text, .transcript:
+            false
+        }
+    }
+
     private func shelfGroups(_ hits: [SearchHit]) -> [(title: String, hits: [SearchHit])] {
-        let filed = archivedIDs
-        let notes = hits.filter { !filed.contains($0.itemID) }
-        let archive = hits.filter { filed.contains($0.itemID) }
+        let notes = hits.filter { $0.source == .annotation }
+        let archive = hits.filter { $0.source == .material }
         return [(title: "Annotations", hits: notes), (title: "Archive", hits: archive)].filter { !$0.hits.isEmpty }
     }
 

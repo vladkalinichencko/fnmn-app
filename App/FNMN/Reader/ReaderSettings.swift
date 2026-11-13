@@ -333,7 +333,7 @@ struct ReaderMenu: View {
                 Text("Posts").tag(ReadingMode.posts)
                 Text("Fast").tag(ReadingMode.fast)
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.inline)
             ReaderAppearanceControls()
             Toggle("Reading Line", systemImage: "ruler",isOn: $showsLine)
             Toggle("Bold Word Starts", systemImage: "bold", isOn: $boldsWordStarts)
