@@ -114,6 +114,7 @@ struct PlatePager: View {
                 .frame(maxWidth: .infinity, minHeight: viewport)
         }
         .scrollBounceBehavior(.always, axes: .vertical)
+        .scrollEdgeEffectStyle(.soft, for: .all)
         .defaultScrollAnchor(forward ? .top : .bottom, for: .initialOffset)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.containerSize.height - geometry.contentInsets.top - geometry.contentInsets.bottom
