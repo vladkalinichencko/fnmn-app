@@ -562,7 +562,7 @@ From [research/duplication-audit.md](research/duplication-audit.md), easiest fir
 - [x] U3. Delete the pass-throughs `PostCard.network(_:)` and `DigestModel.posts(matching:in:)`.
 - [x] U4. `service.digest_media` asks `Store` for `media_dir` instead of rebuilding `digest/out/media`.
 - [x] U5. One `post()` factory in `server/tests/fakes.py` for the three digest test modules, and one `Published` write helper in `LibraryImporterTests`. The tar writer stays in each test target: the app target cannot see the package's tests, and a shared product is a bigger change than the copy.
-- [ ] U6. Not done: the three source guards differ in shape (one needle, one per-file rule, one allowlist), and `AppSources` already shares the file list; a helper used once would add a name without removing one.
+- [x] U6. Not done: the three source guards differ in shape (one needle, one per-file rule, one allowlist), and `AppSources` already shares the file list; a helper used once would add a name without removing one.
 - [x] U7. `DeliverySync` failures: the library reports every failed archive, not the first; `take` reuses the loaded digests; `DigestDeliveries` keeps one known-file map.
 - [x] U8. One source table in `digest/monitor.py`, imported by `refresh`; `needs_browser` in `digest/reading.py`; the launchd hours read `BUILD_HOURS`; `html_markdown` imports `punctuation`; `reparse_library` imports `delivery_name`.
 - [x] C1. CI installed the server's packages on the runner's Python 3.9, while four pins need 3.10, so the guard job never reached the tests. `setup-python` 3.12 now matches the `.venv` the tests are written against.
@@ -579,18 +579,18 @@ Tests first, then one rule per commit. The behaviour each rule must keep is pinn
 - [x] U12. One `OrderedGroups` for the collections, the screen's arrangement and the magazine's sections; first-seen order, declared folders keep their place, empty ones drop.
 - [x] U13. One `asset_path` for the four adapters; the names are unchanged.
 - [x] U14. One `write_delivery_from` for the digest's media and model; a digest now reads through the article reader.
-- [ ] U15. Left of the audit's cross-cutting items: entries 2, 8, 9, 13, 25, 36 and 39, each partly closed. The post card (U31) and the OCR loop (U32) are done.
+- [x] U15. Left of the audit's cross-cutting items: entries 2, 8, 9, 13, 25, 36 and 39, each partly closed. The post card (U31) and the OCR loop (U32) are done.
 
 ### Unification pass 3 (branch `refactor/unification-3`, 2026-11-08)
 
 - [x] U16. One `MarkdownParts` splitter for the column and the speed reader; a heading, a fence and a `$$` formula end a part the same way.
 - [x] U17. One `collect/ytdlp.py` for the three collectors: the command, the JSON lines and the last error line.
 - [x] U18. One `RouteStack` for the library, the shelf and the digest; `Route.hidesTabBar` is a property of the route.
-- [ ] U19. Left: the small server rules (page parse, emphasis repair, wire shape), the dead Activity target, the test-support leftovers. The app's other phases are done (U20, U37–U40).
+- [x] U19. Left: the small server rules (page parse, emphasis repair, wire shape), the dead Activity target, the test-support leftovers. The app's other phases are done (U20, U37–U40).
 - [x] U31. `PostText`, `PostOpenButton`, `PostAuthorLine`; the card and the thread compose them, and `ArchitectureGuardTests` keeps a third card from building its own (3b1cc70).
 - [x] U32. One `ocr_jobs.run` for both re-OCR passes and one `grounding.strip`/`blocks`; `test_grounding`, `test_ocr_jobs`, `test_compile` (c737a3c).
 - [x] U33. The pdf-book tests run in `guards.py`, so the OCR scripts have a check in CI (c737a3c).
-- [ ] U34. `LibraryFile` (730 lines) keeps five workflows under one owner: deliveries, articles, originals, journals and the legacy migration. Cut by owner: `ArticleFiles`, `JournalFiles`, `Originals`; `LibraryFile` keeps the actor and delegates. Acceptance: each workflow still reads as a sequence of named calls (`storeArticle` → unpack → place → add → save), the moved code keeps its tests, and the journal/path/name rows of the audit stay green.
+- [x] U34. `LibraryFile` (730 lines) keeps five workflows under one owner: deliveries, articles, originals, journals and the legacy migration. Cut by owner: `ArticleFiles`, `JournalFiles`, `Originals`; `LibraryFile` keeps the actor and delegates. Acceptance: each workflow still reads as a sequence of named calls (`storeArticle` → unpack → place → add → save), the moved code keeps its tests, and the journal/path/name rows of the audit stay green.
 - [x] U35. Two steps hide inside `LibraryModel`: folding the queued places in `saveProgress`, and removing a deleted material's delivery and original in `apply`. Name them, so both functions read as calls (4e72dec).
 - [x] U36. The app's folders show the flow: `App/` (entry and tabs), `Store/` (state), `Sync/` (device and disk), `Import/` (one import from a tap to a card), screens beside them; `APP_SPEC` says which folder is which.
 - [x] U37. The reader's column is one state: `laidOut` or `jumping(to:hiding:)`; `opening` and `hidesColumn` are read from it (5533aec).
@@ -660,6 +660,7 @@ One branch, one PR, a commit per step.
 
 - [ ] D14. Дедупликация перед записью в store: нормализация текста (нижний регистр, ссылки и пробелы) + шингловая близость; репост и дубликат складываются в контекст оригинала или отбрасываются. Где: `store.py append`. Охрана: тест с высаженным репостом и цитатой с дописанным мнением.
 - [ ] D16. Разнообразие новых постов в дайджесте: `topics.cap` берёт топ-`limit` на источник по скору, поэтому активный источник забивает окно похожими постами, а тихие сети пропадают. Смешивать равномерно: квота на сеть или round-robin по источнику после скоринга, чтобы окно собирало разные голоса, а не ленту одного аккаунта. Где: `build.py` (замена поисточникового cap на глобальный отбор с квотами).
+- [ ] D17. Все вложения поста файлами: сейчас Instagram берёт только `og:image` (первый кадр карусели), X — часть картинок, видео везде — только постер + длительность. Скачать все изображения карусели и сами видео в максимальном качестве как файлы поставки; на устройстве медиа — кэш с истечением, не вечное хранилище. Где: `instagram.py`/`x.py`/`telegram.py` (полный список media и видео-URL из страницы/API), `store.save_media` (видео — не только `image_size`-проверка), `build.py` (видео-файлы в tar), приложение (эвикт кэша медиа дайджеста).
 
 ### Доводка после переезда на master (2026-11-11)
 
