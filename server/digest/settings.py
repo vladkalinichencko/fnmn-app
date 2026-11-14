@@ -69,6 +69,17 @@ def any_topics(settings: dict) -> bool:
     )
 
 
+def threshold(settings: dict, network: str, source: str) -> float:
+    """The score a post of this network and source must clear: the source's own threshold,
+    then the network's, then the global one."""
+    fallback = settings.get("threshold", DEFAULT_THRESHOLD)
+    for entry in (settings.get("sources", {}).get(source) or {}, settings.get("networks", {}).get(network) or {}):
+        value = entry.get("threshold") if isinstance(entry, dict) else None
+        if isinstance(value, (int, float)):
+            return float(value)
+    return float(fallback)
+
+
 def network_limit(settings: dict, network: str) -> int | None:
     """A per-network ceiling on one delivery's posts; `None` when the network has none."""
     entry = settings.get("networks", {}).get(network)

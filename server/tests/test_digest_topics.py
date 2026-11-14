@@ -1,5 +1,6 @@
 import json
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -63,6 +64,22 @@ class ClassifyTests(unittest.TestCase):
         scored = post("x/1", text="A post about llms")
         topics.classify([[scored]], self.prefs(), tied_scores)
         self.assertEqual(scored.folders, [])
+
+    def test_a_source_threshold_beats_the_network_and_the_global_one(self):
+        prefs = {
+            "threshold": 0.5,
+            "networks": {"x": {"topics": ["llms", "cooking"], "threshold": 0.4}},
+            "sources": {"x/karpathy": {"threshold": 0.1}},
+        }
+        loose = post("x/karpathy/1", text="A post about llms")
+        strict = replace(post("x/other/2", text="A post about llms"), source="x/other")
+
+        def clear_scores(text, words):
+            return {"llms": 0.9, "cooking": 0.7}
+
+        topics.classify([[loose], [strict]], prefs, clear_scores)
+        self.assertEqual(loose.folders, ["llms"])
+        self.assertEqual(strict.folders, [])
 
     def test_a_post_below_the_threshold_lands_in_other(self):
         prefs = self.prefs(networks={"x": {"topics": ["cooking"]}})

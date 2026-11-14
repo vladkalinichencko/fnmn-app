@@ -35,11 +35,11 @@ def classify(threads: list[list[Post]], settings: dict, scorer: Scorer | None = 
     if not digest_settings.any_topics(settings):
         return {}
     score_of = scorer or default_scorer()
-    threshold = settings.get("threshold", digest_settings.DEFAULT_THRESHOLD)
     best: dict[str, float] = {}
     for thread in threads:
         first = thread[0]
         topics = digest_settings.topics(settings, first.network, first.source)
+        threshold = digest_settings.threshold(settings, first.network, first.source)
         text = "\n\n".join((post.text or "").strip() for post in thread if (post.text or "").strip())
         if not topics or not text:
             for post in thread:
