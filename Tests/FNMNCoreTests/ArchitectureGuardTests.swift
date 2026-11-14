@@ -95,6 +95,13 @@ final class ArchitectureGuardTests: XCTestCase {
         }
     }
 
+    func testAContextTapStaysInsideTheApp() throws {
+        let source = try contents(of: "PostCard.swift")
+        let tap = try XCTUnwrap(body(of: "private struct ContextTap", in: source))
+        XCTAssertTrue(tap.contains("navigation.open(.thread("), "a context tap no longer opens the thread inside the app")
+        XCTAssertFalse(tap.contains("openURL("), "a context tap leaves the app; the external link stays in the card's menu")
+    }
+
     func testWebViewsAppearOnlyInTheLiveCropAndThePlayer() throws {
         let allowed: Set<String> = ["LiveCropView.swift", "VideoReaderView.swift"]
         for file in try AppSources.files() {

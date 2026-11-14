@@ -246,6 +246,37 @@ final class DigestModelTests: XCTestCase {
         }
     }
 
+    func testAContextOnlyPostIsFoundForItsThread() async throws {
+        let folder = root.appending(path: "FNMN")
+        let parent = DigestPackage.Post.ContextPost(
+            id: "x/0",
+            network: .x,
+            author: .init(handle: "ada", name: "Ada"),
+            permalink: URL(string: "https://x.com/ada/status/0")!,
+            postedAt: Date(timeIntervalSince1970: 1_759_999_000),
+            text: "the whole parent text"
+        )
+        let reply = DigestPackage.Post(
+            id: "x/1",
+            network: .x,
+            author: .init(handle: "bob", name: "Bob"),
+            permalink: URL(string: "https://x.com/bob/status/1")!,
+            postedAt: Date(timeIntervalSince1970: 1_760_000_000),
+            context: .init(kind: .reply, post: parent)
+        )
+        let package = DigestPackage(
+            id: "digest-context",
+            window: .init(from: Date(timeIntervalSince1970: 1_759_999_000), to: Date(timeIntervalSince1970: 1_760_001_000)),
+            posts: [reply]
+        )
+        _ = try writeDigest(package, into: folder.appending(path: "digests"), name: "digest-context.tar", files: [])
+        let digests = model()
+        await digests.sync(folder: folder)
+        XCTAssertNil(digests.post("x/0"))
+        XCTAssertEqual(digests.contextPost("x/0")?.text, "the whole parent text")
+        XCTAssertNil(digests.contextPost("x/9"))
+    }
+
     func testHidingAMarkNotifiesTheReader() async throws {
         let folder = root.appending(path: "FNMN")
         _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")

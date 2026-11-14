@@ -138,7 +138,7 @@ class InstagramFeedTests(unittest.TestCase):
             {"href": "/p/CCC/", "user": "/real.user/"},
             "junk",
         ]
-        self.assertEqual(instagram._pairs(rows), [("CCC", "real.user")])
+        self.assertEqual(instagram._pairs(rows), [("real.user", "p", "CCC")])
 
 
 class TelegramScopeTests(unittest.TestCase):

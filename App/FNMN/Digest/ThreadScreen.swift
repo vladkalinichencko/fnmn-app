@@ -36,6 +36,11 @@ struct ThreadScreen: View {
                 .padding(.horizontal, Tokens.gutter)
                 .padding(.top, Tokens.gap)
                 .padding(.bottom, Tokens.sectionGap)
+            } else if let contextPost = digests.contextPost(postID) {
+                contextPostCard(contextPost)
+                    .padding(.horizontal, Tokens.gutter)
+                    .padding(.top, Tokens.gap)
+                    .padding(.bottom, Tokens.sectionGap)
             } else {
                 ContentUnavailableView("The post is gone", systemImage: "text.bubble")
             }
@@ -46,7 +51,7 @@ struct ThreadScreen: View {
     }
 
     private var title: String {
-        digests.post(postID)?.author.name ?? "Thread"
+        digests.post(postID)?.author.name ?? digests.contextPost(postID)?.author.name ?? "Thread"
     }
 
     private func isAuthor(_ comment: DigestPackage.Post.Comment, of post: DigestPackage.Post) -> Bool {
@@ -62,6 +67,26 @@ struct ThreadScreen: View {
                 PostContextLabel(kind: kind, text: "\(kind.action) \(post.author.name)")
                 Spacer(minLength: 8)
                 PostOpenButton(url: post.permalink, label: "Open the post that is quoted")
+            }
+            if let text = post.text {
+                PostText(text: text)
+            }
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func contextPostCard(_ post: DigestPackage.Post.ContextPost) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(post.author.name)
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
+                Text(post.network.name)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)")
+                Spacer(minLength: 8)
             }
             if let text = post.text {
                 PostText(text: text)

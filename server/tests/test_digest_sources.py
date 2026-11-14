@@ -216,6 +216,143 @@ class XTests(unittest.TestCase):
             post = x._post(payload, "jack", source(), fake_web(), store, ["ml"])
             self.assertEqual(post.text, "just setting up my twttr")
 
+    def test_a_payload_that_carries_the_full_note_needs_no_page(self):
+        payload = json.loads(fixture("tweet-20.json"))
+        payload["note_tweet"] = {"full_text": "the whole long body, straight from the payload"}
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = x._post(payload, "jack", source(), fake_web(), store, ["ml"])
+            self.assertEqual(post.text, "the whole long body, straight from the payload")
+
+
+def tweet(status_id: str, user: str = "ada", text: str = "a post", parent: str | None = None, **extra) -> dict:
+    payload = {
+        "__typename": "Tweet",
+        "id_str": status_id,
+        "user": {"screen_name": user, "name": user.title()},
+        "created_at": "2026-11-13T10:00:00.000Z",
+        "text": text,
+    }
+    if parent:
+        payload["in_reply_to_status_id_str"] = parent
+    payload.update(extra)
+    return payload
+
+
+def tweets_web(payloads: dict[str, dict]) -> Web:
+    def text(url):
+        status_id = url.split("id=")[1].split("&")[0]
+        return json.dumps(payloads[status_id])
+
+    return fake_web(text=text)
+
+
+class ChainTab:
+    """A permalink page for `_entry`: `_conversation` gets its ancestor ids and the focal text, and a
+    note read on an ancestor's own page gets the note body."""
+
+    def __init__(self, ancestors: list[str], focal_text: str | None = None, note_text: str | None = None):
+        self.ancestors = ancestors
+        self.focal_text = focal_text
+        self.note_text = note_text
+        self.context = FakeContext()
+
+    def goto(self, url, **kwargs):
+        return None
+
+    def wait_for_selector(self, *args, **kwargs):
+        return None
+
+    def wait_for_timeout(self, milliseconds):
+        return None
+
+    def eval(self, script):
+        if "ancestors" in script:
+            return {"ancestors": self.ancestors, "text": self.focal_text}
+        return self.note_text
+
+
+class XChainTests(unittest.TestCase):
+    def entry(self, payloads: dict[str, dict], tab: ChainTab, focal: dict) -> list:
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            return x._entry(
+                focal, "ada", source(), tweets_web(payloads), store, ["ml"], fetch=None, page=tab,
+            )
+
+    def test_a_reply_collects_its_whole_chain_as_posts(self):
+        payloads = {
+            "1": tweet("1", "root", "the root post"),
+            "2": tweet("2", "mid", "the middle post", parent="1"),
+            "3": tweet("3", "ada", "the reply", parent="2"),
+        }
+        posts = self.entry(payloads, ChainTab(["1", "2"]), payloads["3"])
+        self.assertEqual([post.id for post in posts], ["x/1", "x/2", "x/3"])
+        root, middle, reply = posts
+        self.assertIsNone(root.context)
+        self.assertEqual(middle.context["kind"], "reply")
+        self.assertEqual(middle.context["post"]["id"], "x/1")
+        self.assertEqual(middle.context["post"]["text"], "the root post")
+        self.assertEqual(reply.context["kind"], "reply")
+        self.assertEqual(reply.context["post"]["id"], "x/2")
+        self.assertEqual(reply.context["post"]["text"], "the middle post")
+        self.assertEqual(reply.context["post"]["author"]["handle"], "mid")
+
+    def test_a_parent_the_page_did_not_show_reads_as_gone(self):
+        payloads = {"9": tweet("9", "ghost", "a deleted post"), "3": tweet("3", "ada", "the reply", parent="9")}
+        posts = self.entry(payloads, ChainTab([]), payloads["3"])
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0].context, {"kind": "reply", "post": None})
+
+    def test_a_tombstone_ancestor_breaks_the_chain_above_it(self):
+        payloads = {
+            "1": {"__typename": "TweetTombstone"},
+            "2": tweet("2", "mid", "the middle post", parent="1"),
+            "3": tweet("3", "ada", "the reply", parent="2"),
+        }
+
+        def text(url):
+            status_id = url.split("id=")[1].split("&")[0]
+            return json.dumps(payloads[status_id])
+
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            posts = x._entry(payloads["3"], "ada", source(), fake_web(text=text), store, ["ml"], fetch=None, page=ChainTab(["1", "2"]))
+        self.assertEqual([post.id for post in posts], ["x/2", "x/3"])
+        middle, reply = posts
+        self.assertEqual(middle.context, {"kind": "reply", "post": None})
+        self.assertEqual(reply.context["post"]["id"], "x/2")
+
+    def test_the_chain_stops_at_the_limit_with_the_nearest_ancestors(self):
+        payloads = {str(index): tweet(str(index), f"u{index}", f"post {index}", parent=str(index - 1) if index > 1 else None) for index in range(1, 9)}
+        payloads["8"] = tweet("8", "ada", "the reply", parent="7")
+        ancestors = [str(index) for index in range(1, 8)]
+        posts = self.entry(payloads, ChainTab(ancestors), payloads["8"])
+        self.assertEqual([post.id for post in posts], ["x/3", "x/4", "x/5", "x/6", "x/7", "x/8"])
+        self.assertIsNone(posts[0].context)
+        self.assertEqual(posts[-1].context["post"]["id"], "x/7")
+
+    def test_a_reply_with_a_note_tweet_reads_its_whole_body_from_the_page(self):
+        payloads = {
+            "1": tweet("1", "root", "the root post"),
+            "2": tweet("2", "ada", "preview…", parent="1", note_tweet={"id": "bm90ZQ"}),
+        }
+        posts = self.entry(payloads, ChainTab(["1"], focal_text="the whole reply body"), payloads["2"])
+        reply = posts[-1]
+        self.assertEqual(reply.text, "the whole reply body")
+        self.assertEqual(reply.context["post"]["text"], "the root post")
+
+    def test_a_plain_post_never_opens_the_permalink_page(self):
+        payloads = {"5": tweet("5", "ada", "just a post")}
+
+        class NoPage:
+            def goto(self, url, **kwargs):
+                raise AssertionError("a plain post needs no page")
+
+        posts = self.entry(payloads, NoPage(), payloads["5"])
+        self.assertEqual([post.id for post in posts], ["x/5"])
+        self.assertIsNone(posts[0].context)
+
 
 class MarkThreadsTests(unittest.TestCase):
     def collected(self, post_id: str, at: str, handle: str = "chan", source_id: str = "telegram/chan") -> object:
@@ -341,7 +478,7 @@ class InstagramTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             post = instagram._post(
-                FakePage(fixture("instagram-post.html")), "studio", "CxYzAbCdEfG",
+                FakePage(fixture("instagram-post.html")), "studio", "p", "CxYzAbCdEfG",
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
                 fake_web(), store, ["design"],
             )
@@ -362,7 +499,7 @@ class InstagramTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             post = instagram._post(
-                FakePage(fixture("instagram-post.html")), "studio", "CxYzAbCdEfG",
+                FakePage(fixture("instagram-post.html")), "studio", "p", "CxYzAbCdEfG",
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
                 fake_web(bytes=refuse), store, ["design"],
             )
@@ -378,11 +515,33 @@ class InstagramTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             post = instagram._post(
-                FakePage(markup), "studio", "abc",
+                FakePage(markup), "studio", "p", "abc",
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
                 fake_web(), store, ["design"],
             )
             self.assertIsNone(post)
+
+    def test_a_post_page_is_opened_under_its_author(self):
+        """The bare `/p/` URL answers the logged-in browser a rate-limited error page; the author-scoped
+        one loads, so the collector must build `/{handle}/p/{code}/`."""
+
+        class RecordingPage(FakePage):
+            def __init__(self, markup):
+                super().__init__(markup)
+                self.urls = []
+
+            def goto(self, url, **kwargs):
+                self.urls.append(url)
+
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            page = RecordingPage(fixture("instagram-post.html"))
+            instagram._post(
+                page, "studio", "reel", "CxYzAbCdEfG",
+                {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
+                fake_web(), store, ["design"],
+            )
+            self.assertEqual(page.urls, ["https://www.instagram.com/studio/reel/CxYzAbCdEfG/"])
 
 
 class SourceTableTests(unittest.TestCase):

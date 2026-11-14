@@ -18,7 +18,6 @@ EMBED_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 EMBED_QUERY = "Instruct: Classify the topic of this social media post.\nQuery: "
 EMBED_PASSAGE = "passage: "
 MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
-TEMPERATURE = 0.08
 Scorer = Callable[[str, list[str]], dict[str, float]]
 
 _WORDS = re.compile(r"\w+", re.UNICODE)
@@ -48,7 +47,8 @@ def classify(threads: list[list[Post]], settings: dict, scorer: Scorer | None = 
             continue
         scores = score_of(text, topics)
         top = max(topics, key=lambda topic: scores.get(topic, 0.0))
-        best_score = scores.get(top, 0.0)
+        ranked = sorted((scores.get(topic, 0.0) for topic in topics), reverse=True)
+        best_score = ranked[0] - (ranked[1] if len(ranked) > 1 else 0.0)
         for post in thread:
             post.folders = [top] if best_score >= threshold else []
             best[post.id] = best_score
@@ -90,12 +90,12 @@ def default_scorer() -> Scorer:
 
 
 class Embedder:
-    """Qwen3-Embedding: the post and each topic become vectors, and the scores are the
-    softmax over their cosines, so the winning topic carries a real 0–1 confidence.
+    """Qwen3-Embedding: the post and each topic become vectors, and the score of a topic is
+    the cosine between them.
 
     Topic vectors are encoded once per topic set and reused, so a build pays one encoding
-    per post. Raw cosines all sit in a narrow band and say nothing about relevance; the
-    softmax spreads them by the gaps between topics, which is what the threshold reads.
+    per post. `classify` reads the gap between the best and the runner-up topic as the
+    confidence, so the threshold does not drift with the number of configured topics.
     The query carries an instruction and each topic a `passage:` prefix, the pair the
     model was evaluated with.
     """
@@ -119,9 +119,7 @@ class Embedder:
             )
         vector = self._np.asarray(self._encoder.encode(f"{EMBED_QUERY}{text}", normalize_embeddings=True))
         sims = self._passages[key] @ vector
-        weights = self._np.exp((sims - sims.max()) / TEMPERATURE)
-        probs = weights / weights.sum()
-        return {topic: float(prob) for topic, prob in zip(topics, probs)}
+        return {topic: float(sim) for topic, sim in zip(topics, sims)}
 
 
 class ZeroShot:

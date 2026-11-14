@@ -215,9 +215,7 @@ struct PostCard: View {
 
     private struct ContextTap: ViewModifier {
         let context: DigestPackage.Post.Context
-        @Environment(DigestModel.self) private var digests
         @Environment(WindowNavigation.self) private var navigation
-        @Environment(\.openURL) private var openURL
 
         func body(content: Content) -> some View {
             if context.post != nil {
@@ -231,11 +229,7 @@ struct PostCard: View {
             guard let quoted = context.post else {
                 return
             }
-            if digests.post(quoted.id) != nil {
-                navigation.open(.thread(quoted.id))
-            } else {
-                openURL(quoted.permalink)
-            }
+            navigation.open(.thread(quoted.id))
         }
     }
 

@@ -15,8 +15,17 @@ from digest.store import Post, iso
 from web import Web
 
 HOME = "https://www.instagram.com"
-SHORTCODE = re.compile(r"/(p|reel)/([A-Za-z0-9_-]+)")
+LINK = re.compile(r"/(?:([A-Za-z0-9._]+)/)?(p|reel)/([A-Za-z0-9_-]+)")
 MAX_POSTS = 8
+
+
+def _link(href: str | None) -> tuple[str | None, str, str] | None:
+    """A post href as (author, kind, shortcode): `/handle/p/code/` names its author, a bare
+    `/p/code/` does not."""
+    match = LINK.search(href or "")
+    if not match:
+        return None
+    return match.group(1), match.group(2), match.group(3)
 
 
 def collect(source: dict, web: Web, store, folders: list[str], report: Report, page=None) -> SourceResult:
@@ -28,18 +37,18 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     else:
         handle = source["handle"]
         report(f"reading instagram.com/{handle}")
-        links = [(shortcode, handle) for shortcode in _grid(page, handle)]
+        links = _grid(page, handle)
     known = store.ids()
     posts: list[Post] = []
     name = None
     skipped = 0
-    for shortcode, author in links:
+    for author, kind, shortcode in links:
         post_id = f"instagram/{author}/{shortcode}"
         if post_id in known:
             continue
         if len(posts) >= MAX_POSTS:
             break
-        post = _post(page, author, shortcode, source, web, store, folders)
+        post = _post(page, author, kind, shortcode, source, web, store, folders)
         if post is not None:
             posts.append(post)
             name = name or post.author["name"]
@@ -58,7 +67,8 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     )
 
 
-def _grid(tab, handle: str) -> list[str]:
+def _grid(tab, handle: str) -> list[tuple[str, str, str]]:
+    """(author, kind, shortcode) of the profile's posts, in the order the grid shows them."""
     try:
         tab.goto(f"{HOME}/{handle}/")
         if "/accounts/login" in tab.url:
@@ -68,20 +78,22 @@ def _grid(tab, handle: str) -> list[str]:
         raise
     except Exception as error:
         raise SourceFailure(f"instagram.com/{handle} did not show its profile: {error}") from error
-    found: list[str] = []
+    found: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
     for _ in range(2):
         hrefs = tab.eval_on_selector_all('a[href*="/p/"], a[href*="/reel/"]', "e => e.getAttribute('href')") or []
         for href in hrefs:
-            match = SHORTCODE.search(href or "")
-            if match and match.group(2) not in found:
-                found.append(match.group(2))
+            link = _link(href)
+            if link and link[2] not in seen:
+                seen.add(link[2])
+                found.append((link[0] or handle, link[1], link[2]))
         tab.wheel(1200)
         tab.wait_for_timeout(900)
     return found
 
 
-def _feed(tab) -> list[tuple[str, str]]:
-    """(shortcode, author handle) pairs from the home feed; a post whose author the page does not name
+def _feed(tab) -> list[tuple[str, str, str]]:
+    """(author, kind, shortcode) of the home feed's posts; a post whose author the page does not name
     is dropped, since its id and its card both need one."""
     try:
         tab.goto(f"{HOME}/")
@@ -92,29 +104,29 @@ def _feed(tab) -> list[tuple[str, str]]:
         raise
     except Exception as error:
         raise SourceFailure(f"the home feed did not load: {error}") from error
-    pairs: list[tuple[str, str]] = []
+    pairs: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for _ in range(2):
         rows = tab.eval_on_selector_all('a[href*="/p/"], a[href*="/reel/"]', FEED_AUTHOR) or []
-        for code, user in _pairs(rows):
-            if code not in seen:
-                seen.add(code)
-                pairs.append((code, user))
+        for row in _pairs(rows):
+            if row[2] not in seen:
+                seen.add(row[2])
+                pairs.append(row)
         tab.wheel(1200)
         tab.wait_for_timeout(900)
     return pairs
 
 
-def _pairs(rows) -> list[tuple[str, str]]:
-    """The feed rows the page script returned, as (shortcode, author) pairs without the noise."""
+def _pairs(rows) -> list[tuple[str, str, str]]:
+    """The feed rows the page script returned, as (author, kind, shortcode) without the noise."""
     found = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        match = SHORTCODE.search(row.get("href") or "")
+        link = _link(row.get("href"))
         user = (row.get("user") or "").strip("/")
-        if match and user and user.lower() not in RESERVED:
-            found.append((match.group(2), user))
+        if link and user and user.lower() not in RESERVED:
+            found.append((user, link[1], link[2]))
     return found
 
 
@@ -128,10 +140,13 @@ FEED_AUTHOR = """e => {
 RESERVED = {"", "explore", "reels", "stories", "direct", "accounts", "p", "reel"}
 
 
-def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:
-    """One post page: the caption and the picture are in the page's own meta tags, the time in its `time`."""
+def _post(tab, handle: str, kind: str, shortcode: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:
+    """One post page: the caption and the picture are in the page's own meta tags, the time in its `time`.
+    The URL names its author — the bare `/p/` form answers a rate-limited error page to the logged-in
+    browser, while `/{handle}/p/` loads."""
+    permalink = f"{HOME}/{handle}/{kind}/{shortcode}/"
     try:
-        tab.goto(f"{HOME}/p/{shortcode}/")
+        tab.goto(permalink)
         markup = tab.html()
     except Exception:
         return None
@@ -170,7 +185,7 @@ def _post(tab, handle: str, shortcode: str, source: dict, web: Web, store, folde
         network="instagram",
         source=source["id"],
         author={"handle": handle, "name": title},
-        permalink=f"{HOME}/p/{shortcode}/",
+        permalink=permalink,
         posted_at=posted,
         text=_caption(caption),
         media=media,

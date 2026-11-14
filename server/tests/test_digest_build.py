@@ -218,6 +218,57 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(len(package["posts"]), 2)
             self.assertEqual(Store(root).builds()[-1]["skipped"], {})
 
+    def test_a_network_limit_caps_the_whole_network_not_each_source(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({
+                "networks": {"instagram": {"limit": 2}},
+            }), encoding="utf-8")
+            photos = [
+                replace(
+                    post(f"instagram/{handle}/{index}"),
+                    network="instagram", source=f"instagram/{handle}",
+                    id=f"instagram/{handle}/{index}", author={"handle": handle, "name": handle},
+                    permalink=f"https://www.instagram.com/p/{handle}{index}/", folders=[],
+                )
+                for handle, count in (("a", 2), ("b", 1))
+                for index in range(count)
+            ]
+            Store(root).append([*photos, post("x/1")])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            shipped = [item["id"] for item in package["posts"]]
+            self.assertEqual(len([item for item in shipped if item.startswith("instagram/")]), 2)
+            self.assertIn("x/1", shipped)
+            self.assertEqual(len(Store(root).builds()[-1]["skipped"]), 1)
+
+    def test_a_rotation_ships_only_the_longest_waiting_sources(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({
+                "rotation": {"sources": 1, "posts": 2},
+            }), encoding="utf-8")
+            posts = [
+                replace(post(f"x/{source}/{index}"), source=f"x/{source}")
+                for source in ("aaa", "bbb", "ccc")
+                for index in range(3)
+            ]
+            Store(root).append(posts)
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            shipped = [item["id"] for item in package["posts"]]
+            self.assertEqual(len(shipped), 2)
+            self.assertEqual(len({item.rsplit("/", 2)[0] for item in shipped}), 1)
+            skipped = Store(root).builds()[-1]["skipped"]
+            self.assertEqual(len(skipped), 7)
+            self.assertEqual(sum(1 for reason in skipped.values() if reason == "not in this rotation"), 6)
+
     def test_a_post_below_the_topic_threshold_is_filtered_and_a_topicless_network_is_not(self):
         from unittest import mock
 

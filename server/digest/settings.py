@@ -25,6 +25,7 @@ def load(folder: Path | None = None) -> dict:
         "hours": list(DEFAULT_HOURS),
         "threshold": DEFAULT_THRESHOLD,
         "limit": DEFAULT_LIMIT,
+        "rotation": {},
         "networks": {},
         "sources": {},
     }
@@ -66,6 +67,13 @@ def any_topics(settings: dict) -> bool:
         isinstance(entry, dict) and entry.get("topics")
         for entry in list(networks.values()) + list(sources.values())
     )
+
+
+def network_limit(settings: dict, network: str) -> int | None:
+    """A per-network ceiling on one delivery's posts; `None` when the network has none."""
+    entry = settings.get("networks", {}).get(network)
+    limit = entry.get("limit") if isinstance(entry, dict) else None
+    return limit if isinstance(limit, int) and limit > 0 else None
 
 
 def recommendations(settings: dict, network: str) -> bool:

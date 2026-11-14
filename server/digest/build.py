@@ -4,7 +4,9 @@
 
 The builder runs from the launchd agent at the hours in the settings: a run that is not due, or
 that has nothing new, writes nothing. `limit` caps each source's posts in one delivery; a settings
-file without topics collects the whole feed under the `FEED_LIMIT` ceiling. The delivery is the same
+file without topics collects the whole feed under the `FEED_LIMIT` ceiling. A `rotation` block in
+the settings (`sources`, `posts`) ships only the longest-waiting channels' best posts each build.
+The delivery is the same
 uncompressed USTAR archive as an article's,
 `package.json` first, and lands under `digests/` in the FNMN folder, where the phone reads it the way it reads
 every other delivery.
@@ -74,6 +76,12 @@ def main(argv: list[str] | None = None) -> int:
         kept += group_kept
         over.update(group_over)
     buildable = kept
+    net_kept, net_over = _cap_networks(buildable, scores, prefs)
+    buildable = net_kept
+    over.update(net_over)
+    rotated, rot_over = _rotate(buildable, scores, store, prefs.get("rotation") or {})
+    buildable = rotated
+    over.update(rot_over)
     if not digest_settings.any_topics(prefs):
         buildable, feed_over = topics.cap(_threads(buildable), scores, FEED_LIMIT)
         over.update(feed_over)
@@ -131,6 +139,68 @@ def _threads(posts: list[Post]) -> list[list[Post]]:
             order.append(key)
         groups[key].append(post)
     return [groups[key] for key in order]
+
+
+def _cap_networks(posts: list[Post], scores: dict[str, float], prefs: dict) -> tuple[list[Post], dict[str, str]]:
+    """A network that names a `limit` in the settings ships at most that many posts a delivery,
+    the strongest threads first; the rest is consumed but not shipped."""
+    limited = {post.network for post in posts if digest_settings.network_limit(prefs, post.network)}
+    if not limited:
+        return posts, {}
+    by_network: dict[str, list[list[Post]]] = {}
+    for thread in _threads(posts):
+        by_network.setdefault(thread[0].network, []).append(thread)
+    kept: list[Post] = []
+    over: dict[str, str] = {}
+    for network, groups in by_network.items():
+        limit = digest_settings.network_limit(prefs, network)
+        if limit is None:
+            kept += [post for group in groups for post in group]
+            continue
+        group_kept, group_over = topics.cap(groups, scores, limit)
+        kept += group_kept
+        over.update(group_over)
+    return kept, over
+
+
+def _rotate(posts: list[Post], scores: dict[str, float], store: Store, rotation: dict) -> tuple[list[Post], dict[str, str]]:
+    """A delivery that names `rotation` ships only the strongest `posts` posts of the `sources`
+    channels that went the longest without one; every other post is consumed but not shipped,
+    so each channel gets its turn instead of the whole firehose landing at once."""
+    sources_n = rotation.get("sources")
+    posts_n = rotation.get("posts")
+    if not isinstance(sources_n, int) or not isinstance(posts_n, int) or sources_n <= 0 or posts_n <= 0:
+        return posts, {}
+    builds = store.builds()
+    source_of = {post.id: post.source for post in store.posts()}
+    last_shipped: dict[str, int] = {}
+    for index, build in enumerate(builds):
+        shipped = set(build.get("post_ids", [])) - set((build.get("skipped") or {}).keys())
+        for post_id in shipped:
+            source = source_of.get(post_id)
+            if source:
+                last_shipped[source] = index
+    by_source: dict[str, list[list[Post]]] = {}
+    for thread in _threads(posts):
+        by_source.setdefault(thread[0].source, []).append(thread)
+
+    def rank(source: str) -> tuple[int, float]:
+        best = max(
+            (scores.get(post.id, 0.0) for group in by_source[source] for post in group),
+            default=0.0,
+        )
+        return (last_shipped.get(source, -1), -best)
+
+    ordered = sorted(by_source, key=rank)
+    kept: list[Post] = []
+    over: dict[str, str] = {}
+    for source in ordered[:sources_n]:
+        group_kept, group_over = topics.cap(by_source[source], scores, posts_n)
+        kept += group_kept
+        over.update(group_over)
+    for source in ordered[sources_n:]:
+        over.update({post.id: "not in this rotation" for group in by_source[source] for post in group})
+    return kept, over
 
 
 def _subscriptions(path: Path) -> dict:

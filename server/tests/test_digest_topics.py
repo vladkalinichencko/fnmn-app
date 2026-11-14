@@ -50,11 +50,19 @@ class ClassifyTests(unittest.TestCase):
 
     def test_a_post_keeps_only_its_best_topic_over_the_threshold(self):
         def two_scores(text, words):
-            return {"llms": 0.9, "cooking": 0.8}
+            return {"llms": 0.9, "cooking": 0.3}
 
         scored = post("x/1", text="A post about llms")
         topics.classify([[scored]], self.prefs(), two_scores)
         self.assertEqual(scored.folders, ["llms"])
+
+    def test_topics_too_close_to_call_land_in_other(self):
+        def tied_scores(text, words):
+            return {"llms": 0.9, "cooking": 0.85}
+
+        scored = post("x/1", text="A post about llms")
+        topics.classify([[scored]], self.prefs(), tied_scores)
+        self.assertEqual(scored.folders, [])
 
     def test_a_post_below_the_threshold_lands_in_other(self):
         prefs = self.prefs(networks={"x": {"topics": ["cooking"]}})

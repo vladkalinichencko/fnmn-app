@@ -78,6 +78,13 @@ final class DigestModel {
         digests.lazy.compactMap { digest in digest.package.posts.first { $0.id == postID } }.first
     }
 
+    func contextPost(_ postID: String) -> DigestPackage.Post.ContextPost? {
+        digests.lazy
+            .flatMap { $0.package.posts }
+            .compactMap { $0.context?.post }
+            .first { $0.id == postID }
+    }
+
     func sync(folder: URL?) async {
         guard syncState == .idle else {
             return
