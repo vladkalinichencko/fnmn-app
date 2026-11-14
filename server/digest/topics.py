@@ -48,7 +48,7 @@ def classify(threads: list[list[Post]], settings: dict, scorer: Scorer | None = 
         scores = score_of(text, topics)
         top = max(topics, key=lambda topic: scores.get(topic, 0.0))
         ranked = sorted((scores.get(topic, 0.0) for topic in topics), reverse=True)
-        best_score = ranked[0] - (ranked[1] if len(ranked) > 1 else 0.0)
+        best_score = ranked[0] - (sum(ranked[1:]) / len(ranked[1:]) if len(ranked) > 1 else 0.0)
         for post in thread:
             post.folders = [top] if best_score >= threshold else []
             best[post.id] = best_score
@@ -94,8 +94,8 @@ class Embedder:
     the cosine between them.
 
     Topic vectors are encoded once per topic set and reused, so a build pays one encoding
-    per post. `classify` reads the gap between the best and the runner-up topic as the
-    confidence, so the threshold does not drift with the number of configured topics.
+    per post. `classify` reads the lead of the best topic over the mean of the rest as
+    the confidence, so the threshold does not drift with the number of configured topics.
     The query carries an instruction and each topic a `passage:` prefix, the pair the
     model was evaluated with.
     """

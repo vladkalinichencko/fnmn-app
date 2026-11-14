@@ -65,6 +65,16 @@ class ClassifyTests(unittest.TestCase):
         topics.classify([[scored]], self.prefs(), tied_scores)
         self.assertEqual(scored.folders, [])
 
+    def test_a_close_runner_up_does_not_sink_a_clear_lead(self):
+        prefs = self.prefs(threshold=0.4, networks={"x": {"topics": ["llms", "cooking", "sports"]}})
+
+        def crowded_scores(text, words):
+            return {"llms": 0.9, "cooking": 0.8, "sports": 0.0}
+
+        scored = post("x/1", text="A post about llms")
+        topics.classify([[scored]], prefs, crowded_scores)
+        self.assertEqual(scored.folders, ["llms"])
+
     def test_a_source_threshold_beats_the_network_and_the_global_one(self):
         prefs = {
             "threshold": 0.5,
