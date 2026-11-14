@@ -1,0 +1,80 @@
+[m12=0.192] the fact that AI is not allowed to be listed as co-author is the funniest thing ever  i'm supposed to take full credit for genius of Claude
+---
+[m12=0.191] Nazis convinced themselves that Darwinian competition is the law of human history and a moral ideal, then acted on it. Americans believe that AGI is winner-take-all. I think both could *make* it true, but it’s not inevitable. What reason do I have to support their attempts?
+---
+[m12=0.185] Events in the AI timeline only have gotten more and more insane since 2024.
+---
+[m12=0.182] It's kinda weird that the ai safety company has consistently good product taste!
+---
+[m12=0.180] For all we can see China, as a state, does not currently believe that AGI is winner-take-all, that they can get global domination forever, or that it’s even desirable. As a non-Chinese and non-American, why would I support the US? What is the payoff? Joining the victorious evil?
+---
+[m12=0.172] Interesting argument But I'm afraid that the USG, emboldened by the flame of ambition and sparks of AGI, will have little patience for quaint arguments like "this particular meatbag founder is crucial to his gig". Elon is bigger than Jensen. But not infinitely so. https://t.co/tcczqz6ExD
+---
+[m12=0.171] tbh this doesn't seem very concerning to me because if it doesn't actually help much in the CoT regime, which covers ≈all consequential agentic work, it's basically worthless. The main threat model would be the agent entering this regime to quickly produce a hostile tool call? https://t.co/qtb0Qse7k
+---
+[m12=0.168] but we *are* living in a science fiction world. My phone can run a pack of floats that would pass the Turing test if only we haven't grown familiar with "AI accent" like it's some new species of immigrant. I honestly don't know what remains to be said. "Fable pls dunk i'm tired" https://t.co/0w0a8Sx
+---
+[m12=0.164] Singularity coded non AI things https://t.co/E27F9EdPhu
+---
+[m12=0.157] I remember doing this 2 years ago at Linear manually, and it wasn’t fun. One of the greatest things about AI is that I don’t need to do the tedious bits anymore.
+---
+[m12=0.154] “Dune: Part Three” cinematographer Linus Sandgren says he and Denis Villeneuve shot the upcoming sci-fi epic in “almost every format” possible:  “For this film, he encouraged us to be especially expressive. After months of testing, we landed on filming in almost every format, from IMAX 65mm film to 
+---
+[m12=0.151] RIP AI notetaker tools
+---
+[m12=0.147] NEW:  @slashvibe_ai  built a physical device for managing multiple AI agents.  It shows what each agent is doing and lets you jump in, approve requests, or give new instructions without digging through tabs and windows.  -Shows which agents are working, finished, or waiting. -Joystick lets you jump 
+---
+[m12=0.146] Ruaridh Mollica breaks down filming the reunion scene between Tommy and Billy via Rotten Tomatoes https://t.co/GwVDnfIR54
+---
+[m12=0.135] マイケル・ロジャース米退役海軍大将、トム・モラン元CIA支局長がSakana AIのシニアアドバイザーに就任  https://t.co/X4uhrFUBJl  Sakana AIは、元米国家安全保障局（NSA）長官兼米サイバー軍司令官のマイケル・ロジャース退役海軍大将と、元米中央情報局（CIA）幹部のトム・モラン氏が、ともに
+---
+[m12=0.131] AI has fundamentally changed Math education. I wonder if students in future will even make an effort to do these Calculus concepts using pen and paper
+---
+[m12=0.131] JUST IN: Ring built a security drone that flies through your home to investigate when a sensor goes off.  Drone Cam maps indoor flight paths so you can send it to different rooms, run patrols, or check in remotely.  -Flies room to room instead of needing multiple fixed cameras. https://t.co/TEbI1GXb
+---
+[m12=0.131] Nice to see @jackclarkSF cover Core Automation frontier training on distributed compute islands on import ai, and possibly in space! https://t.co/cHqPnABuK4 ❤️  @JohnCLangford was mentioning that it may even be possible do it with a very flat looking computer accelerator
+---
+[m12=0.130] 本日の日本経済新聞朝刊に、Sakana AI共同創業者・CEOのDavid Ha（@hardmaru）による寄稿（Nikkei Asia掲載論文の抄訳版）が掲載されました。  「合理性失う『巨大』AI モデルの連携、日本に勝機」 https://t.co/VLQw0lBQbl  単一の巨大モデルの規模を競う戦略が経済合理性を失いつつあるなか、今後の
+---
+[m12=0.130] ITmedia AI+ さまに、Sakana AIがなぜ今、大規模言語モデルの事前学習に取り組むのかを取り上げていただきました。  10月のシンポジウムで弊社Chief Scientistの秋葉拓哉が発表した「Sakana Sawara（仮称）」について、背景やねらいをお答えしました。  Sakana Namazuで取り組んできた事後学習、Sakana https://t.co/q0kDJNkLog
+---
+[m12=0.128] 6.1 Sol API is, most of the time, unbeatable on economics (when it has a well-defined task at least, and little opportunity to show its bad taste). At this point, OpenAI is either fatally incompetent or actively aiding and abetting Anthropic's legendary run.
+---
+[m12=0.128] Introducing Grok Bot 1.0. AI teammates that work alongside your whole team.  Share Bots, collaborate with them in Slack and Teams, invite them to meetings, and watch them learn and become more helpful. https://t.co/7569CZRc9G
+---
+[m12=0.127] Doing a PhD is easily one of the hardest things you can put yourself through. Once you start you quickly learn that it doesnt just challenge your mastery your area of research, it challenges your time-management, work-life balance, patience and self-doubt all at once!  And if you
+---
+[m12=0.124] How I Use AI To Do AI Research - 3 Rules  New result: you don't need to train the router in mixture of experts. A fixed word-to-expert table works if you have 26 experts or less per chosen expert on English text, because the most common word "the" would overload one expert past that, no matter how b
+---
+[m12=0.122] NEW: Ring built a security robot that patrols and drives itself to investigate alarms.  Rover Cam is a mobile 4K security camera that can move through stores, offices, and warehouses instead of watching from one fixed spot.  -Drives to investigate when a connected Ring sensor is https://t.co/hpySElI
+---
+[m12=0.118] New skill: /learn-taste  Collects every design correction you made during a session and turns each one into a strict rule with reasoning, so that the next agent doesn’t make the same mistake.  A great time saver if correct your agent often.  https://t.co/Pty8pwU6vj
+---
+[m12=0.118] Autonomous MailBots https://t.co/CqjWECmDwV
+---
+[m12=0.117] One thing I noticed lately with Opus: it no longer falls apart if my inputs are low-effort, "uh more R&amp;D pls" tier. No, it'll keep doing largely coherent actions. But these actions are in service of some bullshit, and its language collapses into EXTREMELY DENSE CLAUDESLOP https://t.co/vaNDeKPs3C
+---
+[m12=0.117] This is an experimental skill inspired by @mattpocockuk (highly recommend to follow him) retro skill, but instead of correcting how the agent works, it focuses specifically on design.
+---
+[m12=0.117] ©️ ts_design https://t.co/qAvd5ZhVAm
+---
+[m12=0.116] Google's new Gemini 4 Hydrogen has Intelligence just below Claude Sonnet 5.5 and GPT-6.1 Sol, at a third of Sonnet’s cost but ~2.5x that of GPT-6.1 Sol  @GoogleDeepMind has released their third new model in six weeks. Gemini 4 Hydrogen introduces an xhigh reasoning level and https://t.co/mtn4GzkVVq
+---
+[m12=0.116] Developers be honest:   do you still write your own commit messages, or did the agent take that job too?
+---
+[m12=0.110] libghostty-vt 1.0.1 released. ABI stable so its a drop-in upgrade. Biggest highlight is that we provide prebuilt Windows builds now (DLL and static libs)! Also just a good group of performance improvements and bug fixes. Enjoy the hand-written release notes below.  Windows builds
+---
+[m12=0.110] Handoff² is here.  Our computer use agent, Handoff, allows Hark to do things on the web for you. And starting today it can do those things nearly 2x faster.  Not only is Handoff² faster than our original computer use agent, it also outperforms frontier models. https://t.co/P5Qd2DxxTb
+---
+[m12=0.109] blurry photo in the field? Jev makes a snap judgment to find out.  @elise_ai clocked Jev at 94ms a photo: ~30x faster than Sol, with ~50x as many judgments for the same cost
+---
+[m12=0.109] LLMs are good at searching  transform your AI research into search problems with many small experiments that cover all situations and approximate long trainings
+---
+[m12=0.109] #DeepManifoldInterpretation Paper:  Measuring AI Agents as Teammates with Collaborative Intelligence (Sean Wu et al., arXiv:2611.02633).  All evaluated models exhibit weaknesses in teamwork. Strong individual capability does not guarantee collaborative intelligence. The problem is not merely whether
+---
+[m12=0.108] Nikkei Asiaに掲載された原文の日本語要約は、こちらのポストからもご覧いただけます。  https://t.co/76QErm0FtT  またSakana AIでは、こうした複数モデルの連携技術を皆さまに身近な形で体験していただけるよう、現在、初のモバイルアプリを開発中です。
+---
+[m12=0.108] De Srouji salieron el A4, los M1 y los módems de Apple. Es un genio, pero un genio diseñando chips para un solo cliente que además es su casa. NVIDIA vende a todo el mundo y vive tanto de CUDA como del silicio. Es otro oficio.  El candidato con más lógica es el que quiere Trump:
+---
+[m12=0.106] 塚田さんのレビュー、とても嬉しいです　仰る通り『Fly』の技法的後続で、自己模倣をしたことに割とバッドだったけど、こういう評を頂くなかで自信が持ててきた　新千歳が（なし崩し的に）プレミア上映ってことになります
+---

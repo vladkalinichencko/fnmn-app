@@ -1,0 +1,80 @@
+[maxgap=0.208] given how easily it can be post-trained, did OpenAI just do it in desperation due to Ant pressure, for a small one-time benchmark bump?  I actually wonder about one more thing. Dory 4B is obviously a toy. Are there ANY high-end capabilities where you strictly need latent depth?
+---
+[maxgap=0.206] You don't need to train the router in a mixture of experts.  A mixture-of-experts model has many small expert networks, and a router that learns which experts each token should go to.  But you can skip the learning. Decide before training which expert each word goes to, and keep it fixed. Every "cat
+---
+[maxgap=0.194] lol this looks just like logit artifacts in ViT based segmentation models!
+---
+[maxgap=0.192] Training one network on two losses added together hurts the thing with the smaller loss. One number predicts how much.  Mixture of experts LLM, self-driving, robotics and more.  A self-driving model predicts a car and a pedestrian. The car moves about 5× farther per step, so its https://t.co/p7htPmI
+---
+[maxgap=0.192] the fact that AI is not allowed to be listed as co-author is the funniest thing ever  i'm supposed to take full credit for genius of Claude
+---
+[maxgap=0.191] Nazis convinced themselves that Darwinian competition is the law of human history and a moral ideal, then acted on it. Americans believe that AGI is winner-take-all. I think both could *make* it true, but it’s not inevitable. What reason do I have to support their attempts?
+---
+[maxgap=0.185] Events in the AI timeline only have gotten more and more insane since 2024.
+---
+[maxgap=0.182] It's kinda weird that the ai safety company has consistently good product taste!
+---
+[maxgap=0.180] For all we can see China, as a state, does not currently believe that AGI is winner-take-all, that they can get global domination forever, or that it’s even desirable. As a non-Chinese and non-American, why would I support the US? What is the payoff? Joining the victorious evil?
+---
+[maxgap=0.175] #DeepManifoldInterpretation Interesting work by Albert Bou et al., Learning to Reason from Reference Samples Alone (arXiv:2610.38851). The paper shows that reasoning can improve through adversarial co-training, using only reference answers without explicit reward functions or reasoning traces.  From
+---
+[maxgap=0.175] #DeepManifoldInterpretation  A really good article by Xingyu Dang ( @xingyudang ) on Training-Time Testing (T³), rooted in the fundamental problem of data complexity, discussed in Deep Manifold Part 2 (Neural Network Mathematics).  T³ introduces a simple but powerful idea: take a trial training step
+---
+[maxgap=0.172] Interesting argument But I'm afraid that the USG, emboldened by the flame of ambition and sparks of AGI, will have little patience for quaint arguments like "this particular meatbag founder is crucial to his gig". Elon is bigger than Jensen. But not infinitely so. https://t.co/tcczqz6ExD
+---
+[maxgap=0.171] tbh this doesn't seem very concerning to me because if it doesn't actually help much in the CoT regime, which covers ≈all consequential agentic work, it's basically worthless. The main threat model would be the agent entering this regime to quickly produce a hostile tool call? https://t.co/qtb0Qse7k
+---
+[maxgap=0.169] #DeepManifoldInterpretation The Molecular Structure of Thought (arXiv:2601.06002) suggests that effective long chain-of-thought reasoning is not simply a sequence of steps, but a structured interaction among deep reasoning, self-reflection, and self-exploration. Stable interaction patterns and fast 
+---
+[maxgap=0.168] but we *are* living in a science fiction world. My phone can run a pack of floats that would pass the Turing test if only we haven't grown familiar with "AI accent" like it's some new species of immigrant. I honestly don't know what remains to be said. "Fable pls dunk i'm tired" https://t.co/0w0a8Sx
+---
+[maxgap=0.167] #DeepManifoldInterpretation  An interesting finding from Understanding Mixture-of-Experts Language Models Beyond Expert Boundaries (arXiv:2611.13975):  Domains and experts are mixed, in both directions. One expert contains neurons associated with multiple domains, while one domain spans multiple exp
+---
+[maxgap=0.164] Singularity coded non AI things https://t.co/E27F9EdPhu
+---
+[maxgap=0.158] #DeepManifoldInterpretation Interesting work by David Tom Foss: Geometric State Space Models: Bounded Hyperbolic Recurrence for Language Modeling.  The paper demonstrates how a carefully designed recurrence can keep neural states bounded by construction, rather than relying on https://t.co/EppoJMvVC
+---
+[maxgap=0.158] Last couple years I've been asked what I think about decoder-only vs encoder-decoder for multimodality, and never really given an answer.  Ellis and Chris take a good step towards answering that question in this study.  Two big points:  (1) Recent encoder-free models like Gemma4-12B, Inkling1, TUNA-
+---
+[maxgap=0.157] I remember doing this 2 years ago at Linear manually, and it wasn’t fun. One of the greatest things about AI is that I don’t need to do the tedious bits anymore.
+---
+[maxgap=0.154] “Dune: Part Three” cinematographer Linus Sandgren says he and Denis Villeneuve shot the upcoming sci-fi epic in “almost every format” possible:  “For this film, he encouraged us to be especially expressive. After months of testing, we landed on filming in almost every format, from IMAX 65mm film to 
+---
+[maxgap=0.153] KV cache compression is one of the most important and competitive areas of AI infrastructure as it determines how many concurrent inference sessions your GPUs can serve.  Pearl Research now has the most efficient KV cache quantization on earth, all the way down to the CUDA
+---
+[maxgap=0.151] RIP AI notetaker tools
+---
+[maxgap=0.147] NEW:  @slashvibe_ai  built a physical device for managing multiple AI agents.  It shows what each agent is doing and lets you jump in, approve requests, or give new instructions without digging through tabs and windows.  -Shows which agents are working, finished, or waiting. -Joystick lets you jump 
+---
+[maxgap=0.147] #DeepManifoldInterpretation Interesting work by Aaron Defazio: “Why Gradients Rapidly Increase Near the End of Training” (arXiv:2506.02285).  The paper explains late-stage gradient spikes through the interaction of weight decay, normalization layers, and learning-rate schedules. It derives a steady-
+---
+[maxgap=0.146] Ruaridh Mollica breaks down filming the reunion scene between Tommy and Billy via Rotten Tomatoes https://t.co/GwVDnfIR54
+---
+[maxgap=0.139] #DeepManifoldInterpretation Linear attention has its own merits, but its fixed-point power has never been properly understood or explored.  Like much of AI research today, progress remains largely spray and pray: try enough ideas and hope something works. Promising discoveries https://t.co/GH88Wjp1D
+---
+[maxgap=0.135] マイケル・ロジャース米退役海軍大将、トム・モラン元CIA支局長がSakana AIのシニアアドバイザーに就任  https://t.co/X4uhrFUBJl  Sakana AIは、元米国家安全保障局（NSA）長官兼米サイバー軍司令官のマイケル・ロジャース退役海軍大将と、元米中央情報局（CIA）幹部のトム・モラン氏が、ともに
+---
+[maxgap=0.134] Do research with AI (Step By Step)  The finding: when you add two losses and train one network, the task with the smaller loss learns worse, and the ratio of the two losses predicts how much: P − 1 ≈ 0.15 Λ^0.75.  How I did it on a MacBook with no GPU: hundreds of 5–10 second https://t.co/SCRPpWmbHH
+---
+[maxgap=0.131] AI has fundamentally changed Math education. I wonder if students in future will even make an effort to do these Calculus concepts using pen and paper
+---
+[maxgap=0.131] RL makes chains of thought longer and models more accurate, but forcing a trained model to think longer helps for a while but eventually makes the answer worse  so is it really the length of each chain that helps?
+---
+[maxgap=0.131] JUST IN: Ring built a security drone that flies through your home to investigate when a sensor goes off.  Drone Cam maps indoor flight paths so you can send it to different rooms, run patrols, or check in remotely.  -Flies room to room instead of needing multiple fixed cameras. https://t.co/TEbI1GXb
+---
+[maxgap=0.131] Nice to see @jackclarkSF cover Core Automation frontier training on distributed compute islands on import ai, and possibly in space! https://t.co/cHqPnABuK4 ❤️  @JohnCLangford was mentioning that it may even be possible do it with a very flat looking computer accelerator
+---
+[maxgap=0.130] 本日の日本経済新聞朝刊に、Sakana AI共同創業者・CEOのDavid Ha（@hardmaru）による寄稿（Nikkei Asia掲載論文の抄訳版）が掲載されました。  「合理性失う『巨大』AI モデルの連携、日本に勝機」 https://t.co/VLQw0lBQbl  単一の巨大モデルの規模を競う戦略が経済合理性を失いつつあるなか、今後の
+---
+[maxgap=0.130] ITmedia AI+ さまに、Sakana AIがなぜ今、大規模言語モデルの事前学習に取り組むのかを取り上げていただきました。  10月のシンポジウムで弊社Chief Scientistの秋葉拓哉が発表した「Sakana Sawara（仮称）」について、背景やねらいをお答えしました。  Sakana Namazuで取り組んできた事後学習、Sakana https://t.co/q0kDJNkLog
+---
+[maxgap=0.128] 6.1 Sol API is, most of the time, unbeatable on economics (when it has a well-defined task at least, and little opportunity to show its bad taste). At this point, OpenAI is either fatally incompetent or actively aiding and abetting Anthropic's legendary run.
+---
+[maxgap=0.128] Introducing Grok Bot 1.0. AI teammates that work alongside your whole team.  Share Bots, collaborate with them in Slack and Teams, invite them to meetings, and watch them learn and become more helpful. https://t.co/7569CZRc9G
+---
+[maxgap=0.127] Doing a PhD is easily one of the hardest things you can put yourself through. Once you start you quickly learn that it doesnt just challenge your mastery your area of research, it challenges your time-management, work-life balance, patience and self-doubt all at once!  And if you
+---
+[maxgap=0.124] How I Use AI To Do AI Research - 3 Rules  New result: you don't need to train the router in mixture of experts. A fixed word-to-expert table works if you have 26 experts or less per chosen expert on English text, because the most common word "the" would overload one expert past that, no matter how b
+---
+[maxgap=0.124] #DeepManifoldInterpretation Paper:  Measuring AI Agents as Teammates with Collaborative Intelligence (Sean Wu et al., arXiv:2611.02633).  All evaluated models exhibit weaknesses in teamwork. Strong individual capability does not guarantee collaborative intelligence. The problem is not merely whether
+---
