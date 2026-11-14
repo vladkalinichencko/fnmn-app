@@ -269,6 +269,31 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(len(skipped), 7)
             self.assertEqual(sum(1 for reason in skipped.values() if reason == "not in this rotation"), 6)
 
+    def test_the_rotation_gives_each_network_its_own_slots(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({
+                "rotation": {"sources": 1, "posts": 2},
+            }), encoding="utf-8")
+            posts = [
+                replace(post(f"x/{source}/{index}"), source=f"x/{source}")
+                for source in ("aaa", "bbb")
+                for index in range(3)
+            ] + [
+                replace(post(f"telegram/{source}/{index}"), network="telegram", source=f"telegram/{source}")
+                for source in ("ccc", "ddd")
+                for index in range(3)
+            ]
+            Store(root).append(posts)
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            shipped = [item["id"] for item in package["posts"]]
+            self.assertEqual(len(shipped), 4)
+            self.assertEqual(len({item.split("/")[0] for item in shipped}), 2)
+
     def test_a_post_below_the_topic_threshold_is_filtered_and_a_topicless_network_is_not(self):
         from unittest import mock
 

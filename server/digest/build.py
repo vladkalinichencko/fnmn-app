@@ -165,8 +165,9 @@ def _cap_networks(posts: list[Post], scores: dict[str, float], prefs: dict) -> t
 
 def _rotate(posts: list[Post], scores: dict[str, float], store: Store, rotation: dict) -> tuple[list[Post], dict[str, str]]:
     """A delivery that names `rotation` ships only the strongest `posts` posts of the `sources`
-    channels that went the longest without one; every other post is consumed but not shipped,
-    so each channel gets its turn instead of the whole firehose landing at once."""
+    channels that went the longest without one, per network — the networks' score scales differ,
+    so one shared pool would starve the quieter ones. Every other post is consumed but not
+    shipped, so each channel gets its turn instead of the whole firehose landing at once."""
     sources_n = rotation.get("sources")
     posts_n = rotation.get("posts")
     if not isinstance(sources_n, int) or not isinstance(posts_n, int) or sources_n <= 0 or posts_n <= 0:
@@ -180,6 +181,21 @@ def _rotate(posts: list[Post], scores: dict[str, float], store: Store, rotation:
             source = source_of.get(post_id)
             if source:
                 last_shipped[source] = index
+    by_network: dict[str, list[Post]] = {}
+    for post in posts:
+        by_network.setdefault(post.network, []).append(post)
+    kept: list[Post] = []
+    over: dict[str, str] = {}
+    for group in by_network.values():
+        group_kept, group_over = _rotate_network(group, scores, last_shipped, sources_n, posts_n)
+        kept += group_kept
+        over.update(group_over)
+    return kept, over
+
+
+def _rotate_network(
+    posts: list[Post], scores: dict[str, float], last_shipped: dict[str, int], sources_n: int, posts_n: int
+) -> tuple[list[Post], dict[str, str]]:
     by_source: dict[str, list[list[Post]]] = {}
     for thread in _threads(posts):
         by_source.setdefault(thread[0].source, []).append(thread)
