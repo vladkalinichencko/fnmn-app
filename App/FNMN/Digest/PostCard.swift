@@ -47,7 +47,7 @@ struct PostCard: View {
     }
 
     private var cardContent: some View {
-        let media = digests.media(for: post)
+        let media = post.media
         return HStack(alignment: .top, spacing: 12) {
             if opensThread {
                 Rectangle()
@@ -77,7 +77,7 @@ struct PostCard: View {
     }
 
     private var cardPeek: some View {
-        let media = digests.media(for: post)
+        let media = post.media
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(post.author.name)
@@ -152,17 +152,6 @@ struct PostCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 8)
-            if digests.refreshing.contains(post.id) {
-                ProgressView()
-                    .controlSize(.small)
-                    .progressViewStyle(GraySpinner())
-            } else {
-                Button("Retry") {
-                    Task { await digests.refresh(post, digest: digest) }
-                }
-                .font(.caption)
-                .buttonStyle(.plain)
-            }
         }
         .padding(.vertical, 4)
     }
@@ -218,9 +207,6 @@ struct PostCard: View {
         }
         Button("Open in \(post.network.name)", systemImage: "arrow.up.right.square") {
             openURL(post.permalink)
-        }
-        Button("Hide", systemImage: "eye.slash") {
-            digests.hide(post)
         }
     }
 

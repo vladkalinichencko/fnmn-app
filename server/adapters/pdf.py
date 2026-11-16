@@ -28,8 +28,16 @@ _PYTHON = Path(__file__).resolve().parents[2] / ".venv-ocr" / "bin" / "python"
 _HEADING = re.compile(r"^(#+) (.+)$", re.M)
 _OCR = threading.Lock()
 
-sys.path.insert(0, str(_PIPELINE))
-from math_issues import formula_jobs
+
+def _formula_jobs(candidates: list) -> list:
+    """`math_issues` lives beside the pipeline scripts, which import each other by bare name; the
+    path is on `sys.path` only for this import so the rest of the process never sees it."""
+    sys.path.insert(0, str(_PIPELINE))
+    try:
+        from math_issues import formula_jobs
+    finally:
+        sys.path.remove(str(_PIPELINE))
+    return formula_jobs(candidates)
 
 
 def read(url: str, web: Web, report: Report) -> Document:
@@ -57,7 +65,7 @@ def transcribe(pdf: bytes, title: str | None, authors: str | None, report: Repor
         footnote_total = sum(issue["type"] == "footnote_needs_ocr" for page in candidates for issue in page["issues"])
         _step(report, "footnotes", footnote_total, lambda: _count(root / "footnote-ocr", r".+\.json"),
               "run-footnote-ocr.py", book.with_suffix(".candidates.json"), footnotes)
-        _step(report, "formulas", len(formula_jobs(candidates)), lambda: _count(root / "formula-ocr", r".+\.json"),
+        _step(report, "formulas", len(_formula_jobs(candidates)), lambda: _count(root / "formula-ocr", r".+\.json"),
               "run-formula-ocr.py", book.with_suffix(".candidates.json"), formulas)
         _step(report, "assembly", None, None, "assemble-book.py", source, ocr, book,
               "--footnote-overrides", footnotes, "--formula-overrides", formulas)
@@ -83,13 +91,16 @@ def _step(report: Report, stage: str, total: int | None, done: Callable[[], int]
     if total == 0:
         return
     report(stage, 0 if total else None, total)
-    process = subprocess.Popen([str(_PYTHON), str(_PIPELINE / script), *map(str, args)],
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    while process.poll() is None:
-        if done is not None:
-            report(stage, done(), total)
-        time.sleep(2)
-    _, error = process.communicate()
+    with tempfile.TemporaryDirectory() as logs:
+        out, err = Path(logs) / "out.log", Path(logs) / "err.log"
+        with out.open("w") as stdout, err.open("w") as stderr:
+            process = subprocess.Popen([str(_PYTHON), str(_PIPELINE / script), *map(str, args)],
+                                       stdout=stdout, stderr=stderr)
+            while process.poll() is None:
+                if done is not None:
+                    report(stage, done(), total)
+                time.sleep(2)
+        error = err.read_text(errors="replace")
     if process.returncode != 0:
         raise ImportFailure(stage, error.strip().splitlines()[-1] if error.strip() else f"{script} failed")
     report(stage, total, total)

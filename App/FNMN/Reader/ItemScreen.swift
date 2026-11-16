@@ -9,13 +9,52 @@ struct ItemScreen: View {
 
     var body: some View {
         Group {
-            if library.snapshot.articles.contains(where: { $0.material.id == itemID }) {
-                ArticleOpener(itemID: itemID, startPiece: startPiece, startSeconds: startSeconds)
+            if let entry = library.snapshot.articles.first(where: { $0.material.id == itemID }) {
+                if entry.material.kind == .link {
+                    LinkScreen(itemID: itemID)
+                } else {
+                    ArticleOpener(itemID: itemID, startPiece: startPiece, startSeconds: startSeconds)
+                }
             } else {
                 ContentUnavailableView("This item is no longer in the library", systemImage: "questionmark.folder")
             }
         }
         .task { library.apply(.open(itemID: itemID)) }
+    }
+}
+
+private struct LinkScreen: View {
+    let itemID: String
+    @Environment(LibraryModel.self) private var library
+    @Environment(\.openURL) private var openURL
+    @State private var opened = false
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Link", systemImage: "link")
+        } description: {
+            Text("This item is a link to the web.")
+        } actions: {
+            if let item = library.queries.item(itemID),
+               let original = library.original(of: itemID, page: item.originalURL) {
+                Button("Open Original") { open(original) }
+            }
+        }
+        .task {
+            guard !opened, let item = library.queries.item(itemID),
+                  let original = library.original(of: itemID, page: item.originalURL) else {
+                return
+            }
+            opened = true
+            open(original)
+        }
+    }
+
+    private func open(_ original: Original) {
+        switch original {
+        case let .web(url): openURL(url)
+        case let .file(url): Task { await library.preview(url) }
+        }
     }
 }
 
@@ -51,7 +90,10 @@ private struct ArticleOpener: View {
             let interval = Signposts.library.beginInterval("Open material")
             defer { Signposts.library.endInterval("Open material", interval) }
             do {
-                text = try await open()
+                let opened = try await open()
+                try Task.checkCancellation()
+                text = opened
+            } catch is CancellationError {
             } catch {
                 text = .failed(error.localizedDescription)
             }

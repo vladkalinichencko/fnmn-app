@@ -4,14 +4,10 @@ import Textual
 
 struct PostText: View {
     let text: String
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         StructuredText(text, parser: MarkedMarkdown(baseURL: nil, marks: [], width: nil))
             .plateText()
-            .onChange(of: typeSize) { _, value in
-                print("PostText typeSize → \(value)")
-            }
     }
 }
 

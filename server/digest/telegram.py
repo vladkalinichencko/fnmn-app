@@ -1,10 +1,19 @@
 """Telegram public channels: the web preview at t.me/s/<channel> lists the recent messages as plain HTML and
-needs no login. A channel busy enough to overflow one page is read back through its `before=` link."""
+needs no login. A channel busy enough to overflow one page is read back through its `before=` link. The
+account's own read state comes from the `tg` CLI once per monitor run: a channel's unread messages are
+always the newest tail of it, so only that tail joins the digest — a post already read in Telegram never
+does, and a channel the account never opens still gives its recent backlog."""
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import shutil
+import subprocess
+import time
 from datetime import datetime
+from pathlib import Path
 
 from lxml import html
 
@@ -17,11 +26,18 @@ PAGE = "https://t.me/s/{channel}"
 MORE = re.compile(r"before=(\d+)")
 MAX_PAGES = 3
 
+_UNREAD_COUNTS: tuple[float, dict[str, int] | None] | None = None
+_UNREAD_TTL = 3600.0
+
 
 def collect(source: dict, web: Web, store, folders: list[str], report: Report, page=None) -> SourceResult:
     if source.get("scope") == "recommendations":
         raise SourceFailure("Telegram has no recommendation feed the reader can open")
     channel = source["channel"]
+    counts = _unread_counts()
+    unread = counts.get(channel.lstrip("@").lower()) if counts is not None else None
+    if unread == 0:
+        return SourceResult(posts=[], note="nothing unread in the channel")
     known = store.ids()
     collected: dict[str, Post] = {}
     name = None
@@ -55,8 +71,78 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
         before = _older(document)
         if before is None or any(post_id in known for post_id in page_ids):
             break
-    note = f"{skipped} messages had no text, media or time" if skipped else None
-    return SourceResult(posts=sorted(collected.values(), key=lambda post: post.posted_at), name=name, note=note)
+    posts = sorted(collected.values(), key=lambda post: post.posted_at)
+    read = len(posts)
+    if unread is not None:
+        tail = _unread_tail(posts, unread)
+        posts = tail
+        read -= len(tail)
+    fresh = [post for post in posts if post.id not in known]
+    skipped_store = len(posts) - len(fresh)
+    posts = fresh
+    notes = []
+    if read:
+        notes.append(f"{read} posts were already read in Telegram")
+    if skipped_store:
+        notes.append(f"{skipped_store} posts were already in the digest")
+    if skipped:
+        notes.append(f"{skipped} messages had no text, media or time")
+    return SourceResult(posts=posts, name=name, note="; ".join(notes) or None)
+
+
+def _unread_tail(posts: list[Post], unread: int) -> list[Post]:
+    """The newest `unread` posts by message id. Telegram's read state is one watermark per channel, so
+    everything past it is unread and it always sits at the tail; a few ids lost to edits or deletions
+    can shift the boundary by a post, which the digest tolerates."""
+    if unread <= 0:
+        return []
+    if unread >= len(posts):
+        return posts
+    ids = sorted((int(post.id.rsplit("/", 1)[-1]) for post in posts), reverse=True)
+    boundary = ids[unread - 1]
+    return [post for post in posts if int(post.id.rsplit("/", 1)[-1]) >= boundary]
+
+
+def _telegram_cli() -> str | None:
+    candidates = [shutil.which("telegram"), str(Path.home() / ".local" / "bin" / "telegram")]
+    for candidate in candidates:
+        if candidate and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def _unread_counts() -> dict[str, int] | None:
+    """Unread message counts per channel username, one `tg chats` pair an hour — the main list
+    and the archive folder are separate listings. None when the CLI cannot answer; a source then reads
+    by recency as it did before the read state existed."""
+    global _UNREAD_COUNTS
+    now = time.monotonic()
+    if _UNREAD_COUNTS is not None and now - _UNREAD_COUNTS[0] < _UNREAD_TTL:
+        return _UNREAD_COUNTS[1]
+    cli = _telegram_cli()
+    counts: dict[str, int] | None = None
+    if cli is not None:
+        gathered: dict[str, int] = {}
+        for archived in (False, True):
+            for chat in _chats(cli, archived):
+                username = (chat.get("username") or "").lstrip("@").lower()
+                if username:
+                    gathered[username] = chat.get("unreadCount") or 0
+        counts = gathered or None
+    _UNREAD_COUNTS = (now, counts)
+    return counts
+
+
+def _chats(cli: str, archived: bool) -> list[dict]:
+    args = [cli, "chats", "--json", "-n", "1000"]
+    if archived:
+        args.append("--archived")
+    try:
+        done = subprocess.run(args, capture_output=True, timeout=120, text=True)
+        chats = json.loads(done.stdout)
+    except Exception:
+        return []
+    return chats if isinstance(chats, list) else []
 
 
 def _older(document) -> str | None:

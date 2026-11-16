@@ -15,6 +15,7 @@ import json
 import re
 from urllib.parse import urlparse
 
+import httpx
 from lxml import html
 
 from package import Document, Report, asset_path
@@ -83,7 +84,10 @@ def _article(url: str, report: Report) -> Document:
             for index, source in enumerate(images):
                 report("fetchingAssets", index + 1, len(images))
                 path = asset_path(source, f"-{index}.jpg")
-                files[path] = tab.fetch(source)
+                try:
+                    files[path] = tab.fetch(source)
+                except (httpx.HTTPError, OSError, ValueError, reader.ReaderError):
+                    continue
                 lines.append(f"![{index + 1}]({path})")
     except (reader.ReaderError, OSError) as error:
         raise ValueError(f"the article needs the reader browser: {error}") from error
@@ -161,8 +165,13 @@ def _continuations(markup: str, handle: str, focal_id: str, fetch) -> tuple[list
         parts = [message["text"]]
         for index, source in enumerate(message["images"][:4]):
             path = asset_path(source, f"-{index}.jpg")
-            if path not in files:
+            if path in files:
+                parts.append(f"![{index + 1}]({path})")
+                continue
+            try:
                 files[path] = fetch(source)
+            except (httpx.HTTPError, OSError, ValueError):
+                continue
             parts.append(f"![{index + 1}]({path})")
         sections.append("\n\n".join(parts))
         if len(sections) >= THREAD_LIMIT:
@@ -201,7 +210,10 @@ def _message_markdown(post: dict, web: Web, files: dict[str, bytes], report: Rep
             index += 1
             if path not in files:
                 report("fetchingAssets", len(files), None)
-                files[path] = web.bytes(f"{source}?name=large")
+                try:
+                    files[path] = web.bytes(f"{source}?name=large")
+                except (httpx.HTTPError, OSError, ValueError):
+                    continue
             parts.append(f"![{index}]({path})")
         elif item.get("type") in ("video", "animated_gif"):
             poster = item.get("media_url_https")
@@ -210,8 +222,12 @@ def _message_markdown(post: dict, web: Web, files: dict[str, bytes], report: Rep
                 index += 1
                 if path not in files:
                     report("fetchingAssets", len(files), None)
-                    files[path] = web.bytes(poster)
-                parts.append(f"![{index}]({path})")
+                    try:
+                        files[path] = web.bytes(poster)
+                    except (httpx.HTTPError, OSError, ValueError):
+                        pass
+                if path in files:
+                    parts.append(f"![{index}]({path})")
             stream = _stream(item) or item.get("expanded_url")
             if stream:
                 parts.append(f"[video]({stream})")

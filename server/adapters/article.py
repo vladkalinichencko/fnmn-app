@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urldefrag
 
 from lxml import html
@@ -54,12 +55,14 @@ def document(source: str, markdown: str, assets: dict[str, str], web: Web, repor
     serves leaves the text."""
     report("fetchingAssets", 0, len(assets))
     files: dict[str, bytes] = {}
-    for done, (path, asset_url) in enumerate(assets.items(), 1):
-        try:
-            files[path] = web.bytes(asset_url)
-        except Exception as error:
-            markdown = _without_asset(markdown, path, error)
-        report("fetchingAssets", done, len(assets))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        fetched = {path: pool.submit(web.bytes, url) for path, url in assets.items()}
+        for done, (path, future) in enumerate(fetched.items(), 1):
+            try:
+                files[path] = future.result()
+            except Exception as error:
+                markdown = _without_asset(markdown, path, error)
+            report("fetchingAssets", done, len(assets))
     document = html.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", source, count=1))
     title = document.xpath("string(//title)").strip() or None
     author = next(iter(document.xpath("//meta[@name='author']/@content")), None)

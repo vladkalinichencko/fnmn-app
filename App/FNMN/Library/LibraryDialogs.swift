@@ -56,13 +56,21 @@ func dialogReduce(_ dialog: LibraryDialog, _ action: DialogAction) -> LibraryDia
 final class LibraryDialogs {
     private(set) var dialog = LibraryDialog.none
 
+    @ObservationIgnored private var afterMenu: Task<Void, Never>?
+
     func send(_ action: DialogAction) {
+        afterMenu?.cancel()
+        afterMenu = nil
         dialog = dialogReduce(dialog, action)
     }
 
     func sendAfterMenu(_ action: DialogAction) {
-        Task { @MainActor in
+        afterMenu?.cancel()
+        afterMenu = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else {
+                return
+            }
             send(action)
         }
     }

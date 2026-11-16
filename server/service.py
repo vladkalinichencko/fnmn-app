@@ -11,15 +11,18 @@
 
 from __future__ import annotations
 
+import hmac
+import logging
 import os
-from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 import jobs
-from digest.store import Store
+
+_LOG = logging.getLogger(__name__)
+MAX_UPLOAD = 500 * 1024 * 1024
 
 
 class ImportRequest(BaseModel):
@@ -31,15 +34,11 @@ class VideoRequest(BaseModel):
     url: str
 
 
-class DigestRefreshRequest(BaseModel):
-    post_id: str
-
-
 def require_token(authorization: str | None = Header(default=None)) -> None:
     token = os.environ.get("FNMN_TOKEN")
     if not token:
         raise HTTPException(503, "FNMN_TOKEN is not configured")
-    if authorization != f"Bearer {token}":
+    if not hmac.compare_digest((authorization or "").encode(), f"Bearer {token}".encode()):
         raise HTTPException(401, "invalid bearer token")
 
 
@@ -58,7 +57,14 @@ def start_job(request: ImportRequest) -> dict:
 
 @app.post("/files", status_code=202)
 async def start_file(request: Request, name: str) -> dict:
-    return jobs.submit(name, [], kind="file", upload=await request.body()).status()
+    chunks = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > MAX_UPLOAD:
+            raise HTTPException(413, "the file is larger than the importer accepts")
+        chunks.append(chunk)
+    return jobs.submit(name, [], kind="file", upload=b"".join(chunks)).status()
 
 
 @app.get("/jobs/{job_id}")
@@ -85,33 +91,10 @@ def start_video(request: VideoRequest) -> dict:
     return jobs.submit(request.url, [], kind="videoFile").status()
 
 
-@app.post("/digest/refresh")
-def refresh_digest(request: DigestRefreshRequest) -> dict:
-    from digest.refresh import refresh
-
-    try:
-        media = refresh(request.post_id)
-    except LookupError as error:
-        raise HTTPException(404, "no such post") from error
-    except Exception as error:
-        raise HTTPException(409, str(error)) from error
-    return {"media": media}
-
-
-@app.get("/digest/media/{name}")
-def digest_media(name: str) -> FileResponse:
-    if Path(name).name != name or name in (".", ".."):
-        raise HTTPException(404, "no such picture")
-    path = Store().media_dir / name
-    if not path.is_file():
-        raise HTTPException(404, "no such picture")
-    return FileResponse(path)
-
-
 @app.get("/jobs/{job_id}/file")
 def job_file(job_id: str) -> FileResponse:
     job = _job(job_id)
-    if job.phase != "done" or job.file is None:
+    if job.phase != "done" or job.kind != "videoFile" or job.file is None:
         raise HTTPException(409, f"job is {job.phase}")
     return FileResponse(job.file, media_type="video/mp4", filename=job.file.name)
 

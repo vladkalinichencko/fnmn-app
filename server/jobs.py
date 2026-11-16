@@ -17,7 +17,7 @@ import tempfile
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from adapters import article, youtube
@@ -50,16 +50,21 @@ class Job:
     """What the phone sent for a `file` job, named by `url`, until the job has read it."""
     key: tuple = ()
     """What the job was asked for; the same ask finds the job again."""
+    gone: bool = False
+    """The phone said it stored the result while the job still ran; the file it finishes with goes nowhere."""
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def status(self) -> dict:
-        return {"id": self.id, "url": self.url, "phase": self.phase, "stage": self.stage,
-                "done": self.done, "total": self.total, "error": self.error}
+        with self._lock:
+            return {"id": self.id, "url": self.url, "phase": self.phase, "stage": self.stage,
+                    "done": self.done, "total": self.total, "error": self.error}
 
 
 def submit(url: str, folders: list[str], kind: str = "import", upload: bytes | None = None) -> Job:
     """`import` prepares a package from a link, `file` from the `upload` named `url`; `videoFile` downloads
     a YouTube video as an mp4. The same ask while a job for it is queued, running or done without a fault
-    gets that job back, so a phone that did not take the result asks again and takes it."""
+    gets that job back, so a phone that did not take the result asks again and takes it; a done job that
+    kept only the link or the file is not reused, so asking again retries the import."""
     digest = hashlib.sha256(upload).hexdigest() if upload is not None else None
     key = (kind, url, tuple(folders), digest)
     with _LOCK:
@@ -78,33 +83,46 @@ def find(job_id: str) -> Job | None:
 
 
 def forget(job_id: str) -> Job | None:
-    """The phone stored the job's result: its file and the job go."""
+    """The phone stored the job's result: its file and the job go. A job still running keeps its
+    worker; the file it finishes with is deleted instead of being kept for nobody."""
     with _LOCK:
         job = _JOBS.pop(job_id, None)
-    if job is not None and job.file is not None:
-        job.file.unlink(missing_ok=True)
+    if job is not None:
+        job.gone = True
+        if job.file is not None:
+            job.file.unlink(missing_ok=True)
     return job
 
 
 def _run(job: Job) -> None:
-    job.phase = "running"
+    with job._lock:
+        job.phase = "running"
 
     def report(stage: str, done: int | None, total: int | None) -> None:
-        job.stage, job.done, job.total = stage, done, total
+        with job._lock:
+            job.stage, job.done, job.total = stage, done, total
 
     try:
         _FILES.mkdir(parents=True, exist_ok=True)
         if job.kind == "videoFile":
-            job.file = youtube.download(job.url, _FILES, report)
+            file = youtube.download(job.url, _FILES, report)
         else:
             archive = _FILES / f"{job.id}.tar"
             write_delivery(archive, _delivery(job, report))
-            job.file = archive
+            file = archive
+        with job._lock:
+            job.file = file
     except Exception as error:
         _LOG.exception("job %s (%s) failed", job.id, job.url)
-        job.phase, job.error = "failed", str(error)
-        return
-    job.phase = "done"
+        with job._lock:
+            job.phase, job.error = "failed", str(error)
+    else:
+        with job._lock:
+            job.phase = "done"
+    finally:
+        job.upload = None
+        if job.gone and job.file is not None:
+            job.file.unlink(missing_ok=True)
 
 
 def _delivery(job: Job, report) -> Delivery:
@@ -115,11 +133,13 @@ def _delivery(job: Job, report) -> Delivery:
             return import_file(job.url, data, LIVE, report)
         except Exception as failure:
             _LOG.exception("job %s (%s) kept the file as it is", job.id, job.url)
-            job.error = str(failure)
+            with job._lock:
+                job.error = str(failure)
             return file_delivery(job.url, data)
     try:
         return import_link(job.url, job.folders, LIVE, report)
     except Exception as failure:
         _LOG.exception("job %s (%s) kept the link as it is", job.id, job.url)
-        job.error = str(failure)
+        with job._lock:
+            job.error = str(failure)
         return link_delivery(job.url, article.title(job.url, LIVE), job.folders)

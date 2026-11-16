@@ -3,6 +3,7 @@ import io
 import json
 import os
 import tarfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -134,6 +135,31 @@ class ServiceTests(unittest.TestCase):
         with patch("adapters.file.pdf.transcribe", fake_transcribe):
             _, package = self._package_of_file("paper.pdf", b"%PDF")
         self.assertEqual((package["material"]["title"], package["material"]["byline"]), ("Paper", "A. Author"))
+
+    def test_forgetting_a_running_job_deletes_the_file_it_finishes_with(self):
+        release = threading.Event()
+
+        def fake_import(url, folders, web, report):
+            release.wait(10)
+            return Delivery({"material": {"sourceURL": url}, "folders": folders}, {})
+
+        with patch("jobs.import_link", fake_import):
+            job = jobs.submit("https://example.com/slow.pdf", [])
+            deadline = time.time() + 5
+            while jobs.find(job.id).phase != "running" and time.time() < deadline:
+                time.sleep(0.01)
+            self.assertEqual(jobs.find(job.id).phase, "running")
+            jobs.forget(job.id)
+            release.set()
+            deadline = time.time() + 5
+            while job.file is None and time.time() < deadline:
+                time.sleep(0.01)
+            file = job.file
+            deadline = time.time() + 5
+            while file is not None and file.exists() and time.time() < deadline:
+                time.sleep(0.01)
+            self.assertIsNotNone(file)
+            self.assertFalse(file.exists())
 
     def test_video_job_hands_over_the_downloaded_file(self):
         def fake_download(url, folder, report):

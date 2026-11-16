@@ -1,6 +1,7 @@
 import FNMNCore
 import Foundation
 import Observation
+import SwiftUI
 
 enum DigestSyncState: Equatable {
     case idle
@@ -13,61 +14,25 @@ final class DigestModel {
     private(set) var syncState = DigestSyncState.idle
     private(set) var digests: [Digest] = []
     private(set) var index = DigestIndex()
-    private(set) var refreshed: [String: [DigestPackage.Post.Media]] = [:]
-    private(set) var refreshing: Set<String> = []
     private(set) var lastError: String?
     private(set) var pendingDownloads: [URL] = []
+    @ObservationIgnored var magazineScrollPosition = ScrollPosition(idType: Never.self)
     private(set) var deliveryFailed = false
     private let file: DigestFile
-    private let server: ServerLink?
     @ObservationIgnored private var loaded = false
     @ObservationIgnored private var indexSave: Task<Void, Never>?
+    @ObservationIgnored private var syncAgain = false
 
-    init(file: DigestFile = DigestFile(), server: ServerLink? = nil) {
+    init(file: DigestFile = DigestFile()) {
         self.file = file
-        self.server = server
     }
 
     var current: Digest? {
         digests.first
     }
 
-    var hidden: Set<String> {
-        index.hidden
-    }
-
     var folded: Set<DigestFold> {
         index.folded
-    }
-
-    func media(for post: DigestPackage.Post) -> [DigestPackage.Post.Media] {
-        refreshed[post.id] ?? post.media
-    }
-
-    func refresh(_ post: DigestPackage.Post, digest: Digest) async {
-        guard let server else {
-            lastError = "Set up the Mac server to fetch this picture again."
-            return
-        }
-        guard !refreshing.contains(post.id) else {
-            return
-        }
-        do {
-            let connection = try server.configured()
-            refreshing.insert(post.id)
-            defer { refreshing.remove(post.id) }
-            let media = try await server.port.refreshDigestPost(post.id, connection: connection)
-            var local: [DigestPackage.Post.Media] = []
-            for item in media {
-                let name = (item.path as NSString).lastPathComponent
-                let data = try await server.port.digestMedia(name, connection: connection)
-                let path = try await file.saveMedia(data, as: "refresh-\(name)", of: digest)
-                local.append(.init(path: path, width: item.width, height: item.height))
-            }
-            refreshed[post.id] = local
-        } catch {
-            lastError = error.localizedDescription
-        }
     }
 
     func digest(of postID: String) -> Digest? {
@@ -87,10 +52,17 @@ final class DigestModel {
 
     func sync(folder: URL?) async {
         guard syncState == .idle else {
+            syncAgain = true
             return
         }
         syncState = .syncing
-        defer { syncState = .idle }
+        defer {
+            syncState = .idle
+            if syncAgain {
+                syncAgain = false
+                Task { await sync(folder: folder) }
+            }
+        }
         if state == .idle {
             state = .loading
         }
@@ -120,11 +92,6 @@ final class DigestModel {
                 state = .failed(error.localizedDescription)
             }
         }
-    }
-
-    func hide(_ post: DigestPackage.Post) {
-        index.hidden.insert(post.id)
-        scheduleIndexSave()
     }
 
     func toggleFold(_ fold: DigestFold) {

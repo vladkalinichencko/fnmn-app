@@ -52,7 +52,7 @@ struct ShelfScreen: View {
             }
             .background(Tokens.canvas)
         case .settling:
-            Color.clear
+            Loading()
         case .empty:
             ContentUnavailableView("Nothing on the shelf", systemImage: "bookmark", description: Text("Highlights, notes and archived items appear here."))
         }

@@ -104,6 +104,7 @@ private final class LibraryDeliveries: DeliveryTarget {
     private let file: LibraryFile
     private let write: LibraryImporter.Write
     private let onStep: @MainActor (ImportStep) -> Void
+    private var staged: LibrarySnapshot?
 
     init(file: LibraryFile, write: @escaping LibraryImporter.Write, onStep: @escaping @MainActor (ImportStep) -> Void) {
         self.file = file
@@ -123,9 +124,18 @@ private final class LibraryDeliveries: DeliveryTarget {
 
     func add(_ archive: URL, index: Int, total: Int) async throws {
         onStep(.reading(index, of: total))
-        try await write(true) { [file] snapshot in try await file.addCloudDelivery(archive, into: snapshot) }
+        try await write(false) { snapshot in
+            let next = try await self.file.addCloudDelivery(archive, into: self.staged ?? snapshot)
+            self.staged = next
+            return snapshot
+        }
     }
 
     func finish(_ archives: [URL]) async throws {
+        guard let staged else {
+            return
+        }
+        self.staged = nil
+        try await write(true) { _ in staged }
     }
 }

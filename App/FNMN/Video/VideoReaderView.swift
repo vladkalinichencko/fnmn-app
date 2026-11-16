@@ -10,6 +10,7 @@ struct VideoReaderView: View {
     @Environment(\.scenePhase) private var scenePhase
     let video: VideoCoordinator
     @State private var downloading: URL?
+    @State private var downloadFailure: URL?
     @State private var stageHeight: CGFloat = 0
 
     private var hasCaptions: Bool { !video.cues.isEmpty }
@@ -115,18 +116,27 @@ struct VideoReaderView: View {
         let video = video
         switch source {
         case let .coming(file):
-            VideoPlaceholder { Loading() }
-                .task(id: file) {
-                    downloading = file
-                    defer { downloading = nil }
-                    do {
-                        try await CloudFolder.download(file, timeout: .seconds(1800))
-                    } catch CloudFolderError.notDownloaded(_, _) {
-                        library.failure = CloudFolderError.notDownloaded(count: 1, name: package.material.title).localizedDescription
-                    } catch {
-                        library.failure = error.localizedDescription
-                    }
+            VideoPlaceholder {
+                if downloadFailure == file {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.orange)
+                } else {
+                    Loading()
                 }
+            }
+            .task(id: file) {
+                downloadFailure = nil
+                downloading = file
+                defer { downloading = nil }
+                do {
+                    try await CloudFolder.download(file, timeout: .seconds(1800))
+                } catch is CancellationError {
+                } catch {
+                    downloadFailure = file
+                    library.failure = Failure(title: "Couldn’t download", message: error.localizedDescription)
+                }
+            }
         case let .local(file):
             SystemPlayer(
                 url: file,

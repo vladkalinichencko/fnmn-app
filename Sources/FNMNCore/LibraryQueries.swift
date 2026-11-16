@@ -8,6 +8,7 @@ public struct LibraryQueries: Sendable {
     public let albumSummaries: [AlbumSummary]
     public let annotationGroups: [AnnotationGroup]
     private let snapshot: LibrarySnapshot
+    private let byID: [String: LibraryItem]
 
     public init(_ snapshot: LibrarySnapshot) {
         self.snapshot = snapshot
@@ -17,10 +18,11 @@ public struct LibraryQueries: Sendable {
         unsortedItems = items.filter { snapshot.albums(of: $0.id).isEmpty }
         albumSummaries = Self.albumSummaries(items: items, snapshot: snapshot)
         annotationGroups = Self.annotationGroups(snapshot: snapshot, items: allItems)
+        byID = Dictionary(allItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     public func item(_ id: String) -> LibraryItem? {
-        allItems.first { $0.id == id }
+        byID[id]
     }
 
     public func continueItems(_ progress: ReadingProgress) -> [LibraryItem] {

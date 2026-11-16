@@ -43,7 +43,7 @@ final class LibraryModel {
     private(set) var cloudFolder: URL?
     private(set) var originals: [String: URL] = [:]
     var previewedOriginal: URL?
-    var failure: String?
+    var failure: Failure?
     let storageURL: URL
     private let file: LibraryFile
     private let importer: LibraryImporter
@@ -54,6 +54,7 @@ final class LibraryModel {
     @ObservationIgnored private var progressWrite: Task<Void, Never>?
     @ObservationIgnored private var progressUnsaved = false
     @ObservationIgnored private var reindex: Task<Void, Never>?
+    @ObservationIgnored private var previewGeneration = 0
 
     init(
         storageURL: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "FNMN"),
@@ -88,7 +89,7 @@ final class LibraryModel {
             await syncWithOtherDevices()
             let corrupt = await file.corruptPackageNames
             if !corrupt.isEmpty {
-                failure = "Couldn’t read \(corrupt.joined(separator: ", ")). The rest of the library is open."
+                failure = Failure(title: "Library partially unreadable", message: "Couldn’t read \(corrupt.joined(separator: ", ")). The rest of the library is open.")
             }
         } catch {
             loadState = .failed(error.localizedDescription)
@@ -105,7 +106,7 @@ final class LibraryModel {
                 await removeDeleted(deleted)
             }
         } catch {
-            failure = error.localizedDescription
+            failure = Failure(title: "Couldn’t save the change", message: error.localizedDescription)
         }
     }
 
@@ -114,17 +115,10 @@ final class LibraryModel {
         case .savePosition, .open, .openGroup:
             places.append(change)
         default:
-            let folded = places
-            places = []
-            let next = (folded + [change]).reduce(progress) { $0.applying($1) }
+            foldPlaces()
+            let next = progress.applying(change)
             if next != progress {
                 progress = next
-            }
-            for deferred in folded {
-                if case .savePosition = deferred {
-                    continue
-                }
-                journal.record(.progress(deferred))
             }
         }
         switch change {
@@ -144,7 +138,7 @@ final class LibraryModel {
             try await journal.flush()
         } catch {
             progressUnsaved = true
-            failure = error.localizedDescription
+            failure = Failure(title: "Couldn’t save the change", message: error.localizedDescription)
         }
     }
 
@@ -193,7 +187,7 @@ final class LibraryModel {
             SyncLog.library.log("Sync finished")
         case let .failed(message):
             syncState = .idle
-            failure = message
+            failure = Failure(title: "Sync failed", message: message)
             SyncLog.library.error("Sync failure: \(message, privacy: .public)")
         default:
             syncState = .idle
@@ -203,16 +197,8 @@ final class LibraryModel {
     }
 
     private func logLocalState() {
-        SyncLog.library.log("Local catalog: \(self.snapshot.articles.count, privacy: .public) materials, \(self.snapshot.albums, privacy: .public), deletions: \(self.snapshot.deletedAt, privacy: .public)")
-        let snapshot = self.snapshot
-        let progress = self.progress
-        Task.detached(priority: .utility) {
-            for entry in snapshot.articles {
-                let id = entry.material.id
-                let reading = progress.readings[id]
-                SyncLog.library.log("Material \(id, privacy: .public); title: \(entry.material.title, privacy: .public); delivery: \(entry.delivery ?? "none", privacy: .public); collections: \(snapshot.albums(of: id), privacy: .public); opened: \(reading?.openedAt.map { $0.description } ?? "never", privacy: .public); read: \(reading?.isRead == true, privacy: .public); position: \(progress.positions[id].map { String(describing: $0) } ?? "none", privacy: .public)")
-            }
-        }
+        let read = progress.readings.values.filter { $0.isRead == true }.count
+        SyncLog.library.log("Local catalog: \(self.snapshot.articles.count, privacy: .public) materials (\(read, privacy: .public) read), \(self.snapshot.albums, privacy: .public), deletions: \(self.snapshot.deletedAt, privacy: .public)")
     }
 
     func reindexSearch() async {
@@ -295,19 +281,24 @@ final class LibraryModel {
         do {
             try await file.removeOriginal(original)
         } catch {
-            failure = error.localizedDescription
+            failure = Failure(title: "Couldn’t remove the download", message: error.localizedDescription)
         }
         await readOriginals()
     }
 
     func preview(_ original: URL) async {
+        previewGeneration += 1
+        let generation = previewGeneration
         do {
             try await CloudFolder.download(original, timeout: .seconds(300))
+            guard generation == previewGeneration else { return }
             previewedOriginal = original
         } catch CloudFolderError.notDownloaded(_, _) {
-            failure = CloudFolderError.notDownloaded(count: 1, name: original.lastPathComponent).localizedDescription
+            guard generation == previewGeneration else { return }
+            failure = Failure(title: "Couldn’t download", message: CloudFolderError.notDownloaded(count: 1, name: original.lastPathComponent).localizedDescription)
         } catch {
-            failure = error.localizedDescription
+            guard generation == previewGeneration else { return }
+            failure = Failure(title: "Couldn’t download", message: error.localizedDescription)
         }
     }
 
@@ -396,7 +387,7 @@ final class LibraryModel {
         do {
             try await importer.moveIntoCloudIfNeeded(snapshot, write: self.write)
         } catch {
-            failure = error.localizedDescription
+            failure = Failure(title: "Couldn’t move the library to iCloud", message: error.localizedDescription)
         }
     }
 

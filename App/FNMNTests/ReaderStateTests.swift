@@ -29,6 +29,19 @@ final class ReaderStateTests: XCTestCase {
         XCTAssertEqual(state.place, 1)
     }
 
+    func testAKeptPlaceYieldsToTheFirstRealScroll() {
+        var state = ReaderState(place: 0)
+        state.keepsPlace = true
+
+        state = readerReduce(state, .scrolled(1), document: document)
+        XCTAssertFalse(state.keepsPlace)
+        XCTAssertEqual(state.scrollID, 1)
+        XCTAssertEqual(state.place, 0)
+
+        state = readerReduce(state, .scrolled(2), document: document)
+        XCTAssertEqual(state.place, 2)
+    }
+
     func testASecondOpenedChangesNothing() {
         var state = ReaderState(place: nil)
         state.scrollID = 4

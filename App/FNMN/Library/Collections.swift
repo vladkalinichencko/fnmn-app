@@ -176,12 +176,18 @@ struct AlbumScreen: View {
 
     var body: some View {
         let found = library.queries.search(query, in: library.queries.items(inAlbum: name))
-        ScrollView {
-            ArrangedItems(items: found, album: name, scope: "album:\(name)")
-                .padding(.horizontal, Tokens.gutter)
+        Group {
+            if library.queries.albumSummaries.contains(where: { $0.name == name }) {
+                ScrollView {
+                    ArrangedItems(items: found, album: name, scope: "album:\(name)")
+                        .padding(.horizontal, Tokens.gutter)
+                }
+                .background(Tokens.canvas)
+                .noResults(for: query, when: found.isEmpty)
+            } else {
+                ContentUnavailableView("This collection is gone", systemImage: "rectangle.stack.badge.minus")
+            }
         }
-        .background(Tokens.canvas)
-        .noResults(for: query, when: found.isEmpty)
         .screenSearch($query)
         .navigationTitle(name)
         .task { library.apply(.openGroup(id: AlbumSummary.id(.albums, name))) }

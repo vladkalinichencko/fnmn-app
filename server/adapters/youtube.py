@@ -54,8 +54,8 @@ def download(url: str, folder: Path, report: Report) -> Path:
             report("downloadingVideo", int(state.get("downloaded_bytes") or 0) >> 20, int(total) >> 20 if total else None)
 
     options = {
-        "noplaylist": True, "quiet": True, "noprogress": True,
-        "js_runtimes": {"node": {"path": "node"}},
+        **_OPTIONS,
+        "skip_download": False,
         "format": "bv*[ext=mp4][height<=720]+ba[ext=m4a]/b[ext=mp4][height<=720]/b[ext=mp4]",
         "merge_output_format": "mp4",
         "outtmpl": str(folder / f"{name}.%(ext)s"),
@@ -64,8 +64,13 @@ def download(url: str, folder: Path, report: Report) -> Path:
     import yt_dlp
 
     report("downloadingVideo", None, None)
-    with yt_dlp.YoutubeDL(options) as ydl:
-        ydl.download([source])
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            ydl.download([source])
+    finally:
+        for leftover in folder.glob(f"{name}.*"):
+            if leftover.suffix in {".part", ".ytdl"}:
+                leftover.unlink(missing_ok=True)
     file = folder / f"{name}.mp4"
     if not file.exists():
         raise ImportFailure("downloadingVideo", "yt-dlp did not produce an mp4")

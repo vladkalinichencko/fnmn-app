@@ -188,14 +188,18 @@ final class ImportJobs {
     private func prepareOnServer(jobID: UUID, start: (ServerConnection) async throws -> ServerJob) async throws {
         let connection = try server.configured()
         let job = try await server.port.finished(try await start(connection), connection: connection) { send(.progressed(jobID, $0)) }
-        guard job.phase == .done, job.error == nil else {
+        do {
+            guard job.phase == .done, job.error == nil else {
+                throw ServerError.rejected(job.error ?? "The server could not prepare this item.")
+            }
+            let archive = try await server.port.delivery(of: job.id, connection: connection) { self.send(.progressed(jobID, $0)) }
+            defer { try? FileManager.default.removeItem(at: archive) }
+            send(.progressed(jobID, .saving))
+            try await library.store(archive: archive)
+        } catch {
             await forget(job.id, connection: connection)
-            throw ServerError.rejected(job.error ?? "The server could not prepare this item.")
+            throw error
         }
-        let archive = try await server.port.delivery(of: job.id, connection: connection) { self.send(.progressed(jobID, $0)) }
-        defer { try? FileManager.default.removeItem(at: archive) }
-        send(.progressed(jobID, .saving))
-        try await library.store(archive: archive)
         await forget(job.id, connection: connection)
     }
 
@@ -207,21 +211,29 @@ final class ImportJobs {
         let connection = try server.configured()
         let started = try await server.port.startVideoDownload(url: url, connection: connection)
         let job = try await server.port.finished(started, connection: connection) { send(.progressed(jobID, $0)) }
-        guard job.phase == .done else {
-            throw ServerError.rejected(job.error ?? "The server could not download this video.")
+        do {
+            guard job.phase == .done else {
+                throw ServerError.rejected(job.error ?? "The server could not download this video.")
+            }
+            let video = try await server.port.videoFile(of: job.id, connection: connection) { self.send(.progressed(jobID, $0)) }
+            defer { try? FileManager.default.removeItem(at: video) }
+            send(.progressed(jobID, .saving))
+            try await library.storeOriginal(video, of: itemID)
+        } catch {
+            await forget(job.id, connection: connection)
+            throw error
         }
-        let video = try await server.port.videoFile(of: job.id, connection: connection) { self.send(.progressed(jobID, $0)) }
-        defer { try? FileManager.default.removeItem(at: video) }
-        send(.progressed(jobID, .saving))
-        try await library.storeOriginal(video, of: itemID)
         await forget(job.id, connection: connection)
     }
 
     private func showFirstPreparingJob(ending action: ImportAction) {
         let shown = jobs.last { $0.isPreparing }
         if shown?.id != shownJobID, shownJobID != nil {
-            let failed = if case .failed = action { true } else { false }
-            ImportActivity.end(status: failed ? "Failed" : "Ready")
+            let succeeded = switch action {
+            case .failed, .dismiss, .deleted: false
+            default: true
+            }
+            ImportActivity.end(success: succeeded)
             shownJobID = nil
         }
         guard let shown, case let .preparing(step, _) = shown.phase else {

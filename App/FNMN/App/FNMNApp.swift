@@ -15,7 +15,7 @@ struct FNMNApp: App {
         _library = State(initialValue: library)
         _server = State(initialValue: server)
         _imports = State(initialValue: ImportJobs(library: library, server: server))
-        _digests = State(initialValue: DigestModel(server: server))
+        _digests = State(initialValue: DigestModel())
         ReaderAppearance.makeSpeedProfiles()
     }
 
@@ -90,11 +90,12 @@ private struct WindowRoot: View {
             }
         }
         .onChange(of: library.phase) { _, phase in
-            guard phase == .ready, let route = navigation.pendingItem else {
+            guard phase == .ready, !navigation.pendingItems.isEmpty else {
                 return
             }
-            navigation.pendingItem = nil
-            navigation.show(route)
+            navigation.tab = .library
+            navigation.library = navigation.pendingItems
+            navigation.pendingItems = []
         }
         .task { await WidgetSnapshotBuilder.refresh(library: library, digests: digests) }
         .onChange(of: library.snapshot) { scheduleWidgetRefresh() }
@@ -130,22 +131,23 @@ private struct WindowRoot: View {
                       let id = components.queryItems?.first(where: { $0.name == "id" })?.value,
                       !id.isEmpty {
                 let piece = components.queryItems?.first { $0.name == "piece" }?.value.flatMap(Int.init)
+                let seconds = components.queryItems?.first { $0.name == "seconds" }?.value.flatMap(Double.init)
                 if library.phase == .ready {
-                    navigation.show(.item(id, piece: piece))
+                    navigation.show(.item(id, piece: piece, seconds: seconds))
                 } else {
-                    navigation.pendingItem = .item(id, piece: piece)
+                    navigation.pendingItems.append(.item(id, piece: piece, seconds: seconds))
                 }
             } else if let shared = CaptureHandoff.sharedURL(from: url) {
                 dialogs.send(.addLink(shared.absoluteString))
             }
         }
-        .alert("Couldn’t save the change", isPresented: Binding(
+        .alert(library.failure?.title ?? "Something went wrong", isPresented: Binding(
             get: { library.failure != nil },
             set: { if !$0 { library.failure = nil } }
         )) {
             Button("OK") { library.failure = nil }
         } message: {
-            Text(library.failure ?? "")
+            Text(library.failure?.message ?? "")
         }
     }
 

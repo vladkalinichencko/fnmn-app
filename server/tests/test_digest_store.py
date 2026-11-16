@@ -59,6 +59,16 @@ class StoreTests(unittest.TestCase):
             store.record_build({"id": "digest-1", "at": iso(__import__("datetime").datetime.now(__import__("datetime").timezone.utc)), "post_ids": ["x/1"]})
             self.assertEqual([item.id for item in store.unconsumed()], ["x/2"])
 
+    def test_a_pending_build_counts_only_once_its_tar_is_there(self):
+        with TemporaryDirectory() as folder, TemporaryDirectory() as deliveries:
+            store = Store(Path(folder))
+            store.append([post("x/1")])
+            store.record_build({"at": "2026-11-16T00:00:00Z", "post_ids": ["x/1"], "file": "digest-1.tar", "pending": True})
+            self.assertEqual([item.id for item in store.unconsumed(Path(deliveries))], ["x/1"])
+            (Path(deliveries) / "digest-1.tar").write_bytes(b"tar")
+            self.assertEqual(store.unconsumed(Path(deliveries)), [])
+            self.assertIsNone(store.last_build_at())
+
     def test_safe_names_keep_the_store_on_one_level(self):
         self.assertEqual(safe("x/1587-0"), "x-1587-0")
         self.assertNotIn("/", safe("../x/1"))

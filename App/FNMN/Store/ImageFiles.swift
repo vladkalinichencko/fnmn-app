@@ -21,7 +21,7 @@ enum ImageFiles {
               let height = properties[kCGImagePropertyPixelHeight] as? CGFloat,
               width > 0, height > 0 else { return nil }
         let orientation = properties[kCGImagePropertyOrientation] as? UInt32 ?? 1
-        return orientation >= 5 ? CGSize(width: height, height: width) : CGSize(width: width, height: width)
+        return orientation >= 5 ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
     }
 
     @concurrent

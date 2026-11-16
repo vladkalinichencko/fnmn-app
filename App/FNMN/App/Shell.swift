@@ -39,7 +39,7 @@ final class WindowNavigation {
     var digest: [DigestRoute] = []
     var shelf: [Route] = []
     var pending = PendingRoute.none
-    var pendingItem: Route?
+    var pendingItems: [Route] = []
     var digestPost: String?
 
     func open(_ route: Route) {

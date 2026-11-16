@@ -81,14 +81,21 @@ struct DigestScreen: View {
     }
 
     private var magazine: some View {
-        ScrollViewReader { proxy in
+        @Bindable var digests = digests
+        return ScrollViewReader { proxy in
             ScrollView {
-                ForEach(digests.digests) { digest in
-                    let networks = digest.package.sections(hidden: digests.hidden)
-                    digestHeader(digest, networks: networks)
-                    sections(of: digest, networks: networks)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(digests.digests) { digest in
+                        let networks = digest.package.sections()
+                        VStack(spacing: 0) {
+                            digestHeader(digest, networks: networks)
+                            sections(of: digest, networks: networks)
+                        }
+                        .id(digest.id)
+                    }
                 }
             }
+            .scrollPosition($digests.magazineScrollPosition)
             .onAppear {
                 revealPendingPost(using: proxy)
             }
@@ -102,11 +109,23 @@ struct DigestScreen: View {
     }
 
     private func revealPendingPost(using proxy: ScrollViewProxy) {
-        guard let id = navigation.digestPost, digests.post(id) != nil else {
+        guard let id = navigation.digestPost else {
             return
         }
+        guard let digest = digests.digest(of: id),
+              let post = digest.package.posts.first(where: { $0.id == id }) else {
+            return
+        }
+        let folds = [DigestFold.digest(digest.id), .network(digest: digest.id, network: post.network)]
+            + post.folders.map { .topic(digest: digest.id, network: post.network, folder: $0) }
+        for fold in folds where digests.folded.contains(fold) {
+            digests.toggleFold(fold)
+        }
         navigation.digestPost = nil
-        proxy.scrollTo(id, anchor: .center)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            proxy.scrollTo(id, anchor: .center)
+        }
     }
 
     private func digestHeader(_ digest: Digest, networks: [DigestPackage.NetworkSection]) -> some View {

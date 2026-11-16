@@ -15,17 +15,14 @@ every other delivery.
 from __future__ import annotations
 
 import argparse
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from digest import settings as digest_settings
-from digest import topics
+from digest import subscriptions, topics
 from digest.store import Post, Store, iso, wire
 from package import write_delivery_from
 
-HERE = Path(__file__).resolve().parent
-FNMN = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/FNMN"
 BUILD_HOURS = (8, 20)
 KEEP = 4
 FEED_LIMIT = 40
@@ -33,7 +30,7 @@ FEED_LIMIT = 40
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Pack the new posts into a digest delivery")
-    parser.add_argument("--folder", default=str(FNMN))
+    parser.add_argument("--folder", default=str(digest_settings.FNMN))
     parser.add_argument("--root", default=None, help="the store's folder, for tests")
     parser.add_argument("--subscriptions", default=None, help="the subscriptions file, for tests")
     parser.add_argument("--now", default=None, help="ISO time to build as, for tests")
@@ -45,14 +42,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     now = datetime.fromisoformat(options.now) if options.now else datetime.now(timezone.utc)
     store = Store(Path(options.root)) if options.root else Store()
-    pending = store.unconsumed()
+    folder = Path(options.folder) / "digests"
+    pending = store.unconsumed(deliveries=folder)
     if not pending:
         print("nothing new since the last digest")
         return 0
     if not options.force and not due(store, now, prefs):
         print("the next build time has not come yet")
         return 0
-    subscriptions = _subscriptions(Path(options.subscriptions) if options.subscriptions else HERE / "subscriptions.json")
+    subscription_data = subscriptions.load(Path(options.subscriptions) if options.subscriptions else None)
     skipped = {}
     for post in pending:
         reason = _unshowable(post) or _available(post, store)
@@ -93,18 +91,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{post_id}: skipped: {reason}")
         print("nothing showable to build")
         return 0
-    package = _package(buildable, store, subscriptions, now)
-    folder = Path(options.folder) / "digests"
+    package = _package(buildable, store, subscription_data, now)
     folder.mkdir(parents=True, exist_ok=True)
     name = f"{package['id']}.tar"
-    _write(package, buildable, store, folder / name)
-    store.record_build({
-        "id": package["id"],
-        "at": iso(now),
-        "post_ids": [post.id for post in pending],
-        "skipped": skipped,
-        "file": name,
-    })
+    store.record_build({"at": iso(now), "post_ids": [post.id for post in pending], "file": name, "pending": True})
+    try:
+        _write(package, buildable, store, folder / name)
+        store.record_build({
+            "id": package["id"],
+            "at": iso(now),
+            "post_ids": [post.id for post in pending],
+            "skipped": skipped,
+            "file": name,
+        })
+    except Exception:
+        (folder / name).unlink(missing_ok=True)
+        raise
     _prune(folder)
     for post_id, reason in skipped.items():
         print(f"{post_id}: skipped: {reason}")
@@ -185,7 +187,7 @@ def _rotate(posts: list[Post], scores: dict[str, float], store: Store, rotation:
     posts_n = rotation.get("posts")
     if not isinstance(sources_n, int) or not isinstance(posts_n, int) or sources_n <= 0 or posts_n <= 0:
         return posts, {}
-    builds = store.builds()
+    builds = [build for build in store.builds() if not build.get("pending")]
     source_of = {post.id: post.source for post in store.posts()}
     last_shipped: dict[str, int] = {}
     for index, build in enumerate(builds):
@@ -230,10 +232,6 @@ def _rotate_network(
     for source in ordered[sources_n:]:
         over.update({post.id: "not in this rotation" for group in by_source[source] for post in group})
     return kept, over
-
-
-def _subscriptions(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _package(posts: list[Post], store: Store, subscriptions: dict, now: datetime) -> dict:
@@ -306,6 +304,8 @@ def _prune(folder: Path) -> None:
     deliveries = sorted(folder.glob("digest-*.tar"))
     for old in deliveries[:-KEEP]:
         old.unlink()
+    for stale in folder.glob("*.incoming"):
+        stale.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

@@ -24,15 +24,29 @@ class Web(NamedTuple):
     rendered: Callable[[str], str]
 
 
-def _get(url: str) -> httpx.Response:
-    response = httpx.get(url, follow_redirects=True, timeout=30, headers={"User-Agent": _USER_AGENT})
-    response.raise_for_status()
-    return response
+def _stream(url: str) -> tuple[bytes, str, str | None]:
+    """(body, final url, charset) of one GET; the body is refused as soon as it proves larger than the limit."""
+    with httpx.stream("GET", url, follow_redirects=True, timeout=30, headers={"User-Agent": _USER_AGENT}) as response:
+        response.raise_for_status()
+        return reader.read_bounded(response), str(response.url), response.charset_encoding
+
+
+def _decode(data: bytes, charset: str | None) -> str:
+    return data.decode(charset or "utf-8", errors="replace")
+
+
+def _text(url: str) -> str:
+    data, _, charset = _stream(url)
+    return _decode(data, charset)
+
+
+def _bytes(url: str) -> bytes:
+    return _stream(url)[0]
 
 
 def _page(url: str) -> str:
-    response = _get(url)
-    return with_base(response.text, str(response.url))
+    data, final, charset = _stream(url)
+    return with_base(_decode(data, charset), final)
 
 
 def _rendered(url: str) -> str:
@@ -52,8 +66,8 @@ def _rendered(url: str) -> str:
 
 
 LIVE = Web(
-    text=lambda url: _get(url).text,
-    bytes=lambda url: _get(url).content,
+    text=_text,
+    bytes=_bytes,
     page=_page,
     rendered=_rendered,
 )

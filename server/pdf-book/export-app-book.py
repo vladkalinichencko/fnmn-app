@@ -7,7 +7,6 @@ import re
 import shutil
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from markdown import normalize
 from math_issues import math_issues

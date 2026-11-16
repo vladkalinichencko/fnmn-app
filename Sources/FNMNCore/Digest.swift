@@ -283,10 +283,9 @@ extension DigestPackage {
     public static let otherFolder = "Other"
     public static let networkOrder: [Network] = [.telegram, .x, .instagram]
 
-    public func sections(hidden: Set<String>) -> [NetworkSection] {
-        let visible = posts.filter { !hidden.contains($0.id) }
+    public func sections() -> [NetworkSection] {
         return Self.networkOrder.compactMap { network in
-            let own = visible.filter { $0.network == network }
+            let own = posts.filter { $0.network == network }
             guard !own.isEmpty else {
                 return nil
             }
@@ -305,17 +304,14 @@ extension DigestPackage {
         post.folders.first ?? Self.otherFolder
     }
 
-    public func posts(matching query: String, hidden: Set<String> = []) -> [Post] {
+    public func posts(matching query: String) -> [Post] {
         let query = query
         guard query.contains(where: { !$0.isWhitespace }) else {
-            return posts.filter { !hidden.contains($0.id) }
+            return posts
         }
         let folded = TextFold.folded(query)
         return posts.filter { post in
-            guard !hidden.contains(post.id) else {
-                return false
-            }
-            return post.searchTexts.contains { TextFold.folded($0).contains(folded) }
+            post.searchTexts.contains { TextFold.folded($0).contains(folded) }
         }
     }
 }
@@ -366,19 +362,16 @@ public struct Digest: Identifiable, Equatable, Sendable {
 
 public struct DigestIndex: Codable, Equatable, Sendable {
     public var imported: [Imported]
-    public var hidden: Set<String>
     public var folded: Set<DigestFold>
 
-    public init(imported: [Imported] = [], hidden: Set<String> = [], folded: Set<DigestFold> = []) {
+    public init(imported: [Imported] = [], folded: Set<DigestFold> = []) {
         self.imported = imported
-        self.hidden = hidden
         self.folded = folded
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         imported = try container.decodeIfPresent([Imported].self, forKey: .imported) ?? []
-        hidden = try container.decodeIfPresent(Set<String>.self, forKey: .hidden) ?? []
         folded = try container.decodeIfPresent(Set<DigestFold>.self, forKey: .folded) ?? []
     }
 

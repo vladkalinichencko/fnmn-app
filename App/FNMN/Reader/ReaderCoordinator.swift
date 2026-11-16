@@ -93,7 +93,9 @@ func readerReduce(_ state: ReaderState, _ action: ReaderAction, document: Reader
             return state
         }
         state.scrollID = index
-        if document.blocks.indices.contains(index), !state.keepsPlace {
+        if state.keepsPlace {
+            state.keepsPlace = false
+        } else if document.blocks.indices.contains(index) {
             state.place = index
         }
     case let .plate(action):
@@ -389,7 +391,7 @@ final class ReaderCoordinator {
             [place, library.progress.readThrough[materialID], lineRead].compactMap { $0 }.max() ?? -1
         }
         let position = place.map(ReadingPosition.piece) ?? library.position(of: materialID) ?? .piece(0)
-        library.apply(.savePosition(position, itemID: materialID, progress: Double(read + 1) / Double(document.blocks.count)))
+        library.apply(.savePosition(position, itemID: materialID, progress: Double(read + 1) / Double(max(document.blocks.count, 1))))
     }
 
     private func search(_ query: String) {

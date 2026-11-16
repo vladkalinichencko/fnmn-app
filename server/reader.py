@@ -49,6 +49,8 @@ WINDOWED = [
     "--window-size=1280,1600",
 ]
 _SETTLE_MS = 10_000
+MAX_BYTES = 500 * 1024 * 1024
+"""The largest body one download may hold; a bigger answer is refused before it is all in memory."""
 _LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
 _SESSIONS: dict[str, tuple[Reader, int]] = {}
@@ -84,6 +86,21 @@ def _lock(network: str) -> threading.Lock:
         return _LOCKS.setdefault(network, threading.Lock())
 
 
+def read_bounded(response: httpx.Response, limit: int = MAX_BYTES) -> bytes:
+    """The whole body of a streamed response, refused as soon as it proves larger than the limit."""
+    declared = response.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > limit:
+        raise ValueError(f"the answer is larger than the {limit} byte limit")
+    chunks = []
+    size = 0
+    for chunk in response.iter_bytes():
+        size += len(chunk)
+        if size > limit:
+            raise ValueError(f"the answer is larger than the {limit} byte limit")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 class Connection:
     """One websocket to the browser, flat protocol: every call names its session."""
 
@@ -91,7 +108,7 @@ class Connection:
         version = json.loads(urllib.request.urlopen(f"{http}/json/version", timeout=10).read())
         self.ws = websocket.create_connection(version["webSocketDebuggerUrl"], timeout=60, max_size=256 * 1024 * 1024, suppress_origin=True)
         self.next_id = 0
-        self.events: list[dict] = []
+        self.events: dict[str | None, list[dict]] = {}
 
     def call(self, method: str, params: dict | None = None, session: str | None = None, timeout: float = 60) -> dict:
         self.next_id += 1
@@ -100,18 +117,24 @@ class Connection:
         if session:
             payload["sessionId"] = session
         deadline = time.monotonic() + timeout
-        self.ws.send(json.dumps(payload))
+        try:
+            self.ws.send(json.dumps(payload))
+        except (OSError, websocket.WebSocketException) as error:
+            raise ReaderError(f"{method}: the browser connection dropped") from error
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise ReaderError(f"{method} timed out")
             self.ws.settimeout(remaining)
-            reply = json.loads(self.ws.recv())
+            try:
+                reply = json.loads(self.ws.recv())
+            except (OSError, ValueError, websocket.WebSocketException) as error:
+                raise ReaderError(f"{method}: the browser connection dropped") from error
             if reply.get("id") == message_id:
                 if "error" in reply:
                     raise ReaderError(f"{method}: {reply['error']}")
                 return reply.get("result", {})
-            self.events.append(reply)
+            self.events.setdefault(reply.get("sessionId"), []).append(reply)
 
     def close(self) -> None:
         self.ws.close()
@@ -141,7 +164,7 @@ class Tab:
         return self.eval("location.href") or ""
 
     def goto(self, url: str, timeout: float = 45) -> None:
-        self.connection.events.clear()
+        self.connection.events.pop(self.session, None)
         try:
             self.call("Page.navigate", {"url": url}, timeout=timeout)
         except ReaderError as error:
@@ -159,7 +182,7 @@ class Tab:
 
     def document_status(self) -> int | None:
         """The status of the navigation document, when the network saw one."""
-        for event in reversed(self.connection.events):
+        for event in reversed(self.connection.events.get(self.session, [])):
             if event.get("method") == "Network.responseReceived":
                 response = event["params"].get("response", {})
                 if response.get("type") == "Document":
@@ -238,14 +261,14 @@ class Tab:
         cookies = self.call("Network.getCookies", {"urls": [url]}).get("cookies", [])
         header = "; ".join(f"{cookie['name']}={cookie['value']}" for cookie in cookies)
         headers = {"Cookie": header} if header else {}
-        response = httpx.get(url, timeout=30, headers=headers, follow_redirects=True)
-        response.raise_for_status()
-        return response.content
+        with httpx.stream("GET", url, timeout=30, headers=headers, follow_redirects=True) as response:
+            response.raise_for_status()
+            return read_bounded(response)
 
     def close(self) -> None:
         try:
             self.connection.call("Target.closeTarget", {"targetId": self.target_id})
-        except ReaderError:
+        except (ReaderError, OSError):
             pass
 
 
@@ -274,17 +297,23 @@ class Reader:
             self.process.terminate()
 
 
-def _launch(network: str) -> Reader:
+def _spawn(network: str, flags: list[str]) -> tuple[subprocess.Popen, str]:
+    """A new Chrome on the profile and the DevTools address it opened; the caller holds the profile's lock."""
     folder = profile(network)
     folder.mkdir(parents=True, exist_ok=True)
     for stale in ("DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"):
         (folder / stale).unlink(missing_ok=True)
     process = subprocess.Popen(
-        [str(CHROME), f"--user-data-dir={folder}", *HEADLESS],
+        [str(CHROME), f"--user-data-dir={folder}", *flags],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    return Reader(network, process, Connection(_wait_for_endpoint(network)))
+    return process, _wait_for_endpoint(network)
+
+
+def _launch(network: str) -> Reader:
+    process, http = _spawn(network, HEADLESS)
+    return Reader(network, process, Connection(http))
 
 
 def ensure(network: str, headed: bool = False) -> Reader:
@@ -303,16 +332,13 @@ def ensure(network: str, headed: bool = False) -> Reader:
 
 
 def _launch_headed(network: str) -> Reader:
-    folder = profile(network)
-    folder.mkdir(parents=True, exist_ok=True)
-    for stale in ("DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"):
-        (folder / stale).unlink(missing_ok=True)
-    process = subprocess.Popen(
-        [str(CHROME), f"--user-data-dir={folder}", *WINDOWED],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    return Reader(network, process, Connection(_wait_for_endpoint(network)))
+    """A visible Chrome for a login; it refuses to start on a profile a browser already owns, since two
+    Chromes on one profile corrupt its singleton files."""
+    with _lock(network):
+        if endpoint(network) is not None:
+            raise ReaderError(f"a reader browser is already running on the {network} profile")
+        process, http = _spawn(network, WINDOWED)
+    return Reader(network, process, Connection(http))
 
 
 def _wait_for_endpoint(network: str, timeout: float = 30) -> str:
@@ -352,5 +378,7 @@ def job(network: str) -> Iterator[Tab]:
     try:
         yield tab
     finally:
-        tab.close()
-        _release(network, session)
+        try:
+            tab.close()
+        finally:
+            _release(network, session)

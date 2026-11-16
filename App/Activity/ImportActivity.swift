@@ -100,8 +100,8 @@ enum ImportActivity {
         state = state.send(.update(step))
     }
 
-    static func end(status: String) {
-        state = state.send(.end(success: status == "Ready"))
+    static func end(success: Bool) {
+        state = state.send(.end(success: success))
     }
 
     private static func request(id: String, title: String, step: ImportStep) -> Bool {

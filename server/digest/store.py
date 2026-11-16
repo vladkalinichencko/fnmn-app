@@ -100,18 +100,25 @@ class Store:
         self.sources_file = root / "sources.json"
         self.media_dir = root / "media"
         self._sig_cache: dict[str, tuple[str, frozenset[str]]] = {}
+        self._posts_cache: tuple[tuple[int, int], list[Post]] | None = None
 
     def posts(self) -> list[Post]:
         """Every collected post, oldest first. A run that died mid-line leaves a torn tail, which is skipped;
-        the next run appends after it."""
-        if not self.posts_file.exists():
+        the next run appends after it. The file is re-read only when it changed on disk."""
+        try:
+            stat = self.posts_file.stat()
+        except FileNotFoundError:
             return []
+        signature = (stat.st_mtime_ns, stat.st_size)
+        if self._posts_cache is not None and self._posts_cache[0] == signature:
+            return self._posts_cache[1]
         posts = []
         for line in self.posts_file.read_text(encoding="utf-8").splitlines():
             try:
                 posts.append(Post(**json.loads(line)))
             except (json.JSONDecodeError, TypeError):
                 continue
+        self._posts_cache = (signature, posts)
         return posts
 
     def ids(self) -> set[str]:
@@ -149,6 +156,7 @@ class Store:
         with self.posts_file.open("a", encoding="utf-8") as log:
             for post in fresh:
                 log.write(json.dumps(asdict(post), ensure_ascii=False) + "\n")
+        self._posts_cache = None
         return len(fresh)
 
     def save_media(self, post_id: str, index: int | str, data: bytes, extension: str) -> dict | None:
@@ -176,15 +184,26 @@ class Store:
             return []
         return [json.loads(line) for line in self.builds_file.read_text(encoding="utf-8").splitlines() if line]
 
-    def built_ids(self) -> set[str]:
-        return {post_id for build in self.builds() for post_id in build.get("post_ids", [])}
+    def built_ids(self, deliveries: Path | None = None) -> set[str]:
+        """The post ids a build record consumed. A `pending` record — written before its tar — counts
+        only when the tar it names is actually in `deliveries`, so a crash between the two never ships
+        a post twice nor loses it."""
+        built = set()
+        for build in self.builds():
+            post_ids = set(build.get("post_ids", []))
+            if build.get("pending"):
+                if deliveries is not None and build.get("file") and (deliveries / build["file"]).exists():
+                    built |= post_ids
+            else:
+                built |= post_ids
+        return built
 
     def last_build_at(self) -> datetime | None:
-        builds = self.builds()
+        builds = [build for build in self.builds() if not build.get("pending")]
         return datetime.fromisoformat(builds[-1]["at"]) if builds else None
 
-    def unconsumed(self) -> list[Post]:
-        built = self.built_ids()
+    def unconsumed(self, deliveries: Path | None = None) -> list[Post]:
+        built = self.built_ids(deliveries)
         return [post for post in self.posts() if post.id not in built]
 
     def record_build(self, digest: dict) -> None:

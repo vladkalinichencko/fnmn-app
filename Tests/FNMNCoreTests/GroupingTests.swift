@@ -85,7 +85,7 @@ import Testing
                 post("3", folder: "design", at: 1_700),
             ]
         )
-        let sections = package.sections(hidden: [])
+        let sections = package.sections()
         #expect(sections.map(\.network) == [.x])
         let topics = sections[0].topics
         #expect(topics.map(\.folder) == ["ml", "design", "tech"])
@@ -100,6 +100,6 @@ import Testing
             postedAt: Date(timeIntervalSince1970: 1_500), text: "A post", folders: ["ml"]
         )
         let package = DigestPackage(id: "digest-1", window: window, folders: ["ml", "design", "film"], posts: [post])
-        #expect(package.sections(hidden: []).first?.topics.map(\.folder) == ["ml"])
+        #expect(package.sections().first?.topics.map(\.folder) == ["ml"])
     }
 }

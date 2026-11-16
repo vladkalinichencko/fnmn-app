@@ -667,11 +667,10 @@ class InstagramTests(unittest.TestCase):
 
 
 class SourceTableTests(unittest.TestCase):
-    def test_one_table_serves_the_monitor_and_the_refresh(self):
-        from digest import monitor, refresh
+    def test_every_source_reads_through_a_browser(self):
+        from digest import monitor
         from digest.reading import needs_browser
 
-        self.assertIs(monitor.SOURCES, refresh.SOURCES)
         for network in monitor.SOURCES:
             self.assertTrue(needs_browser(network))
         self.assertFalse(needs_browser("none"))

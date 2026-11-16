@@ -178,9 +178,13 @@ def write_delivery_from(path: Path, package: dict, files: list[tuple[str, Path]]
     """The same archive, for files that already live on disk: a digest's media."""
     path.parent.mkdir(parents=True, exist_ok=True)
     incoming = path.with_suffix(".incoming")
+    seen = {PACKAGE_NAME}
     with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
         _add(archive, PACKAGE_NAME, json.dumps(package, ensure_ascii=False).encode())
         for name, source in files:
+            if name in seen:
+                raise ValueError(f"the delivery names {name} twice")
+            seen.add(name)
             _add_path(archive, name, source)
     replace_if_changed(incoming, path)
 

@@ -9,7 +9,7 @@ struct DigestSearchResults: View {
 
     private var groups: [(digest: Digest, posts: [DigestPackage.Post])] {
         digests.digests.compactMap { digest in
-            let found = digest.package.posts(matching: query, hidden: digests.hidden)
+            let found = digest.package.posts(matching: query)
             return found.isEmpty ? nil : (digest, found)
         }
     }

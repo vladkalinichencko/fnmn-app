@@ -162,7 +162,6 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     let file = DigestFile(url: root, cache: root)
     let index = DigestIndex(
         imported: [.init(file: "digest-1.tar", id: "digest-1", at: postedAt)],
-        hidden: ["x/2"],
         folded: [.network(digest: "digest-1", network: .telegram)]
     )
     try await file.saveIndex(index)
@@ -171,10 +170,9 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
 }
 
 @Test func anIndexWithoutFoldsStillDecodes() throws {
-    let json = #"{"imported":[],"hidden":["x/1"]}"#
+    let json = #"{"imported":[],"hidden":["x/1"],"folded":[]}"#
     let decoder = JSONDecoder()
     let index = try decoder.decode(DigestIndex.self, from: Data(json.utf8))
-    #expect(index.hidden == ["x/1"])
     #expect(index.folded.isEmpty)
 }
 
@@ -224,7 +222,7 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
         post("x/3", folder: "design", date: postedAt),
         post("x/4", folder: "unknown", date: postedAt),
     ])
-    let sections = package.sections(hidden: [])
+    let sections = package.sections()
     #expect(sections.map(\.network) == [.x])
     let topics = sections[0].topics
     #expect(topics.map(\.folder) == ["ml", "design", "unknown"])
@@ -238,14 +236,9 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
         post("x/1"),
         DigestPackage.Post(id: "tg/1", network: .telegram, author: author, permalink: permalink, postedAt: postedAt, text: "tg", folders: ["ml"]),
     ])
-    #expect(package.sections(hidden: []).map(\.network) == [.telegram, .x])
+    #expect(package.sections().map(\.network) == [.telegram, .x])
 }
 
-@Test func aHiddenPostLeavesItsSection() {
-    let package = package(posts: [post("x/1"), post("x/2")])
-    let sections = package.sections(hidden: ["x/2"])
-    #expect(sections.flatMap { $0.topics.flatMap(\.posts) }.map(\.id) == ["x/1"])
-}
 
 @Test func searchReadsTextAndAuthor() {
     let package = package(posts: [
@@ -296,14 +289,6 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     }
 }
 
-@Test func searchSkipsHiddenPosts() {
-    let package = package(posts: [
-        post("x/1", text: "A catalog post."),
-        post("x/2", text: "Another catalog post."),
-    ])
-    #expect(package.posts(matching: "catalog", hidden: ["x/2"]).map(\.id) == ["x/1"])
-    #expect(package.posts(matching: "", hidden: ["x/1"]).map(\.id) == ["x/2"])
-}
 
 @Test func searchFoldsCaseAndDiacritics() {
     let post = DigestPackage.Post(

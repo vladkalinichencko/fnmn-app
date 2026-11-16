@@ -131,8 +131,9 @@ struct SettingsScreen: View {
     }
 
     private func saveAndCheck() {
+        let connection: ServerConnection
         do {
-            try server.save(ServerConnection(address: address, token: token))
+            connection = try ServerConnection(address: address, token: token)
         } catch {
             check = check.send(.saveFailed(error.localizedDescription))
             return
@@ -140,7 +141,8 @@ struct SettingsScreen: View {
         check = .checking
         Task {
             do {
-                try await server.check()
+                try await server.port.check(connection: connection)
+                try server.save(connection)
                 check = check.send(.checkPassed)
             } catch {
                 check = check.send(.checkFailed(error.localizedDescription))

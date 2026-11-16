@@ -4,3 +4,8 @@ enum LoadState: Equatable {
     case ready
     case failed(String)
 }
+
+struct Failure: Equatable {
+    let title: String
+    let message: String
+}

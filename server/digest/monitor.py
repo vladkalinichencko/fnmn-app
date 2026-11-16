@@ -8,18 +8,16 @@ a run that finds nothing new writes nothing.
 from __future__ import annotations
 
 import argparse
-import json
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-from digest import instagram, settings as digest_settings, telegram, x
+from digest import instagram, settings as digest_settings, subscriptions, telegram, x
 from digest.reading import SourceFailure, SourceResult, browser, mark_threads, needs_browser
 from digest.store import Store, iso
 from web import LIVE
 import reader
 
-HERE = Path(__file__).resolve().parent
 SOURCES = {"x": x, "telegram": telegram, "instagram": instagram}
 
 
@@ -32,8 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     if not prefs["enabled"]:
         print("the digest is off in its settings")
         return 0
-    subscriptions = json.loads((HERE / "subscriptions.json").read_text(encoding="utf-8"))
-    sources = list(subscriptions["sources"])
+    subscription_data = subscriptions.load()
+    sources = list(subscription_data["sources"])
     for network in digest_settings.RECOMMENDATION_NETWORKS:
         if digest_settings.recommendations(prefs, network):
             sources.append({
@@ -49,8 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     retryable: set[str] = set()
 
     def run(source: dict) -> None:
-        status = _run(source, subscriptions["folders"], store, options.verbose)
-        transient = status.pop("retryable", False)
+        status, transient = _run(source, subscription_data["folders"], store, options.verbose)
         statuses[source["id"]] = {
             "id": source["id"],
             "network": source["network"],
@@ -73,36 +70,39 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _run(source: dict, folders: list[str], store: Store, verbose: bool) -> dict:
-    module = SOURCES[source["network"]]
-
+def _run(source: dict, folders: list[str], store: Store, verbose: bool) -> tuple[dict, bool]:
+    """(the source's status, whether a transient failure makes it worth one more pass)."""
     def report(stage: str) -> None:
         if verbose:
             print(f"{source['id']}: {stage}")
 
     try:
+        module = SOURCES[source["network"]]
+    except KeyError:
+        return {"status": "failed", "detail": f"unknown network {source['network']}"}, False
+    try:
         result = _collect(source, module, store, report)
     except SourceFailure as failure:
         if source["network"] != "x" or not _warm_x(source, verbose):
             print(f"{source['id']}: failed: {failure.reason}")
-            return {"status": "failed", "detail": failure.reason}
+            return {"status": "failed", "detail": failure.reason}, False
         try:
             result = _collect(source, module, store, report)
         except SourceFailure as retry:
             print(f"{source['id']}: failed: {retry.reason}")
-            return {"status": "failed", "detail": retry.reason}
+            return {"status": "failed", "detail": retry.reason}, False
         except Exception as error:
             traceback.print_exc()
-            return {"status": "failed", "detail": str(error), "retryable": True}
+            return {"status": "failed", "detail": str(error)}, True
     except Exception as error:
         traceback.print_exc()
-        return {"status": "failed", "detail": str(error), "retryable": True}
+        return {"status": "failed", "detail": str(error)}, True
     mark_threads(result.posts, store)
     added = store.append(result.posts)
     print(f"{source['id']}: {added} new of {len(result.posts)} read")
     if result.note:
-        return {"status": "stale", "detail": result.note, "name": result.name}
-    return {"status": "ok", "name": result.name}
+        return {"status": "stale", "detail": result.note, "name": result.name}, False
+    return {"status": "ok", "name": result.name}, False
 
 
 def _collect(source: dict, module, store: Store, report) -> SourceResult:

@@ -135,7 +135,8 @@ def _gunzip(data: bytes) -> bytes:
     if data[:2] != b"\x1f\x8b":
         return data
     try:
-        return gzip.decompress(data)
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as stream:
+            return stream.read(200_000_000)
     except OSError:
         return data
 

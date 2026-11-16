@@ -119,20 +119,6 @@ final class DigestModelTests: XCTestCase {
         XCTAssertEqual(digests.current?.package.posts.count, 2)
     }
 
-    func testHidingAPostKeepsItOutOfTheSections() async throws {
-        let folder = root.appending(path: "FNMN")
-        let tar = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
-        let file = DigestFile(url: root, cache: root)
-        _ = try await file.add(tar: tar)
-        let digests = model()
-        await digests.sync(folder: folder)
-        let post = try XCTUnwrap(digests.post("x/1"))
-        digests.hide(post)
-        await digests.settle()
-        XCTAssertTrue(digests.hidden.contains("x/1"))
-        let saved = try await DigestFile(url: root, cache: root).loadIndex()
-        XCTAssertTrue(saved.hidden.contains("x/1"))
-    }
 
     func testFoldingASectionKeepsItOutOfTheIndex() async throws {
         let folder = root.appending(path: "FNMN")
@@ -149,28 +135,12 @@ final class DigestModelTests: XCTestCase {
         XCTAssertFalse(digests.folded.contains(fold))
     }
 
-    func testAHiddenPostLeavesItsSection() throws {
-        let sections = package().sections(hidden: ["x/1"])
-        XCTAssertEqual(sections.flatMap { $0.topics.flatMap(\.posts) }.map(\.id), ["x/2"])
-    }
-
     func testTheSearchFindsTextAndAuthor() {
         let package = package()
         XCTAssertEqual(package.posts(matching: "catalog").map(\.id), ["x/1"])
         XCTAssertEqual(package.posts(matching: "karpathy").count, 2)
     }
 
-    func testASyncBeforeOpenKeepsTheHiddenPosts() async throws {
-        let folder = root.appending(path: "FNMN")
-        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
-        let file = DigestFile(url: root, cache: root)
-        try await file.saveIndex(DigestIndex(hidden: ["x/2"]))
-        let digests = model()
-        await digests.sync(folder: folder)
-        XCTAssertEqual(digests.hidden, ["x/2"])
-        let saved = try await DigestFile(url: root, cache: root).loadIndex()
-        XCTAssertEqual(saved.hidden, ["x/2"])
-    }
 
     func testABadDeliveryKeepsTheGoodOneAndTheMagazine() async throws {
         let folder = root.appending(path: "FNMN")
@@ -209,17 +179,6 @@ final class DigestModelTests: XCTestCase {
         XCTAssertNil(digests.lastError)
     }
 
-    func testSearchUsesTheHiddenSet() async throws {
-        let folder = root.appending(path: "FNMN")
-        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
-        let digests = model()
-        await digests.sync(folder: folder)
-        let post = try XCTUnwrap(digests.post("x/1"))
-        digests.hide(post)
-        let package = try XCTUnwrap(digests.current?.package)
-        let found = package.posts(matching: "karpathy", hidden: digests.hidden)
-        XCTAssertEqual(found.map(\.id), ["x/2"])
-    }
 
     func testEveryNetworkAndContextKindHasADisplay() {
         for network in DigestPackage.Network.allCases {
@@ -277,45 +236,11 @@ final class DigestModelTests: XCTestCase {
         XCTAssertNil(digests.contextPost("x/9"))
     }
 
-    func testHidingAMarkNotifiesTheReader() async throws {
-        let folder = root.appending(path: "FNMN")
-        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
-        let digests = model()
-        await digests.sync(folder: folder)
-        let post = try XCTUnwrap(digests.post("x/1"))
-        let seen = expectation(description: "the reader sees the mark")
-        withObservationTracking {
-            _ = digests.hidden
-        } onChange: {
-            seen.fulfill()
-        }
-        digests.hide(post)
-        await fulfillment(of: [seen], timeout: 1)
-    }
 
-    func testARefreshBringsOnePicture() async throws {
-        let folder = root.appending(path: "FNMN")
-        _ = try writeDigest(package(), into: folder.appending(path: "digests"), name: "digest-1.tar")
-        let port = FakeServerPort()
-        port.media = [.init(path: "media/p.jpg", width: 2, height: 2)]
-        let connection = try ServerConnection(address: "https://example.com", token: "token")
-        let server = ServerLink(port: port, storage: FakeStorage(connection: connection))
-        let digests = DigestModel(file: DigestFile(url: root, cache: root), server: server)
-        await digests.sync(folder: folder)
-        let post = try XCTUnwrap(digests.post("x/1"))
-        let digest = try XCTUnwrap(digests.digest(of: "x/1"))
-        await digests.refresh(post, digest: digest)
-        XCTAssertEqual(digests.media(for: post).map(\.path), ["media/refresh-p.jpg"])
-        XCTAssertEqual(try Data(contentsOf: digest.url(of: "media/refresh-p.jpg")), Data("picture".utf8))
-        XCTAssertTrue(digests.refreshing.isEmpty)
-    }
 }
 
 @MainActor
 private final class FakeServerPort: ServerPort {
-    var media: [DigestPackage.Post.Media] = []
-    var data = Data("picture".utf8)
-
     func check(connection: ServerConnection) async throws {
     }
 
@@ -344,14 +269,6 @@ private final class FakeServerPort: ServerPort {
     }
 
     func forget(_ id: String, connection: ServerConnection) async throws {
-    }
-
-    func refreshDigestPost(_ postID: String, connection: ServerConnection) async throws -> [DigestPackage.Post.Media] {
-        media
-    }
-
-    func digestMedia(_ name: String, connection: ServerConnection) async throws -> Data {
-        data
     }
 }
 
