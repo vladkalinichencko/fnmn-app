@@ -12,14 +12,9 @@ struct ThreadScreen: View {
                 let own = post.comments.filter { isAuthor($0, of: post) }
                 let others = post.comments.filter { !isAuthor($0, of: post) }
                 VStack(alignment: .leading, spacing: Tokens.gap) {
-                    if let context = post.context, let parent = context.post, context.kind == .reply {
-                        parentCard(parent, kind: context.kind)
-                        PostCard(post: post, digest: digest, showsContext: false)
-                    } else {
-                        PostCard(post: post, digest: digest, showsContext: false)
-                        if let context = post.context, let parent = context.post {
-                            parentCard(parent, kind: context.kind)
-                        }
+                    PostCard(post: post, digest: digest, showsContext: false)
+                    if let context = post.context, let parent = context.post {
+                        ContextPostBlock(kind: context.kind, post: parent)
                     }
                     ForEach(Array(own.enumerated()), id: \.offset) { _, comment in
                         commentCard(comment)
@@ -59,21 +54,6 @@ struct ThreadScreen: View {
             return handle.caseInsensitiveCompare(post.author.handle) == .orderedSame
         }
         return comment.author == post.author.name
-    }
-
-    private func parentCard(_ post: DigestPackage.Post.ContextPost, kind: DigestPackage.Post.Context.Kind) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                PostContextLabel(kind: kind, text: "\(kind.action) \(post.author.name)")
-                Spacer(minLength: 8)
-                PostOpenButton(url: post.permalink, label: "Open the post that is quoted")
-            }
-            if let text = post.text {
-                PostText(text: text)
-            }
-        }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func contextPostCard(_ post: DigestPackage.Post.ContextPost) -> some View {

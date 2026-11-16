@@ -61,11 +61,12 @@ def main(argv: list[str] | None = None) -> int:
     buildable = [post for post in pending if post.id not in skipped]
     scores = topics.classify(_threads(buildable), prefs)
     filtered = []
-    for post in buildable:
-        if post.text and not post.folders and digest_settings.topics(prefs, post.network, post.source):
-            skipped[post.id] = "below the topic threshold"
+    for thread in _threads(buildable):
+        if _below_threshold(thread, prefs):
+            for post in thread:
+                skipped[post.id] = "below the topic threshold"
         else:
-            filtered.append(post)
+            filtered.extend(thread)
     buildable = filtered
     per_source: dict[str, list[list[Post]]] = {}
     for thread in _threads(buildable):
@@ -126,6 +127,18 @@ def next_build_time(after: datetime, hours: tuple[int, ...] = BUILD_HOURS) -> da
             return candidate
     tomorrow = local + timedelta(days=1)
     return tomorrow.replace(hour=hours[0], minute=0, second=0, microsecond=0)
+
+
+def _below_threshold(thread: list[Post], prefs: dict) -> bool:
+    """The threshold verdict belongs to the story, not to one message of it: `classify` gives every
+    member the same folders, so a thread under the bar drops whole instead of leaving its textless
+    posts to ship without the text that explained them."""
+    first = thread[0]
+    return (
+        bool(digest_settings.topics(prefs, first.network, first.source))
+        and any(post.text for post in thread)
+        and all(not post.folders for post in thread)
+    )
 
 
 def _threads(posts: list[Post]) -> list[list[Post]]:

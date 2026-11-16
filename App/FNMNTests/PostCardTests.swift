@@ -42,4 +42,10 @@ final class PostCardTests: XCTestCase {
         XCTAssertEqual(comment.handle, "h")
         XCTAssertEqual(comment.avatar?.path, "media/a.jpg")
     }
+
+    func testAPeekCarriesNoTappableLinks() {
+        let peek = PostCard.peekText("a [quoted link](https://x.com/some/status/1) inside")
+        XCTAssertTrue(peek.runs.allSatisfy { $0.link == nil })
+        XCTAssertTrue(peek.characters.contains("quoted link"))
+    }
 }

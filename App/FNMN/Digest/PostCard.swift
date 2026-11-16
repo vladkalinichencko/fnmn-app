@@ -106,9 +106,13 @@ struct PostCard: View {
         .plate(cornerRadius: Tokens.plateRadius)
     }
 
-    private static func peekText(_ markdown: String) -> AttributedString {
+    static func peekText(_ markdown: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
+        var text = (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
+        for range in text.runs.filter { $0.link != nil }.map(\.range) {
+            text[range].link = nil
+        }
+        return text
     }
 
     private func openThread() {
@@ -193,43 +197,18 @@ struct PostCard: View {
         }
     }
 
-    private func contextBlock(_ context: DigestPackage.Post.Context) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Rectangle()
-                .fill(.secondary.opacity(0.4))
-                .frame(width: 2)
-                .frame(maxHeight: .infinity)
-            VStack(alignment: .leading, spacing: 4) {
+    @ViewBuilder private func contextBlock(_ context: DigestPackage.Post.Context) -> some View {
+        if let post = context.post {
+            ContextPostBlock(kind: context.kind, post: post, lines: 3)
+        } else {
+            HStack(alignment: .top, spacing: 10) {
+                Rectangle()
+                    .fill(.secondary.opacity(0.4))
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
                 PostContextLabel(kind: context.kind, text: Self.contextLabel(context))
-                if let text = context.post?.text {
-                    Text(Self.peekText(text))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
             }
-        }
-        .padding(.leading, 8)
-        .modifier(ContextTap(context: context))
-    }
-
-    private struct ContextTap: ViewModifier {
-        let context: DigestPackage.Post.Context
-        @Environment(WindowNavigation.self) private var navigation
-
-        func body(content: Content) -> some View {
-            if context.post != nil {
-                content.contentShape(.rect).onTapGesture { open() }
-            } else {
-                content
-            }
-        }
-
-        private func open() {
-            guard let quoted = context.post else {
-                return
-            }
-            navigation.open(.thread(quoted.id))
+            .padding(.leading, 8)
         }
     }
 
@@ -282,5 +261,56 @@ struct PostCard: View {
     static func contextLabel(_ context: DigestPackage.Post.Context) -> String {
         let name = context.post.map { $0.author.name } ?? "a post that is gone"
         return "\(context.kind.action) \(name)"
+    }
+}
+
+struct ContextPostBlock: View {
+    let kind: DigestPackage.Post.Context.Kind
+    let post: DigestPackage.Post.ContextPost
+    var lines: Int? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Rectangle()
+                .fill(.secondary.opacity(0.4))
+                .frame(width: 2)
+                .frame(maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    PostContextLabel(kind: kind, text: "\(kind.action) \(post.author.name)")
+                    Spacer(minLength: 8)
+                    PostOpenButton(url: post.permalink, label: "Open the post in \(post.network.name)")
+                }
+                if let text = post.text {
+                    textView(text)
+                }
+            }
+        }
+        .padding(.leading, 8)
+        .modifier(ContextTap(postID: post.id))
+    }
+
+    @ViewBuilder private func textView(_ text: String) -> some View {
+        if let lines {
+            Text(PostCard.peekText(text))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(lines)
+        } else {
+            PostText(text: text)
+        }
+    }
+}
+
+private struct ContextTap: ViewModifier {
+    let postID: String
+    @Environment(WindowNavigation.self) private var navigation
+
+    func body(content: Content) -> some View {
+        content.contentShape(.rect).onTapGesture { open() }
+    }
+
+    private func open() {
+        navigation.open(.thread(postID))
     }
 }

@@ -2,6 +2,7 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import httpx
 from lxml import html
@@ -224,6 +225,41 @@ class XTests(unittest.TestCase):
             post = x._post(payload, "jack", source(), fake_web(), store, ["ml"])
             self.assertEqual(post.text, "the whole long body, straight from the payload")
 
+    def test_links_expand_to_their_addresses_and_a_trailing_media_link_drops(self):
+        payload = {
+            "id_str": "7",
+            "user": {"screen_name": "ada", "name": "Ada"},
+            "created_at": "2026-11-07T09:30:00.000Z",
+            "text": "read this https://t.co/abc and this https://t.co/def https://t.co/media",
+            "entities": {"urls": [
+                {"url": "https://t.co/abc", "expanded_url": "https://example.com/post"},
+                {"url": "https://t.co/def", "expanded_url": "https://example.com/other"},
+            ]},
+        }
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = x._post(payload, "ada", source(), fake_web(), store, ["ml"])
+            self.assertEqual(post.text, "read this https://example.com/post and this https://example.com/other")
+
+    def test_a_quoted_post_expands_its_links_too(self):
+        payload = {
+            "id_str": "8",
+            "user": {"screen_name": "ada", "name": "Ada"},
+            "created_at": "2026-11-07T09:30:00.000Z",
+            "text": "worth a read",
+            "quoted_tweet": {
+                "id_str": "9",
+                "user": {"screen_name": "bob", "name": "Bob"},
+                "created_at": "2026-11-07T09:00:00.000Z",
+                "text": "the article https://t.co/abc",
+                "entities": {"urls": [{"url": "https://t.co/abc", "expanded_url": "https://example.com/article"}]},
+            },
+        }
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = x._post(payload, "ada", source(), fake_web(), store, ["ml"])
+            self.assertEqual(post.context["post"]["text"], "the article https://example.com/article")
+
 
 def tweet(status_id: str, user: str = "ada", text: str = "a post", parent: str | None = None, **extra) -> dict:
     payload = {
@@ -411,6 +447,50 @@ class MarkThreadsTests(unittest.TestCase):
             self.assertEqual(fresh.thread, "telegram/chan/1")
 
 
+class TelegramUnreadTests(unittest.TestCase):
+    def collect(self, counts, stored=()):
+        source = {"id": "telegram/telegram", "network": "telegram", "channel": "telegram", "folders": ["tech"]}
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            store.append([fakes.post(post_id=post_id) for post_id in stored])
+            web = fake_web(text=lambda url: fixture("telegram.html"))
+            with patch.object(telegram, "_unread_counts", return_value=counts):
+                return telegram.collect(source, web, store, ["tech"], lambda stage: None)
+
+    def test_a_fully_read_channel_gives_nothing(self):
+        result = self.collect({"telegram": 0})
+        self.assertEqual(result.posts, [])
+        self.assertIn("unread", result.note)
+
+    def test_only_the_unread_tail_of_the_channel_is_collected(self):
+        result = self.collect({"telegram": 2})
+        self.assertEqual([post.id for post in result.posts], ["telegram/telegram/442", "telegram/telegram/452"])
+        self.assertIn("already read", result.note)
+
+    def test_a_channel_with_more_unread_than_fetched_keeps_them_all(self):
+        result = self.collect({"telegram": 50})
+        self.assertEqual(len(result.posts), 3)
+
+    def test_a_channel_the_cli_does_not_know_reads_by_recency(self):
+        result = self.collect({"other": 0})
+        self.assertEqual(len(result.posts), 3)
+
+    def test_an_unread_post_already_in_the_digest_is_not_new(self):
+        result = self.collect({"telegram": 2}, stored=["telegram/telegram/442"])
+        self.assertEqual([post.id for post in result.posts], ["telegram/telegram/452"])
+
+    def test_no_read_state_at_all_reads_by_recency(self):
+        result = self.collect(None)
+        self.assertEqual(len(result.posts), 3)
+
+    def test_the_tail_is_the_newest_messages_by_id(self):
+        posts = [fakes.post(post_id=f"telegram/chan/{index}") for index in (10, 30, 20)]
+        tail = telegram._unread_tail(posts, 2)
+        self.assertEqual([post.id for post in tail], ["telegram/chan/30", "telegram/chan/20"])
+        self.assertEqual(telegram._unread_tail(posts, 0), [])
+        self.assertEqual(len(telegram._unread_tail(posts, 9)), 3)
+
+
 class TelegramTimeTests(unittest.TestCase):
     def test_a_message_without_a_time_is_skipped(self):
         with TemporaryDirectory() as folder:
@@ -520,6 +600,48 @@ class InstagramTests(unittest.TestCase):
                 fake_web(), store, ["design"],
             )
             self.assertIsNone(post)
+
+    def test_a_reel_reads_its_video_from_the_embedded_json(self):
+        markup = (
+            '<html><head>'
+            '<meta property="og:title" content="Studio on Instagram: &quot;A reel&quot;">'
+            '<meta property="og:description" content="1,234 likes, 56 comments - Studio (@studio) on March 3, 2026: &quot;A reel&quot;">'
+            '<meta property="og:image" content="https://scontent.cdninstagram.com/post-1.jpg">'
+            '</head><body><article>'
+            '<script type="application/json">{"items":[{"video_versions":['
+            '{"type":101,"width":480,"height":854,"url":"https:\\/\\/scontent.cdninstagram.com\\/v-small.mp4"},'
+            '{"type":101,"width":720,"height":1280,"url":"https:\\/\\/scontent.cdninstagram.com\\/v-big.mp4"}'
+            ']}]}</script>'
+            '<time datetime="2026-03-03T10:00:00.000Z">March 3, 2026</time>'
+            '</article></body></html>'
+        )
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = instagram._post(
+                FakePage(markup), "studio", "reel", "CxYzAbCdEfG",
+                {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
+                fake_web(), store, ["design"],
+            )
+            self.assertIsNotNone(post.video)
+            self.assertTrue(post.video["file"]["path"].endswith(".mp4"))
+
+    def test_the_page_video_picks_the_largest_version_and_unescapes_the_address(self):
+        markup = (
+            '<script>{"video_versions":['
+            '{"width":480,"height":854,"url":"https:\\/\\/scontent.cdninstagram.com\\/a.mp4\\u0026oe=1"},'
+            '{"width":720,"height":1280,"url":"https:\\/\\/scontent.cdninstagram.com\\/b.mp4"}'
+            ']}</script>'
+        )
+        self.assertEqual(
+            instagram._page_video(markup),
+            "https://scontent.cdninstagram.com/b.mp4",
+        )
+        escaped = markup.replace('"', "&quot;")
+        self.assertEqual(
+            instagram._page_video(escaped),
+            "https://scontent.cdninstagram.com/b.mp4",
+        )
+        self.assertIsNone(instagram._page_video("<html><body>no video</body></html>"))
 
     def test_a_post_page_is_opened_under_its_author(self):
         """The bare `/p/` URL answers the logged-in browser a rate-limited error page; the author-scoped

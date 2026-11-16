@@ -149,8 +149,16 @@ def _note_full(payload: dict) -> str | None:
     return None
 
 
+_TRAILING_LINK = re.compile(r"(?:\s*https://t\.co/\w+)+\s*$")
+
+
 def _payload_text(payload: dict) -> str | None:
-    return _note_full(payload) or ((payload.get("text") or "").strip() or None)
+    text = _note_full(payload) or ((payload.get("text") or "").strip() or None)
+    if text is None:
+        return None
+    for entity in (payload.get("entities") or {}).get("urls") or []:
+        text = text.replace(entity.get("url") or "", entity.get("expanded_url") or entity.get("url") or "")
+    return _TRAILING_LINK.sub("", text).strip() or None
 
 
 def _entry(payload: dict, handle: str, source: dict, web: Web, store, folders: list[str], fetch, page) -> list[Post]:

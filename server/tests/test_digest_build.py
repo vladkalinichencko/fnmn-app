@@ -204,6 +204,38 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(set(skipped), {"x/0", "x/1", "x/2"})
             self.assertTrue(all(reason == "over the digest limit" for reason in skipped.values()))
 
+    def test_a_below_threshold_thread_drops_whole_and_an_above_one_keeps_its_textless_posts(self):
+        from unittest import mock
+
+        from digest.topics import lexical
+
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            fnmn.mkdir(parents=True)
+            (fnmn / "digest-settings.json").write_text(json.dumps({
+                "networks": {"x": {"topics": ["small model"]}},
+            }), encoding="utf-8")
+            store = Store(root)
+            below_lead = post("x/0", text="I baked bread and fed the cat", folders=())
+            below_lead.thread = "x/0"
+            below_photo = post("x/1", text="", folders=())
+            below_photo.thread = "x/0"
+            below_photo.media = [store.save_media("x/1", 0, png(640, 480), "png")]
+            above_lead = post("x/2", text="small model release notes", folders=())
+            above_lead.thread = "x/2"
+            above_photo = post("x/3", text="", folders=())
+            above_photo.thread = "x/2"
+            above_photo.media = [store.save_media("x/3", 0, png(640, 480), "png")]
+            store.append([below_lead, below_photo, above_lead, above_photo])
+            with mock.patch("digest.topics.default_scorer", return_value=lexical):
+                self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            self.assertEqual([item["id"] for item in package["posts"]], ["x/2", "x/3"])
+            skipped = Store(root).builds()[-1]["skipped"]
+            self.assertEqual(skipped, {"x/0": "below the topic threshold", "x/1": "below the topic threshold"})
+
     def test_the_limit_caps_each_source_not_the_whole_delivery(self):
         with TemporaryDirectory() as folder:
             root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"

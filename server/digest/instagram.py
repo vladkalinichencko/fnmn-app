@@ -4,6 +4,7 @@ networks, so a run reads a small number of new posts and leaves the rest for the
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 
@@ -166,7 +167,8 @@ def _post(tab, handle: str, kind: str, shortcode: str, source: dict, web: Web, s
             media.append(saved)
         else:
             errors += 1
-    video_urls = dom["videos"] or [
+    page_video = _page_video(markup)
+    video_urls = dom["videos"] or ([page_video] if page_video else []) or [
         url for url in (_meta(document, "og:video:secure_url"), _meta(document, "og:video")) if url
     ]
     video = None
@@ -193,6 +195,48 @@ def _post(tab, handle: str, kind: str, shortcode: str, source: dict, web: Web, s
         folders=folders,
         media_errors=errors,
     )
+
+
+def _page_video(markup: str) -> str | None:
+    """The post's mp4 as the page's embedded JSON names it: the player keeps its `video` element
+    empty until it plays, so the DOM and the og tags often carry no fetchable address. The first
+    `video_versions` block is the first attachment's, the order the carousel shows them in."""
+    text = markup.replace("&quot;", '"')
+    block = re.search(r'"video_versions"\s*:\s*\[', text)
+    if block:
+        section = text[block.end():block.end() + 40000]
+        end = section.find("]")
+        if end > 0:
+            section = section[:end]
+        best_url, best_area = None, 0
+        for item in re.findall(r"\{[^{}]*\}", section):
+            url = _json_string(item, "url")
+            if url is None:
+                continue
+            area = _json_int(item, "width") * _json_int(item, "height")
+            if area > best_area:
+                best_url, best_area = url, area
+        if best_url is not None:
+            return best_url
+    match = re.search(r'"video_url"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    return _unescape(match.group(1)) if match else None
+
+
+def _json_string(item: str, name: str) -> str | None:
+    match = re.search(rf'"{name}"\s*:\s*"((?:[^"\\]|\\.)*)"', item)
+    return _unescape(match.group(1)) if match else None
+
+
+def _json_int(item: str, name: str) -> int:
+    match = re.search(rf'"{name}"\s*:\s*(\d+)', item)
+    return int(match.group(1)) if match else 0
+
+
+def _unescape(raw: str) -> str:
+    try:
+        return json.loads(f'"{raw}"').replace("&amp;", "&")
+    except json.JSONDecodeError:
+        return raw.replace("\\/", "/").replace("&amp;", "&")
 
 
 def _dom_media(tab) -> dict:
