@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from package import Delivery, delivery_name, read_delivery, stable_id, write_delivery
+from package import Delivery, delivery_name, read_delivery, stable_id, write_delivery, write_delivery_from
 from collect.prepare_browser_library import repackage
 from collect.publish_books import publish
 
@@ -38,6 +38,28 @@ class DeliveryTests(unittest.TestCase):
         write_delivery(path, Delivery({"material": {"title": "B"}}))
         self.assertEqual(read_delivery(path).package["material"]["title"], "B")
         self.assertEqual([file.name for file in self.folder.iterdir()], ["a.tar"])
+
+    def test_the_same_file_named_twice_is_written_once(self):
+        source = self.folder / "x.png"
+        source.write_bytes(b"png")
+        path = self.folder / "a.tar"
+        write_delivery_from(path, {}, [("media/x.png", source), ("media/x.png", source)])
+        with tarfile.open(path) as archive:
+            self.assertEqual(archive.getnames().count("media/x.png"), 1)
+
+    def test_two_different_files_under_one_name_still_fail(self):
+        first = self.folder / "x.png"
+        first.write_bytes(b"png")
+        second = self.folder / "y.png"
+        second.write_bytes(b"other")
+        with self.assertRaises(ValueError):
+            write_delivery_from(self.folder / "a.tar", {}, [("media/x.png", first), ("media/x.png", second)])
+
+    def test_a_failed_delivery_write_leaves_no_incoming(self):
+        path = self.folder / "a.tar"
+        with self.assertRaises(FileNotFoundError):
+            write_delivery_from(path, {}, [("media/x.png", self.folder / "missing.png")])
+        self.assertFalse(path.with_suffix(".incoming").exists())
 
     def test_an_exported_book_becomes_a_delivery_with_its_pdf_beside_it(self):
         book = self.folder / "book"

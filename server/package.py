@@ -167,26 +167,37 @@ def write_delivery(path: Path, delivery: Delivery) -> None:
     """USTAR, so the app's reader needs no PAX headers; a path too long for it fails here."""
     path.parent.mkdir(parents=True, exist_ok=True)
     incoming = path.with_suffix(".incoming")
-    with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
-        _add(archive, PACKAGE_NAME, json.dumps(delivery.package, ensure_ascii=False).encode())
-        for name, blob in delivery.files.items():
-            _add(archive, name, blob)
-    replace_if_changed(incoming, path)
+    try:
+        with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
+            _add(archive, PACKAGE_NAME, json.dumps(delivery.package, ensure_ascii=False).encode())
+            for name, blob in delivery.files.items():
+                _add(archive, name, blob)
+        replace_if_changed(incoming, path)
+    except Exception:
+        incoming.unlink(missing_ok=True)
+        raise
 
 
 def write_delivery_from(path: Path, package: dict, files: list[tuple[str, Path]]) -> None:
-    """The same archive, for files that already live on disk: a digest's media."""
+    """The same archive, for files that already live on disk: a digest's media. Two entries naming
+    one file — a video's poster is often its first picture — are the same member, written once."""
     path.parent.mkdir(parents=True, exist_ok=True)
     incoming = path.with_suffix(".incoming")
-    seen = {PACKAGE_NAME}
-    with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
-        _add(archive, PACKAGE_NAME, json.dumps(package, ensure_ascii=False).encode())
-        for name, source in files:
-            if name in seen:
-                raise ValueError(f"the delivery names {name} twice")
-            seen.add(name)
-            _add_path(archive, name, source)
-    replace_if_changed(incoming, path)
+    seen = {PACKAGE_NAME: None}
+    try:
+        with tarfile.open(incoming, "w", format=tarfile.USTAR_FORMAT) as archive:
+            _add(archive, PACKAGE_NAME, json.dumps(package, ensure_ascii=False).encode())
+            for name, source in files:
+                if name in seen:
+                    if seen[name] == source:
+                        continue
+                    raise ValueError(f"the delivery names {name} twice")
+                seen[name] = source
+                _add_path(archive, name, source)
+        replace_if_changed(incoming, path)
+    except Exception:
+        incoming.unlink(missing_ok=True)
+        raise
 
 
 def write_if_changed(path: Path, blob: bytes) -> None:

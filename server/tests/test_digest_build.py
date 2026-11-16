@@ -73,6 +73,25 @@ class BuildTests(unittest.TestCase):
             self.assertIn("media/x-1-poster.png", members)
             self.assertEqual(package["posts"][0]["video"]["file"]["path"], "media/x-1-video.mp4")
 
+    def test_a_poster_that_is_the_first_picture_is_written_once(self):
+        with TemporaryDirectory() as folder:
+            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            store = Store(root)
+            clip = post("x/1", text=None)
+            poster = store.save_media("x/1", 0, png(640, 480), "png")
+            clip.media = [poster]
+            clip.video = {
+                "poster": poster,
+                "file": store.save_file("x/1", "video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
+            }
+            store.append([clip])
+            self.build(root, fnmn)
+            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                names = opened.getnames()
+            self.assertEqual(names.count("media/x-1-0.png"), 1)
+            self.assertIn("media/x-1-video.mp4", names)
+
     def test_the_digest_reads_through_the_article_delivery_reader(self):
         with TemporaryDirectory() as folder:
             root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"

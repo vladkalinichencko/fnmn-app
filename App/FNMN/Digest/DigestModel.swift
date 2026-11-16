@@ -176,7 +176,7 @@ private final class DigestDeliveries: DeliveryTarget {
         guard !archives.isEmpty else {
             return
         }
-        try await file.evict(keeping: 5)
+        try await file.evict(keeping: 4)
         try await file.saveIndex(index)
     }
 }
