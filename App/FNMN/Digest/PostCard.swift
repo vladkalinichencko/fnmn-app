@@ -109,7 +109,7 @@ struct PostCard: View {
     static func peekText(_ markdown: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         var text = (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
-        for range in text.runs.filter { $0.link != nil }.map(\.range) {
+        for range in text.runs.filter({ $0.link != nil }).map(\.range) {
             text[range].link = nil
         }
         return text
