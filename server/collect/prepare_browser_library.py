@@ -191,11 +191,12 @@ def main() -> None:
     parser.add_argument("--repackage", action="store_true", help="Apply albums and Markdown rules to prepared deliveries")
     parser.add_argument("--links", action="store_true", help="Save every material not prepared yet as a link delivery, without fetching")
     parser.add_argument("--refetch", action="store_true", help="Read prepared web pages again; a page that fails keeps its delivery")
+    parser.add_argument("--albums", type=Path, default=ALBUMS, help="url → album table; defaults to browser_albums.tsv")
     args = parser.parse_args()
     library = json.loads(args.input.read_text(encoding="utf-8"))
     if library["review"] or library["errors"]:
         parser.error("resolve browser-library review and errors before preparation")
-    rows = material_rows(library, read_albums())
+    rows = material_rows(library, read_albums(args.albums))
     args.output.joinpath("deliveries").mkdir(parents=True, exist_ok=True)
     write_if_changed(args.output / "catalog.json", args.input.read_bytes())
     write_if_changed(args.output / "index.json", json.dumps(rows, ensure_ascii=False, indent=2).encode())
@@ -212,7 +213,7 @@ def main() -> None:
         return
     selected = [row for row in rows if args.kind == "all" or ("video" if video_id_from_url(row["url"]) else "web") == args.kind]
     if args.refetch:
-        selected = [row for row in selected if not video_id_from_url(row["url"]) and _delivery(args.output, row).exists()]
+        selected = [row for row in selected if not video_id_from_url(row["url"]) and _article_path(args.output, row["url"]).exists()]
     if args.limit is not None:
         selected = selected[:args.limit]
     errors_path = args.output / ("errors.json" if args.kind == "all" else f"errors-{args.kind}.json")

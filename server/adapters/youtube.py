@@ -8,6 +8,7 @@ stops the import instead of silently leaving the transcript empty.
 from __future__ import annotations
 
 import html
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -19,6 +20,16 @@ from web import Web
 _ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _OPTIONS = {"skip_download": True, "noplaylist": True, "quiet": True, "noprogress": True,
             "js_runtimes": {"node": {"path": "node"}}}
+
+
+def _options() -> dict:
+    """Bulk playlist imports can trip YouTube's bot check; REED_YT_COOKIES points yt-dlp at a
+    cookies.txt export when plain requests start failing."""
+    options = dict(_OPTIONS)
+    cookies = os.environ.get("REED_YT_COOKIES")
+    if cookies:
+        options["cookiefile"] = cookies
+    return options
 
 
 def read(url: str, web: Web, report: Report) -> Video:
@@ -54,7 +65,7 @@ def download(url: str, folder: Path, report: Report) -> Path:
             report("downloadingVideo", int(state.get("downloaded_bytes") or 0) >> 20, int(total) >> 20 if total else None)
 
     options = {
-        **_OPTIONS,
+        **_options(),
         "skip_download": False,
         "format": "bv*[ext=mp4][height<=720]+ba[ext=m4a]/b[ext=mp4][height<=720]/b[ext=mp4]",
         "merge_output_format": "mp4",
@@ -134,7 +145,7 @@ def _clean(text: str) -> str:
 def _info(url: str) -> dict:
     import yt_dlp
 
-    with yt_dlp.YoutubeDL(_OPTIONS) as ydl:
+    with yt_dlp.YoutubeDL(_options()) as ydl:
         info = ydl.extract_info(url, download=False)
     if not isinstance(info, dict):
         raise ValueError("yt-dlp returned no video")
@@ -166,7 +177,7 @@ def _download_cues(url: str, language: str) -> list[tuple[float, str]]:
     import yt_dlp
 
     with tempfile.TemporaryDirectory() as directory:
-        options = {**_OPTIONS, "writesubtitles": True, "writeautomaticsub": True, "subtitleslangs": [language],
+        options = {**_options(), "writesubtitles": True, "writeautomaticsub": True, "subtitleslangs": [language],
                    "subtitlesformat": "vtt", "outtmpl": str(Path(directory) / "%(id)s")}
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.extract_info(url, download=True)
