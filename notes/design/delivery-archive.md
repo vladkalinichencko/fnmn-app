@@ -2,7 +2,7 @@
 
 ## Задача
 
-Mac отдаёт подготовленную статью одним JSON: поля `ImportPackage` и `files`, где каждая картинка лежит строкой base64. Этот формат идёт в трёх местах: ответ `GET /jobs/{id}/package`, файлы `deliveries/<hash>.json` из `prepare_browser_library.py` (около 1,8 ГБ на 1471 поставку, почти всё картинки) и папка FNMN в iCloud, куда их копирует `publish_library.py`. Приложение читает поставку целиком в память (`MacServiceClient.package`, `LibraryFile.BrowserDelivery`) и декодирует каждую картинку, а base64 раздувает картинки на треть. Решено: одна поставка — один несжатый tar, внутри первым `package.json`, за ним файлы по их относительным путям; готовые поставки один раз перегоняются на Mac, приложение читает только новый формат. Выбранный вручную `.json` остаётся пакетом без файлов.
+Mac отдаёт подготовленную статью одним JSON: поля `ImportPackage` и `files`, где каждая картинка лежит строкой base64. Этот формат идёт в трёх местах: ответ `GET /jobs/{id}/package`, файлы `deliveries/<hash>.json` из `prepare_browser_library.py` (около 1,8 ГБ на 1471 поставку, почти всё картинки) и папка REED в iCloud, куда их копирует `publish_library.py`. Приложение читает поставку целиком в память (`MacServiceClient.package`, `LibraryFile.BrowserDelivery`) и декодирует каждую картинку, а base64 раздувает картинки на треть. Решено: одна поставка — один несжатый tar, внутри первым `package.json`, за ним файлы по их относительным путям; готовые поставки один раз перегоняются на Mac, приложение читает только новый формат. Выбранный вручную `.json` остаётся пакетом без файлов.
 
 ## Использование
 
@@ -13,7 +13,7 @@ let archive = try await mac.port.delivery(of: job.id, connection: connection)   
 try await library.store(archive: archive)
 ```
 
-Приложение, папка FNMN и выбранный файл:
+Приложение, папка REED и выбранный файл:
 
 ```swift
 for url in deliveries where url.pathExtension == "tar" {
@@ -38,7 +38,7 @@ write_delivery(path.with_suffix(".tar"), Delivery(package, files))
 
 ## Форма
 
-FNMNCore:
+REEDCore:
 
 ```swift
 /// One prepared material as the Mac delivers it: an uncompressed USTAR archive whose first entry is
@@ -81,7 +81,7 @@ def read_delivery(path: Path) -> Delivery                    # tar; старый
 
 ## Принятые компромиссы
 
-- Принимаем свой разбор USTAR в FNMNCore (заголовок 512 байт, размер в восьмеричной записи, выравнивание данных до 512) в обмен на отсутствие зависимости: в iOS нет открытого API для tar.
+- Принимаем свой разбор USTAR в REEDCore (заголовок 512 байт, размер в восьмеричной записи, выравнивание данных до 512) в обмен на отсутствие зависимости: в iOS нет открытого API для tar.
 - Принимаем ограничение USTAR на длину пути (имя до 100 символов, вместе с префиксом до 255) в обмен на то, что читатель не разбирает заголовки PAX. Mac пишет `format=tarfile.USTAR_FORMAT` и падает на слишком длинном пути, а не пишет PAX молча.
 - Принимаем разовый перегон 1,8 ГБ на Mac в обмен на один путь чтения в приложении.
 

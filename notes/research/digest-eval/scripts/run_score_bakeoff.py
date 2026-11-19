@@ -1,8 +1,8 @@
 import json, sys, time, numpy as np
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from sentence_transformers import SentenceTransformer
 
-OUT='/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/notes/research/digest-eval'
+OUT='/Users/vladislavkalinichenko/VSCodeProjects/REED App/notes/research/digest-eval'
 model=SentenceTransformer("Qwen/Qwen3-Embedding-0.6B")
 QP="Instruct: Classify the topic of this social media post.\nQuery: "
 
@@ -90,7 +90,7 @@ for _ in range(100):
 results['scorer_overhead_ms_per_100posts']=round((time.time()-t)*10,3)
 
 # ============ PART 2: live X ============
-raw=[json.loads(l) for l in open('/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server/digest/out/posts.jsonl')]
+raw=[json.loads(l) for l in open('/Users/vladislavkalinichenko/VSCodeProjects/REED App/server/digest/out/posts.jsonl')]
 xs=[p for p in raw if p.get('network')=='x' and (p.get('text') or '').strip()]
 xs.sort(key=lambda p:p.get('posted_at',''),reverse=True); xs=xs[:400]
 XT=["film updates","software development","web design","research","artificial intelligence","deep learning"]

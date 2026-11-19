@@ -1,5 +1,5 @@
 import json, sys, time
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from transformers import pipeline
 import numpy as np
 

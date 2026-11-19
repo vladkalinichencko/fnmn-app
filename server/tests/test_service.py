@@ -18,7 +18,7 @@ from tests import fakes
 
 class ServiceTests(unittest.TestCase):
     def setUp(self):
-        patcher = patch.dict(os.environ, {"FNMN_TOKEN": "test-token"})
+        patcher = patch.dict(os.environ, {"REED_TOKEN": "test-token"})
         patcher.start()
         self.addCleanup(patcher.stop)
         self.client = TestClient(app, headers={"Authorization": "Bearer test-token"})

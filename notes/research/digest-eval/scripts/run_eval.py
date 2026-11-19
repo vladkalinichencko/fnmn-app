@@ -1,6 +1,6 @@
 """Score digest posts under different zero-shot configs; dump raw scores for offline analysis."""
 import json, sys, time
-sys.path.insert(0, '/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0, '/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from transformers import pipeline
 
 TG_TOPICS = ["personal blog","ai news","startups","design thoughts","research"]

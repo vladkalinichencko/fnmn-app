@@ -127,7 +127,7 @@ def _page(content: str, files: dict[str, bytes]) -> str:
     whole = content.lstrip()[:15].lower().startswith(("<!doctype", "<html"))
     path = asset_path(content, ".html", "interactive-")
     files[path] = (content if whole else _PAGE.replace("{content}", content)).encode()
-    return f"```fnmn-interactive\n{path}\n```"
+    return f"```reed-interactive\n{path}\n```"
 
 
 def _fenced(content: str, language: str) -> str:

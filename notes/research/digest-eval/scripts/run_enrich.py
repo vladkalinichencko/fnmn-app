@@ -1,5 +1,5 @@
 import json, sys, numpy as np
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from sentence_transformers import SentenceTransformer
 from collections import Counter
 
@@ -11,7 +11,7 @@ canon=["kpop","magazine_covers","graphic_design","film","ai_industry","ml_resear
 TE=model.encode(["passage: "+t for t in TOPICS],normalize_embeddings=True)
 # need author info: reload posts
 posts={}
-for l in open('/Users/vladislavkalinichenko/Library/Application Support/FNMN/digest-out/posts.jsonl'):
+for l in open('/Users/vladislavkalinichenko/Library/Application Support/REED/digest-out/posts.jsonl'):
     p=json.loads(l); posts[p['id']]=p
 
 def variants(p):

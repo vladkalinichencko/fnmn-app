@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "FNMNCore",
+    name: "REEDCore",
     platforms: [.iOS(.v27), .macOS(.v27)],
-    products: [.library(name: "FNMNCore", targets: ["FNMNCore"])],
+    products: [.library(name: "REEDCore", targets: ["REEDCore"])],
     targets: [
-        .target(name: "FNMNCore"),
+        .target(name: "REEDCore"),
         .testTarget(
-            name: "FNMNCoreTests",
-            dependencies: ["FNMNCore"],
+            name: "REEDCoreTests",
+            dependencies: ["REEDCore"],
             resources: [.copy("Fixtures")]
         ),
     ]

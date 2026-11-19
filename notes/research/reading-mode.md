@@ -1,6 +1,6 @@
 # Режимы чтения и формулы в HTML
 
-Вопрос для FNMN: движки Reader Mode сводят страницу к статье одним общим методом или белым списком тегов вроде `article` / `d-article` / `dt-math`? Отдельно: есть ли у LaTeX на вебе носитель формулы, который не сводится к «эта строка похожа на математику»?
+Вопрос для REED: движки Reader Mode сводят страницу к статье одним общим методом или белым списком тегов вроде `article` / `d-article` / `dt-math`? Отдельно: есть ли у LaTeX на вебе носитель формулы, который не сводится к «эта строка похожа на математику»?
 
 Проверено по первичным источникам ниже. Блоги и чужие пересказы не использовались.
 
@@ -38,7 +38,7 @@ DOM Distiller это открытый движок упрощённых стат
 
 Есть узкий shortcut по ориентирам: если на странице ровно один видимый `ARTICLE`, обход начинается с него; иначе ищутся `[itemscope][itemtype*="Article"]` и `Posting`. https://raw.githubusercontent.com/chromium/dom-distiller/master/java/org/chromium/distiller/DomUtil.java
 
-Это сужение корня обхода, а не FNMN-стиль «если тег `dt-math`, то формула». После shortcut всё равно работает boilerpipe-классификатор. https://raw.githubusercontent.com/chromium/dom-distiller/master/java/org/chromium/distiller/ContentExtractor.java
+Это сужение корня обхода, а не REED-стиль «если тег `dt-math`, то формула». После shortcut всё равно работает boilerpipe-классификатор. https://raw.githubusercontent.com/chromium/dom-distiller/master/java/org/chromium/distiller/ContentExtractor.java
 
 В `DomConverter` теги `SCRIPT`, `NOSCRIPT`, `IFRAME` и `svg` пропускаются и не попадают в документ. https://raw.githubusercontent.com/chromium/dom-distiller/master/java/org/chromium/distiller/webdocument/DomConverter.java
 
@@ -90,7 +90,7 @@ KaTeX при сборке MathML кладёт исходный TeX в `<annotati
 
 ## Trafilatura
 
-FNMN уже зависит от Trafilatura. README описывает rule-based extractor основного текста с fallback на jusText и readability-lxml. https://github.com/adbar/trafilatura/blob/master/README.md
+REED уже зависит от Trafilatura. README описывает rule-based extractor основного текста с fallback на jusText и readability-lxml. https://github.com/adbar/trafilatura/blob/master/README.md
 
 Основной путь: чистка дерева, затем `extract_content` по набору `BODY_XPATH` (часто `article` / `main` / `section` / `div` с типичными class/id), разбор узлов из каталога тегов, при коротком результате идут recovery и внешние fallback. https://raw.githubusercontent.com/adbar/trafilatura/master/trafilatura/main_extractor.py
 
@@ -108,13 +108,13 @@ FNMN уже зависит от Trafilatura. README описывает rule-base
 
 Custom elements издателя Trafilatura как особые корни статьи не называет. Неизвестный тег либо попадёт под xpath/очистку по общим правилам, либо останется шумом вне `TAG_CATALOG`. https://raw.githubusercontent.com/adbar/trafilatura/master/trafilatura/settings.py
 
-## Суждение для FNMN
+## Суждение для REED
 
 Продакшен-движки статьи (Readability, DOM Distiller, Trafilatura) делают одно и то же по роду работы: общий scorер или xpath/эвристика основного текста плюс чистка boilerplate. Они не держат длинный белый список фирменных тегов сайта.
 
 Узкий ориентир `article` / schema.org Article у Distiller и xpath на `article` у Trafilatura это вспомогательный landmark внутри общей процедуры, а не аналог наших `d-article` / `dt-article` / `dt-math`.
 
-Особые имена Distill и прочих обёрток у FNMN это site wrapper. Их не стоит тащить в ядро парсера как будто так делают Reader Mode.
+Особые имена Distill и прочих обёрток у REED это site wrapper. Их не стоит тащить в ядро парсера как будто так делают Reader Mode.
 
 Формулу индустрия ищет не по «похоже на LaTeX», а по маленькому набору стандартных носителей: `<math>` (presentation / MathML Core), `annotation encoding="application/x-tex"`, иногда `alttext`, и `script type="math/tex"`. Текущий `master` Trafilatura уже берёт annotation и `alttext`. Поставленная сюда 2.0.0 формулу выбрасывает. Парсер веб-статьи берёт формулы из тех же носителей сам.
 

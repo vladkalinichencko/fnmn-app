@@ -1,4 +1,4 @@
-"""Builds the reader's bundled fonts into App/FNMN/Fonts.
+"""Builds the reader's bundled fonts into App/REED/Fonts.
 
 Each family ships as four static faces (Regular, Bold, Italic, BoldItalic), so SwiftUI's bold and italic land on
 real faces. Libron and Atkinson Hyperlegible Next have no Cyrillic, and CoreText's fallback for a missing glyph
@@ -22,7 +22,7 @@ from fontTools.ttLib import TTFont
 from fontTools.ttLib.scaleUpem import scale_upem
 from fontTools.varLib import instancer
 
-OUT = Path(__file__).resolve().parents[2] / "App/FNMN/Fonts"
+OUT = Path(__file__).resolve().parents[2] / "App/REED/Fonts"
 GOOGLE = "https://raw.githubusercontent.com/google/fonts/main/ofl/"
 CYRILLIC = list(range(0x0400, 0x0530)) + [0x2116]
 STYLES = {"Regular": (400, False), "Bold": (700, False), "Italic": (400, True), "BoldItalic": (700, True)}

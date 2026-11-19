@@ -26,7 +26,7 @@ from package import Delivery, file_delivery, link_delivery, write_delivery
 from web import LIVE
 
 _LOG = logging.getLogger("uvicorn.error")
-_FILES = Path(tempfile.gettempdir()) / "fnmn-job-files"
+_FILES = Path(tempfile.gettempdir()) / "reed-job-files"
 
 _POOL = ThreadPoolExecutor(max_workers=4)
 _JOBS: dict[str, Job] = {}

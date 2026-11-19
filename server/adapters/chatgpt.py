@@ -157,7 +157,7 @@ def _app(payload: str, files: dict[str, bytes]) -> str:
         return ""
     path = asset_path(content, ".html", "interactive-")
     files[path] = _APP_PAGE.replace("{content}", content).encode()
-    return f"\n\n```fnmn-interactive\n{path}\n```\n\n"
+    return f"\n\n```reed-interactive\n{path}\n```\n\n"
 
 
 def _normalize_chunk(text: str) -> str:

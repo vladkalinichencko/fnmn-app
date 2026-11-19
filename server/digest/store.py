@@ -113,7 +113,7 @@ class Store:
         if self._posts_cache is not None and self._posts_cache[0] == signature:
             return self._posts_cache[1]
         posts = []
-        for line in self.posts_file.read_text(encoding="utf-8").splitlines():
+        for line in self.posts_file.read_text(encoding="utf-8").split("\n"):
             try:
                 posts.append(Post(**json.loads(line)))
             except (json.JSONDecodeError, TypeError):
@@ -130,6 +130,8 @@ class Store:
         existing = self.posts()
         known = {post.id for post in existing}
         signatures = []
+        texts: list[tuple[str, str, str]] = []
+        wanted = {(post.network, post.source) for post in posts}
         for post in existing:
             if not post.text:
                 continue
@@ -138,6 +140,8 @@ class Store:
                 cached = (post.network, _signature(post.text))
                 self._sig_cache[post.id] = cached
             signatures.append(cached)
+            if (post.network, post.source) in wanted:
+                texts.append((post.network, post.source, flat_text(post.text)))
         fresh = []
         for post in posts:
             if post.id in known:
@@ -147,9 +151,17 @@ class Store:
                 network == post.network and _similar(signature, other) for network, other in signatures
             ):
                 continue
+            flat = flat_text(post.text)
+            if flat and not (post.media or post.video) and any(
+                network == post.network and source == post.source and prefix_of(flat, other)
+                for network, source, other in texts
+            ):
+                continue
             fresh.append(post)
             if signature:
                 signatures.append((post.network, signature))
+            if flat:
+                texts.append((post.network, post.source, flat))
         if not fresh:
             return 0
         self.root.mkdir(parents=True, exist_ok=True)
@@ -182,7 +194,7 @@ class Store:
     def builds(self) -> list[dict]:
         if not self.builds_file.exists():
             return []
-        return [json.loads(line) for line in self.builds_file.read_text(encoding="utf-8").splitlines() if line]
+        return [json.loads(line) for line in self.builds_file.read_text(encoding="utf-8").split("\n") if line]
 
     def built_ids(self, deliveries: Path | None = None) -> set[str]:
         """The post ids a build record consumed. A `pending` record — written before its tar — counts
@@ -243,6 +255,28 @@ def _similar(first: frozenset[str], second: frozenset[str]) -> bool:
     if not first or not second:
         return False
     return len(first & second) / len(first | second) >= 0.85
+
+
+def flat_text(text: str | None) -> str:
+    """A post's text with every whitespace run folded and case dropped — the form two spellings of
+    the same words share."""
+    if not text:
+        return ""
+    return re.sub(r"\s+", " ", text).strip().casefold()
+
+
+_PREFIX_MIN = 120
+_ELLIPSIS = re.compile(r"(?:…|\.\.\.)\s*$")
+
+
+def prefix_of(shorter: str, longer: str) -> bool:
+    """`shorter` opens `longer` verbatim — a channel that reposts its text as a media caption gets
+    the caption cut at an ellipsis, and the cut copy is the same post. Only a long matching prefix
+    counts; two posts that merely start alike stay."""
+    for cut in (shorter, _ELLIPSIS.sub("", shorter)):
+        if len(cut) >= _PREFIX_MIN and len(longer) > len(cut) and longer.startswith(cut):
+            return True
+    return False
 
 
 def image_size(data: bytes) -> tuple[int, int] | None:

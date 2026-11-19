@@ -1,8 +1,8 @@
-# AGENTS.md (FNMN)
+# AGENTS.md (REED)
 
 Rules for agents working in this repository.
 
-- Project state: [notes/state/fnmn.md](notes/state/fnmn.md)
+- Project state: [notes/state/reed.md](notes/state/reed.md)
 - Work queue: [notes/tasks.md](notes/tasks.md)
 - Apple performance patterns compared with our code: [notes/state/performance.md](notes/state/performance.md)
 - Task execution rules for structure and interfaces: [notes/plan.md](notes/plan.md). Use `architect` before changing structure and `coding` when implementing.
@@ -24,7 +24,7 @@ Fixing a performance or correctness defect is not enough. **The same PR must add
 Choose the level by what the check can see:
 
 1. **Type or ownership** — when the bug was a state that should not exist, change the shape so it cannot be constructed (one enum instead of a flag that can disagree with a value). No check to add; the compiler is the guard.
-2. **Unit test** (`App/FNMNTests`, `Tests/FNMNCoreTests`) — behavior of one class or function, including its errors and the order of its calls.
+2. **Unit test** (`App/REEDTests`, `Tests/REEDCoreTests`) — behavior of one class or function, including its errors and the order of its calls.
 3. **Source test** (`ArchitectureGuardTests`, `ServerLinkGuardTests`, `HotPathGuardTests`) — an invariant across files or the whole app. It reads every file, not only the diff, so it also sees code that was already there.
 4. **Lint rule** (`.swiftlint.yml`) — a call or a name in the source; runs before the build and in the editor.
 5. **Diff check** (`scripts/guards.py`, `diff_violations`) — how new code is written: style, comments, language. It only sees added lines, so **it may never be the only guard for a behavior or an interaction**; the interaction is exactly what it cannot see.
@@ -66,7 +66,7 @@ A feature lands in the shape that already owns the thing: the enum gets a case, 
 
 **A boolean becomes a read of the state it described.** `SpeedPlayer.isPlaying` was a stored flag beside a clock task, and the clock could outlive the flag. The player already had one mode of operation, so `isPlaying` became `mode == .playing`, and `enter` — the only writer of `mode` — starts and cancels the clock. The view still reads `isPlaying`; the truth moved into the mode.
 
-**The rule joins the rules that already live together.** "How far is this material read" was answered in four places. The answer belongs beside `isPieceRead`, `readShare` and `openingPiece`, so `ReadingProgress.status(of:)` and `ItemStatus` went there, and Continue, the tile menu and the continue deep link read it. A shared value in `FNMNCore` is right when both sides ask the same question; it is wrong when it only saves a line.
+**The rule joins the rules that already live together.** "How far is this material read" was answered in four places. The answer belongs beside `isPieceRead`, `readShare` and `openingPiece`, so `ReadingProgress.status(of:)` and `ItemStatus` went there, and Continue, the tile menu and the continue deep link read it. A shared value in `REEDCore` is right when both sides ask the same question; it is wrong when it only saves a line.
 
 **A new small value is right when two screens answer identically.** Two web views each kept a hand-rolled "which page is loaded" latch, so a late message from a replaced page wrote the new page's phase. One `WebGeneration` in the core carries the page's number into the page and back with every message, and the coordinator accepts only the current one. The figure's script and the player's page now report the same kind of number.
 
@@ -142,14 +142,14 @@ The server and the app model different things. To the server a page is `claude`,
 
 ## Hot paths: how to keep them fast
 
-- `LibraryQueries` (`Sources/FNMNCore/LibraryQueries.swift`) is the read side of the library. Building it walks and sorts the whole catalog, so only `LibraryModel` builds it, once per catalog change, in `refreshQueries()`.
+- `LibraryQueries` (`Sources/REEDCore/LibraryQueries.swift`) is the read side of the library. Building it walks and sorts the whole catalog, so only `LibraryModel` builds it, once per catalog change, in `refreshQueries()`.
 - Screens read `library.queries`: `library.queries.items(matching:)`, `library.queries.albumSummaries`, `library.queries.groups(...)`, and so on. Every query is a filter or a sort over the stored arrays, not a rebuild.
-- Do not write `LibraryQueries(` in `App/FNMN` outside `LibraryModel.swift`.
-- `SearchIndex` (`Sources/FNMNCore/SearchIndex.swift`) is the full-text read side. Building it folds every search body, so only `LibraryModel` builds it, once per launch and after each reindex, off the main thread; screens call `library.search(_:)`, which awaits it.
+- Do not write `LibraryQueries(` in `App/REED` outside `LibraryModel.swift`.
+- `SearchIndex` (`Sources/REEDCore/SearchIndex.swift`) is the full-text read side. Building it folds every search body, so only `LibraryModel` builds it, once per launch and after each reindex, off the main thread; screens call `library.search(_:)`, which awaits it.
 
 ## Runtime state stays out of the repo
 
-The Xcode project references the repository root as a local package (`"path": ".."`), so Xcode watches every file in the tree. Any process that writes inside the repo — logs, caches, browser profiles, collected data — makes Xcode rebuild on every write. Runtime state lives in `~/Library/Application Support/FNMN/` and reaches the code through a symlink at its old path (`server/digest/out`, `server/digest/profiles`); never add a new runtime directory inside the repo. Build artifacts (`.build/`, DerivedData) are fine — they are toolchain-owned and gitignored.
+The Xcode project references the repository root as a local package (`"path": ".."`), so Xcode watches every file in the tree. Any process that writes inside the repo — logs, caches, browser profiles, collected data — makes Xcode rebuild on every write. Runtime state lives in `~/Library/Application Support/REED/` and reaches the code through a symlink at its old path (`server/digest/out`, `server/digest/profiles`); never add a new runtime directory inside the repo. Build artifacts (`.build/`, DerivedData) are fine — they are toolchain-owned and gitignored.
 
 ## Pipeline
 
@@ -172,7 +172,7 @@ A bug never skips step 2, and a fix never skips step 5. When a step cannot be do
 Run from the repository root:
 
 ```sh
-python3 scripts/guards.py --app   # diff checks, swiftlint --strict, lint self-test, swift test, FNMN app build and its unit tests
+python3 scripts/guards.py --app   # diff checks, swiftlint --strict, lint self-test, swift test, REED app build and its unit tests
 ```
 
 Without `--app` the build and the app unit tests are skipped. CI runs the same command with `--app` on each pull request.
@@ -188,13 +188,13 @@ Each defect below is closed by the check in the last column.
 | 2026-11-02 | Doc comments added in long blocks (43 added comment lines in one PR) | `guards.py`: `comment`, any comment on an added line |
 | 2026-11-02 | A second code path for cached lists (`among:` with a fallback), and duplicate overloads | `guards.py`: `among parameter` on added lines |
 | 2026-11-02 | The Add to Collection sheet, search, and every screen rebuilt the whole catalog (~10–20 ms for 1,500 materials) in a view body; frames of the sheet's slide-in and of search typing were dropped | `snapshot_catalog_selector_in_view` in `.swiftlint.yml`; `HotPathGuardTests`; `guards.py` lint self-test, which must see the rule fire on a planted `LibraryQueries(` |
-| 2026-11-02 | A change removed `@ViewBuilder` and `public` and broke the app build, while the PR claimed a build that was not run | `guards.py --app`: `xcodebuild` of the FNMN scheme on every PR |
+| 2026-11-02 | A change removed `@ViewBuilder` and `public` and broke the app build, while the PR claimed a build that was not run | `guards.py --app`: `xcodebuild` of the REED scheme on every PR |
 | 2026-11-02 | Speed check compared two timings with no frame budget | `CollectedCatalogSpeedTests`: best of ten runs under 5 ms |
 | 2026-11-02 | Tests read a `LibraryQueries` built before the library changed | `LibraryTests`: queries are rebuilt after each change |
 | 2026-11-02 | CI ran Swift 6.3.3 while the package needs tools 6.4 | CI runner `xcode-27` |
 | 2026-11-05 | The journal sync and import were moved out of `LibraryModel` with no behavior pinned first | `JournalTests`, `LibraryTests`, `JournalSyncTests` and `LibraryImporterTests`: the disk contract and the moved classes are pinned |
 | 2026-11-05 | `LibraryModel` had grown back into the owner of journal and import disk work | `ArchitectureGuardTests`: `LibraryModel` may not call journal or import disk work |
-| 2026-11-05 | Reading the Keychain inside `ServerLink.init`, which runs in `FNMNApp.init`, delayed the first frame | `ArchitectureGuardTests`: `ServerLink.init` has no `storage.load()`; `ServerLinkTests`: `init` does not touch the storage |
+| 2026-11-05 | Reading the Keychain inside `ServerLink.init`, which runs in `REEDApp.init`, delayed the first frame | `ArchitectureGuardTests`: `ServerLink.init` has no `storage.load()`; `ServerLinkTests`: `init` does not touch the storage |
 | 2026-11-05 | A view read `server.connection` before the lazy Keychain read had run, so a YouTube embed saw no server | `ServerLinkGuardTests`: a file that reads `server.connection` must call `savedConnection()` |
 | 2026-11-07 | The digest tab could have brought a web view into a magazine that must draw with SwiftUI | `ArchitectureGuardTests`: a web view may appear only in `LiveCropView.swift` and `VideoReaderView.swift`, the whole app read; proven by planting an `import WebKit` in a digest card |
 | 2026-11-11 | Journal events were consumed before they were applied: `merge` advanced the event clock before `try?` could drop a failed change, `JournalSync.unread` committed read offsets before the merge, and a re-imported delivery restored folder defaults over an explicit "removed from every collection" because `placements[id] == []` and `nil` looked the same | `SyncConvergenceTests`: placement before/after delivery, sticky unsorted through re-import and album deletion, link-stub handoff, album collisions, order-independent convergence; `JournalSyncTests.testAnUnreadJournalIsNotConsumedUntilItIsCommitted`; `LibrarySyncTests`: the FSM walk, a ghost placement waiting for its delivery, catalog refresh on sync, two `LibraryModel`s converging on one folder; proven by the five `SyncConvergenceTests` failures before the fix |

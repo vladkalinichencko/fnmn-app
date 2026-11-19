@@ -1,7 +1,7 @@
 import json
 from transformers import AutoModel
 model = AutoModel.from_pretrained("vllm-sr/Decision-2.0-Eos-0.8B", trust_remote_code=True)
-data=json.load(open('/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/notes/research/digest-eval/data/offtopic_eval.json'))
+data=json.load(open('/Users/vladislavkalinichenko/VSCodeProjects/REED App/notes/research/digest-eval/data/offtopic_eval.json'))
 TOPICS=["k-pop pictures","magazine covers","graphic design","film and cinema","artificial intelligence","machine learning research","startups and business","personal stories","software projects","none of these topics"]
 out=[]
 for i,p in enumerate(data):

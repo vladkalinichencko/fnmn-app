@@ -2,7 +2,7 @@
 """The guards for a change, in one place. CI and the agent before a PR both run this file.
 
     python3 scripts/guards.py                 # diff checks, SwiftLint, lint self-test, swift test
-    python3 scripts/guards.py --app           # also build the FNMN app for the iOS Simulator
+    python3 scripts/guards.py --app           # also build the REED app for the iOS Simulator
     python3 scripts/guards.py --base origin/master
 
 Diff checks read only the lines the change adds (against --base, committed or not), so code that was
@@ -60,7 +60,11 @@ def added_lines(base):
             number += 1
     untracked = run(["git", "ls-files", "--others", "--exclude-standard", "--", *SCOPE]).stdout.split()
     for path in untracked:
-        for number, text in enumerate((ROOT / path).read_text().split("\n"), 1):
+        try:
+            lines = (ROOT / path).read_text().split("\n")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for number, text in enumerate(lines, 1):
             yield path, number, text
 
 
@@ -117,7 +121,7 @@ def digest_script_checks(root=ROOT):
     """The digest's calendar agents must name their minute, and the builder's hours must come from the
     settings the app writes, the same source `due()` reads. launchd treats a missing key as a wildcard,
     so an `Hour`-only entry fires every minute of that hour."""
-    path = root / "server" / "digest" / "fnmn-digest.sh"
+    path = root / "server" / "digest" / "reed-digest.sh"
     if not path.exists():
         return []
     source = path.read_text(encoding="utf-8")
@@ -125,9 +129,9 @@ def digest_script_checks(root=ROOT):
     for match in re.finditer(r"StartCalendarInterval:(\d+):Hour", source):
         prefix = f"StartCalendarInterval:{match.group(1)}:Minute"
         if prefix not in source:
-            problems.append(f"server/digest/fnmn-digest.sh sets {match.group(0)} without a Minute")
+            problems.append(f"server/digest/reed-digest.sh sets {match.group(0)} without a Minute")
     if "settings.hours(settings.load())" not in source:
-        problems.append("server/digest/fnmn-digest.sh writes fixed builder hours; read the app's digest settings")
+        problems.append("server/digest/reed-digest.sh writes fixed builder hours; read the app's digest settings")
     return problems
 
 
@@ -221,14 +225,14 @@ def source_self_test():
     with TemporaryDirectory() as folder:
         root = Path(folder)
         (root / "server" / "digest").mkdir(parents=True)
-        (root / "server" / "digest" / "fnmn-digest.sh").write_text("Add :StartCalendarInterval:0:Hour integer 8\n")
+        (root / "server" / "digest" / "reed-digest.sh").write_text("Add :StartCalendarInterval:0:Hour integer 8\n")
         if not digest_script_checks(root):
             sys.exit("FAILED: the schedule check missed an Hour without a Minute")
     with TemporaryDirectory() as folder:
         root = Path(folder)
         (root / "server" / "digest").mkdir(parents=True)
         script = "Add :StartCalendarInterval:0:Hour integer 8\nAdd :StartCalendarInterval:0:Minute integer 0\n"
-        (root / "server" / "digest" / "fnmn-digest.sh").write_text(script)
+        (root / "server" / "digest" / "reed-digest.sh").write_text(script)
         if not digest_script_checks(root):
             sys.exit("FAILED: the schedule check missed builder hours that do not come from BUILD_HOURS")
     with TemporaryDirectory() as folder:
@@ -284,7 +288,7 @@ def diff_self_test():
 
 
 def lint_self_test():
-    probe = ROOT / "App/FNMN/GuardProbe.swift"
+    probe = ROOT / "App/REED/GuardProbe.swift"
     probe.write_text(
         "struct GuardProbe {\n    let count = LibraryQueries(LibrarySnapshot()).items.count\n}\n"
     )
@@ -345,19 +349,19 @@ def main():
     )
     if options.app:
         step(
-            "build FNMN app",
+            "build REED app",
             [
-                "xcodebuild", "-project", "App/FNMN.xcodeproj", "-scheme", "FNMN",
+                "xcodebuild", "-project", "App/REED.xcodeproj", "-scheme", "REED",
                 "-destination", "generic/platform=iOS Simulator", "-configuration", "Debug",
                 "build", "CODE_SIGNING_ALLOWED=NO",
             ],
         )
         step(
-            "test FNMN app",
+            "test REED app",
             [
-                "xcodebuild", "-project", "App/FNMN.xcodeproj", "-scheme", "FNMN",
+                "xcodebuild", "-project", "App/REED.xcodeproj", "-scheme", "REED",
                 "-destination", f"id={simulator_udid()}", "-configuration", "Debug",
-                "-only-testing:FNMNTests", "test", "CODE_SIGNING_ALLOWED=NO",
+                "-only-testing:REEDTests", "test", "CODE_SIGNING_ALLOWED=NO",
             ],
         )
     print("All guards passed.")

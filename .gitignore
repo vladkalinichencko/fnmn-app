@@ -10,7 +10,7 @@ playlists.csv
 .swiftpm/
 prepared-browser-library/
 xcuserdata/
-App/FNMN.xcodeproj/project.xcworkspace/
+App/REED.xcodeproj/project.xcworkspace/
 .venv-ocr/
 
 .recall/
@@ -18,4 +18,4 @@ App/FNMN.xcodeproj/project.xcworkspace/
 server/digest/out/
 server/digest/profiles/
 
-App/FNMN/Connection.json
+App/REED/Connection.json

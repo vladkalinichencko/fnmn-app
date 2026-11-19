@@ -89,7 +89,7 @@ enum ImportActivity {
 
     static func start(title: String, step: ImportStep) {
         state = state.send(.end(success: true))
-        let id = "local.fnmn.reader.import.\(UUID().uuidString)"
+        let id = "local.reed.reader.import.\(UUID().uuidString)"
         guard request(id: id, title: title, step: step) else {
             return
         }

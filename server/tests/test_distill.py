@@ -44,7 +44,7 @@ def _select(document, selector: str):
 
 def _crops(markdown: str) -> list[tuple[str, str | None]]:
     crops = []
-    for part in markdown.split("```fnmn-interactive\n")[1:]:
+    for part in markdown.split("```reed-interactive\n")[1:]:
         body = part.split("```", 1)[0].strip().splitlines()
         crops.append((body[0], body[1] if len(body) > 1 else None))
     return crops
@@ -57,7 +57,7 @@ class DistillTests(unittest.TestCase):
                 self._check_page(url, title, phrase, formula)
 
     def _check_page(self, url: str, title: str, phrase: str, formula: str | None):
-        source = httpx.get(url, follow_redirects=True, timeout=40, headers={"User-Agent": "FNMN/1.0 article reader"}).text
+        source = httpx.get(url, follow_redirects=True, timeout=40, headers={"User-Agent": "REED/1.0 article reader"}).text
         document = html.fromstring(source)
         markdown, downloads = article_markdown(source, url)
         fetched = []
@@ -68,7 +68,7 @@ class DistillTests(unittest.TestCase):
             return source
 
         def fetch_bytes(asset: str) -> bytes:
-            response = httpx.get(asset, follow_redirects=True, timeout=40, headers={"User-Agent": "FNMN/1.0 article reader"})
+            response = httpx.get(asset, follow_redirects=True, timeout=40, headers={"User-Agent": "REED/1.0 article reader"})
             response.raise_for_status()
             self.assertGreater(len(response.content), 0)
             fetched.append(asset)

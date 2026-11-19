@@ -1,4 +1,4 @@
-# FNMN Editing Ontology v0.1 — черновик и ходы тьютора
+# REED Editing Ontology v0.1 — черновик и ходы тьютора
 
 Исходный дамп идей для [design/editing-ontology.md](../design/editing-ontology.md) и [design/tutor-moves.md](../design/tutor-moves.md). Здесь сохранён полностью, чтобы не потерять формулировки; рабочие версии живут в design/.
 
@@ -48,7 +48,7 @@
 - S04 REDUNDANT_RESTATEMENT. Автор повторил мысль другими словами, не добавив nuance?
 - S05 EXCESSIVE_MOTIVATION. Нужен ли весь background для понимания текущей идеи?
 - S06 EXCESSIVE_QUALIFICATION. Есть ли оговорки, которые не меняют практически полезный смысл? Осторожно: may, under assumption X, only when часто нельзя удалять.
-- S07 LOW_RELEVANCE_TO_FEED_INTENT. Соответствует ли блок текущей теме пользователя? Это ranking property FNMN, не свойство качества текста.
+- S07 LOW_RELEVANCE_TO_FEED_INTENT. Соответствует ли блок текущей теме пользователя? Это ranking property REED, не свойство качества текста.
 - S08 LOW_NOVELTY_FOR_USER. Содержит ли блок информацию, которую пользователь уже много раз видел?
 - S09 HIGH_INFORMATION_DENSITY. Нельзя ли этот блок сокращать вообще, потому что почти каждое предложение несёт отдельную информацию? Output классификатора не обязательно «исправь» — иногда правильный ответ COPY.
 
@@ -69,7 +69,7 @@ ACCESS показывает, что length, amount of paraphrasing, lexical comp
 
 ## EXPLANATION QUALITY — текст корректен, но плохо обучает
 
-Академические simplification taxonomies покрывают эту часть хуже, поэтому расширено под FNMN.
+Академические simplification taxonomies покрывают эту часть хуже, поэтому расширено под REED.
 
 - E01 NO_BIG_PICTURE. Перед деталями понятно, какую проблему решаем?
 - E02 NO_CAUSAL_EXPLANATION. Текст сообщает корреляцию/процедуру, но не causal/mechanistic intuition.
@@ -110,7 +110,7 @@ Transformation должен быть консервативным. В simplifica
 
 ## PRESENTATION / FEED TRANSFORMATION
 
-Практически FNMN-specific.
+Практически REED-specific.
 
 - P01 ATOMIC_TAKE_POSSIBLE. Можно ли превратить часть текста в один самостоятельный feed item?
 - P02 THREAD_REQUIRED. Смысл слишком зависим от последовательности — нужны 2–5 связанных карточек, а не одна.

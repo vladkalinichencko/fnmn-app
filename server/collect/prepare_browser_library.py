@@ -1,10 +1,10 @@
-"""Prepare the materials in browser-library.json as FNMN deliveries: the one-time start of the library,
+"""Prepare the materials in browser-library.json as REED deliveries: the one-time start of the library,
 kept here with the rest of the collection, away from the service the app talks to.
 
     cd mac && ../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json \
-        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
+        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/REED
 
-The output is the FNMN folder in iCloud Drive itself, where the phone reads the library: `catalog.json`,
+The output is the REED folder in iCloud Drive itself, where the phone reads the library: `catalog.json`,
 `index.json` (every material with its reviewed albums) and `deliveries/`. Only files that changed are
 written, so iCloud uploads only those. The command resumes from completed deliveries. Failed URLs remain in errors.json. Albums come from
 browser_albums.tsv beside this file; `--repackage` applies them and the current Markdown rules to the
@@ -180,7 +180,7 @@ def repackage(rows: list[dict], output: Path) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare the browser library for FNMN")
+    parser = argparse.ArgumentParser(description="Prepare the browser library for REED")
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--workers", type=int, default=1)

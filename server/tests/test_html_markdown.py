@@ -83,13 +83,13 @@ class HtmlMarkdownTests(unittest.TestCase):
         self.assertIn("- First", markdown)
         self.assertNotIn("draw()", markdown)
         self.assertNotIn("page.js", markdown)
-        self.assertIn("```fnmn-interactive\nhttps://example.com/post/\nbody:nth-of-type(1) > article:nth-of-type(1) > figure:nth-of-type(1)\n```", markdown)
-        self.assertIn("```fnmn-interactive\nhttps://example.com/post/\n#mount\n```", markdown)
-        self.assertIn("```fnmn-interactive\nhttps://videos.example/embed/1\n```", markdown)
+        self.assertIn("```reed-interactive\nhttps://example.com/post/\nbody:nth-of-type(1) > article:nth-of-type(1) > figure:nth-of-type(1)\n```", markdown)
+        self.assertIn("```reed-interactive\nhttps://example.com/post/\n#mount\n```", markdown)
+        self.assertIn("```reed-interactive\nhttps://videos.example/embed/1\n```", markdown)
         self.assertTrue(any(url.endswith("slope.gif") for url in downloads.values()))
         self.assertTrue(any(url.endswith("roll.mp4") for url in downloads.values()))
         self.assertFalse(any(url.endswith("page.js") for url in downloads.values()))
-        self.assertIn("```fnmn-video\n", markdown)
+        self.assertIn("```reed-video\n", markdown)
 
     def test_a_widget_with_states_in_templates_is_live_and_its_states_are_not_text(self):
         source = """
@@ -103,7 +103,7 @@ class HtmlMarkdownTests(unittest.TestCase):
         </article></body></html>
         """
         markdown, _ = article_markdown(source, PAGE)
-        self.assertIn("```fnmn-interactive\nhttps://example.com/post/\n#swap\n```", markdown)
+        self.assertIn("```reed-interactive\nhttps://example.com/post/\n#swap\n```", markdown)
         self.assertNotIn("Reply from", markdown)
         self.assertNotIn("Echo", markdown)
         self.assertIn("Before the examples", markdown)
@@ -117,11 +117,11 @@ class HtmlMarkdownTests(unittest.TestCase):
         </article></body></html>
         """
         markdown, downloads = article_markdown(source, PAGE)
-        self.assertIn("```fnmn-interactive\nhttps://example.com/post/\n#plot\n```", markdown)
+        self.assertIn("```reed-interactive\nhttps://example.com/post/\n#plot\n```", markdown)
         self.assertNotIn("A curve.", markdown)
         self.assertTrue(any(url.endswith("pic.png") for url in downloads.values()))
         self.assertIn("![slope](", markdown)
-        self.assertEqual(markdown.count("```fnmn-interactive"), 1)
+        self.assertEqual(markdown.count("```reed-interactive"), 1)
 
     def test_a_cover_figure_whose_picture_was_dropped_is_not_a_live_figure(self):
         source = """
@@ -133,7 +133,7 @@ class HtmlMarkdownTests(unittest.TestCase):
         </main></body></html>
         """
         markdown, _ = article_markdown(source, PAGE)
-        self.assertNotIn("fnmn-interactive", markdown)
+        self.assertNotIn("reed-interactive", markdown)
         self.assertIn("gold standard", markdown)
 
     def test_code_keeps_its_text_and_the_spaces_around_it(self):

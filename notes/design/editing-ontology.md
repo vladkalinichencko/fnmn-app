@@ -1,4 +1,4 @@
-# FNMN Editing Ontology v0.1
+# REED Editing Ontology v0.1
 
 Важно: это multi-label система. Абзац может одновременно иметь MULTIPLE_IDEAS + UNDEFINED_TERM + REDUNDANT_BACKGROUND.
 
@@ -75,7 +75,7 @@ COPY · DELETE · TRIM · SPLIT · MERGE · REORDER · REPHRASE · EXPLAIN · DE
 - **S06 EXCESSIVE_QUALIFICATION** Есть ли оговорки, которые не меняют практически полезный смысл? Тут надо быть осторожным: may, under assumption X, only when часто нельзя удалять.
 - **S07 LOW_RELEVANCE_TO_FEED_INTENT** Соответствует ли блок текущей теме пользователя?
 
-Это уже не свойство качества текста, а ranking property FNMN.
+Это уже не свойство качества текста, а ranking property REED.
 
 - **S08 LOW_NOVELTY_FOR_USER** Содержит ли блок информацию, которую пользователь уже много раз видел?
 - **S09 HIGH_INFORMATION_DENSITY** Напротив, нельзя ли этот блок сокращать вообще, потому что почти каждое предложение несёт отдельную информацию?
@@ -101,7 +101,7 @@ ACCESS показывает, что length, amount of paraphrasing, lexical comp
 
 ## EXPLANATION QUALITY — текст корректен, но плохо обучает
 
-Это уже часть, которую академические simplification taxonomies покрывают хуже, поэтому здесь я расширяю их специально под FNMN.
+Это уже часть, которую академические simplification taxonomies покрывают хуже, поэтому здесь я расширяю их специально под REED.
 
 - **E01 NO_BIG_PICTURE** Перед деталями понятно, какую проблему решаем?
 - **E02 NO_CAUSAL_EXPLANATION** Текст сообщает корреляцию/процедуру, но не causal/mechanistic intuition.
@@ -149,7 +149,7 @@ ACCESS показывает, что length, amount of paraphrasing, lexical comp
 
 ## PRESENTATION / FEED TRANSFORMATION
 
-Это уже практически FNMN-specific.
+Это уже практически REED-specific.
 
 - **P01 ATOMIC_TAKE_POSSIBLE** Можно ли превратить часть текста в один самостоятельный feed item?
 - **P02 THREAD_REQUIRED** Смысл слишком зависим от последовательности, поэтому нужны 2–5 связанных карточек, а не одна.

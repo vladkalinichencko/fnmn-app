@@ -45,7 +45,7 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
 }
 
 enum WidgetStore {
-    static let group = "group.local.fnmn.reader"
+    static let group = "group.local.reed.reader"
 
     static var container: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
@@ -110,13 +110,13 @@ enum WidgetStore {
 extension WidgetItem {
     var deepLink: URL {
         var components = URLComponents()
-        components.scheme = "fnmn"
+        components.scheme = "reed"
         components.host = "item"
         components.queryItems = [URLQueryItem(name: "id", value: id)]
         if let piece {
             components.queryItems?.append(URLQueryItem(name: "piece", value: String(piece)))
         }
-        return components.url ?? URL(string: "fnmn://continue")!
+        return components.url ?? URL(string: "reed://continue")!
     }
 }
 
@@ -124,10 +124,10 @@ extension WidgetItem {
 extension WidgetPost {
     var deepLink: URL {
         var components = URLComponents()
-        components.scheme = "fnmn"
+        components.scheme = "reed"
         components.host = "digest"
         components.queryItems = [URLQueryItem(name: "post", value: id)]
-        return components.url ?? URL(string: "fnmn://digest")!
+        return components.url ?? URL(string: "reed://digest")!
     }
 }
 

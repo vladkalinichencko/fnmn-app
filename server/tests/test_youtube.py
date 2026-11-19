@@ -9,7 +9,7 @@ from unittest.mock import patch
 from adapters import youtube
 from adapters.youtube import video_id_from_url
 
-FIXTURE = Path(__file__).resolve().parents[2] / "Tests/FNMNCoreTests/Fixtures/youtube-urls.json"
+FIXTURE = Path(__file__).resolve().parents[2] / "Tests/REEDCoreTests/Fixtures/youtube-urls.json"
 
 
 class VideoIDTests(unittest.TestCase):

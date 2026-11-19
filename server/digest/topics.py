@@ -8,6 +8,7 @@ inject their own scorer; the live ones are never loaded there.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Callable
 
@@ -18,6 +19,9 @@ EMBED_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 EMBED_QUERY = "Instruct: Classify the topic of this social media post.\nQuery: "
 EMBED_PASSAGE = "passage: "
 MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+SOFTMAX_TEMP = 0.03
+"""The sharpness of the topic vote: embedding similarities sit a few hundredths apart, so a small
+temperature turns "clearly the closest topic" into a probability near 1 and a coin flip near 0.5."""
 Scorer = Callable[[str, list[str]], dict[str, float]]
 
 _WORDS = re.compile(r"\w+", re.UNICODE)
@@ -27,10 +31,11 @@ def classify(threads: list[list[Post]], settings: dict, scorer: Scorer | None = 
     """Writes each post's topic folders and returns its best score, keyed by post id.
 
     A thread is scored once on its joined texts and every member keeps the verdict, so a
-    story never splits across topics. A post keeps its single best topic when that score
-    cleared the threshold; below it the folders stay empty and the magazine files the post
-    under `Other`. With no topics configured at all the folders are left as the collector
-    wrote them and every score is 0.
+    story never splits across topics. A post keeps its single best topic when the softmax
+    probability of that topic cleared the threshold; below it the folders stay empty and the
+    magazine files the post under `Other`. With one topic configured there is nothing to
+    vote against, so the raw score stands in for the probability. With no topics configured
+    at all the folders are left as the collector wrote them and every score is 0.
     """
     if not digest_settings.any_topics(settings):
         return {}
@@ -47,12 +52,20 @@ def classify(threads: list[list[Post]], settings: dict, scorer: Scorer | None = 
             continue
         scores = score_of(text, topics)
         top = max(topics, key=lambda topic: scores.get(topic, 0.0))
-        ranked = sorted((scores.get(topic, 0.0) for topic in topics), reverse=True)
-        best_score = ranked[0] - (sum(ranked[1:]) / len(ranked[1:]) if len(ranked) > 1 else 0.0)
+        values = [scores.get(topic, 0.0) for topic in topics]
+        best_score = _probability(values) if len(values) > 1 else min(max(values[0], 0.0), 1.0)
         for post in thread:
             post.folders = [top] if best_score >= threshold else []
             best[post.id] = best_score
     return best
+
+
+def _probability(values: list[float]) -> float:
+    """The softmax share of the strongest topic: near 1 when it clearly wins, near 1/n when the
+    field is tied. The vote, not the absolute similarity, is what the threshold reads."""
+    peak = max(values)
+    weights = [math.exp((value - peak) / SOFTMAX_TEMP) for value in values]
+    return max(weights) / sum(weights)
 
 
 def cap(threads: list[list[Post]], scores: dict[str, float], limit: int) -> tuple[list[Post], dict[str, str]]:
@@ -94,10 +107,10 @@ class Embedder:
     the cosine between them.
 
     Topic vectors are encoded once per topic set and reused, so a build pays one encoding
-    per post. `classify` reads the lead of the best topic over the mean of the rest as
-    the confidence, so the threshold does not drift with the number of configured topics.
-    The query carries an instruction and each topic a `passage:` prefix, the pair the
-    model was evaluated with.
+    per post. `classify` reads the topics' similarities as a softmax vote, so the threshold
+    does not drift with the number of configured topics or the scorer's absolute scale. The
+    query carries an instruction and each topic a `passage:` prefix, the pair the model was
+    evaluated with.
     """
 
     def __init__(self, model: str = EMBED_MODEL, encoder=None):

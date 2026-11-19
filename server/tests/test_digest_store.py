@@ -5,6 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from digest.store import Store, image_size, iso, safe
+from dataclasses import replace
+
 from tests.fakes import post
 
 
@@ -86,6 +88,28 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(added, 2)
             self.assertEqual([item.id for item in store.posts()], ["x/1", "x/4"])
             self.assertEqual(store.append([post("x/5", text=body)]), 0)
+
+    def test_a_post_with_a_unicode_line_separator_still_reads_back(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            store.append([post("x/1", text="первая строка\u2028вторая строка")])
+            self.assertEqual(len(store.posts()), 1)
+            self.assertIn("\u2028", store.posts()[0].text)
+            self.assertEqual(store.ids(), {"x/1"})
+
+    def test_a_cut_caption_is_dropped_but_the_whole_text_stays(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            whole = " ".join(f"слово номер {index} в длинном тексте поста" for index in range(60))
+            cut = whole[:250] + "…"
+            telegram = lambda post_id, text: replace(
+                post(post_id, text=text), network="telegram", source="telegram/news",
+                id=post_id,
+            )
+            store.append([telegram("telegram/news/1", cut)])
+            self.assertEqual(store.append([telegram("telegram/news/2", whole)]), 1)
+            self.assertEqual(store.append([telegram("telegram/news/3", cut + "x")]), 0)
+            self.assertEqual([item.id for item in store.posts()], ["telegram/news/1", "telegram/news/2"])
 
     def test_an_instagram_author_name_drops_the_og_title_noise(self):
         from digest.store import Post

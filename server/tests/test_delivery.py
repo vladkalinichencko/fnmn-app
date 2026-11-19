@@ -73,14 +73,14 @@ class DeliveryTests(unittest.TestCase):
         pdfs = self.folder / "pdfs"
         pdfs.mkdir()
         (pdfs / "notes one.pdf").write_bytes(b"%PDF")
-        publish([book], self.folder / "FNMN", pdfs)
+        publish([book], self.folder / "REED", pdfs)
         stem = hashlib.sha256(b"book:notes one.pdf").hexdigest()
-        delivery = read_delivery(self.folder / "FNMN" / "deliveries" / f"{stem}.tar")
+        delivery = read_delivery(self.folder / "REED" / "deliveries" / f"{stem}.tar")
         self.assertEqual(delivery.package["material"]["kind"], "book")
         self.assertNotIn("sourceURL", delivery.package["material"])
         self.assertEqual(delivery.package["material"]["byline"], "Ada, Bob")
         self.assertEqual(delivery.files, {"assets/p.png": b"png"})
-        self.assertEqual((self.folder / "FNMN" / "originals" / f"{stem}.pdf").read_bytes(), b"%PDF")
+        self.assertEqual((self.folder / "REED" / "originals" / f"{stem}.pdf").read_bytes(), b"%PDF")
 
     def test_repackage_turns_an_old_json_delivery_into_an_archive(self):
         url = "https://example.com/a"

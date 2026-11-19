@@ -1,4 +1,4 @@
-"""Turn one link or file into an FNMN delivery: find its kind, read it with that kind's adapter, package it."""
+"""Turn one link or file into an REED delivery: find its kind, read it with that kind's adapter, package it."""
 
 from __future__ import annotations
 

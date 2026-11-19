@@ -1,4 +1,4 @@
-"""The digest settings the app writes as `digest-settings.json` into the FNMN folder.
+"""The digest settings the app writes as `digest-settings.json` into the REED folder.
 
 The file is the one channel between the phone and the Mac: the app owns the words, the
 monitor and the builder read them. A missing file means the defaults — the digest runs,
@@ -10,10 +10,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-FNMN = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/FNMN"
+REED = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/REED"
 NAME = "digest-settings.json"
 DEFAULT_HOURS = (8, 20)
-DEFAULT_THRESHOLD = 0.5
+DEFAULT_THRESHOLD = 0.6
 DEFAULT_LIMIT = 40
 RECOMMENDATION_NETWORKS = ("x", "instagram")
 
@@ -29,7 +29,7 @@ def load(folder: Path | None = None) -> dict:
         "networks": {},
         "sources": {},
     }
-    path = (folder or FNMN) / NAME
+    path = (folder or REED) / NAME
     if path.exists():
         try:
             stored = json.loads(path.read_text(encoding="utf-8"))
@@ -78,6 +78,13 @@ def threshold(settings: dict, network: str, source: str) -> float:
         if isinstance(value, (int, float)):
             return float(value)
     return float(fallback)
+
+
+def source_limit(settings: dict, source: str) -> int | None:
+    """A per-source ceiling on one delivery's posts; `None` when the source has none."""
+    entry = settings.get("sources", {}).get(source)
+    limit = entry.get("limit") if isinstance(entry, dict) else None
+    return limit if isinstance(limit, int) and limit > 0 else None
 
 
 def network_limit(settings: dict, network: str) -> int | None:

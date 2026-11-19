@@ -35,14 +35,14 @@ class VideoRequest(BaseModel):
 
 
 def require_token(authorization: str | None = Header(default=None)) -> None:
-    token = os.environ.get("FNMN_TOKEN")
+    token = os.environ.get("REED_TOKEN")
     if not token:
-        raise HTTPException(503, "FNMN_TOKEN is not configured")
+        raise HTTPException(503, "REED_TOKEN is not configured")
     if not hmac.compare_digest((authorization or "").encode(), f"Bearer {token}".encode()):
         raise HTTPException(401, "invalid bearer token")
 
 
-app = FastAPI(title="FNMN server", dependencies=[Depends(require_token)])
+app = FastAPI(title="REED server", dependencies=[Depends(require_token)])
 
 
 @app.get("/health")

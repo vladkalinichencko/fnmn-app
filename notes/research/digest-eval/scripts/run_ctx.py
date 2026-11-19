@@ -1,5 +1,5 @@
 import json, sys, numpy as np
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from sentence_transformers import SentenceTransformer
 
 model=SentenceTransformer("intfloat/multilingual-e5-large")
@@ -9,7 +9,7 @@ TOPICS=["k-pop pictures","magazine covers","graphic design","film and cinema","a
 canon=["kpop","magazine_covers","graphic_design","film","ai_industry","ml_research","startups","personal","tech_dev"]
 TE=model.encode(["passage: "+t for t in TOPICS],normalize_embeddings=True)
 posts={}
-for l in open('/Users/vladislavkalinichenko/Library/Application Support/FNMN/digest-out/posts.jsonl'):
+for l in open('/Users/vladislavkalinichenko/Library/Application Support/REED/digest-out/posts.jsonl'):
     p=json.loads(l); posts[p['id']]=p
 
 def ctx_text(pid):

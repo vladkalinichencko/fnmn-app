@@ -19,7 +19,7 @@ flowchart TD
     Pieces --> Text[Текст SwiftUI]
     Pieces --> Math[Формула SwiftMath]
     Pieces --> File[Картинка или видео из файла пакета]
-    Pieces --> Live[fnmn-interactive: WKWebView исходной страницы]
+    Pieces --> Live[reed-interactive: WKWebView исходной страницы]
 ```
 
 Куски списка, сверху вниз:

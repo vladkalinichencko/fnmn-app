@@ -12,16 +12,16 @@ Tab Groups Dia не входят в результат. [`dia-local-sources.md`]
 
 ## Подготовка библиотеки в iCloud Drive
 
-Команда пишет прямо в папку FNMN в iCloud Drive, откуда её читает телефон: `catalog.json` с исходной иерархией, `index.json` с альбомами каждого материала и по одной поставке в `deliveries/` для каждого подготовленного материала. Меняются только изменившиеся файлы, повторный запуск пропускает готовые поставки. Видео можно сначала сохранить без подписей для проверки плеера, затем дополнить их через yt-dlp. Книги кладёт `publish_books.py`.
+Команда пишет прямо в папку REED в iCloud Drive, откуда её читает телефон: `catalog.json` с исходной иерархией, `index.json` с альбомами каждого материала и по одной поставке в `deliveries/` для каждого подготовленного материала. Меняются только изменившиеся файлы, повторный запуск пропускает готовые поставки. Видео можно сначала сохранить без подписей для проверки плеера, затем дополнить их через yt-dlp. Книги кладёт `publish_books.py`.
 
 ```sh
 cd mac
-../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN --seed-videos
-../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN --kind web --workers 2
-../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN --kind video --enrich-videos --workers 1
-../.venv/bin/python -m collect.publish_books ../fixtures/books/principles-of-deep-learning-theory ~/Library/Mobile\ Documents/com~apple~CloudDocs/FNMN
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/REED --seed-videos
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/REED --kind web --workers 2
+../.venv/bin/python -m collect.prepare_browser_library ../browser-library.json ~/Library/Mobile\ Documents/com~apple~CloudDocs/REED --kind video --enrich-videos --workers 1
+../.venv/bin/python -m collect.publish_books ../fixtures/books/principles-of-deep-learning-theory ~/Library/Mobile\ Documents/com~apple~CloudDocs/REED
 ```
 
-В приложении выберите папку FNMN через `+` → File.
+В приложении выберите папку REED через `+` → File.
 
 Пакет от 28 сентября содержит 344 источника и 899 готовых материалов: 329 веб-страниц и 570 видео. У 28 видео есть подписи; остальные видео открываются без транскрипта. 33 веб-ссылки остаются ссылками на оригинал: интерактивная проверка Cloudflare (ACM), отказ по IP выхода VPN (Хабр и ещё три сайта), пейвол NYT и WSJ, удалённые страницы, сетевые сбои с этого Mac, голые PDF, ноутбуки Jupyter, X Articles за логином и ссылка на YouTube-канал. В приложении они лежат плитками-ссылками в своих альбомах из `index.json`.

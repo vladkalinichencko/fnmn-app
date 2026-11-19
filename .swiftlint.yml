@@ -6,7 +6,7 @@ included:
   - App
 
 excluded:
-  - App/FNMN/Store/LibraryModel.swift
+  - App/REED/Store/LibraryModel.swift
 
 custom_rules:
   snapshot_catalog_selector_in_view:

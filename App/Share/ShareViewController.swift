@@ -1,4 +1,4 @@
-import FNMNCore
+import REEDCore
 import UIKit
 import UniformTypeIdentifiers
 
@@ -28,7 +28,9 @@ final class ShareViewController: UIViewController {
     }
 
     private func openApp() {
-        guard let url = URL(string: "fnmn://inbox") else { return }
+        guard let url = URL(string: "reed://inbox") else {
+            return
+        }
         var responder: UIResponder? = self
         while let current = responder {
             if let application = current as? UIApplication {
@@ -73,7 +75,7 @@ final class ShareViewController: UIViewController {
 
     private func showFailure() {
         let label = UILabel()
-        label.text = "FNMN could not read this."
+        label.text = "REED could not read this."
         label.translatesAutoresizingMaskIntoConstraints = false
         view.backgroundColor = .systemBackground
         view.addSubview(label)

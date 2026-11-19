@@ -22,6 +22,7 @@ struct ImportActivityWidget: Widget {
                     .frame(width: 28, height: 28)
             }
             .padding(16)
+            .tint(.red)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
@@ -50,6 +51,7 @@ private struct ShareDone: View {
     var body: some View {
         Ring(fraction: fraction)
             .frame(width: 18, height: 18)
+            .tint(.red)
     }
 }
 

@@ -1,24 +1,24 @@
 # Code duplication audit
 
-Every entry names both sites, so the claim can be checked without trusting this note. Read: `Sources/FNMNCore` (25 files), `App/FNMN` (48), `App/Share`, `App/Activity`, `server` (44 Python modules), and the unmerged `social-digest` branch (48 files against `origin/master`).
+Every entry names both sites, so the claim can be checked without trusting this note. Read: `Sources/REEDCore` (25 files), `App/REED` (48), `App/Share`, `App/Activity`, `server` (44 Python modules), and the unmerged `social-digest` branch (48 files against `origin/master`).
 
 **The short version.** The app answers "which source does this page belong to" in three places with two different taxonomies, names a file from an id in three shapes, appends a journal line in two ways, and spells "a screen is loading" as six enums. The server writes a delivery archive in two modules, hashes asset names in four, drives yt-dlp in three, and runs two copies of the OCR loop. The digest branch added a second copy of four of those and brought its own card, stack, and search.
 
 ## Naming and identity
 
-**1. Which source a page belongs to.** `CaptureRoute.source(for:)` (`Sources/FNMNCore/CaptureRoute.swift:8`) classifies a URL into `CaptureSource`; `source_kind` (`server/sources.py:18`) does the same into the server's `NAMES` keys; `SourceIndex` (`Sources/FNMNCore/SourceIndex.swift`) answers a third question — the publisher a saved link came from — and `publisher_of` (`server/publisher.py:29`) plus `collect/browser_library.py:65 source_for` answer that one twice more, once against the live page and once against the saved catalog. The taxonomies already disagree: `CaptureSource` has no `claude` and no `notebook`, `NAMES` has no `instagram`, and only the Swift table treats `youtu.be` and `twitter.com` as first-class. A link the app sends as `web` can be handled by the server's `claude` adapter and come back with an id the app's route never predicted.
+**1. Which source a page belongs to.** `CaptureRoute.source(for:)` (`Sources/REEDCore/CaptureRoute.swift:8`) classifies a URL into `CaptureSource`; `source_kind` (`server/sources.py:18`) does the same into the server's `NAMES` keys; `SourceIndex` (`Sources/REEDCore/SourceIndex.swift`) answers a third question — the publisher a saved link came from — and `publisher_of` (`server/publisher.py:29`) plus `collect/browser_library.py:65 source_for` answer that one twice more, once against the live page and once against the saved catalog. The taxonomies already disagree: `CaptureSource` has no `claude` and no `notebook`, `NAMES` has no `instagram`, and only the Swift table treats `youtu.be` and `twitter.com` as first-class. A link the app sends as `web` can be handled by the server's `claude` adapter and come back with an id the app's route never predicted.
 
 *One home:* one declaration of the host table per side of the wire, generated from one list or returned by the server, so the app never re-derives a kind the server owns. `SourceIndex` and `publisher_of` answer a different question and should stay separate — but `collect/browser_library.source_for` is the offline half of `publisher_of` and can call it.
 
 *Decided 2026-11-08:* the two tables stay. The server and the app model different things and share only the wire format — see AGENTS.md, "Across the boundary".
 
-**2. YouTube video id.** `YouTube.videoID(in:)` (`Sources/FNMNCore/YouTube.swift:4`), `video_id_from_url` (`server/adapters/youtube.py:74`), and a third inline special case in `canonical_url` (`server/collect/browser_library.py:46`, which also rewrites the URL, not just reads the id). The two regex/id-shape rules match today; three copies means one of them will accept `watch?v=` while another does not.
+**2. YouTube video id.** `YouTube.videoID(in:)` (`Sources/REEDCore/YouTube.swift:4`), `video_id_from_url` (`server/adapters/youtube.py:74`), and a third inline special case in `canonical_url` (`server/collect/browser_library.py:46`, which also rewrites the URL, not just reads the id). The two regex/id-shape rules match today; three copies means one of them will accept `watch?v=` while another does not.
 
 *One home:* the server's parser is the contract; the Swift copy is needed only because `SourceIndex.key` groups links offline. Give it a test that runs both over one list of URLs.
 
 *Partly closed in 57f5af7:* one fixture of addresses runs through both parsers. The two implementations stay until question 1 in `notes/research/source-identity.md` is answered.
 
-**3. Delivery file name.** `delivery_name` (`server/package.py:142`), a second identical copy (`server/collect/reparse_library.py:89`), `_delivery` (`server/collect/prepare_browser_library.py:89`), and `LibraryFile.deliveryName` (`Sources/FNMNCore/LibraryFile.swift:384`). The prepare script hashes `row["url"]`; the other three hash the material id. For a link they differ (`https://…` against `link:https://…`), so the same material has two legal archive names depending on which writer made it. Nothing breaks today because the app stores the name it read, but any future writer that recomputes the name creates a second archive for one material.
+**3. Delivery file name.** `delivery_name` (`server/package.py:142`), a second identical copy (`server/collect/reparse_library.py:89`), `_delivery` (`server/collect/prepare_browser_library.py:89`), and `LibraryFile.deliveryName` (`Sources/REEDCore/LibraryFile.swift:384`). The prepare script hashes `row["url"]`; the other three hash the material id. For a link they differ (`https://…` against `link:https://…`), so the same material has two legal archive names depending on which writer made it. Nothing breaks today because the app stores the name it read, but any future writer that recomputes the name creates a second archive for one material.
 
 *One home:* `package.delivery_name`, imported by both collect scripts; the prepare script passes the material id it already builds. Across the wire it stays a contract, and the existing `DeliveryArchiveTests` should pin the rule on the Swift side.
 
@@ -26,19 +26,19 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 **4. Id to file or folder name.** `base64` with `/` → `_` for an article folder and its cover (`LibraryFile.swift:739`), `/` → `-` for a digest folder (`DigestFile.swift:105`), `sha256` hex for a delivery (three Python sites). Three encodings of one idea, in two files that already have a shared audience.
 
-*One home:* one small `FileNames` enum in `FNMNCore` with three named functions, so a new id shape has one place to land.
+*One home:* one small `FileNames` enum in `REEDCore` with three named functions, so a new id shape has one place to land.
 
 ## Storage mechanics
 
 **5. The JSONL journal.** `LibraryFile.appendJournal` (`LibraryFile.swift:451`) creates `state/`, encodes one JSON object per line, appends under `NSFileCoordinator`, and compacts past 2000 lines. `DigestFile.append` (`DigestFile.swift:79`) creates `digest-state/`, encodes one object per line, and appends to `<device>.jsonl` with a `FileHandle`, without coordination. Same file format, same device-name convention, two writers with different safety guarantees — the digest one is the weaker, and it writes into the same iCloud folder.
 
-*One home:* a `JournalFile` actor in `FNMNCore` parameterised by folder name, element type, and compaction policy, used by both. The digest needs no compaction, which is a parameter, not a second writer.
+*One home:* a `JournalFile` actor in `REEDCore` parameterised by folder name, element type, and compaction policy, used by both. The digest needs no compaction, which is a parameter, not a second writer.
 
 *Closed in 1261132:* `JSONLines` owns the line and the append; the library keeps its coordination and its generation, the digest its atomic first write.
 
 **6. Path containment.** `LibraryFile.contained` (`LibraryFile.swift:627`) refuses an empty path, a leading `/`, or any path containing `..`; `DigestFile.check` (`DigestFile.swift:109`) refuses an empty path, a leading `/`, or a `..` path *part*. So `a..b.png` is refused by one and accepted by the other. Two rules for "a name inside a package may not climb out", and they already differ.
 
-*One home:* the stricter function, in `FNMNCore`, called by both, with one test over the same list of hostile paths.
+*One home:* the stricter function, in `REEDCore`, called by both, with one test over the same list of hostile paths.
 
 *Closed in 41ac307:* `PackagePath.isSafe` and `resolves`, with `PackagePathTests`. The media endpoint's name check guards a URL segment, not a package path, and stays.
 
@@ -56,7 +56,7 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 **9. Bucket by a key, keep first-seen order.** `LibraryQueries.groups(by:)` (`LibraryQueries.swift:54`) builds `order`/`names`/`membersByGroup`; `LibraryQueries.arrange` (`LibraryQueries.swift:212`) builds `order`/`names`/`members` and sorts the same keys, months descending, the rest by localized name; `DigestPackage.sections` (`Digest.swift:250`) builds `order`/`groups`; `SourcesScreen.folders(of:)` (`SourcesScreen.swift:84`) filters per folder; `StoredAnnotations.merging` (`AnnotationMigration.swift`) builds the same order-then-buckets loop for paragraphs. Five copies of one algorithm, and the sorting rule for month keys is written twice.
 
-*One home:* `orderedBuckets<Element>(_ items: [Element], by key: (Element) -> (key: String, name: String)?) -> [(key, name, [Element])]` in `FNMNCore`, with the caller choosing the final sort. `albumSummaries` and `groups` then also share one `AlbumSummary` construction instead of two.
+*One home:* `orderedBuckets<Element>(_ items: [Element], by key: (Element) -> (key: String, name: String)?) -> [(key, name, [Element])]` in `REEDCore`, with the caller choosing the final sort. `albumSummaries` and `groups` then also share one `AlbumSummary` construction instead of two.
 
 *Partly closed in bf51e6d:* `OrderedGroups` serves `groups`, `arrange` and `sections`. `SourcesScreen.folders` and the legacy-annotation merge still bucket on their own.
 
@@ -76,7 +76,7 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 **12. "Is `$…$` a formula or a price".** `MarkedMarkdown.isPrice` (`MarkedMarkdown.swift:89`) says a formula is prose when it has no TeX punctuation and holds a word of three or more letters. `SpeedText.isRich` (`SpeedText.swift:188`) says the opposite side of the same test with the same two conditions, one negated. The renderer and the speed reader can disagree about the same paragraph.
 
-*One home:* one predicate over the inner text, in `FNMNCore`, used by both.
+*One home:* one predicate over the inner text, in `REEDCore`, used by both.
 
 *Closed in 4cae4d4:* `InlineMath.looksLikeProse`; `InlineMathTests` pins a price, a formula and the lone letter that is a variable.
 
@@ -100,7 +100,7 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 **16. Network display names.** `PostCard.network(_:)` maps `x`/`telegram`/`instagram` to display names; `SourcesScreen` checks `network == "telegram"` to say "Channel" instead of "Account"; the server's `DigestPackage.Source.network` carries the raw id. A fourth network means edits in three places.
 
-*One home:* a `DigestNetwork` enum in `FNMNCore`, decoded from the raw string, carrying name and account kind.
+*One home:* a `DigestNetwork` enum in `REEDCore`, decoded from the raw string, carrying name and account kind.
 
 *Closed in 9319bf4:* `DigestPackage.Network` carries the name, and `Source.Status` and `Context.Kind` became enums with it. The "Channel or Account" label is still a condition in `SourcesScreen`, now over an enum.
 
@@ -160,7 +160,7 @@ Every entry names both sites, so the claim can be checked without trusting this 
 
 *Partly closed in c01cb3e:* `media_errors` went into `wire` only, so the nested rename in `wire_context` still carries every context field by hand.
 
-**26. Image size at build time.** `digest/store.image_size` (`:162`) reads PNG/GIF/JPEG headers so each card can lay itself out before decoding; `ImageFiles.headerSize` (`App/FNMN/Store/ImageFiles.swift`) reads the same headers on the phone with ImageIO. Two header readers for one question, and the shipped size is advisory only.
+**26. Image size at build time.** `digest/store.image_size` (`:162`) reads PNG/GIF/JPEG headers so each card can lay itself out before decoding; `ImageFiles.headerSize` (`App/REED/Store/ImageFiles.swift`) reads the same headers on the phone with ImageIO. Two header readers for one question, and the shipped size is advisory only.
 
 *One home:* the phone can read the header of a file it has already downloaded; the server can keep the size as a fallback for formats ImageIO will not open. Today both exist and neither is declared the source of truth.
 
@@ -231,7 +231,7 @@ Eleven commits landed after the first pass, `9319bf4..9fb771b`. One of the first
 
 *Closed in 07d6196:* `monitor.SOURCES` is the only table and `refresh` imports it; `needs_browser` sits in `reading.py`, and a test asserts both modules share the one dict.
 
-**34. The build hours, twice.** `build.BUILD_HOURS = (8, 20)` (`build.py:25`) decides `due()` and `next_build_time`; `fnmn-digest.sh:57,60` writes 8 and 20 into the launchd plist, and `:64` writes the trainer's 21. `digest_script_checks` proves every `Hour` has a `Minute`; it cannot see that the hours disagree with the builder, so changing one leaves the other firing at the old time.
+**34. The build hours, twice.** `build.BUILD_HOURS = (8, 20)` (`build.py:25`) decides `due()` and `next_build_time`; `reed-digest.sh:57,60` writes 8 and 20 into the launchd plist, and `:64` writes the trainer's 21. `digest_script_checks` proves every `Hour` has a `Minute`; it cannot see that the hours disagree with the builder, so changing one leaves the other firing at the old time.
 
 *Closed in 07d6196:* the shell asks `digest.build` for the hours, and `digest_script_checks` fails a script that writes fixed builder hours.
 
@@ -251,7 +251,7 @@ Eleven commits landed after the first pass, `9319bf4..9fb771b`. One of the first
 
 *Closed in 07d6196:* the endpoint asks `Store().media_dir`, and `test_a_picture_in_the_store_is_served` proves the path.
 
-**39. Test support, copied.** `App/FNMNTests/DigestModelTests.writeTar` (`:62`) is a second 40-line USTAR writer beside `Tests/FNMNCoreTests/DeliveryArchiveTests.writeTar`; the package and app test targets cannot share code, so the copies cannot converge without a shared test-support target. In the server tests three modules define their own `post()` factory (`test_digest_store`, `test_digest_build`, `test_digest_refresh`) and two define their own ISO 8601 encoder. In `LibraryImporterTests` the same four-line `LibraryImporter.Write` closure is written four times (`:32`, `:49`, `:57`, `:74`) and could be one helper on the test class.
+**39. Test support, copied.** `App/REEDTests/DigestModelTests.writeTar` (`:62`) is a second 40-line USTAR writer beside `Tests/REEDCoreTests/DeliveryArchiveTests.writeTar`; the package and app test targets cannot share code, so the copies cannot converge without a shared test-support target. In the server tests three modules define their own `post()` factory (`test_digest_store`, `test_digest_build`, `test_digest_refresh`) and two define their own ISO 8601 encoder. In `LibraryImporterTests` the same four-line `LibraryImporter.Write` closure is written four times (`:32`, `:49`, `:57`, `:74`) and could be one helper on the test class.
 
 *Partly closed in 173f513 and 07d6196:* one `post()` factory in `fakes.py` and one `Published` helper. The tar writer stays in each target; sharing it needs a product both test bundles can import.
 

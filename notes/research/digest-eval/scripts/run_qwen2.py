@@ -1,5 +1,5 @@
 import json, sys, numpy as np
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from sentence_transformers import SentenceTransformer
 data=json.load(open('/tmp/digest-eval/offtopic_eval.json'))
 TOPICS=["k-pop pictures","magazine covers","graphic design","film and cinema","artificial intelligence","machine learning research","startups and business","personal stories","software projects"]

@@ -14,19 +14,19 @@ from tests.test_digest_store import png
 
 
 class BuildTests(unittest.TestCase):
-    def build(self, root: Path, fnmn: Path, *extra: str) -> int:
+    def build(self, root: Path, reed: Path, *extra: str) -> int:
         subscriptions = Path(root).parent / "subscriptions.json"
         subscriptions.write_text(
             json.dumps({"folders": ["ml", "design", "tech"], "sources": []}),
             encoding="utf-8",
         )
         return build.main([
-            "--root", str(root), "--folder", str(fnmn), "--subscriptions", str(subscriptions), "--force", *extra,
+            "--root", str(root), "--folder", str(reed), "--subscriptions", str(subscriptions), "--force", *extra,
         ])
 
     def test_a_build_writes_one_delivery_with_every_new_post_and_its_picture(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             store = Store(root)
             first = post("x/1")
             first.media = [store.save_media("x/1", 0, png(640, 480), "png")]
@@ -35,8 +35,8 @@ class BuildTests(unittest.TestCase):
                 {"id": "x/karpathy", "network": "x", "name": "Andrej Karpathy", "folders": ["ml"], "status": "ok", "detail": None},
                 {"id": "telegram/durov", "network": "telegram", "name": "Pavel Durov", "folders": ["tech"], "status": "failed", "detail": "the login expired"},
             ])
-            self.assertEqual(self.build(root, fnmn), 0)
-            deliveries = list((fnmn / "digests").glob("digest-*.tar"))
+            self.assertEqual(self.build(root, reed), 0)
+            deliveries = list((reed / "digests").glob("digest-*.tar"))
             self.assertEqual(len(deliveries), 1)
             with tarfile.open(deliveries[0]) as archive:
                 members = archive.getnames()
@@ -56,7 +56,7 @@ class BuildTests(unittest.TestCase):
 
     def test_a_video_file_rides_the_delivery_next_to_its_poster(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             store = Store(root)
             clip = post("x/1", text=None)
             clip.video = {
@@ -64,8 +64,8 @@ class BuildTests(unittest.TestCase):
                 "file": store.save_file("x/1", "video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
             }
             store.append([clip])
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 members = opened.getnames()
                 package = json.loads(opened.extractfile("package.json").read())
@@ -75,7 +75,7 @@ class BuildTests(unittest.TestCase):
 
     def test_a_poster_that_is_the_first_picture_is_written_once(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             store = Store(root)
             clip = post("x/1", text=None)
             poster = store.save_media("x/1", 0, png(640, 480), "png")
@@ -85,8 +85,8 @@ class BuildTests(unittest.TestCase):
                 "file": store.save_file("x/1", "video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
             }
             store.append([clip])
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 names = opened.getnames()
             self.assertEqual(names.count("media/x-1-0.png"), 1)
@@ -94,51 +94,51 @@ class BuildTests(unittest.TestCase):
 
     def test_the_digest_reads_through_the_article_delivery_reader(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             Store(root).append([post("x/1")])
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             delivery = read_delivery(archive)
             self.assertEqual(delivery.package["schema"], 1)
             self.assertIn("posts", delivery.package)
 
     def test_a_second_build_with_nothing_new_writes_nothing(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             Store(root).append([post("x/1")])
-            self.build(root, fnmn)
-            self.assertEqual(self.build(root, fnmn), 0)
-            self.assertEqual(len(list((fnmn / "digests").glob("digest-*.tar"))), 1)
+            self.build(root, reed)
+            self.assertEqual(self.build(root, reed), 0)
+            self.assertEqual(len(list((reed / "digests").glob("digest-*.tar"))), 1)
 
     def test_a_post_the_magazine_could_not_show_is_skipped_and_the_next_build_runs(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             empty = post("x/1", text="")
             Store(root).append([empty])
-            self.assertEqual(self.build(root, fnmn), 0)
-            self.assertEqual(list((fnmn / "digests").glob("digest-*.tar")), [])
+            self.assertEqual(self.build(root, reed), 0)
+            self.assertEqual(list((reed / "digests").glob("digest-*.tar")), [])
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "neither text nor media"})
             Store(root).append([post("x/2")])
-            self.assertEqual(self.build(root, fnmn), 0)
-            self.assertEqual(len(list((fnmn / "digests").glob("digest-*.tar"))), 1)
+            self.assertEqual(self.build(root, reed), 0)
+            self.assertEqual(len(list((reed / "digests").glob("digest-*.tar"))), 1)
 
     def test_a_video_without_a_poster_is_skipped(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             video = post("x/1", text="")
             video.video = {"poster": None}
             Store(root).append([video])
-            self.assertEqual(self.build(root, fnmn), 0)
+            self.assertEqual(self.build(root, reed), 0)
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "a video with no poster"})
 
     def test_a_missing_picture_is_dropped_and_the_text_stays(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             with_picture = post("x/1")
             with_picture.media = [{"path": "media/missing.png", "width": 1, "height": 1}]
             Store(root).append([with_picture])
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
                 self.assertNotIn("media/missing.png", opened.getnames())
@@ -146,32 +146,32 @@ class BuildTests(unittest.TestCase):
 
     def test_a_post_whose_only_picture_is_missing_is_skipped(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             with_picture = post("x/1", text="")
             with_picture.media = [{"path": "media/missing.png", "width": 1, "height": 1}]
             Store(root).append([with_picture])
-            self.build(root, fnmn)
+            self.build(root, reed)
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "missing media"})
 
     def test_the_build_reads_its_subscriptions_file(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
             Store(root).append([post("x/1")])
             subscriptions = Path(folder) / "subs.json"
             subscriptions.write_text(json.dumps({"folders": ["alpha"], "sources": []}), encoding="utf-8")
             build.main([
-                "--root", str(root), "--folder", str(fnmn), "--subscriptions", str(subscriptions), "--force",
+                "--root", str(root), "--folder", str(reed), "--subscriptions", str(subscriptions), "--force",
             ])
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual(package["folders"], ["alpha"])
 
     def test_the_settings_file_topics_relabel_the_posts_and_the_limit_drops_the_rest(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
                 "networks": {"x": {"topics": ["small model", "nothing alike"]}},
                 "limit": 1,
             }), encoding="utf-8")
@@ -181,8 +181,8 @@ class BuildTests(unittest.TestCase):
             from digest.topics import lexical
 
             with mock.patch("digest.topics.default_scorer", return_value=lexical):
-                self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+                self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual(len(package["posts"]), 1)
@@ -195,9 +195,9 @@ class BuildTests(unittest.TestCase):
         from digest.topics import lexical
 
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
                 "networks": {"x": {"topics": ["small model"]}},
                 "limit": 2,
             }), encoding="utf-8")
@@ -214,8 +214,8 @@ class BuildTests(unittest.TestCase):
                 item.posted_at = "2026-11-07T09:00:00Z"
             Store(root).append([*story, solo])
             with mock.patch("digest.topics.default_scorer", return_value=lexical):
-                self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+                self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual([item["id"] for item in package["posts"]], ["x/9"])
@@ -229,9 +229,9 @@ class BuildTests(unittest.TestCase):
         from digest.topics import lexical
 
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
                 "networks": {"x": {"topics": ["small model"]}},
             }), encoding="utf-8")
             store = Store(root)
@@ -247,8 +247,8 @@ class BuildTests(unittest.TestCase):
             above_photo.media = [store.save_media("x/3", 0, png(640, 480), "png")]
             store.append([below_lead, below_photo, above_lead, above_photo])
             with mock.patch("digest.topics.default_scorer", return_value=lexical):
-                self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+                self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual([item["id"] for item in package["posts"]], ["x/2", "x/3"])
@@ -257,13 +257,13 @@ class BuildTests(unittest.TestCase):
 
     def test_the_limit_caps_each_source_not_the_whole_delivery(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({"limit": 1}), encoding="utf-8")
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({"limit": 1}), encoding="utf-8")
             other = replace(post("x/2"), source="x/elsewhere")
             Store(root).append([post("x/1"), other])
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual(len(package["posts"]), 2)
@@ -271,9 +271,9 @@ class BuildTests(unittest.TestCase):
 
     def test_a_network_limit_caps_the_whole_network_not_each_source(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
                 "networks": {"instagram": {"limit": 2}},
             }), encoding="utf-8")
             photos = [
@@ -287,8 +287,8 @@ class BuildTests(unittest.TestCase):
                 for index in range(count)
             ]
             Store(root).append([*photos, post("x/1")])
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             shipped = [item["id"] for item in package["posts"]]
@@ -298,9 +298,9 @@ class BuildTests(unittest.TestCase):
 
     def test_a_rotation_ships_only_the_longest_waiting_sources(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
                 "rotation": {"sources": 1, "posts": 2},
             }), encoding="utf-8")
             posts = [
@@ -309,8 +309,8 @@ class BuildTests(unittest.TestCase):
                 for index in range(3)
             ]
             Store(root).append(posts)
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             shipped = [item["id"] for item in package["posts"]]
@@ -322,9 +322,9 @@ class BuildTests(unittest.TestCase):
 
     def test_the_rotation_gives_each_network_its_own_slots(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
                 "rotation": {"sources": 1, "posts": 2},
             }), encoding="utf-8")
             posts = [
@@ -337,8 +337,8 @@ class BuildTests(unittest.TestCase):
                 for index in range(3)
             ]
             Store(root).append(posts)
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             shipped = [item["id"] for item in package["posts"]]
@@ -351,9 +351,9 @@ class BuildTests(unittest.TestCase):
         from digest.topics import lexical
 
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
                 "networks": {"x": {"topics": ["small model"]}},
             }), encoding="utf-8")
             off_topic = replace(post("x/1", text="I baked bread and fed the cat"), folders=[])
@@ -365,8 +365,8 @@ class BuildTests(unittest.TestCase):
             )
             Store(root).append([off_topic, photos])
             with mock.patch("digest.topics.default_scorer", return_value=lexical):
-                self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+                self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual([item["id"] for item in package["posts"]], ["instagram/a/1"])
@@ -374,11 +374,11 @@ class BuildTests(unittest.TestCase):
 
     def test_without_topics_the_feed_is_capped_at_forty(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
             Store(root).append([post(f"x/{index}") for index in range(45)])
-            self.build(root, fnmn)
-            archive = next((fnmn / "digests").glob("digest-*.tar"))
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
             self.assertEqual(len(package["posts"]), build.FEED_LIMIT)
@@ -386,25 +386,111 @@ class BuildTests(unittest.TestCase):
 
     def test_a_disabled_digest_builds_nothing(self):
         with TemporaryDirectory() as folder:
-            root, fnmn = Path(folder) / "data", Path(folder) / "fnmn"
-            fnmn.mkdir(parents=True)
-            (fnmn / "digest-settings.json").write_text(json.dumps({"enabled": False}), encoding="utf-8")
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({"enabled": False}), encoding="utf-8")
             Store(root).append([post("x/1")])
-            self.assertEqual(self.build(root, fnmn), 0)
-            self.assertEqual(list((fnmn / "digests").glob("digest-*.tar")), [])
+            self.assertEqual(self.build(root, reed), 0)
+            self.assertEqual(list((reed / "digests").glob("digest-*.tar")), [])
 
     def test_pruning_keeps_the_newest_deliveries(self):
         with TemporaryDirectory() as folder:
-            fnmn = Path(folder)
+            reed = Path(folder)
             for hour in range(16):
-                (fnmn / f"digest-2026-11-07T{hour:02d}-00-00Z.tar").write_bytes(b"")
-            (fnmn / "notes.txt").write_text("kept")
-            build._prune(fnmn)
-            names = sorted(item.name for item in fnmn.glob("digest-*.tar"))
+                (reed / f"digest-2026-11-07T{hour:02d}-00-00Z.tar").write_bytes(b"")
+            (reed / "notes.txt").write_text("kept")
+            build._prune(reed)
+            names = sorted(item.name for item in reed.glob("digest-*.tar"))
             self.assertEqual(len(names), build.KEEP)
-            self.assertFalse((fnmn / "digest-2026-11-07T00-00-00Z.tar").exists())
-            self.assertTrue((fnmn / "digest-2026-11-07T15-00-00Z.tar").exists())
-            self.assertTrue((fnmn / "notes.txt").exists())
+            self.assertFalse((reed / "digest-2026-11-07T00-00-00Z.tar").exists())
+            self.assertTrue((reed / "digest-2026-11-07T15-00-00Z.tar").exists())
+            self.assertTrue((reed / "notes.txt").exists())
+
+
+    def test_a_prolific_author_scores_lower_until_somebody_else_wins(self):
+        from unittest import mock
+
+        from digest.topics import lexical
+
+        with TemporaryDirectory() as folder:
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
+                "networks": {"x": {"topics": ["small model"]}},
+                "limit": 2,
+            }), encoding="utf-8")
+            store = Store(root)
+            loud_author = {"handle": "loud", "name": "Loud"}
+            loud_a = replace(post("x/loud/new1"), source="x/loud", author=loud_author)
+            loud_a.posted_at = "2026-11-07T10:00:00Z"
+            loud_b = replace(post("x/loud/new2"), source="x/loud", author=loud_author)
+            loud_b.posted_at = "2026-11-07T10:01:00Z"
+            fresh = replace(post("x/fresh/new"), source="x/fresh", author={"handle": "fresh", "name": "Fresh"})
+            fresh.posted_at = "2026-11-07T09:00:00Z"
+            loud_c = replace(post("x/loud/new3"), source="x/loud", author=loud_author)
+            loud_c.posted_at = "2026-11-07T09:30:00Z"
+            store.append([loud_a, loud_b, loud_c, fresh])
+            with mock.patch("digest.topics.default_scorer", return_value=lexical):
+                self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            shipped = {item["id"] for item in package["posts"]}
+            self.assertEqual(shipped, {"x/fresh/new", "x/loud/new2"})
+            skipped = Store(root).builds()[-1]["skipped"]
+            self.assertEqual(set(skipped), {"x/loud/new1", "x/loud/new3"})
+
+    def telegram_post(self, post_id, text, media=()):
+        return replace(
+            post(post_id, text=text),
+            network="telegram", source="telegram/news", id=post_id,
+            author={"handle": "news", "name": "News"},
+            permalink=f"https://t.me/news/{post_id.rsplit('/', 1)[-1]}",
+            media=list(media), folders=[],
+        )
+
+    def test_a_cut_caption_pair_ships_only_the_whole_text_and_keeps_the_media(self):
+        with TemporaryDirectory() as folder:
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            whole = " ".join(f"слово номер {index} в длинном тексте поста" for index in range(60))
+            cut = whole[:250] + "…"
+            store = Store(root)
+            (root / "media").mkdir(parents=True)
+            (root / "media" / "news-2-0.jpg").write_bytes(png())
+            store.append([
+                self.telegram_post("telegram/news/1", whole),
+                self.telegram_post("telegram/news/2", cut, media=[{"path": "media/news-2-0.jpg", "width": 4, "height": 3}]),
+            ])
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            shipped = package["posts"]
+            self.assertEqual([item["id"] for item in shipped], ["telegram/news/1"])
+            self.assertIn("media/news-2-0.jpg", [media["path"] for media in shipped[0]["media"]])
+            self.assertEqual(Store(root).builds()[-1]["skipped"]["telegram/news/2"], "a shorter copy of the same text")
+
+    def test_a_source_limit_caps_one_source_not_the_delivery(self):
+        with TemporaryDirectory() as folder:
+            root, reed = Path(folder) / "data", Path(folder) / "reed"
+            reed.mkdir(parents=True)
+            (reed / "digest-settings.json").write_text(json.dumps({
+                "limit": 40,
+                "sources": {"x/teortaxestex": {"limit": 1}},
+            }), encoding="utf-8")
+            loud = [replace(post(f"x/teortaxestex/{index}"), source="x/teortaxestex") for index in range(3)]
+            quiet = replace(post("x/other/9"), source="x/other")
+            Store(root).append([*loud, quiet])
+            self.build(root, reed)
+            archive = next((reed / "digests").glob("digest-*.tar"))
+            with tarfile.open(archive) as opened:
+                package = json.loads(opened.extractfile("package.json").read())
+            shipped = [item["id"] for item in package["posts"]]
+            self.assertEqual(len([item for item in shipped if item.startswith("x/teortaxestex/")]), 1)
+            self.assertIn("x/other/9", shipped)
+
+
 
 
 class ScheduleTests(unittest.TestCase):
@@ -426,7 +512,6 @@ class ScheduleTests(unittest.TestCase):
             store = Store(Path(folder))
             store.record_build({"id": "digest-1", "at": (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat(), "post_ids": []})
             self.assertFalse(build.due(store, datetime.now(timezone.utc)))
-
 
 if __name__ == "__main__":
     unittest.main()

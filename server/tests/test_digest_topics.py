@@ -14,7 +14,7 @@ class SettingsTests(unittest.TestCase):
             prefs = settings.load(Path(folder))
         self.assertTrue(prefs["enabled"])
         self.assertEqual(prefs["hours"], [8, 20])
-        self.assertEqual(prefs["threshold"], 0.5)
+        self.assertEqual(prefs["threshold"], 0.6)
         self.assertEqual(prefs["limit"], 40)
         self.assertFalse(settings.any_topics(prefs))
 
@@ -58,11 +58,13 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(scored.folders, ["llms"])
 
     def test_topics_too_close_to_call_land_in_other(self):
-        def tied_scores(text, words):
-            return {"llms": 0.9, "cooking": 0.85}
+        prefs = self.prefs(networks={"x": {"topics": ["llms", "cooking", "sports"]}})
+
+        def crowded_scores(text, words):
+            return {"llms": 0.9, "cooking": 0.9, "sports": 0.89}
 
         scored = post("x/1", text="A post about llms")
-        topics.classify([[scored]], self.prefs(), tied_scores)
+        topics.classify([[scored]], prefs, crowded_scores)
         self.assertEqual(scored.folders, [])
 
     def test_a_close_runner_up_does_not_sink_a_clear_lead(self):
@@ -78,16 +80,16 @@ class ClassifyTests(unittest.TestCase):
     def test_a_source_threshold_beats_the_network_and_the_global_one(self):
         prefs = {
             "threshold": 0.5,
-            "networks": {"x": {"topics": ["llms", "cooking"], "threshold": 0.4}},
+            "networks": {"x": {"topics": ["llms", "cooking", "sports"], "threshold": 0.4}},
             "sources": {"x/karpathy": {"threshold": 0.1}},
         }
         loose = post("x/karpathy/1", text="A post about llms")
         strict = replace(post("x/other/2", text="A post about llms"), source="x/other")
 
-        def clear_scores(text, words):
-            return {"llms": 0.9, "cooking": 0.7}
+        def crowded_scores(text, words):
+            return {"llms": 0.9, "cooking": 0.9, "sports": 0.89}
 
-        topics.classify([[loose], [strict]], prefs, clear_scores)
+        topics.classify([[loose], [strict]], prefs, crowded_scores)
         self.assertEqual(loose.folders, ["llms"])
         self.assertEqual(strict.folders, [])
 

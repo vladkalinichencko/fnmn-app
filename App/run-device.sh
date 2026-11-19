@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds FNMN for a connected iPhone or iPad, installs it over the old version and opens it; the library on the device stays.
+# Builds REED for a connected iPhone or iPad, installs it over the old version and opens it; the library on the device stays.
 #   App/run-device.sh            the first connected physical device
 #   App/run-device.sh <UDID>     a specific one
 set -e -o pipefail
@@ -9,8 +9,8 @@ if [[ -z $DEVICE ]]; then
   xcrun devicectl list devices | grep physical >&2
   exit 1
 fi
-DERIVED=${TMPDIR:-/tmp}/fnmn-device-build
+DERIVED=${TMPDIR:-/tmp}/reed-device-build
 cd "$(dirname "$0")"
-xcodebuild -project FNMN.xcodeproj -scheme FNMN -destination "generic/platform=iOS" -derivedDataPath "$DERIVED" -allowProvisioningUpdates build | grep -E "error:|BUILD"
-xcrun devicectl device install app --device "$DEVICE" "$DERIVED/Build/Products/Debug-iphoneos/FNMN.app"
-xcrun devicectl device process launch --terminate-existing --device "$DEVICE" local.fnmn.reader
+xcodebuild -project REED.xcodeproj -scheme REED -destination "generic/platform=iOS" -derivedDataPath "$DERIVED" -allowProvisioningUpdates build | grep -E "error:|BUILD"
+xcrun devicectl device install app --device "$DEVICE" "$DERIVED/Build/Products/Debug-iphoneos/REED.app"
+xcrun devicectl device process launch --terminate-existing --device "$DEVICE" local.reed.reader

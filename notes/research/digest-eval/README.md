@@ -28,5 +28,5 @@
 `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`,
 `joeddav/xlm-roberta-large-xnli` (удалены из кэша после экспериментов).
 
-Данные постов брались из `~/Library/Application Support/FNMN/digest-out/posts.jsonl`
+Данные постов брались из `~/Library/Application Support/REED/digest-out/posts.jsonl`
 (симлинк на iCloud `digest-out`).

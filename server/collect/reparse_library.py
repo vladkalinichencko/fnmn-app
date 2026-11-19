@@ -1,7 +1,7 @@
-"""Read every web page in the library again under the current parser, in the FNMN folder itself:
+"""Read every web page in the library again under the current parser, in the REED folder itself:
 
     cd server && ../.venv/bin/python -m collect.reparse_library \
-        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
+        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/REED
 
 A material keeps its id, so it stays in its collections. The app forgets reading progress and marks of a
 material whose text changed, so a material the reader marked read, noted, highlighted or read past its first
@@ -86,8 +86,8 @@ def reparse(archive: Path, into: Path, kept: set[str]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Reparse the web pages of the FNMN library")
-    parser.add_argument("library", type=Path, help="the FNMN folder in iCloud Drive")
+    parser = argparse.ArgumentParser(description="Reparse the web pages of the REED library")
+    parser.add_argument("library", type=Path, help="the REED folder in iCloud Drive")
     parser.add_argument("--into", type=Path, help="write the new deliveries here instead of the library")
     parser.add_argument("--only", action="append", default=[], help="a source URL to reparse; repeatable")
     parser.add_argument("--workers", type=int, default=4)

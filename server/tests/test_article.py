@@ -85,7 +85,7 @@ class ArticleTests(unittest.TestCase):
         self.assertEqual(package["material"]["sourceURL"], "https://huggingface.co/spaces/owner/name")
         self.assertEqual(package["material"]["title"], "Counting")
         self.assertIn("Models track line breaks", package["body"])
-        self.assertIn("```fnmn-interactive\nhttps://owner-name.hf.space/?__theme=system\n#plot\n```", package["body"])
+        self.assertIn("```reed-interactive\nhttps://owner-name.hf.space/?__theme=system\n#plot\n```", package["body"])
         self.assertEqual(package["material"]["source"], {"homepage": "https://huggingface.co/owner", "name": "owner"})
         self.assertNotIn("https://stripe.example/m.html", seen)
 
@@ -142,7 +142,7 @@ class ArticleTests(unittest.TestCase):
 
         package = imported_article("https://example.com/notes", fetch_text, fetch_bytes, ["Web"])
         self.assertEqual(package["material"]["title"], "Notes")
-        self.assertIn("```fnmn-interactive\nhttps://example.com/notes\n#chart\n```", package["body"])
+        self.assertIn("```reed-interactive\nhttps://example.com/notes\n#chart\n```", package["body"])
         self.assertNotIn("draw()", package["body"])
         path, encoded = next(iter(package["files"].items()))
         self.assertEqual(len(package["files"]), 1)
@@ -170,7 +170,7 @@ class ArticleTests(unittest.TestCase):
 
         package = imported_article("https://example.com/notes", lambda url: source, fetch_bytes, [])
         self.assertIn("Hi", package["body"])
-        self.assertNotIn("fnmn-video", package["body"])
+        self.assertNotIn("reed-video", package["body"])
         self.assertEqual(package["files"], {})
 
     def test_refused_page_is_read_from_the_rendered_browser_page(self):

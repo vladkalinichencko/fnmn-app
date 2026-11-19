@@ -14,7 +14,7 @@ import httpx
 
 import reader
 
-_USER_AGENT = "FNMN/1.0 (https://github.com/vladkalinichencko/fnmn-app) article reader"
+_USER_AGENT = "REED/1.0 (https://github.com/vladkalinichencko/reed-app) article reader"
 
 
 class Web(NamedTuple):

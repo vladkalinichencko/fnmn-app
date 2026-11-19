@@ -1,8 +1,8 @@
 """Margin variants (top1-top2, top1-top3, top1-mean) + length-scaled thresholds on offtopic_eval."""
 import json, sys, numpy as np
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from sentence_transformers import SentenceTransformer
-data=json.load(open('/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/notes/research/digest-eval/data/offtopic_eval.json'))
+data=json.load(open('/Users/vladislavkalinichenko/VSCodeProjects/REED App/notes/research/digest-eval/data/offtopic_eval.json'))
 golds=np.array([p['gold'] for p in data])
 texts=[p['text'][:1500] for p in data]
 lens=np.array([len(t.split()) for t in texts])

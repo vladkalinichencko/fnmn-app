@@ -118,7 +118,7 @@ def _flow(node, page_url: str, downloads: dict[str, str]) -> str:
 
 def _crop(page_url: str, css: str | None) -> str:
     lines = page_url if css is None else f"{page_url}\n{css}"
-    return f"```fnmn-interactive\n{lines}\n```"
+    return f"```reed-interactive\n{lines}\n```"
 
 
 def _list(node, ordered: bool, page_url: str, downloads: dict[str, str]) -> str:
@@ -164,7 +164,7 @@ def _video(node, page_url: str, downloads: dict[str, str]) -> str:
     nested = node.find("source")
     if not source and nested is not None:
         source = nested.get("src") or ""
-    return f"```fnmn-video\n{_stored(page_url, source, downloads)}\n```"
+    return f"```reed-video\n{_stored(page_url, source, downloads)}\n```"
 
 
 def _stored(page_url: str, src: str, downloads: dict[str, str]) -> str:

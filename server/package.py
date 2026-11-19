@@ -1,4 +1,4 @@
-"""The adapter contract and the one delivery format FNMN imports.
+"""The adapter contract and the one delivery format REED imports.
 
 Every adapter is `read(url, web, report) -> Document | Video`. It reports its
 stage through `report` and stops with ImportFailure. `package` turns either

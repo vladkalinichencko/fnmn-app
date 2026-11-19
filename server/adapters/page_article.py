@@ -16,7 +16,7 @@ _SCORE_TAGS = {"section", "h2", "h3", "h4", "h5", "h6", "p", "td", "pre"}
 _POSITIVE = re.compile(r"article|body|content|entry|main|page|post|text|blog|story", re.I)
 NEGATIVE = re.compile(r"banner|comment|consent|cookie|disqus|footer|header|menu|nav|onetrust|related|sidebar|sponsor", re.I)
 _TEX = './/*[local-name()="annotation"][@encoding="application/x-tex"]'
-_MARK = "fnmnblock"
+_MARK = "reedblock"
 _MEDIA = {"img", "picture", "video", "audio", "iframe", "canvas", "math", "object", "embed"}
 _SILENT = {"script", "style", "template", "noscript", "head", "title", "meta", "link", "button"}
 _INLINE = {"a", "abbr", "b", "bdi", "bdo", "br", "cite", "code", "data", "del", "dfn", "em", "font", "i", "ins", "kbd",

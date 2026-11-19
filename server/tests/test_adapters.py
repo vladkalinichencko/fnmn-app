@@ -378,7 +378,7 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("In Paris.", body)
         (path,) = delivery.files
         self.assertRegex(path, r"^assets/interactive-[0-9a-f]{16}\.html$")
-        self.assertIn(f"```fnmn-interactive\n{path}\n```", body)
+        self.assertIn(f"```reed-interactive\n{path}\n```", body)
         self.assertIn('<div id="d" class="p-2">1 < 2</div>', delivery.files[path].decode())
 
     def test_claude_share_keeps_both_sides_and_drops_thinking_and_tools(self):
@@ -466,7 +466,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(len(delivery.files), 2)
         for path, blob in delivery.files.items():
             self.assertRegex(path, r"^assets/interactive-[0-9a-f]{16}\.html$")
-            self.assertIn(f"```fnmn-interactive\n{path}\n```", body)
+            self.assertIn(f"```reed-interactive\n{path}\n```", body)
         pages = sorted(blob.decode() for blob in delivery.files.values())
         self.assertIn(page, pages)
         self.assertTrue(any("<svg><circle r='4'/></svg>" in text and text.startswith("<!doctype html>") for text in pages))

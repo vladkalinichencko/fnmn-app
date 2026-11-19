@@ -23,7 +23,7 @@ struct DigestProvider: TimelineProvider {
 
 struct DigestWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "FNMNDigest", provider: DigestProvider()) { entry in
+        StaticConfiguration(kind: "REEDDigest", provider: DigestProvider()) { entry in
             DigestEntryView(entry: entry)
         }
         .configurationDisplayName("Digest")
@@ -41,7 +41,8 @@ struct DigestEntryView: View {
             DigestContent(digest: entry.digest, family: family, size: geometry.size)
         }
         .containerBackground(.background, for: .widget)
-        .widgetURL(URL(string: "fnmn://digest"))
+        .tint(.red)
+        .widgetURL(URL(string: "reed://digest"))
     }
 }
 

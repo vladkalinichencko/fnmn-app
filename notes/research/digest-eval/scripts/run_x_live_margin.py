@@ -1,8 +1,8 @@
 """Margin distribution + pseudo-label Mahalanobis probe on 400 live X posts from the store."""
 import json, sys, numpy as np
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from sentence_transformers import SentenceTransformer
-raw=[json.loads(l) for l in open('/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server/digest/out/posts.jsonl')]
+raw=[json.loads(l) for l in open('/Users/vladislavkalinichenko/VSCodeProjects/REED App/server/digest/out/posts.jsonl')]
 xs=[p for p in raw if p.get('network')=='x' and (p.get('text') or '').strip()]
 xs.sort(key=lambda p:p.get('posted_at',''),reverse=True); xs=xs[:400]
 TOPICS=["film updates","software development","web design","research","artificial intelligence","deep learning"]

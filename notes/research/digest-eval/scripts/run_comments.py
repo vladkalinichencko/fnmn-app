@@ -1,5 +1,5 @@
 import json, sys, numpy as np
-sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/FNMN App/server')
+sys.path.insert(0,'/Users/vladislavkalinichenko/VSCodeProjects/REED App/server')
 from sentence_transformers import SentenceTransformer
 
 model=SentenceTransformer("intfloat/multilingual-e5-large")
@@ -21,7 +21,7 @@ for t,s in score(att,topics).items(): print(f"  {t:25} {s}")
 
 # --- 2) comments enrichment on short low-scoring posts
 posts={}
-for l in open('/Users/vladislavkalinichenko/Library/Application Support/FNMN/digest-out/posts.jsonl'):
+for l in open('/Users/vladislavkalinichenko/Library/Application Support/REED/digest-out/posts.jsonl'):
     p=json.loads(l); posts[p['id']]=p
 data=json.load(open('/tmp/digest-eval/offtopic_eval.json'))
 TOPICS=["k-pop pictures","magazine covers","graphic design","film and cinema","artificial intelligence","machine learning research","startups and business","personal stories","software projects"]

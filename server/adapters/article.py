@@ -130,7 +130,7 @@ def _has_prose(markdown: str) -> bool:
 
 def _without_asset(markdown: str, path: str, error: Exception) -> str:
     """A picture or video the site no longer serves leaves the text; anything else stops the import."""
-    video = f"```fnmn-video\n{path}\n```"
+    video = f"```reed-video\n{path}\n```"
     if video in markdown:
         return markdown.replace(video, "")
     image = rf"!\[[^\]]*\]\({re.escape(path)}\)"

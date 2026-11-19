@@ -1,17 +1,17 @@
 # Дайджест соцсетей
 
 Mac следит за выбранными каналами Telegram и аккаунтами X, копит посты и дважды в день кладёт дайджест
-поставкой в папку FNMN. Приложение читает его вкладкой Digest; замысел и границы — в
+поставкой в папку REED. Приложение читает его вкладкой Digest; замысел и границы — в
 [notes/research/social-digest.md](../../notes/research/social-digest.md).
 
 ## Что запускается
 
 ```sh
-server/digest/fnmn-digest.sh on       # агенты: монитор каждые 2 часа, сборка в 08:00 и 20:00
-server/digest/fnmn-digest.sh status   # агенты и три последние поставки
-server/digest/fnmn-digest.sh monitor  # прочитать все источники один раз, сейчас
-server/digest/fnmn-digest.sh build    # собрать дайджест, если время пришло
-server/digest/fnmn-digest.sh scan     # записать в subscriptions.json подписки профилей
+server/digest/reed-digest.sh on       # агенты: монитор каждые 2 часа, сборка в 08:00 и 20:00
+server/digest/reed-digest.sh status   # агенты и три последние поставки
+server/digest/reed-digest.sh monitor  # прочитать все источники один раз, сейчас
+server/digest/reed-digest.sh build    # собрать дайджест, если время пришло
+server/digest/reed-digest.sh scan     # записать в subscriptions.json подписки профилей
 ```
 
 Вручную, из `server/`:
@@ -27,9 +27,9 @@ X, Instagram и Telegram читаются постоянным профилем 
 Один раз на Mac:
 
 ```sh
-server/digest/fnmn-digest.sh login x
-server/digest/fnmn-digest.sh login instagram
-server/digest/fnmn-digest.sh login telegram
+server/digest/reed-digest.sh login x
+server/digest/reed-digest.sh login instagram
+server/digest/reed-digest.sh login telegram
 ```
 
 Открывается обычное окно Chrome со страницей входа; после входа закрыть Chrome (Cmd-Q) и нажать Enter в
@@ -51,7 +51,7 @@ Telegram публичные каналы открываются и без вхо
 ]}
 ```
 
-`fnmn-digest.sh scan` проходит по подпискам всех трёх сетей и сверяет `sources` с тем, что
+`reed-digest.sh scan` проходит по подпискам всех трёх сетей и сверяет `sources` с тем, что
 профили показывают сейчас: X — страница Following своего аккаунта, Instagram — диалог Following
 (скроллится до конца), Telegram — каналы из сессии `telegram` CLI (`telegram chats --type channel`;
 канал без публичного username читать нечем — у `t.me` нет его страницы). Найденный сканом источник
@@ -66,7 +66,7 @@ Telegram такого режима нет, и источник падает с �
 
 ## Темы и настройки
 
-`digest-settings.json` в корне папки FNMN — единственный канал настроек: приложение пишет его
+`digest-settings.json` в корне папки REED — единственный канал настроек: приложение пишет его
 экраном настроек дайджеста, монитор и сборка читают. Формат:
 
 ```json
@@ -101,7 +101,7 @@ Telegram такого режима нет, и источник падает с �
 ## Что проверено
 
 - `scan`, `monitor` и `build` прогнаны вживую на всех трёх сетях: 458 источников в `subscriptions.json`,
-  сборка `digest-2026-11-12T16-48-34Z.tar` (78 постов) доехала до папки FNMN.
+  сборка `digest-2026-11-12T16-48-34Z.tar` (78 постов) доехала до папки REED.
 - Instagram-скан добирает Following не полностью: диалог виртуализирован, список догружается порциями.
 - X в headless проходит Cloudflare только с живым `cf_clearance`; при протухании монитор сам
   делает один headed-прогрев профиля (открывает x.com в окне Chrome, ждёт проверку и закрывает),

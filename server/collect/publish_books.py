@@ -1,7 +1,7 @@
-"""Put books the PDF pipeline exported into the FNMN folder in iCloud Drive, as deliveries like any other material.
+"""Put books the PDF pipeline exported into the REED folder in iCloud Drive, as deliveries like any other material.
 
     cd mac && ../.venv/bin/python -m collect.publish_books ../fixtures/books/principles-of-deep-learning-theory \
-        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/FNMN
+        ~/Library/Mobile\\ Documents/com~apple~CloudDocs/REED
 
 Each book becomes one archive in `deliveries/`, and its PDF, found by the name the book records in
 `--originals` (Apple Books by default), goes to `originals/` beside it. Book text goes through the same Markdown
@@ -34,7 +34,7 @@ def publish(books: list[Path], destination: Path, originals: Path = APPLE_BOOKS)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Put exported books into the FNMN folder")
+    parser = argparse.ArgumentParser(description="Put exported books into the REED folder")
     parser.add_argument("books", type=Path, nargs="+")
     parser.add_argument("destination", type=Path)
     parser.add_argument("--originals", type=Path, default=APPLE_BOOKS, help="folder holding each book's PDF")

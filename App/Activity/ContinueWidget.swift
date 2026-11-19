@@ -23,7 +23,7 @@ struct ContinueProvider: TimelineProvider {
 
 struct ContinueWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "FNMNContinue", provider: ContinueProvider()) { entry in
+        StaticConfiguration(kind: "REEDContinue", provider: ContinueProvider()) { entry in
             ContinueEntryView(entry: entry)
         }
         .configurationDisplayName("Continue")
@@ -61,6 +61,7 @@ struct ContinueEntryView: View {
             ContinueContent(items: stream.items, othersStart: stream.othersStart, plan: plan, size: geometry.size)
         }
         .containerBackground(.background, for: .widget)
+        .tint(.red)
     }
 }
 
