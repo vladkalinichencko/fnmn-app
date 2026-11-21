@@ -37,12 +37,12 @@ def mark_threads(posts: list[Post], store) -> None:
     thread it already had, so a story split across monitor passes still reads as one."""
     latest: dict[tuple[str, str], Post] = {}
     for old in store.posts():
-        key = (old.source, old.author.get("handle") or "")
+        key = (old.network, old.author.get("handle") or "")
         if key not in latest or old.posted_at > latest[key].posted_at:
             latest[key] = old
     last = dict(latest)
     for post in sorted(posts, key=lambda item: item.posted_at):
-        key = (post.source, post.author.get("handle") or "")
+        key = (post.network, post.author.get("handle") or "")
         previous = last.get(key)
         gap = None
         if previous is not None:

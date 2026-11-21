@@ -260,19 +260,23 @@ class BuildTests(unittest.TestCase):
             skipped = Store(root).builds()[-1]["skipped"]
             self.assertEqual(skipped, {"x/0": "below the topic threshold", "x/1": "below the topic threshold"})
 
-    def test_the_limit_caps_each_source_not_the_whole_delivery(self):
+    def test_the_limit_caps_each_network_not_the_whole_delivery(self):
         with TemporaryDirectory() as folder:
             root, reed = Path(folder) / "data", Path(folder) / "reed"
             reed.mkdir(parents=True)
             (reed / "digest-settings.json").write_text(json.dumps({"limit": 1}), encoding="utf-8")
-            other = replace(post("x/2"), source="x/elsewhere")
-            Store(root).append([post("x/1"), other])
+            channel = replace(
+                post("telegram/durov/1"), network="telegram", source="telegram/durov",
+                id="telegram/durov/1", permalink="https://t.me/durov/1",
+            )
+            Store(root).append([post("x/1"), post("x/2"), channel])
             self.build(root, reed)
             archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
-            self.assertEqual(len(package["posts"]), 2)
-            self.assertEqual(Store(root).builds()[-1]["skipped"], {})
+            shipped = [item["id"] for item in package["posts"]]
+            self.assertEqual(len([item for item in shipped if item.startswith("x/")]), 1)
+            self.assertIn("telegram/durov/1", shipped)
 
     def test_a_network_limit_caps_the_whole_network_not_each_source(self):
         with TemporaryDirectory() as folder:

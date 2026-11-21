@@ -166,8 +166,8 @@ class Store:
         existing = self.posts()
         known = {post.id for post in existing}
         signatures = []
-        texts: list[tuple[str, str, str]] = []
-        wanted = {(post.network, post.source) for post in posts}
+        texts: list[tuple[str, str]] = []
+        wanted = {post.network for post in posts}
         for post in existing:
             if not post.text:
                 continue
@@ -177,8 +177,8 @@ class Store:
                 cached = (post.network, _signature(post.text))
                 self._sig_cache[key] = cached
             signatures.append(cached)
-            if (post.network, post.source) in wanted:
-                texts.append((post.network, post.source, flat_text(post.text)))
+            if post.network in wanted:
+                texts.append((post.network, flat_text(post.text)))
         fresh = []
         for post in posts:
             if post.id in known:
@@ -191,15 +191,15 @@ class Store:
                 continue
             flat = flat_text(post.text)
             if flat and not post.attachments and any(
-                network == post.network and source == post.source and prefix_of(flat, other)
-                for network, source, other in texts
+                network == post.network and prefix_of(flat, other)
+                for network, other in texts
             ):
                 continue
             fresh.append(post)
             if signature:
                 signatures.append((post.network, signature))
             if flat:
-                texts.append((post.network, post.source, flat))
+                texts.append((post.network, flat))
         if not fresh:
             return 0
         with self.posts_file.open("a", encoding="utf-8") as log:

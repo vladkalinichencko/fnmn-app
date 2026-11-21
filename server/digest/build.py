@@ -72,18 +72,15 @@ def main(argv: list[str] | None = None) -> int:
             filtered.extend(thread)
     buildable = filtered
     scores = _author_decay(_threads(buildable), scores)
-    per_source: dict[str, list[list[Post]]] = {}
+    per_network: dict[str, list[list[Post]]] = {}
     for thread in _threads(buildable):
-        per_source.setdefault(thread[0].source, []).append(thread)
+        per_network.setdefault(thread[0].network, []).append(thread)
     kept, over = [], {}
-    for source_id, group in per_source.items():
-        group_kept, group_over = topics.cap(group, scores, digest_settings.source_limit(prefs, source_id) or prefs["limit"])
-        kept += group_kept
-        over.update(group_over)
+    for network, groups in per_network.items():
+        net_kept, net_over = _cap_network(groups, scores, prefs, network)
+        kept += net_kept
+        over.update(net_over)
     buildable = kept
-    net_kept, net_over = _cap_networks(buildable, scores, prefs)
-    buildable = net_kept
-    over.update(net_over)
     rotated, rot_over = _rotate(buildable, scores, store, prefs.get("rotation") or {})
     buildable = rotated
     over.update(rot_over)
@@ -157,7 +154,7 @@ def _dedup_texts(posts: list[Post]) -> tuple[list[Post], dict[str, str]]:
     beside the whole one. The delivery keeps the longer text and moves the cut copy's media onto
     it, so the pictures survive without the duplicate card."""
     kept: list[Post] = []
-    flats: list[tuple[str, str, str, Post]] = []
+    flats: list[tuple[str, str, Post]] = []
     seen: dict[str, Post] = {}
     over: dict[str, str] = {}
     for post in sorted(posts, key=lambda item: len(flat_text(item.text)), reverse=True):
@@ -169,17 +166,17 @@ def _dedup_texts(posts: list[Post]) -> tuple[list[Post], dict[str, str]]:
         seen[post.id] = post
         flat = flat_text(post.text)
         twin = next(
-            (entry for entry in flats if entry[0] == post.network and entry[1] == post.source and (entry[2] == flat or prefix_of(flat, entry[2]))),
+            (entry for entry in flats if entry[0] == post.network and (entry[1] == flat or prefix_of(flat, entry[1]))),
             None,
         )
         if twin is not None:
-            survivor = twin[3]
+            survivor = twin[2]
             _merge_attachments(survivor, post)
-            over[post.id] = "the same text" if twin[2] == flat else "a shorter copy of the same text"
+            over[post.id] = "the same text" if twin[1] == flat else "a shorter copy of the same text"
             continue
         kept.append(post)
         if flat:
-            flats.append((post.network, post.source, flat, post))
+            flats.append((post.network, flat, post))
     return kept, over
 
 
@@ -244,25 +241,30 @@ def _threads(posts: list[Post]) -> list[list[Post]]:
     return [groups[key] for key in order]
 
 
-def _cap_networks(posts: list[Post], scores: dict[str, float], prefs: dict) -> tuple[list[Post], dict[str, str]]:
-    """A network that names a `limit` in the settings ships at most that many posts a delivery,
-    the strongest threads first; the rest is consumed but not shipped."""
-    limited = {post.network for post in posts if digest_settings.network_limit(prefs, post.network)}
-    if not limited:
-        return posts, {}
-    by_network: dict[str, list[list[Post]]] = {}
-    for thread in _threads(posts):
-        by_network.setdefault(thread[0].network, []).append(thread)
-    kept: list[Post] = []
+def _cap_network(
+    groups: list[list[Post]], scores: dict[str, float], prefs: dict, network: str
+) -> tuple[list[Post], dict[str, str]]:
+    """The delivery's `limit` is the pool each network competes for whole — telegram, x and
+    instagram are the sources a reader follows, while a channel inside one is an author, not a
+    quota of its own. A channel that names `sources.<id>.limit` still ships no more than that
+    inside its network, and `networks.<id>.limit` replaces the shared ceiling for its network."""
+    by_source: dict[str, list[list[Post]]] = {}
+    for thread in groups:
+        by_source.setdefault(thread[0].source, []).append(thread)
+    pool: list[Post] = []
     over: dict[str, str] = {}
-    for network, groups in by_network.items():
-        limit = digest_settings.network_limit(prefs, network)
+    for source_id, source_groups in by_source.items():
+        limit = digest_settings.source_limit(prefs, source_id)
         if limit is None:
-            kept += [post for group in groups for post in group]
+            pool += [post for group in source_groups for post in group]
             continue
-        group_kept, group_over = topics.cap(groups, scores, limit)
-        kept += group_kept
-        over.update(group_over)
+        kept, dropped = topics.cap(source_groups, scores, limit)
+        pool += kept
+        over.update(dropped)
+    kept, dropped = topics.cap(
+        _threads(pool), scores, digest_settings.network_limit(prefs, network) or prefs["limit"]
+    )
+    over.update(dropped)
     return kept, over
 
 

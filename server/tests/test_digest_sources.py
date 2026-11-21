@@ -499,18 +499,30 @@ class MarkThreadsTests(unittest.TestCase):
             mark_threads(posts, store)
             self.assertIsNone(posts[1].thread)
 
-    def test_different_authors_and_sources_never_share_a_thread(self):
+    def test_different_authors_never_share_a_thread(self):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             posts = [
                 self.collected("x/1", "2026-11-13T10:00:00Z", handle="a", source_id="x/recommendations"),
                 self.collected("x/2", "2026-11-13T10:01:00Z", handle="b", source_id="x/recommendations"),
-                self.collected("x/3", "2026-11-13T10:02:00Z", handle="a", source_id="x/other"),
+                self.collected("x/3", "2026-11-13T10:02:00Z", handle="c", source_id="x/other"),
             ]
             for post in posts:
                 post.network = "x"
             mark_threads(posts, store)
             self.assertTrue(all(post.thread is None for post in posts))
+
+    def test_the_same_author_threads_across_feeds(self):
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            posts = [
+                self.collected("x/1", "2026-11-13T10:00:00Z", handle="a", source_id="x/recommendations"),
+                self.collected("x/3", "2026-11-13T10:02:00Z", handle="a", source_id="x/other"),
+            ]
+            for post in posts:
+                post.network = "x"
+            mark_threads(posts, store)
+            self.assertEqual(posts[1].thread, "x/1")
 
     def test_a_run_chains_onto_the_thread_the_store_already_holds(self):
         with TemporaryDirectory() as folder:
