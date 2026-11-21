@@ -6,8 +6,8 @@ The builder runs from the launchd agent at the hours in the settings: a run that
 that has nothing new, writes nothing. `limit` is the pool every post competes for in one
 delivery, and each author's next story counts half of the one before, so one loud author cannot
 fill it; a settings file without topics collects the whole feed under the `FEED_LIMIT` ceiling.
-A `rotation` block in the settings (`sources`, `posts`) ships only the longest-waiting channels'
-best posts each build.
+A `rotation` block in the settings (`sources`, `posts`) ships only the longest-waiting Telegram
+channels' best posts each build — Telegram has no feed of its own, X and Instagram do.
 The delivery is the same
 uncompressed USTAR archive as an article's,
 `package.json` first, and lands under `digests/` in the REED folder, where the phone reads it the way it reads
@@ -270,9 +270,11 @@ def _cap_network(
 
 def _rotate(posts: list[Post], scores: dict[str, float], store: Store, rotation: dict) -> tuple[list[Post], dict[str, str]]:
     """A delivery that names `rotation` ships only the strongest `posts` posts of the `sources`
-    channels that went the longest without one, per network — the networks' score scales differ,
-    so one shared pool would starve the quieter ones. Every other post is consumed but not
-    shipped, so each channel gets its turn instead of the whole firehose landing at once."""
+    Telegram channels that went the longest without one. Telegram is the only network without a
+    feed of its own — X and Instagram already gate every post through recommendations, so their
+    quiet sources surface on their own and rotation would only starve the loud ones. Every other
+    post is consumed but not shipped, so each channel gets its turn instead of the whole firehose
+    landing at once."""
     sources_n = rotation.get("sources")
     posts_n = rotation.get("posts")
     if not isinstance(sources_n, int) or not isinstance(posts_n, int) or sources_n <= 0 or posts_n <= 0:
@@ -291,7 +293,10 @@ def _rotate(posts: list[Post], scores: dict[str, float], store: Store, rotation:
         by_network.setdefault(post.network, []).append(post)
     kept: list[Post] = []
     over: dict[str, str] = {}
-    for group in by_network.values():
+    for network, group in by_network.items():
+        if network != "telegram":
+            kept += group
+            continue
         group_kept, group_over = _rotate_network(group, scores, last_shipped, sources_n, posts_n)
         kept += group_kept
         over.update(group_over)
