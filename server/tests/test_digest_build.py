@@ -29,7 +29,7 @@ class BuildTests(unittest.TestCase):
             root, reed = Path(folder) / "data", Path(folder) / "reed"
             store = Store(root)
             first = post("x/1")
-            first.media = [store.save_media("x/1", 0, png(640, 480), "png")]
+            first.attachments = [{"kind": "image", **store.save_media("x/1", 0, png(640, 480), "png")}]
             store.append([first, post("x/2")])
             store.save_source_statuses([
                 {"id": "x/karpathy", "network": "x", "name": "Andrej Karpathy", "folders": ["ml"], "status": "ok", "detail": None},
@@ -50,8 +50,8 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(package["sources"][1]["detail"], "the login expired")
             for item in package["posts"]:
                 self.assertTrue(item["permalink"])
-                self.assertTrue(item["text"] or item["media"] or item["video"])
-            self.assertEqual(package["posts"][0]["media"][0]["width"], 640)
+                self.assertTrue(item["text"] or item["attachments"])
+            self.assertEqual(package["posts"][0]["attachments"][0]["width"], 640)
             self.assertTrue(package["posts"][0]["postedAt"].endswith("Z"))
 
     def test_a_video_file_rides_the_delivery_next_to_its_poster(self):
@@ -59,19 +59,21 @@ class BuildTests(unittest.TestCase):
             root, reed = Path(folder) / "data", Path(folder) / "reed"
             store = Store(root)
             clip = post("x/1", text=None)
-            clip.video = {
-                "poster": store.save_media("x/1", "poster", png(640, 480), "png"),
-                "file": store.save_file("x/1", "video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
-            }
+            clip.attachments = [{
+                "kind": "video",
+                "poster": store.save_media("x/1", "0-poster", png(640, 480), "png"),
+                "file": store.save_file("x/1", "0-video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
+            }]
             store.append([clip])
             self.build(root, reed)
             archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 members = opened.getnames()
                 package = json.loads(opened.extractfile("package.json").read())
-            self.assertIn("media/x-1-video.mp4", members)
-            self.assertIn("media/x-1-poster.png", members)
-            self.assertEqual(package["posts"][0]["video"]["file"]["path"], "media/x-1-video.mp4")
+            self.assertIn("media/x-1-0-video.mp4", members)
+            self.assertIn("media/x-1-0-poster.png", members)
+            video = next(a for a in package["posts"][0]["attachments"] if a["kind"] == "video")
+            self.assertEqual(video["file"]["path"], "media/x-1-0-video.mp4")
 
     def test_a_poster_that_is_the_first_picture_is_written_once(self):
         with TemporaryDirectory() as folder:
@@ -79,18 +81,21 @@ class BuildTests(unittest.TestCase):
             store = Store(root)
             clip = post("x/1", text=None)
             poster = store.save_media("x/1", 0, png(640, 480), "png")
-            clip.media = [poster]
-            clip.video = {
-                "poster": poster,
-                "file": store.save_file("x/1", "video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
-            }
+            clip.attachments = [
+                {"kind": "image", **poster},
+                {
+                    "kind": "video",
+                    "poster": poster,
+                    "file": store.save_file("x/1", "1-video", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, "mp4"),
+                },
+            ]
             store.append([clip])
             self.build(root, reed)
             archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 names = opened.getnames()
             self.assertEqual(names.count("media/x-1-0.png"), 1)
-            self.assertIn("media/x-1-video.mp4", names)
+            self.assertIn("media/x-1-1-video.mp4", names)
 
     def test_the_digest_reads_through_the_article_delivery_reader(self):
         with TemporaryDirectory() as folder:
@@ -126,29 +131,29 @@ class BuildTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             root, reed = Path(folder) / "data", Path(folder) / "reed"
             video = post("x/1", text="")
-            video.video = {"poster": None}
+            video.attachments = [{"kind": "video", "file": None, "poster": None}]
             Store(root).append([video])
             self.assertEqual(self.build(root, reed), 0)
-            self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "a video with no poster"})
+            self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "missing media"})
 
     def test_a_missing_picture_is_dropped_and_the_text_stays(self):
         with TemporaryDirectory() as folder:
             root, reed = Path(folder) / "data", Path(folder) / "reed"
             with_picture = post("x/1")
-            with_picture.media = [{"path": "media/missing.png", "width": 1, "height": 1}]
+            with_picture.attachments = [{"kind": "image", "path": "media/missing.png", "width": 1, "height": 1}]
             Store(root).append([with_picture])
             self.build(root, reed)
             archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
                 self.assertNotIn("media/missing.png", opened.getnames())
-            self.assertEqual(package["posts"][0]["media"], [])
+            self.assertEqual(package["posts"][0]["attachments"], [])
 
     def test_a_post_whose_only_picture_is_missing_is_skipped(self):
         with TemporaryDirectory() as folder:
             root, reed = Path(folder) / "data", Path(folder) / "reed"
             with_picture = post("x/1", text="")
-            with_picture.media = [{"path": "media/missing.png", "width": 1, "height": 1}]
+            with_picture.attachments = [{"kind": "image", "path": "media/missing.png", "width": 1, "height": 1}]
             Store(root).append([with_picture])
             self.build(root, reed)
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "missing media"})
@@ -239,12 +244,12 @@ class BuildTests(unittest.TestCase):
             below_lead.thread = "x/0"
             below_photo = post("x/1", text="", folders=())
             below_photo.thread = "x/0"
-            below_photo.media = [store.save_media("x/1", 0, png(640, 480), "png")]
+            below_photo.attachments = [{"kind": "image", **store.save_media("x/1", 0, png(640, 480), "png")}]
             above_lead = post("x/2", text="small model release notes", folders=())
             above_lead.thread = "x/2"
             above_photo = post("x/3", text="", folders=())
             above_photo.thread = "x/2"
-            above_photo.media = [store.save_media("x/3", 0, png(640, 480), "png")]
+            above_photo.attachments = [{"kind": "image", **store.save_media("x/3", 0, png(640, 480), "png")}]
             store.append([below_lead, below_photo, above_lead, above_photo])
             with mock.patch("digest.topics.default_scorer", return_value=lexical):
                 self.build(root, reed)
@@ -278,9 +283,9 @@ class BuildTests(unittest.TestCase):
             }), encoding="utf-8")
             photos = [
                 replace(
-                    post(f"instagram/{handle}/{index}"),
+                    post(f"instagram/{handle}{index}"),
                     network="instagram", source=f"instagram/{handle}",
-                    id=f"instagram/{handle}/{index}", author={"handle": handle, "name": handle},
+                    id=f"instagram/{handle}{index}", author={"handle": handle, "name": handle},
                     permalink=f"https://www.instagram.com/p/{handle}{index}/", folders=[],
                 )
                 for handle, count in (("a", 2), ("b", 1))
@@ -358,10 +363,10 @@ class BuildTests(unittest.TestCase):
             }), encoding="utf-8")
             off_topic = replace(post("x/1", text="I baked bread and fed the cat"), folders=[])
             photos = replace(
-                post("instagram/a/1", text="a day at the sea"),
+                post("instagram/sea1", text="a day at the sea"),
                 network="instagram", source="instagram/recommendations",
-                id="instagram/a/1", author={"handle": "a", "name": "A"},
-                permalink="https://www.instagram.com/p/1/", folders=[],
+                id="instagram/sea1", author={"handle": "a", "name": "A"},
+                permalink="https://www.instagram.com/p/sea1/", folders=[],
             )
             Store(root).append([off_topic, photos])
             with mock.patch("digest.topics.default_scorer", return_value=lexical):
@@ -369,7 +374,7 @@ class BuildTests(unittest.TestCase):
             archive = next((reed / "digests").glob("digest-*.tar"))
             with tarfile.open(archive) as opened:
                 package = json.loads(opened.extractfile("package.json").read())
-            self.assertEqual([item["id"] for item in package["posts"]], ["instagram/a/1"])
+            self.assertEqual([item["id"] for item in package["posts"]], ["instagram/sea1"])
             self.assertEqual(Store(root).builds()[-1]["skipped"], {"x/1": "below the topic threshold"})
 
     def test_without_topics_the_feed_is_capped_at_forty(self):
@@ -440,13 +445,13 @@ class BuildTests(unittest.TestCase):
             skipped = Store(root).builds()[-1]["skipped"]
             self.assertEqual(set(skipped), {"x/loud/new1", "x/loud/new3"})
 
-    def telegram_post(self, post_id, text, media=()):
+    def telegram_post(self, post_id, text, attachments=()):
         return replace(
             post(post_id, text=text),
             network="telegram", source="telegram/news", id=post_id,
             author={"handle": "news", "name": "News"},
             permalink=f"https://t.me/news/{post_id.rsplit('/', 1)[-1]}",
-            media=list(media), folders=[],
+            attachments=list(attachments), folders=[],
         )
 
     def test_a_cut_caption_pair_ships_only_the_whole_text_and_keeps_the_media(self):
@@ -460,7 +465,10 @@ class BuildTests(unittest.TestCase):
             (root / "media" / "news-2-0.jpg").write_bytes(png())
             store.append([
                 self.telegram_post("telegram/news/1", whole),
-                self.telegram_post("telegram/news/2", cut, media=[{"path": "media/news-2-0.jpg", "width": 4, "height": 3}]),
+                self.telegram_post(
+                    "telegram/news/2", cut,
+                    attachments=[{"kind": "image", "path": "media/news-2-0.jpg", "width": 4, "height": 3}],
+                ),
             ])
             self.build(root, reed)
             archive = next((reed / "digests").glob("digest-*.tar"))
@@ -468,7 +476,7 @@ class BuildTests(unittest.TestCase):
                 package = json.loads(opened.extractfile("package.json").read())
             shipped = package["posts"]
             self.assertEqual([item["id"] for item in shipped], ["telegram/news/1"])
-            self.assertIn("media/news-2-0.jpg", [media["path"] for media in shipped[0]["media"]])
+            self.assertIn("media/news-2-0.jpg", [a["path"] for a in shipped[0]["attachments"]])
             self.assertEqual(Store(root).builds()[-1]["skipped"]["telegram/news/2"], "a shorter copy of the same text")
 
     def test_a_source_limit_caps_one_source_not_the_delivery(self):

@@ -127,7 +127,7 @@ class InstagramFeedTests(unittest.TestCase):
             self.assertIn("https://www.instagram.com/", tab.visited)
             self.assertEqual(len(result.posts), 1)
             post = result.posts[0]
-            self.assertEqual(post.id, "instagram/studio/CxYzAbCdEfG")
+            self.assertEqual(post.id, "instagram/CxYzAbCdEfG")
             self.assertEqual(post.source, "instagram/feed")
             self.assertEqual(post.author["handle"], "studio")
 

@@ -74,8 +74,11 @@ class TelegramTests(unittest.TestCase):
             )
             self.assertEqual(len(result.posts), 3)
             self.assertEqual(result.name, "Telegram News")
-            media = [post for post in result.posts if post.media]
-            self.assertEqual(len(media), 1)
+            media = [post for post in result.posts if post.attachments]
+            self.assertEqual(len(media), 3)
+            kinds = [attachment["kind"] for post in result.posts for attachment in post.attachments]
+            self.assertEqual(kinds.count("video"), 2)
+            self.assertEqual(kinds.count("image"), 1)
             for post in result.posts:
                 self.assertTrue(post.id.startswith("telegram/telegram/"))
                 self.assertTrue(post.permalink.startswith("https://t.me/telegram/"))
@@ -110,23 +113,92 @@ class TelegramTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
-            self.assertEqual(len(post.media), 12)
+            self.assertEqual(
+                len([a for a in post.attachments if a["kind"] == "image"]), 12,
+            )
 
     def test_a_video_carries_its_file(self):
         message = html.fromstring(
             '<div class="tgme_widget_message_wrap">'
             '<div class="tgme_widget_message" data-post="channel/8">'
+            '<a class="tgme_widget_message_video_player" href="https://t.me/channel/8">'
             '<i class="tgme_widget_message_video_thumb" style="background-image:url(\'https://cdn.telesco.pe/file/p.jpg\')"></i>'
             '<video class="tgme_widget_message_video js-message_video" src="https://cdn.telesco.pe/file/v.mp4?token=t"></video>'
+            '</a>'
             '<time datetime="2026-11-13T10:00:00+00:00">x</time>'
             '</div></div>'
         )
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
-            self.assertIsNotNone(post.video["file"])
-            self.assertTrue(post.video["file"]["path"].endswith(".mp4"))
-            self.assertIsNotNone(post.video["poster"])
+            video = next(a for a in post.attachments if a["kind"] == "video")
+            self.assertIsNotNone(video["file"])
+            self.assertTrue(video["file"]["path"].endswith(".mp4"))
+            self.assertIsNotNone(video["poster"])
+
+    def test_a_round_video_carries_its_file_and_thumb(self):
+        message = html.fromstring(
+            '<div class="tgme_widget_message_wrap">'
+            '<div class="tgme_widget_message roundvideo_media" data-post="channel/8">'
+            '<div class="tgme_widget_message_roundvideo_player js-message_roundvideo_player">'
+            '<div class="tgme_widget_message_roundvideo_wrap">'
+            '<i class="tgme_widget_message_roundvideo_thumb" style="background-image:url(\'https://cdn.telesco.pe/file/p.jpg\')"></i>'
+            '<video class="tgme_widget_message_roundvideo js-message_roundvideo" src="https://cdn.telesco.pe/file/v.mp4?token=t"></video>'
+            '</div></div>'
+            '<time datetime="2026-11-13T10:00:00+00:00">x</time>'
+            '</div></div>'
+        )
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
+            video = next(a for a in post.attachments if a["kind"] == "video")
+            self.assertIsNotNone(video["file"])
+            self.assertTrue(video["file"]["path"].endswith(".mp4"))
+            self.assertIsNotNone(video["poster"])
+
+    def test_a_video_the_page_will_not_serve_comes_through_the_client(self):
+        message = html.fromstring(
+            '<div class="tgme_widget_message_wrap">'
+            '<div class="tgme_widget_message" data-post="channel/9">'
+            '<a class="tgme_widget_message_video_player not_supported" href="https://t.me/channel/9">'
+            '<i class="tgme_widget_message_video_thumb" style="background-image:url(\'https://cdn.telesco.pe/file/p.jpg\')"></i>'
+            '<div class="message_media_not_supported_label">Media is too big</div>'
+            '</a>'
+            '<time datetime="2026-11-13T10:00:00+00:00">x</time>'
+            '</div></div>'
+        )
+        with TemporaryDirectory() as folder, TemporaryDirectory() as scratch:
+            store = Store(Path(folder))
+            clip = Path(scratch) / "clip.mp4"
+            clip.write_bytes(b"\x00" * 64)
+            answer = json.dumps({"filePath": str(clip)})
+            done = type("Done", (), {"stdout": answer})()
+            with patch.object(telegram, "_telegram_cli", return_value="/fake/tg"), patch.object(
+                telegram.subprocess, "run", return_value=done,
+            ):
+                post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
+            video = next(a for a in post.attachments if a["kind"] == "video")
+            self.assertTrue(video["file"]["path"].endswith(".mp4"))
+
+    def test_the_message_text_keeps_its_marks_as_markdown(self):
+        message = html.fromstring(
+            '<div class="tgme_widget_message_wrap">'
+            '<div class="tgme_widget_message" data-post="channel/10">'
+            '<div class="tgme_widget_message_text"><b>bold</b> and <i>italic</i> and '
+            '<code>x = 1</code> and <s>gone</s><br/>'
+            'see <a href="https://example.com/a?b=1&amp;c=2">the link</a> '
+            '<tg-spoiler>hidden words</tg-spoiler></div>'
+            '<time datetime="2026-11-13T10:00:00+00:00">x</time>'
+            '</div></div>'
+        )
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = telegram._post(message, "channel", {"id": "telegram/channel"}, fake_web(), store, ["tech"])
+            self.assertEqual(
+                post.text,
+                "**bold** and *italic* and `x = 1` and ~~gone~~\n"
+                "see [the link](https://example.com/a?b=1&c=2) hidden words",
+            )
 
 
 class XTests(unittest.TestCase):
@@ -149,7 +221,9 @@ class XTests(unittest.TestCase):
             self.assertEqual(post.context["kind"], "quote")
             self.assertEqual(post.context["post"]["author"]["handle"], "hardmaru")
             self.assertEqual(post.context["post"]["text"], "A post being quoted.")
-            self.assertEqual(len(post.media), 1)
+            self.assertEqual(
+                len([a for a in post.attachments if a["kind"] == "image"]), 1,
+            )
             self.assertEqual(post.stats["likes"], 812)
 
     def test_a_reply_carries_the_post_it_answers(self):
@@ -177,7 +251,9 @@ class XTests(unittest.TestCase):
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             post = x._post(payload, "karpathy", source(), fake_web(), store, ["ml"])
-            self.assertEqual(len(post.media), 6)
+            self.assertEqual(
+                len([a for a in post.attachments if a["kind"] == "image"]), 6,
+            )
 
     def test_the_syndication_request_names_the_status(self):
         seen = []
@@ -448,14 +524,20 @@ class MarkThreadsTests(unittest.TestCase):
 
 
 class TelegramUnreadTests(unittest.TestCase):
-    def collect(self, counts, stored=()):
+    def collect(self, counts, stored=(), archived=()):
         source = {"id": "telegram/telegram", "network": "telegram", "channel": "telegram", "folders": ["tech"]}
         with TemporaryDirectory() as folder:
             store = Store(Path(folder))
             store.append([fakes.post(post_id=post_id) for post_id in stored])
             web = fake_web(text=lambda url: fixture("telegram.html"))
-            with patch.object(telegram, "_unread_counts", return_value=counts):
+            state = None if counts is None else (counts, set(archived))
+            with patch.object(telegram, "_unread_counts", return_value=state):
                 return telegram.collect(source, web, store, ["tech"], lambda stage: None)
+
+    def test_an_archived_channel_is_not_read(self):
+        result = self.collect({"telegram": 5}, archived=["telegram"])
+        self.assertEqual(result.posts, [])
+        self.assertIn("archived", result.note)
 
     def test_a_fully_read_channel_gives_nothing(self):
         result = self.collect({"telegram": 0})
@@ -514,7 +596,7 @@ class PictureTests(unittest.TestCase):
             web = fake_web(bytes=refuse)
             self.assertIsNone(save_photo(web, store, "x/1", 0, "https://pbs.twimg.com/media/a.jpg"))
             post = x._post(json.loads(fixture("tweet-quote.json")), "karpathy", source(), web, store, ["ml"])
-            self.assertEqual(post.media, [])
+            self.assertEqual(post.attachments, [])
             self.assertEqual(post.media_errors, 1)
             self.assertTrue(post.text)
 
@@ -562,15 +644,23 @@ class InstagramTests(unittest.TestCase):
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
                 fake_web(), store, ["design"],
             )
-            self.assertEqual(post.id, "instagram/studio/CxYzAbCdEfG")
+            self.assertEqual(post.id, "instagram/CxYzAbCdEfG")
             self.assertEqual(post.text, "Two pencils and one idea. Drawing the same shape until it stops arguing.")
-            self.assertEqual(len(post.media), 1)
+            self.assertEqual(
+                len([a for a in post.attachments if a["kind"] == "image"]), 1,
+            )
             self.assertEqual(post.posted_at, "2026-03-03T10:00:00Z")
             self.assertEqual(post.author["handle"], "studio")
 
-    def test_a_description_without_a_caption_keeps_the_text(self):
+    def test_a_description_without_a_caption_is_not_a_caption(self):
+        """`og:description` without the quoted caption is only the like and comment counts; those are
+        not post text, so the card shows the media alone."""
         self.assertIsNone(instagram._caption(None))
-        self.assertEqual(instagram._caption("12 likes"), "12 likes")
+        self.assertIsNone(instagram._caption("12 likes, 0 comments - studio on March 3, 2026"))
+        self.assertEqual(
+            instagram._caption('12 likes, 0 comments - studio on March 3, 2026: "A caption"'),
+            "A caption",
+        )
 
     def test_a_media_download_uses_the_page_context(self):
         def refuse(url):
@@ -583,7 +673,9 @@ class InstagramTests(unittest.TestCase):
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
                 fake_web(bytes=refuse), store, ["design"],
             )
-            self.assertEqual(len(post.media), 1)
+            self.assertEqual(
+                len([a for a in post.attachments if a["kind"] == "image"]), 1,
+            )
 
     def test_a_post_without_a_time_is_skipped(self):
         markup = (
@@ -622,8 +714,58 @@ class InstagramTests(unittest.TestCase):
                 {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
                 fake_web(), store, ["design"],
             )
-            self.assertIsNotNone(post.video)
-            self.assertTrue(post.video["file"]["path"].endswith(".mp4"))
+            video = next((a for a in post.attachments if a["kind"] == "video"), None)
+            self.assertIsNotNone(video)
+            self.assertTrue(video["file"]["path"].endswith(".mp4"))
+
+    def test_a_carousel_keeps_its_order_and_its_video(self):
+        markup = (
+            '<html><head>'
+            '<meta property="og:title" content="Studio on Instagram: &quot;A carousel&quot;">'
+            '<meta property="og:description" content="1,234 likes, 56 comments - Studio (@studio) on March 3, 2026: &quot;A carousel&quot;">'
+            '<meta property="og:image" content="https://scontent.cdninstagram.com/post-1.jpg">'
+            '</head><body><article>'
+            '<script type="application/json">{"xdt_shortcode_media":{'
+            '"is_video":false,'
+            '"edge_sidecar_to_children":{"edges":['
+            '{"node":{"is_video":false,"display_url":"https://scontent.cdninstagram.com/one.jpg",'
+            '"image_versions2":{"candidates":[{"url":"https://scontent.cdninstagram.com/one.jpg","width":1080,"height":1350}]}}},'
+            '{"node":{"is_video":true,"display_url":"https://scontent.cdninstagram.com/two.jpg",'
+            '"image_versions2":{"candidates":[{"url":"https://scontent.cdninstagram.com/two.jpg","width":1080,"height":1920}]},'
+            '"video_versions":[{"url":"https:\\/\\/scontent.cdninstagram.com\\/clip.mp4","width":720,"height":1280}]}},'
+            '{"node":{"is_video":false,"display_url":"https://scontent.cdninstagram.com/three.jpg",'
+            '"image_versions2":{"candidates":[{"url":"https://scontent.cdninstagram.com/three.jpg","width":1080,"height":1080}]}}}'
+            ']}}}</script>'
+            '<time datetime="2026-03-03T10:00:00.000Z">March 3, 2026</time>'
+            '</article></body></html>'
+        )
+        with TemporaryDirectory() as folder:
+            store = Store(Path(folder))
+            post = instagram._post(
+                FakePage(markup), "studio", "p", "CxYzAbCdEfG",
+                {"id": "instagram/studio", "network": "instagram", "handle": "studio", "folders": ["design"]},
+                fake_web(), store, ["design"],
+            )
+            kinds = [a["kind"] for a in post.attachments]
+            self.assertEqual(kinds, ["image", "video", "image"])
+            video = post.attachments[1]
+            self.assertTrue(video["file"]["path"].endswith(".mp4"))
+            self.assertIsNotNone(video["poster"])
+
+    def test_one_shortcode_under_two_guessed_authors_is_one_post(self):
+        from digest.store import Post
+
+        first = Post(
+            id="instagram/studio/CxYzAbCdEfG", network="instagram", source="instagram/recommendations",
+            author={"handle": "studio", "name": "Studio"}, permalink="https://www.instagram.com/studio/p/CxYzAbCdEfG/",
+            posted_at="2026-03-03T10:00:00Z", text="a",
+        )
+        second = Post(
+            id="instagram/other/CxYzAbCdEfG", network="instagram", source="instagram/recommendations",
+            author={"handle": "other", "name": "Other"}, permalink="https://www.instagram.com/other/p/CxYzAbCdEfG/",
+            posted_at="2026-03-03T10:00:00Z", text="a",
+        )
+        self.assertEqual(first.id, second.id)
 
     def test_the_page_video_picks_the_largest_version_and_unescapes_the_address(self):
         markup = (

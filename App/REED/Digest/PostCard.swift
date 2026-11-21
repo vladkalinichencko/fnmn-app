@@ -47,38 +47,35 @@ struct PostCard: View {
     }
 
     private var cardContent: some View {
-        let media = post.media
-        return HStack(alignment: .top, spacing: 12) {
-            if opensThread {
-                Rectangle()
-                    .fill(.secondary.opacity(0.4))
-                    .frame(width: 3)
-                    .frame(maxHeight: .infinity)
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                header
-                if let text = post.text {
-                    PostText(text: text)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                if opensThread {
+                    Rectangle()
+                        .fill(.secondary.opacity(0.4))
+                        .frame(width: 3)
+                        .frame(maxHeight: .infinity)
                 }
-                if let video = post.video, video.poster != nil {
-                    poster(video)
-                }
-                if (post.mediaErrors ?? 0) > 0, media.isEmpty {
-                    mediaPlaceholder
-                }
-                pictures(media)
-                if showsContext, let context = post.context {
-                    contextBlock(context)
+                VStack(alignment: .leading, spacing: 10) {
+                    header
+                    if let text = post.text {
+                        PostText(text: text)
+                    }
+                    attachments
+                    if (post.mediaErrors ?? 0) > 0, post.attachments.isEmpty {
+                        mediaPlaceholder
+                    }
+                    if showsContext, let context = post.context {
+                        contextBlock(context)
+                    }
                 }
             }
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var cardPeek: some View {
-        let media = post.media
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(post.author.name)
                     .font(.body.weight(.semibold))
@@ -94,7 +91,7 @@ struct PostCard: View {
                     .font(.callout)
                     .lineLimit(10)
             }
-            if let thumb = media.first ?? post.video?.poster {
+            if let thumb = peekThumbnail {
                 FileImage(url: digest.url(of: thumb.path), contentMode: .fill)
                     .frame(height: 160)
                     .frame(maxWidth: .infinity)
@@ -104,6 +101,17 @@ struct PostCard: View {
         .padding(Tokens.tilePadding)
         .frame(width: 300, alignment: .topLeading)
         .plate(cornerRadius: Tokens.plateRadius)
+    }
+
+    private var peekThumbnail: DigestPackage.Post.Media? {
+        for attachment in post.attachments {
+            switch attachment {
+            case .image(let media): return media
+            case .video(let video): if let poster = video.poster { return poster }
+            case .card(let card): if let image = card.image { return image }
+            }
+        }
+        return nil
     }
 
     static func peekText(_ markdown: String) -> AttributedString {
@@ -132,15 +140,40 @@ struct PostCard: View {
         }
     }
 
-    @ViewBuilder private func pictures(_ media: [DigestPackage.Post.Media]) -> some View {
-        if media.count == 1, let only = media.first {
-            picture(only, square: false)
-        } else if !media.isEmpty {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2)], spacing: 2) {
-                ForEach(media, id: \.path) { item in
-                    picture(item, square: true)
+    private var attachmentRuns: [[DigestPackage.Post.Attachment]] {
+        var runs: [[DigestPackage.Post.Attachment]] = []
+        for attachment in post.attachments {
+            if attachment.image != nil, runs.last?.first?.image != nil {
+                runs[runs.count - 1].append(attachment)
+            } else {
+                runs.append([attachment])
+            }
+        }
+        return runs
+    }
+
+    @ViewBuilder private var attachments: some View {
+        ForEach(Array(attachmentRuns.enumerated()), id: \.offset) { _, run in
+            if run.count == 1, let only = run.first {
+                attachment(only, square: false)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2)], spacing: 2) {
+                    ForEach(Array(run.enumerated()), id: \.offset) { _, item in
+                        attachment(item, square: true)
+                    }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func attachment(_ attachment: DigestPackage.Post.Attachment, square: Bool) -> some View {
+        switch attachment {
+        case .image(let media):
+            picture(media, square: square)
+        case .video(let video):
+            poster(video)
+        case .card(let card):
+            cardPreview(card)
         }
     }
 
@@ -186,6 +219,50 @@ struct PostCard: View {
         }
     }
 
+    @ViewBuilder private func cardPreview(_ card: DigestPackage.Post.Card) -> some View {
+        let tile = VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.caption2)
+                Text(card.domain ?? card.url?.host() ?? "Link")
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if let url = card.url {
+                    PostOpenButton(url: url, label: "Open the link")
+                }
+            }
+            .foregroundStyle(.secondary)
+            if let title = card.title {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(3)
+            }
+            if let description = card.description {
+                Text(description)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+            if let image = card.image {
+                FileImage(url: digest.url(of: image.path), contentMode: .fill)
+                    .aspectRatio(CGFloat(image.width) / CGFloat(max(image.height, 1)), contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: mediaRadius, style: .continuous))
+        if let url = card.url {
+            tile
+                .contentShape(.rect)
+                .onTapGesture { openURL(url) }
+                .accessibilityLabel("Open the link")
+        } else {
+            tile
+        }
+    }
+
     @ViewBuilder private func contextBlock(_ context: DigestPackage.Post.Context) -> some View {
         if let post = context.post {
             ContextPostBlock(kind: context.kind, post: post, lines: 3)
@@ -219,18 +296,38 @@ struct PostCard: View {
         if let text = post.text, !text.isEmpty {
             total += (Double(text.count) / max(width / 8.5, 20)).rounded(.up) * 21
         }
-        if post.media.count == 1, let only = post.media.first {
-            total += width * Double(only.height) / Double(max(only.width, 1))
-        } else if !post.media.isEmpty {
-            total += Double((post.media.count + 1) / 2) * width / 2
-        }
-        if let poster = post.video?.poster {
-            total += width * Double(poster.height) / Double(max(poster.width, 1))
+        var index = 0
+        while index < post.attachments.count {
+            switch post.attachments[index] {
+            case .image:
+                var end = index
+                while end < post.attachments.count, post.attachments[end].image != nil {
+                    end += 1
+                }
+                let count = end - index
+                if count == 1, let media = post.attachments[index].image {
+                    total += width * Double(media.height) / Double(max(media.width, 1))
+                } else {
+                    total += Double((count + 1) / 2) * width / 2
+                }
+                index = end
+            case .video(let video):
+                if let poster = video.poster {
+                    total += width * Double(poster.height) / Double(max(poster.width, 1))
+                }
+                index += 1
+            case .card(let card):
+                total += 120
+                if let image = card.image {
+                    total += width * Double(image.height) / Double(max(image.width, 1)) * 0.5
+                }
+                index += 1
+            }
         }
         if post.context != nil {
             total += 40
         }
-        if (post.mediaErrors ?? 0) > 0, post.media.isEmpty {
+        if (post.mediaErrors ?? 0) > 0, post.attachments.isEmpty {
             total += 30
         }
         return total

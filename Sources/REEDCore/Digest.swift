@@ -87,8 +87,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
         public let permalink: URL
         public let postedAt: Date
         public let text: String?
-        public let media: [Media]
-        public let video: Video?
+        public let attachments: [Attachment]
         public let context: Context?
         public let comments: [Comment]
         public let stats: Stats?
@@ -102,8 +101,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             permalink: URL,
             postedAt: Date,
             text: String? = nil,
-            media: [Media] = [],
-            video: Video? = nil,
+            attachments: [Attachment] = [],
             context: Context? = nil,
             comments: [Comment] = [],
             stats: Stats? = nil,
@@ -116,13 +114,49 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             self.permalink = permalink
             self.postedAt = postedAt
             self.text = text
-            self.media = media
-            self.video = video
+            self.attachments = attachments
             self.context = context
             self.comments = comments
             self.stats = stats
             self.folders = folders
             self.mediaErrors = mediaErrors
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, network, author, permalink, postedAt, text, attachments
+            case context, comments, stats, folders, mediaErrors
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            network = try container.decode(Network.self, forKey: .network)
+            author = try container.decode(Author.self, forKey: .author)
+            permalink = try container.decode(URL.self, forKey: .permalink)
+            postedAt = try container.decode(Date.self, forKey: .postedAt)
+            text = try container.decodeIfPresent(String.self, forKey: .text)
+            attachments = try container.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
+            context = try container.decodeIfPresent(Context.self, forKey: .context)
+            comments = try container.decodeIfPresent([Comment].self, forKey: .comments) ?? []
+            stats = try container.decodeIfPresent(Stats.self, forKey: .stats)
+            folders = try container.decodeIfPresent([String].self, forKey: .folders) ?? []
+            mediaErrors = try container.decodeIfPresent(Int.self, forKey: .mediaErrors)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(network, forKey: .network)
+            try container.encode(author, forKey: .author)
+            try container.encode(permalink, forKey: .permalink)
+            try container.encode(postedAt, forKey: .postedAt)
+            try container.encodeIfPresent(text, forKey: .text)
+            try container.encode(attachments, forKey: .attachments)
+            try container.encodeIfPresent(context, forKey: .context)
+            try container.encode(comments, forKey: .comments)
+            try container.encodeIfPresent(stats, forKey: .stats)
+            try container.encode(folders, forKey: .folders)
+            try container.encodeIfPresent(mediaErrors, forKey: .mediaErrors)
         }
 
         public struct Author: Codable, Equatable, Sendable {
@@ -165,6 +199,53 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             }
         }
 
+        public struct Card: Equatable, Sendable {
+            public let title: String?
+            public let description: String?
+            public let domain: String?
+            public let url: URL?
+            public let image: Media?
+
+            public init(title: String? = nil, description: String? = nil, domain: String? = nil, url: URL? = nil, image: Media? = nil) {
+                self.title = title
+                self.description = description
+                self.domain = domain
+                self.url = url
+                self.image = image
+            }
+        }
+
+        public enum Attachment: Equatable, Sendable {
+            case image(Media)
+            case video(Video)
+            case card(Card)
+
+            public enum Kind: String, Codable, Sendable {
+                case image, video, card
+            }
+
+            public var image: Media? {
+                if case .image(let media) = self {
+                    return media
+                }
+                return nil
+            }
+
+            public var video: Video? {
+                if case .video(let video) = self {
+                    return video
+                }
+                return nil
+            }
+
+            public var card: Card? {
+                if case .card(let card) = self {
+                    return card
+                }
+                return nil
+            }
+        }
+
         public struct Context: Codable, Equatable, Sendable {
             public let kind: Kind
             public let post: ContextPost?
@@ -194,8 +275,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
             public let permalink: URL
             public let postedAt: Date
             public let text: String?
-            public let media: [Media]
-            public let video: Video?
+            public let attachments: [Attachment]
             public let stats: Stats?
 
             public init(
@@ -205,8 +285,7 @@ public struct DigestPackage: Codable, Equatable, Sendable {
                 permalink: URL,
                 postedAt: Date,
                 text: String? = nil,
-                media: [Media] = [],
-                video: Video? = nil,
+                attachments: [Attachment] = [],
                 stats: Stats? = nil
             ) {
                 self.id = id
@@ -215,9 +294,36 @@ public struct DigestPackage: Codable, Equatable, Sendable {
                 self.permalink = permalink
                 self.postedAt = postedAt
                 self.text = text
-                self.media = media
-                self.video = video
+                self.attachments = attachments
                 self.stats = stats
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case id, network, author, permalink, postedAt, text, attachments, stats
+            }
+
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                id = try container.decode(String.self, forKey: .id)
+                network = try container.decode(Network.self, forKey: .network)
+                author = try container.decode(Author.self, forKey: .author)
+                permalink = try container.decode(URL.self, forKey: .permalink)
+                postedAt = try container.decode(Date.self, forKey: .postedAt)
+                text = try container.decodeIfPresent(String.self, forKey: .text)
+                attachments = try container.decodeIfPresent([Attachment].self, forKey: .attachments) ?? []
+                stats = try container.decodeIfPresent(Stats.self, forKey: .stats)
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(id, forKey: .id)
+                try container.encode(network, forKey: .network)
+                try container.encode(author, forKey: .author)
+                try container.encode(permalink, forKey: .permalink)
+                try container.encode(postedAt, forKey: .postedAt)
+                try container.encodeIfPresent(text, forKey: .text)
+                try container.encode(attachments, forKey: .attachments)
+                try container.encodeIfPresent(stats, forKey: .stats)
             }
         }
 
@@ -316,9 +422,80 @@ extension DigestPackage {
     }
 }
 
+extension DigestPackage.Post.Card: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case title, description, domain, url, image
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        domain = try container.decodeIfPresent(String.self, forKey: .domain)
+        let raw = try container.decodeIfPresent(String.self, forKey: .url)
+        url = raw.flatMap(URL.init(string:))
+        image = try container.decodeIfPresent(DigestPackage.Post.Media.self, forKey: .image)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(domain, forKey: .domain)
+        try container.encodeIfPresent(url?.absoluteString, forKey: .url)
+        try container.encodeIfPresent(image, forKey: .image)
+    }
+}
+
+extension DigestPackage.Post.Attachment: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case kind, path, width, height, poster, file, title, description, domain, url, image
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .image:
+            self = .image(try DigestPackage.Post.Media(from: decoder))
+        case .video:
+            self = .video(try DigestPackage.Post.Video(from: decoder))
+        case .card:
+            self = .card(try DigestPackage.Post.Card(from: decoder))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .image(let media):
+            try container.encode(Kind.image, forKey: .kind)
+            try container.encode(media.path, forKey: .path)
+            try container.encode(media.width, forKey: .width)
+            try container.encode(media.height, forKey: .height)
+        case .video(let video):
+            try container.encode(Kind.video, forKey: .kind)
+            try container.encodeIfPresent(video.poster, forKey: .poster)
+            try container.encodeIfPresent(video.file, forKey: .file)
+        case .card(let card):
+            try container.encode(Kind.card, forKey: .kind)
+            try container.encodeIfPresent(card.title, forKey: .title)
+            try container.encodeIfPresent(card.description, forKey: .description)
+            try container.encodeIfPresent(card.domain, forKey: .domain)
+            try container.encodeIfPresent(card.url?.absoluteString, forKey: .url)
+            try container.encodeIfPresent(card.image, forKey: .image)
+        }
+    }
+}
+
 extension DigestPackage.Post {
     public var searchTexts: [String] {
         var texts = [text ?? "", author.name, "@\(author.handle)"]
+        texts += attachments.compactMap { attachment -> String? in
+            guard case .card(let card) = attachment else {
+                return nil
+            }
+            return [card.title, card.description, card.domain, card.url?.host()].compactMap { $0 }.joined(separator: " ")
+        }
         if let quoted = context?.post {
             texts += [quoted.author.name, "@\(quoted.author.handle)", quoted.text ?? ""]
         }

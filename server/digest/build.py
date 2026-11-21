@@ -163,10 +163,7 @@ def _dedup_texts(posts: list[Post]) -> tuple[list[Post], dict[str, str]]:
     for post in sorted(posts, key=lambda item: len(flat_text(item.text)), reverse=True):
         if post.id in seen:
             survivor = seen[post.id]
-            paths = {media["path"] for media in survivor.media}
-            survivor.media += [media for media in post.media if media["path"] not in paths]
-            if survivor.video is None and post.video is not None:
-                survivor.video = post.video
+            _merge_attachments(survivor, post)
             over[post.id] = "a duplicate row"
             continue
         seen[post.id] = post
@@ -177,10 +174,7 @@ def _dedup_texts(posts: list[Post]) -> tuple[list[Post], dict[str, str]]:
         )
         if twin is not None:
             survivor = twin[3]
-            paths = {media["path"] for media in survivor.media}
-            survivor.media += [media for media in post.media if media["path"] not in paths]
-            if survivor.video is None and post.video is not None:
-                survivor.video = post.video
+            _merge_attachments(survivor, post)
             over[post.id] = "the same text" if twin[2] == flat else "a shorter copy of the same text"
             continue
         kept.append(post)
@@ -328,6 +322,39 @@ def _rotate_network(
     return kept, over
 
 
+def _attachment_key(attachment: dict) -> str:
+    """What makes two attachments the same piece of media: the file they point at, or the card's address."""
+    for key in ("path",):
+        if attachment.get(key):
+            return attachment[key]
+    for nested in ("file", "poster", "image"):
+        entry = attachment.get(nested)
+        if isinstance(entry, dict) and entry.get("path"):
+            return entry["path"]
+    return attachment.get("url") or ""
+
+
+def _merge_attachments(survivor: Post, dropped: Post) -> None:
+    """A duplicate row's media moves onto the kept post; an attachment the survivor already has stays
+    once, keyed by the file it names."""
+    have = {_attachment_key(attachment) for attachment in survivor.attachments}
+    for attachment in dropped.attachments:
+        key = _attachment_key(attachment)
+        if key and key not in have:
+            survivor.attachments.append(attachment)
+            have.add(key)
+
+
+def _attachment_paths(post: Post) -> list[str]:
+    """Every file an attachment names — image, video file and poster, card picture — as store paths."""
+    paths = []
+    for attachment in post.attachments:
+        for entry in [attachment, *(attachment.get(key) for key in ("file", "poster", "image"))]:
+            if isinstance(entry, dict) and entry.get("path"):
+                paths.append(entry["path"])
+    return paths
+
+
 def _package(posts: list[Post], store: Store, subscriptions: dict, now: datetime) -> dict:
     last = store.last_build_at()
     start = last or min(datetime.fromisoformat(post.posted_at) for post in posts)
@@ -345,13 +372,7 @@ def _write(package: dict, posts: list[Post], store: Store, destination: Path) ->
     """The delivery goes through the same writer as an article's; the files already live in the store."""
     files: list[tuple[str, Path]] = []
     for post in posts:
-        files += [(media["path"], store.root / media["path"]) for media in post.media]
-        poster = (post.video or {}).get("poster")
-        if poster:
-            files.append((poster["path"], store.root / poster["path"]))
-        video_file = (post.video or {}).get("file")
-        if video_file:
-            files.append((video_file["path"], store.root / video_file["path"]))
+        files += [(path, store.root / path) for path in _attachment_paths(post)]
         for comment in post.comments:
             avatar = comment.get("avatar")
             if avatar:
@@ -363,33 +384,36 @@ def _unshowable(post: Post) -> str | None:
     """Why the magazine would draw a card that opens nothing; `None` when it would draw a real one."""
     if not post.permalink:
         return "no permalink"
-    if post.text or post.media or post.media_errors:
+    if post.text or post.attachments or post.media_errors:
         return None
-    if post.video and (post.video.get("poster") or post.video.get("file")):
-        return None
-    if post.video:
-        return "a video with no poster"
     return "neither text nor media"
 
 
+def _attachment_showable(attachment: dict) -> bool:
+    """Whether an attachment still has something to draw after missing files dropped out of it."""
+    if attachment.get("kind") == "card":
+        return bool(attachment.get("title") or attachment.get("description") or attachment.get("domain"))
+    if attachment.get("kind") == "video":
+        return bool((attachment.get("file") or {}).get("path") or (attachment.get("poster") or {}).get("path"))
+    return bool(attachment.get("path"))
+
+
 def _available(post: Post, store: Store) -> str | None:
-    """Drops a picture the store does not hold; a post left with nothing to draw is skipped like an empty one."""
-    available = []
-    for media in post.media:
-        if (store.root / media["path"]).exists():
-            available.append(media)
-        else:
-            print(f"{post.id}: missing {media['path']}")
-    post.media = available
-    poster = (post.video or {}).get("poster")
-    if poster and not (store.root / poster["path"]).exists():
-        print(f"{post.id}: missing {poster['path']}")
-        post.video["poster"] = None
-    video_file = (post.video or {}).get("file")
-    if video_file and not (store.root / video_file["path"]).exists():
-        print(f"{post.id}: missing {video_file['path']}")
-        post.video["file"] = None
-    if post.text or post.media or post.media_errors or (post.video and (post.video.get("poster") or post.video.get("file"))):
+    """Drops the files the store does not hold; a post left with nothing to draw is skipped like an empty one."""
+    kept = []
+    for attachment in post.attachments:
+        for key in ("file", "poster", "image"):
+            entry = attachment.get(key)
+            if isinstance(entry, dict) and entry.get("path") and not (store.root / entry["path"]).exists():
+                print(f"{post.id}: missing {entry['path']}")
+                attachment[key] = None
+        if isinstance(attachment.get("path"), str) and not (store.root / attachment["path"]).exists():
+            print(f"{post.id}: missing {attachment['path']}")
+            attachment["path"] = None
+        if _attachment_showable(attachment):
+            kept.append(attachment)
+    post.attachments = kept
+    if post.text or post.attachments or post.media_errors:
         return None
     return "missing media"
 

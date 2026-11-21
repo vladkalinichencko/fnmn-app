@@ -55,8 +55,6 @@ def build(args: argparse.Namespace) -> tuple[dict, list[list[str]], dict[str, in
     wanted = set(args.playlist or []) | ({WATCH_LATER} if args.watch_later else set())
     stats = {"rows": 0, "skipped_known": 0, "skipped_bad": 0}
 
-    # url → {title, channel}; playlist → ordered member urls. A video keeps its first
-    # playlist row for title/channel but is listed under every selected playlist it is in.
     videos: dict[str, dict] = {}
     members: dict[str, list[str]] = {}
     playlist_urls: dict[str, str] = {}

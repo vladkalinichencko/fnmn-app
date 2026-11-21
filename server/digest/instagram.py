@@ -44,7 +44,7 @@ def collect(source: dict, web: Web, store, folders: list[str], report: Report, p
     name = None
     skipped = 0
     for author, kind, shortcode in links:
-        post_id = f"instagram/{author}/{shortcode}"
+        post_id = f"instagram/{shortcode}"
         if post_id in known:
             continue
         if len(posts) >= MAX_POSTS:
@@ -142,42 +142,35 @@ RESERVED = {"", "explore", "reels", "stories", "direct", "accounts", "p", "reel"
 
 
 def _post(tab, handle: str, kind: str, shortcode: str, source: dict, web: Web, store, folders: list[str]) -> Post | None:
-    """One post page: the caption and the picture are in the page's own meta tags, the time in its `time`.
-    The URL names its author — the bare `/p/` form answers a rate-limited error page to the logged-in
-    browser, while `/{handle}/p/` loads."""
+    """One post page: the caption and the picture are in the page's own meta tags, the time in its `time`,
+    and the attachments in the embedded `xdt_shortcode_media` JSON, in the carousel's own order. The URL
+    names its author — the bare `/p/` form answers a rate-limited error page to the logged-in browser,
+    while `/{handle}/p/` loads; the page itself names the owner again, since a feed guess can be wrong."""
     permalink = f"{HOME}/{handle}/{kind}/{shortcode}/"
     try:
         tab.goto(permalink)
+        if "/accounts/login" in tab.url:
+            raise SourceFailure("the login expired; run python -m digest.login instagram")
         markup = tab.html()
+        if "/p/" in tab.url or "/reel/" in tab.url:
+            permalink = tab.url.split("?")[0]
+    except SourceFailure:
+        raise
     except Exception:
         return None
     document = html.fromstring(markup)
     caption = _meta(document, "og:description")
-    image = _meta(document, "og:image")
     title = _meta(document, "og:title") or handle
-    post_id = f"instagram/{handle}/{shortcode}"
-    media = []
+    owner = _owner(markup) or handle
+    post_id = f"instagram/{shortcode}"
+    attachments = []
     errors = 0
     fetch = page_fetch(tab)
-    dom = _dom_media(tab)
-    images = dom["images"] or ([image] if image else [])
-    for index, url in enumerate(images):
-        saved = save_photo(web, store, post_id, index, url, fetch)
-        if saved:
-            media.append(saved)
+    for attachment in _attachments(markup, document, post_id, web, store, fetch, tab):
+        if attachment is None:
+            errors += 1
         else:
-            errors += 1
-    page_video = _page_video(markup)
-    video_urls = dom["videos"] or ([page_video] if page_video else []) or [
-        url for url in (_meta(document, "og:video:secure_url"), _meta(document, "og:video")) if url
-    ]
-    video = None
-    if video_urls:
-        video_file = save_video(web, store, post_id, "video", video_urls[0], fetch)
-        poster = media[0] if media else (save_photo(web, store, post_id, "poster", image, fetch) if image else None)
-        video = {"poster": poster, "file": video_file}
-        if video_file is None and poster is None:
-            errors += 1
+            attachments.append(attachment)
     times = document.xpath("//time/@datetime")
     if not times:
         return None
@@ -186,15 +179,133 @@ def _post(tab, handle: str, kind: str, shortcode: str, source: dict, web: Web, s
         id=post_id,
         network="instagram",
         source=source["id"],
-        author={"handle": handle, "name": title},
+        author={"handle": owner, "name": title},
         permalink=permalink,
         posted_at=posted,
         text=_caption(caption),
-        media=media,
-        video=video,
+        attachments=attachments,
         folders=folders,
         media_errors=errors,
     )
+
+
+def _attachments(markup: str, document, post_id: str, web: Web, store, fetch, tab) -> list[dict | None]:
+    """The post's media in order. The embedded JSON knows each carousel child's kind and video address;
+    without it the page's own DOM and og tags stand in, as before."""
+    node = _shortcode_node(markup)
+    if node is not None:
+        return [
+            _save_attachment(web, store, post_id, index, spec, fetch)
+            for index, spec in enumerate(_media_specs(node))
+        ]
+    specs = _fallback_specs(markup, document, tab)
+    return [
+        _save_attachment(web, store, post_id, index, spec, fetch)
+        for index, spec in enumerate(specs)
+    ]
+
+
+def _media_specs(node: dict) -> list[dict]:
+    """Each media child of the post as {"kind", "image", "video"} URLs: a carousel's children in order,
+    the post itself when it is not a carousel."""
+    children = node.get("edge_sidecar_to_children", {}).get("edges") or []
+    items = [edge["node"] for edge in children if isinstance(edge.get("node"), dict)]
+    media = node.get("carousel_media")
+    if not items and isinstance(media, list):
+        items = [item for item in media if isinstance(item, dict)]
+    if not items:
+        items = [node]
+    specs = []
+    for item in items:
+        video = _best_video(item)
+        image = _best_image(item)
+        if item.get("is_video") or video:
+            specs.append({"kind": "video", "image": image, "video": video})
+        elif image:
+            specs.append({"kind": "image", "image": image})
+    return specs
+
+
+def _fallback_specs(markup: str, document, tab) -> list[dict]:
+    """Media the embedded JSON did not give: DOM images first, then the first playable video, then the
+    og tags — the order the old reader produced."""
+    image = _meta(document, "og:image")
+    dom = _dom_media(tab)
+    specs = [{"kind": "image", "image": url} for url in (dom["images"] or ([image] if image else []))]
+    page_video = _page_video(markup)
+    video_urls = dom["videos"] or ([page_video] if page_video else []) or [
+        url for url in (_meta(document, "og:video:secure_url"), _meta(document, "og:video")) if url
+    ]
+    if video_urls:
+        specs.append({"kind": "video", "image": image, "video": video_urls[0]})
+    return specs
+
+
+def _save_attachment(web: Web, store, post_id: str, index: int, spec: dict, fetch) -> dict | None:
+    if spec["kind"] == "image":
+        if not spec.get("image"):
+            return None
+        saved = save_photo(web, store, post_id, index, spec["image"], fetch)
+        return {"kind": "image", **saved} if saved else None
+    video_file = save_video(web, store, post_id, f"{index}-video", spec["video"], fetch) if spec.get("video") else None
+    poster = save_photo(web, store, post_id, f"{index}-poster", spec["image"], fetch) if spec.get("image") else None
+    if video_file is None and poster is None:
+        return None
+    return {"kind": "video", "file": video_file, "poster": poster}
+
+
+def _shortcode_node(markup: str) -> dict | None:
+    """The post's `xdt_shortcode_media` object out of the page's embedded JSON; the page writes it with
+    HTML-escaped quotes, which the decoder reads back as they were."""
+    text = markup.replace("&quot;", '"')
+    at = text.find('"xdt_shortcode_media"')
+    if at < 0:
+        return None
+    start = text.find("{", at)
+    if start < 0:
+        return None
+    try:
+        node, _ = json.JSONDecoder().raw_decode(text[start:])
+    except json.JSONDecodeError:
+        return None
+    return node if isinstance(node, dict) else None
+
+
+def _owner(markup: str) -> str | None:
+    """The username the post's own JSON names as owner; a feed's first profile-looking link can belong
+    to a neighbour post, so the page is the authority."""
+    text = markup.replace("&quot;", '"')
+    match = re.search(r'"owner"\s*:\s*\{[^{}]*?"username"\s*:\s*"([^"]+)"', text)
+    return match.group(1) if match else None
+
+
+def _best_image(item: dict) -> str | None:
+    candidates = (item.get("image_versions2") or {}).get("candidates") or []
+    best_url, best_area = None, 0
+    for candidate in candidates:
+        url = candidate.get("url")
+        if not url:
+            continue
+        area = (candidate.get("width") or 0) * (candidate.get("height") or 0)
+        if area > best_area:
+            best_url, best_area = url, area
+    return best_url or item.get("display_url")
+
+
+def _best_video(item: dict) -> str | None:
+    versions = item.get("video_versions") or []
+    best_url, best_area = None, 0
+    for version in versions:
+        url = version.get("url")
+        if not url:
+            continue
+        area = (version.get("width") or 0) * (version.get("height") or 0)
+        if area > best_area:
+            best_url, best_area = url, area
+    if best_url is not None:
+        return _unescape(best_url)
+    video_url = item.get("video_url")
+    return _unescape(video_url) if video_url else None
 
 
 def _page_video(markup: str) -> str | None:
@@ -288,11 +399,12 @@ def _meta(document, property_name: str) -> str | None:
 
 def _caption(description: str | None) -> str | None:
     """`og:description` reads like `1,234 likes, 56 comments - name on March 3, 2026: "the caption"`; the
-    caption is what follows the opening quote."""
+    caption is what follows the opening quote. Without the quote the description is only the counts —
+    a media-only post has no caption, and the counts are not one."""
     if not description:
         return None
     marker = description.find(': "')
     if marker < 0:
-        return description.strip() or None
+        return None
     text = description[marker + 3:]
     return text.rstrip('"').strip() or None

@@ -7,6 +7,7 @@ Posted times are ISO 8601 in UTC with a trailing `Z`, the same shape `DigestPack
 
 from __future__ import annotations
 
+import fcntl
 import json
 import re
 from dataclasses import asdict, dataclass, field
@@ -31,8 +32,7 @@ class Post:
     permalink: str
     posted_at: str
     text: str | None = None
-    media: list[dict] = field(default_factory=list)
-    video: dict | None = None
+    attachments: list[dict] = field(default_factory=list)
     context: dict | None = None
     comments: list[dict] = field(default_factory=list)
     stats: dict | None = None
@@ -42,15 +42,34 @@ class Post:
 
     def __post_init__(self) -> None:
         """Instagram's `og:title` is `Name on Instagram: "caption"`; the card wants only the name, and
-        `@handle` stands in for a missing display name. Rows written before the fix carry the raw title."""
-        if self.network != "instagram":
-            return
-        raw = self.author.get("name") or ""
-        match = re.match(r"^(.*?) on Instagram\b", raw)
-        name = (match.group(1) if match else raw).strip()
-        if not name or name.startswith("@"):
-            name = self.author.get("handle") or name
-        self.author = {**self.author, "name": name}
+        `@handle` stands in for a missing display name. Rows written before the fix carry the raw title.
+        The shortcode names a post by itself, so an id that still carries an author — guessed wrong in
+        the feed — collapses to it."""
+        if self.network == "instagram":
+            raw = self.author.get("name") or ""
+            match = re.match(r"^(.*?) on Instagram\b", raw)
+            name = (match.group(1) if match else raw).strip()
+            if not name or name.startswith("@"):
+                name = self.author.get("handle") or name
+            self.author = {**self.author, "name": name}
+            match = re.fullmatch(r"instagram/[^/]+/([A-Za-z0-9_-]+)", self.id)
+            if match:
+                self.id = f"instagram/{match.group(1)}"
+
+
+def _legacy_row(row: dict) -> dict:
+    """A row written while a post kept `media` and `video` apart reads as the same post's attachments:
+    the pictures first, the video after them, each tagged with its kind."""
+    if "media" not in row and "video" not in row:
+        return row
+    row = dict(row)
+    media = row.pop("media", None) or []
+    video = row.pop("video", None)
+    attachments = [{"kind": "image", **item} for item in media]
+    if video:
+        attachments.append({"kind": "video", "file": video.get("file"), "poster": video.get("poster")})
+    row["attachments"] = attachments
+    return row
 
 
 def wire(post: Post) -> dict:
@@ -62,8 +81,7 @@ def wire(post: Post) -> dict:
         "permalink": post.permalink,
         "postedAt": post.posted_at,
         "text": post.text,
-        "media": post.media,
-        "video": post.video,
+        "attachments": post.attachments,
         "context": wire_context(post.context),
         "comments": post.comments,
         "stats": post.stats,
@@ -85,11 +103,22 @@ def wire_context(context: dict | None) -> dict | None:
             "permalink": post["permalink"],
             "postedAt": post.get("posted_at") or post.get("postedAt"),
             "text": post.get("text"),
-            "media": post.get("media", []),
-            "video": post.get("video"),
+            "attachments": _context_attachments(post),
             "stats": post.get("stats"),
         },
     }
+
+
+def _context_attachments(post: dict) -> list[dict]:
+    """A context post's attachments in the current shape; rows collected before attachments
+    existed carry `media` and `video`, which read as the same list."""
+    if "attachments" in post:
+        return post["attachments"]
+    attachments = [{"kind": "image", **item} for item in post.get("media") or []]
+    video = post.get("video")
+    if video:
+        attachments.append({"kind": "video", "file": video.get("file"), "poster": video.get("poster")})
+    return attachments
 
 
 class Store:
@@ -99,7 +128,7 @@ class Store:
         self.builds_file = root / "builds.jsonl"
         self.sources_file = root / "sources.json"
         self.media_dir = root / "media"
-        self._sig_cache: dict[str, tuple[str, frozenset[str]]] = {}
+        self._sig_cache: dict[tuple[str, str | None], tuple[str, frozenset[str]]] = {}
         self._posts_cache: tuple[tuple[int, int], list[Post]] | None = None
 
     def posts(self) -> list[Post]:
@@ -115,7 +144,7 @@ class Store:
         posts = []
         for line in self.posts_file.read_text(encoding="utf-8").split("\n"):
             try:
-                posts.append(Post(**json.loads(line)))
+                posts.append(Post(**_legacy_row(json.loads(line))))
             except (json.JSONDecodeError, TypeError):
                 continue
         self._posts_cache = (signature, posts)
@@ -126,7 +155,14 @@ class Store:
 
     def append(self, posts: list[Post]) -> int:
         """Adds the posts the store does not hold yet, by id or by text; returns how many it added.
-        A repost or a duplicate is dropped, a quote with a comment of its own stays."""
+        A repost or a duplicate is dropped, a quote with a comment of its own stays. The lock keeps a
+        manual monitor run and the launchd one from interleaving their appends."""
+        self.root.mkdir(parents=True, exist_ok=True)
+        with self.posts_file.with_suffix(".lock").open("w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            return self._append_locked(posts)
+
+    def _append_locked(self, posts: list[Post]) -> int:
         existing = self.posts()
         known = {post.id for post in existing}
         signatures = []
@@ -135,10 +171,11 @@ class Store:
         for post in existing:
             if not post.text:
                 continue
-            cached = self._sig_cache.get(post.id)
+            key = (post.id, post.text)
+            cached = self._sig_cache.get(key)
             if cached is None or cached[0] != post.network:
                 cached = (post.network, _signature(post.text))
-                self._sig_cache[post.id] = cached
+                self._sig_cache[key] = cached
             signatures.append(cached)
             if (post.network, post.source) in wanted:
                 texts.append((post.network, post.source, flat_text(post.text)))
@@ -146,13 +183,14 @@ class Store:
         for post in posts:
             if post.id in known:
                 continue
+            known.add(post.id)
             signature = _signature(post.text)
             if signature and any(
                 network == post.network and _similar(signature, other) for network, other in signatures
             ):
                 continue
             flat = flat_text(post.text)
-            if flat and not (post.media or post.video) and any(
+            if flat and not post.attachments and any(
                 network == post.network and source == post.source and prefix_of(flat, other)
                 for network, source, other in texts
             ):
@@ -164,7 +202,6 @@ class Store:
                 texts.append((post.network, post.source, flat))
         if not fresh:
             return 0
-        self.root.mkdir(parents=True, exist_ok=True)
         with self.posts_file.open("a", encoding="utf-8") as log:
             for post in fresh:
                 log.write(json.dumps(asdict(post), ensure_ascii=False) + "\n")
@@ -220,8 +257,10 @@ class Store:
 
     def record_build(self, digest: dict) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
-        with self.builds_file.open("a", encoding="utf-8") as log:
-            log.write(json.dumps(digest, ensure_ascii=False) + "\n")
+        with self.builds_file.with_suffix(".lock").open("w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            with self.builds_file.open("a", encoding="utf-8") as log:
+                log.write(json.dumps(digest, ensure_ascii=False) + "\n")
 
     def source_statuses(self) -> list[dict]:
         if not self.sources_file.exists():

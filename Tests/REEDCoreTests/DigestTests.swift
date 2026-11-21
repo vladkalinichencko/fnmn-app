@@ -11,13 +11,13 @@ private func post(
     folder: String = "ml",
     date: Date = postedAt,
     text: String = "A small model that reads the whole catalog.",
-    media: [DigestPackage.Post.Media] = [],
+    attachments: [DigestPackage.Post.Attachment] = [],
     context: DigestPackage.Post.Context? = nil,
     comments: [DigestPackage.Post.Comment] = []
 ) -> DigestPackage.Post {
     DigestPackage.Post(
         id: id, network: .x, author: author, permalink: permalink, postedAt: date,
-        text: text, media: media, context: context, comments: comments, folders: [folder]
+        text: text, attachments: attachments, context: context, comments: comments, folders: [folder]
     )
 }
 
@@ -65,15 +65,17 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
         "permalink": "https://x.com/karpathy/status/1587",
         "postedAt": "2026-11-08T07:00:00Z",
         "text": "A small model that reads the whole catalog.",
-        "media": [{"path": "assets/1587-0.jpg", "width": 1280, "height": 720}],
-        "video": {"poster": {"path": "assets/1587-poster.jpg", "width": 640, "height": 360}},
+        "attachments": [
+          {"kind": "image", "path": "assets/1587-0.jpg", "width": 1280, "height": 720},
+          {"kind": "video", "poster": {"path": "assets/1587-poster.jpg", "width": 640, "height": 360}, "file": null}
+        ],
         "context": {"kind": "quote", "post": {
           "id": "x/1000", "network": "x",
           "author": {"handle": "hardmaru", "name": "hardmaru"},
           "permalink": "https://x.com/hardmaru/status/1000",
           "postedAt": "2026-11-07T21:00:00Z",
           "text": "The post being quoted.",
-          "media": []
+          "attachments": []
         }},
         "comments": [{"author": "someone", "text": "This explains it.", "permalink": "https://x.com/someone/status/1"}],
         "stats": {"likes": 100, "reposts": 5, "replies": 2},
@@ -88,8 +90,9 @@ private func writeDigest(_ package: DigestPackage, files: [(String, Data)] = [("
     #expect(decoded.folders == ["ml", "design"])
     #expect(decoded.sources[1].status == .stale)
     let post = try #require(decoded.posts.first)
-    #expect(post.media.first?.width == 1280)
-    #expect(post.video?.poster?.path == "assets/1587-poster.jpg")
+    #expect(post.attachments.count == 2)
+    #expect(post.attachments[0].image?.width == 1280)
+    #expect(post.attachments[1].video?.poster?.path == "assets/1587-poster.jpg")
     #expect(post.context?.kind == .quote)
     #expect(post.context?.post?.author.handle == "hardmaru")
     #expect(post.comments.first?.text == "This explains it.")

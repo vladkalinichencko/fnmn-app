@@ -27,7 +27,7 @@ final class DigestModelTests: XCTestCase {
             permalink: URL(string: "https://x.com/karpathy/status/1")!,
             postedAt: Date(timeIntervalSince1970: 1_760_000_000),
             text: "A small model that reads the whole catalog.",
-            media: [.init(path: "assets/1.png", width: 640, height: 480)],
+            attachments: [.image(.init(path: "assets/1.png", width: 640, height: 480))],
             folders: ["ml"]
         )
         let empty = DigestPackage.Post(
@@ -203,6 +203,67 @@ final class DigestModelTests: XCTestCase {
             let label = PostCard.contextLabel(DigestPackage.Post.Context(kind: kind, post: parent))
             XCTAssertEqual(label, "\(kind.action) Ada")
         }
+    }
+
+    func testAnOrderedDeliveryDecodesItsAttachments() throws {
+        let json = """
+        {
+            "id": "x/1", "network": "x",
+            "author": {"handle": "ada", "name": "Ada"},
+            "permalink": "https://x.com/ada/status/1",
+            "postedAt": "2026-11-07T09:30:00Z",
+            "text": "ordered media",
+            "attachments": [
+                {"kind": "image", "path": "media/x-1-0.png", "width": 640, "height": 480},
+                {"kind": "video", "poster": {"path": "media/x-1-poster.png", "width": 640, "height": 480}, "file": {"path": "media/x-1-video.mp4"}}
+            ],
+            "context": {"kind": "quote", "post": {
+                "id": "x/0", "network": "x",
+                "author": {"handle": "bo", "name": "Bo"},
+                "permalink": "https://x.com/bo/status/0",
+                "postedAt": "2026-11-07T09:00:00Z",
+                "text": "parent",
+                "attachments": [{"kind": "image", "path": "media/x-0-0.png", "width": 1, "height": 1}]
+            }},
+            "comments": [], "stats": null, "folders": [], "mediaErrors": 0
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let post = try decoder.decode(DigestPackage.Post.self, from: Data(json.utf8))
+        XCTAssertEqual(post.attachments.count, 2)
+        XCTAssertEqual(post.attachments[0].image?.path, "media/x-1-0.png")
+        XCTAssertEqual(post.attachments[1].video?.poster?.path, "media/x-1-poster.png")
+        XCTAssertEqual(post.attachments[1].video?.file?.path, "media/x-1-video.mp4")
+        XCTAssertEqual(post.context?.post?.attachments.first?.image?.path, "media/x-0-0.png")
+    }
+
+    func testAnAttachmentsDeliveryDecodesEachKind() throws {
+        let json = """
+        {
+            "id": "x/2", "network": "x",
+            "author": {"handle": "ada", "name": "Ada"},
+            "permalink": "https://x.com/ada/status/2",
+            "postedAt": "2026-11-07T09:30:00Z",
+            "text": "new shape",
+            "attachments": [
+                {"kind": "image", "path": "media/x-2-0.png", "width": 100, "height": 100},
+                {"kind": "video", "file": null, "poster": {"path": "media/x-2-1-poster.jpg", "width": 100, "height": 100}},
+                {"kind": "card", "title": "A title", "description": "About it", "domain": "example.com", "url": "https://example.com/a", "image": {"path": "media/x-2-card.png", "width": 10, "height": 10}}
+            ],
+            "context": null, "comments": [], "stats": null, "folders": [], "mediaErrors": 0
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let post = try decoder.decode(DigestPackage.Post.self, from: Data(json.utf8))
+        XCTAssertEqual(post.attachments.count, 3)
+        XCTAssertNotNil(post.attachments[0].image)
+        XCTAssertNil(post.attachments[1].video?.file)
+        XCTAssertEqual(post.attachments[1].video?.poster?.path, "media/x-2-1-poster.jpg")
+        XCTAssertEqual(post.attachments[2].card?.title, "A title")
+        XCTAssertEqual(post.attachments[2].card?.url?.absoluteString, "https://example.com/a")
+        XCTAssertEqual(post.attachments[2].card?.image?.path, "media/x-2-card.png")
     }
 
     func testAContextOnlyPostIsFoundForItsThread() async throws {

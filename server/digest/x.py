@@ -259,8 +259,8 @@ def _wired_context(payload: dict, fetched: dict[str, Post]) -> dict | None:
 
 
 def _context_of(post: Post) -> dict:
-    """A stored post as the context summary the package carries: its whole text, no media — the files of
-    a context post are not part of the delivery, the card shows the words only."""
+    """A stored post as the context summary the package carries: its whole text, no attachments —
+    the files of a context post are not part of the delivery, the card shows the words only."""
     return {
         "id": post.id,
         "network": post.network,
@@ -268,8 +268,7 @@ def _context_of(post: Post) -> dict:
         "permalink": post.permalink,
         "posted_at": post.posted_at,
         "text": post.text,
-        "media": [],
-        "video": None,
+        "attachments": [],
         "stats": post.stats,
     }
 
@@ -288,7 +287,7 @@ def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: li
     text = _payload_text(payload)
     if payload.get("note_tweet") and _note_full(payload) is None and page is not None:
         text = _note_text(page, permalink, status_id) or text
-    media, video, errors = _media(payload, post_id, web, store, fetch)
+    attachments, errors = _attachments(payload, post_id, web, store, fetch)
     stats = {
         "likes": payload.get("favorite_count"),
         "reposts": payload.get("retweet_count"),
@@ -302,8 +301,7 @@ def _post(payload: dict, handle: str, source: dict, web: Web, store, folders: li
         permalink=permalink,
         posted_at=iso(datetime.fromisoformat(payload["created_at"])),
         text=text,
-        media=media,
-        video=video,
+        attachments=attachments,
         context=_context(payload),
         stats=stats,
         folders=folders,
@@ -335,9 +333,10 @@ def _note_text(tab, permalink: str, status_id: str) -> str | None:
     return text.strip() if isinstance(text, str) and text.strip() else None
 
 
-def _media(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[list[dict], dict | None, int]:
-    media: list[dict] = []
-    video = None
+def _attachments(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[list[dict], int]:
+    """The post's media in the order `mediaDetails` lists it, then the link card the tweet carries —
+    a card is not a picture of the post, so it is its own kind and the card draws it as a preview."""
+    attachments: list[dict] = []
     errors = 0
     for index, item in enumerate(payload.get("mediaDetails") or []):
         kind = item.get("type")
@@ -347,18 +346,61 @@ def _media(payload: dict, post_id: str, web: Web, store, fetch=None) -> tuple[li
         if kind == "photo":
             saved = save_photo(web, store, post_id, index, f"{url}?name=large", fetch)
             if saved:
-                media.append(saved)
+                attachments.append({"kind": "image", **saved})
             else:
                 errors += 1
-        elif kind in ("video", "animated_gif") and video is None:
-            poster = save_photo(web, store, post_id, "poster", url, fetch)
+        elif kind in ("video", "animated_gif"):
+            poster = save_photo(web, store, post_id, f"{index}-poster", url, fetch)
             if poster is None:
                 errors += 1
-            video = {"poster": poster, "file": _video_file(item, post_id, web, store, fetch)}
-    return media, video, errors
+            attachments.append({
+                "kind": "video",
+                "file": _video_file(item, post_id, web, store, fetch, index),
+                "poster": poster,
+            })
+    card = _card(payload, post_id, web, store, fetch)
+    if card is not None:
+        attachments.append(card)
+    return attachments, errors
 
 
-def _video_file(item: dict, post_id: str, web: Web, store, fetch=None) -> dict | None:
+def _card(payload: dict, post_id: str, web: Web, store, fetch=None) -> dict | None:
+    """The tweet's link card as an attachment: title, description, domain and the largest picture the
+    card names. A card without a word or a picture is not worth a row."""
+    card = payload.get("card")
+    if not isinstance(card, dict):
+        return None
+    values = card.get("binding_values") or {}
+
+    def string(name: str) -> str | None:
+        value = (values.get(name) or {}).get("string_value")
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    title = string("title") or string("summary_title")
+    description = string("description") or string("summary_description")
+    domain = string("domain") or string("vanity_url")
+    if not (title or description or domain):
+        return None
+    image = None
+    for name in ("photo_image_full_size_large", "summary_photo_image_large", "thumbnail_image_original"):
+        candidate = ((values.get(name) or {}).get("image_value") or {})
+        url = candidate.get("url")
+        if url:
+            saved = save_photo(web, store, post_id, "card", url, fetch)
+            if saved:
+                image = saved
+            break
+    return {
+        "kind": "card",
+        "title": title,
+        "description": description,
+        "domain": domain,
+        "url": card.get("url"),
+        "image": image,
+    }
+
+
+def _video_file(item: dict, post_id: str, web: Web, store, fetch=None, index: int = 0) -> dict | None:
     """The best mp4 variant of the tweet's video, as a file the digest carries."""
     variants = [
         variant for variant in (item.get("video_info") or {}).get("variants") or []
@@ -367,7 +409,7 @@ def _video_file(item: dict, post_id: str, web: Web, store, fetch=None) -> dict |
     if not variants:
         return None
     best = max(variants, key=lambda variant: variant.get("bitrate") or 0)
-    return save_video(web, store, post_id, "video", best["url"], fetch)
+    return save_video(web, store, post_id, f"{index}-video", best["url"], fetch)
 
 
 def _context(payload: dict) -> dict | None:
@@ -399,8 +441,7 @@ def _context_post(payload: dict) -> dict:
         "permalink": f"{HOME}/{handle}/status/{payload.get('id_str')}",
         "posted_at": iso(datetime.fromisoformat(payload["created_at"])),
         "text": _payload_text(payload),
-        "media": [],
-        "video": None,
+        "attachments": [],
         "stats": {
             "likes": payload.get("favorite_count"),
             "reposts": payload.get("retweet_count"),
